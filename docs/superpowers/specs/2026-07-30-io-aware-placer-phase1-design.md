@@ -61,7 +61,7 @@
 
 - **單一全域 density 場即可**:region 幾何固定、歸屬由位置誘導時,region 面積即容量,全域 electrostatics 已隱式滿足 per-region capacity。DREAMPlace 3.0 multi-electrostatics 僅 baseline (a) 的 fence placement 使用。
 - **Region 輸入格式**:LEF/DEF 流程用 DEF REGION/GROUP(ISPD 2015 慣例);Bookshelf 流程用 sidecar 檔(矩形清單 + 面積預算)。附 region 產生器:grid 切割與 random slicing-tree(面積比例可控)兩種模式,亦接受外部給定的 region 檔。
-- **平台**:fork DREAMPlace 4.x(BSD-3;PyTorch autograd + custom CUDA op 架構,新 objective = 新增一個 op,不動核心迭代器)。Xplace kernel 技巧與其 GGR 作為備援參考;版本以容器鎖定。
+- **平台**:fork DREAMPlace 4.x(BSD-3;PyTorch autograd + custom CUDA op 架構,新 objective = 新增一個 op,不動核心迭代器)。基底使用本機已 build 並跑過的 checkout `/nashome/NVL4/vdalab/yyds-dev/DREAMPlace`(install/ 就緒、附 ISPD2005/2015 benchmarks)。可微項開發順序:先純 PyTorch tensor ops 於 1M 級驗證數學路線,再融合為 custom CUDA op 上 10M/30M。Xplace kernel 技巧與其 GGR 作為備援參考;版本以容器鎖定。
 
 ## 5. Objective formulation
 
@@ -144,7 +144,7 @@
 1. **乘積式梯度稀釋 / 退火敏感** → S5 FD 備援與 S3 span proxy 已入設計;M2 提早 ablation,不行就換路線(結構已預留)。
 2. **30M 測資工程量**(TeraPool 合成、LEF/DEF 自製)→ 10M 主力先行;30M 只需 1–2 個 case;備案配方 B/C。
 3. **λ 權重調參** → evaluator 閉環 auto-normalization 為主;必要時小規模 BO/sweep(ART-3D 先例:IO 權重 design-dependent、值得自動搜尋)。
-4. **DREAMPlace build 鏈老舊**(PyTorch ≤2.0、CMake+Limbo)→ 容器鎖版;改動最小化(僅新增 ops)。
+4. **DREAMPlace build 鏈老舊**(PyTorch ≤2.0、CMake+Limbo)→ 本機 `/nashome/NVL4/vdalab/yyds-dev/DREAMPlace` 已成功 build 並執行過,環境已驗證;以其為基底鎖版(容器化),改動最小化(僅新增 ops)。
 5. **撞題風險**(NVIDIA GrandPlan 系列持續演進)→ 差異點(D1、計數 objective、tree-crossing evaluator、30M)在論文明寫;M1/M2 盡快出可引用結果。
 6. **Rectilinear 實作複雜度** → 資料結構第一天即用「矩形集合」介面,但實驗推進順序 grid → 矩形 → rectilinear。
 7. **Evaluator 高估/低估爭議** → 對外主張限定「梯度方向與相對排序」;絕對值準確性由 Phase 2 router evaluator 校正(論文如此陳述)。
