@@ -24,3 +24,14 @@ def test_run_flat_simple(tmp_path):
     assert os.path.exists(out) and os.path.exists(out + ".npz")
     saved = json.load(open(out))
     assert saved["mode"] == "flat"
+
+@pytest.mark.slow
+def test_load_dreamplace_forces_dp_off():
+    # adaptec1.json 出廠 detailed_place_flag=1;driver 必須強制為 0(GP+LG only protocol)
+    from ioplace.drivers.run_placement import _load_dreamplace
+    root = os.environ.get("DREAMPLACE_ROOT", "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace")
+    cfg = os.path.join(root, "install/test/ispd2005/adaptec1.json")
+    params, placedb = _load_dreamplace(cfg)
+    assert params.detailed_place_flag == 0
+    assert params.detailed_place_engine == ""
+    assert placedb.num_movable_nodes > 0
