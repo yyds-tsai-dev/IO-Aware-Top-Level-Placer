@@ -4,9 +4,9 @@
 
 **Goal:** 建立可重現的基建(netlist 載入、region 定義、reference evaluator、兩條 baseline 流程),再交付 GPU evaluator 與 net-reweighting 閉環,產出 M0/M1 對照表。
 
-**Architecture:** 我們的 code 全部放在本 repo 的 `ioplace/` Python package,以 import 方式驅動已 build 好的 DREAMPlace(位於 `/nashome/NVL4/vdalab/yyds-dev/DREAMPlace`,從其 `install/` 執行);對 DREAMPlace 源碼的唯一改動是一個 iteration callback patch(存於本 repo 的 patch 檔)。Evaluator 先做 numpy 參考版(golden),M1 再做 torch GPU 版並以參考版驗證等價。
+**Architecture:** 我們的 code 全部放在本 repo 的 `ioplace/` Python package,以 import 方式驅動 DREAMPlace(位於 `/nashome/NVL4/vdalab/yyds-dev/DREAMPlace`,Task 1 以新版 Python 重 build,從其 `install/` 執行);對 DREAMPlace 源碼的唯一改動是一個 iteration callback patch(存於本 repo 的 patch 檔)。Evaluator 先做 numpy 參考版(golden),M1 再做 torch GPU 版並以參考版驗證等價。
 
-**Tech Stack:** Python 3.9(DREAMPlace venv)、PyTorch 2.8.0+cu128、numpy、pytest、DREAMPlace(已 build,CUDA_FOUND=TRUE)、Mt-KaHyPar(pip 或 source build)。
+**Tech Stack:** Python 3.12(uv 管理;fallback 3.11 → 3.9)、PyTorch 2.8.0+cu128、numpy<2、pytest、DREAMPlace(Task 1 重 build)、Mt-KaHyPar(pip 或 source build)。
 
 **對應 spec:** `docs/superpowers/specs/2026-07-30-io-aware-placer-phase1-design.md` 的 M0 與 M1(§9);範圍不含 M2+(可微項)。
 
@@ -14,7 +14,7 @@
 
 - DREAMPlace 根目錄:`/nashome/NVL4/vdalab/yyds-dev/DREAMPlace`(以下簡稱 `$DP`);一律從 `$DP/install` 執行/import(source tree 不含編譯出的 `*.so`)。
 - 外部 import 需要**兩個** sys.path:`$DP/install` 與 `$DP/install/dreamplace`(DREAMPlace 混用 `import dreamplace.ops.*` 與 bare `import Params` 兩種風格)。
-- Python 必須是 **3.9**(install 內的 `*_cpp.so`/`*_cuda.so` 以 cp39 ABI 編譯);torch 2.8.0+cu128。
+- Python:**3.12 優先**(Task 1 以 uv 裝 3.12 並重 build DREAMPlace,產生新 ABI 的 `*.so`);失敗依序退 3.11 → 修復舊 3.9 venv(現有 install 的 `*.so` 為 cp39 ABI,僅 fallback 時沿用)。torch 2.8.0+cu128;**numpy 必須 <2**(DREAMPlace 源碼用 `np.string_`,numpy 2.0 已移除)。以下命令中 `$PY` = 最終 venv 的 python(預期 `$DP/.venv312/bin/python`)。
 - GPU:開發機為 NVIDIA L4 23GB;所有 dtype 主線 float32(config `"dtype": "float32"`)。
 - 對 DREAMPlace 源碼的改動:**僅允許** Task 12 的 iteration callback(≤10 行),在 `$DP` 開 git branch `io-aware`,diff 同步存本 repo `ioplace/dp_patch/`。fence region 注入不改 DREAMPlace(在我們 driver 內於 `read()` 與 `initialize()` 之間注入)。
 - Region 約束(spec D2/D3):K ≤ 64(FT bitmask 用 uint64);實驗 K ∈ {8,16,32};region = 矩形集合、全 die 分割、邊界對齊 **512×512 lattice**(產生器保證;`RegionGrid` 因此無 aliasing、計數精確)。
@@ -61,44 +61,52 @@ docs/results/m1-reweight-report.md # Task 13 產出
 
 ---
 
-### Task 1: 環境修復與 repo 骨架
+### Task 1: 以 Python 3.12 重建 DREAMPlace 環境 + repo 骨架
 
 **Files:**
 - Create: `pyproject.toml`, `ioplace/__init__.py`, `tests/__init__.py`, `docs/dev-env.md`, `.gitignore`
-- (外部)修復 `$DP/.venv`
+- (外部)`$DP/.venv312`(新 venv)、`$DP/build312`(新 build 目錄)、重灌 `$DP/install`(先備份)
 
 **Interfaces:**
-- Produces: 可用的 venv(`$DP/.venv/bin/python`,Python 3.9 + torch 2.8.0 cu128 + pytest);`docs/dev-env.md` 記載啟動方式。後續所有 task 的 `pytest`/`python` 都指這個 interpreter。
+- Produces: 可用 venv `$DP/.venv312/bin/python`(**Python 3.12** + torch 2.8.0 cu128 + numpy<2 + pytest)與重 build 的 `$DP/install`(新 ABI 的 `*.so`);`docs/dev-env.md` 記載啟動方式。後續所有命令的 `$PY` 即此 interpreter。
 
-**背景:** `$DP/.venv` 是 uv 建的(pyvenv.cfg 顯示 CPython 3.9.13),site-packages 完整(torch 2.8.0+cu128)但 `.venv/bin/python` 遺失。`$DP/install/results/adaptec1/` 存在證明先前跑通過。
+**背景:** 舊 `.venv` 為 cp39 且 python 執行檔遺失;使用者要求不用 3.9。Python 版本綁定只存在於編譯出的 `*.so`(pybind/torch extension),對新直譯器重 build 即可;C++ parser 與 CUDA kernel 與 Python 版本無關。已知風險(upstream 僅宣稱支援 ≤3.9):(a) numpy 2.x 移除 `np.string_`(PlaceDB.py 有用)→ 必 pin `numpy<2`(1.26.x 支援 3.12);(b) Python 3.12 移除 distutils,build glue 若引用會炸 → 退 3.11;(c) 舊 pin 依賴(torch_optimizer==0.3.0 等,純 Python,預期可裝)。有利事實:此 checkout 已在 torch 2.8.0(遠新於官方宣稱的 ≥1.6)上跑通,堆疊現代化有前例。
 
-- [ ] **Step 1: 診斷並修復 venv**
+- [ ] **Step 1: 準備 uv 與 Python 3.12,建 venv 並裝依賴**
 
 ```bash
 DP=/nashome/NVL4/vdalab/yyds-dev/DREAMPlace
-ls -la $DP/.venv/bin/ | head; cat $DP/.venv/pyvenv.cfg
-which uv || echo "no uv"
+which uv || curl -LsSf https://astral.sh/uv/install.sh | sh   # 無 uv 才裝
+uv python install 3.12
+cd $DP && uv venv --python 3.12 .venv312
+PY=$DP/.venv312/bin/python
+uv pip install --python $PY torch==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+uv pip install --python $PY "numpy<2" scipy matplotlib shapely cairocffi pyunpack patool pkgconfig setuptools "torch_optimizer==0.3.0" "ncg_optimizer==0.2.2" pytest
+$PY -c "import torch, numpy; print(torch.__version__, torch.cuda.is_available(), numpy.__version__)"
 ```
+Expected: `2.8.0+cu128 True 1.26.x`。CUDA 不可用則停下回報(驅動問題,不要繼續)。
 
-依結果三選一(按序嘗試):
-1. `pyvenv.cfg` 的 `home` 指向的 python3.9 還存在 → `ln -s <home>/python3.9 $DP/.venv/bin/python && ln -sf python $DP/.venv/bin/python3`
-2. 有 uv → `cd $DP && uv venv --python 3.9 --allow-existing .venv`(只補 bin/,不動 site-packages;若 uv 拒絕則 `uv python install 3.9` 後重試)
-3. 都不行 → 找任一 python3.9(`ls /usr/bin/python3.9 /usr/local/bin/python3.9`),`python3.9 -m venv --without-pip $DP/.venv-new`,把 `$DP/.venv/lib` symlink 進去;仍失敗才走完整重 build(`$DP/CLAUDE.md` 的 build 指引)— 這是最後手段,先回報再動。
-
-- [ ] **Step 2: 驗證 venv 可跑 DREAMPlace(smoke run)**
+- [ ] **Step 2: 重 build DREAMPlace(先備份舊 install)**
 
 ```bash
-cd $DP/install
-$DP/.venv/bin/python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
-$DP/.venv/bin/python dreamplace/Placer.py test/simple.json
+cd $DP && cp -r install install.cp39.bak
+cmake -B build312 -DPython_EXECUTABLE=$PY -DCMAKE_INSTALL_PREFIX=$DP/install -DCMAKE_BUILD_TYPE=Release
+cmake --build build312 -j $(nproc)
+cmake --build build312 --target install
 ```
-Expected: `2.8.0+cu128 True`;simple case 數秒內完成,`install/results/simple/simple.gp.pl` 更新。若 `torch.cuda.is_available()` 為 False,停下回報(驅動問題,不要繼續)。
+Expected: configure 偵測到 CUDA 與 torch 2.8;build 約 10–40 分鐘。失敗處置(按錯誤類型):
+1. 錯誤含 `distutils` → 3.12 特有:改用 3.11(`uv python install 3.11 && cd $DP && uv venv --python 3.11 .venv311`,重跑 Step 1–2,`$PY` 改指 `.venv311/bin/python`)。
+2. 個別小型 API 相容錯(含 runtime 的 `np.string_` 類)→ 在 `$DP` 開(或沿用)branch `io-aware` 做最小修補並 commit,修補內容記入 `docs/dev-env.md`。
+3. 多處大範圍失敗 → 停下回報;fallback = 修復舊 3.9 venv(`.venv` 的 site-packages 完整仍在:依序試 `pyvenv.cfg` 的 `home` 路徑重建 symlink → `uv venv --python 3.9 --allow-existing .venv` → 系統 python3.9),並還原 `install.cp39.bak` 為 `install`。
 
-- [ ] **Step 3: 安裝測試依賴 + 建 repo 骨架**
+- [ ] **Step 3: Smoke run**
 
 ```bash
-$DP/.venv/bin/python -m pip install pytest 2>/dev/null || uv pip install --python $DP/.venv/bin/python pytest
+cd $DP/install && $PY dreamplace/Placer.py test/simple.json
 ```
+Expected: 數秒完成,`install/results/simple/simple.gp.pl` 更新。runtime 才爆的相容性錯誤 → 回 Step 2 處置 2 修補後重跑 `cmake --build build312 --target install`。
+
+- [ ] **Step 4: 建 repo 骨架**
 
 `pyproject.toml`:
 ```toml
@@ -121,21 +129,21 @@ results/**/*.def
 results/**/*.log
 ```
 
-`ioplace/__init__.py` 與 `tests/__init__.py` 空檔。`docs/dev-env.md` 記錄:修復方式、interpreter 絕對路徑、smoke run 指令、`DREAMPLACE_ROOT` 用法。
+`ioplace/__init__.py` 與 `tests/__init__.py` 空檔。`docs/dev-env.md` 記錄:最終 Python 版本與 build 方式、interpreter 絕對路徑、smoke run 指令、`DREAMPLACE_ROOT` 用法、相容性修補清單。
 
-- [ ] **Step 4: 驗證 pytest 可跑**
+- [ ] **Step 5: 驗證 pytest 可跑**
 
 ```bash
 cd /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer
-$DP/.venv/bin/python -m pytest --collect-only -q
+$PY -m pytest --collect-only -q
 ```
 Expected: `no tests ran`(collect 成功、無錯誤)。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add pyproject.toml ioplace/__init__.py tests/__init__.py docs/dev-env.md .gitignore
-git commit -m "chore: repo skeleton and dev environment doc"
+git commit -m "chore: repo skeleton and dev environment doc (Python 3.12 rebuild)"
 ```
 
 ---
@@ -202,7 +210,7 @@ def test_load_netlist_simple():
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_netlist.py -v -m "not slow"
+$PY -m pytest tests/test_netlist.py -v -m "not slow"
 ```
 Expected: FAIL(`ModuleNotFoundError: ioplace.netlist`)。
 
@@ -288,8 +296,8 @@ def load_netlist(config_json):
 - [ ] **Step 4: Run tests**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_netlist.py -v -m "not slow"
-cd /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer && DREAMPLACE_ROOT=$DP $DP/.venv/bin/python -m pytest tests/test_netlist.py -v -m slow
+$PY -m pytest tests/test_netlist.py -v -m "not slow"
+cd /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer && DREAMPLACE_ROOT=$DP $PY -m pytest tests/test_netlist.py -v -m slow
 ```
 Expected: 前者 2 passed;後者 1 passed(slow test 會實際載入 simple case;注意 `load_netlist` 內 `params.load` 的相對路徑 —— simple.json 的 `aux_input` 是相對於 install 的路徑,若載入失敗,在 `load_netlist` 前 `os.chdir` 到 `$DP/install` 並於 test 中還原 cwd,把這個行為寫進 `load_netlist` docstring)。
 
@@ -360,7 +368,7 @@ def test_json_roundtrip(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_regions.py -v
+$PY -m pytest tests/test_regions.py -v
 ```
 Expected: FAIL(module not found)。
 
@@ -466,7 +474,7 @@ def make_slicing_regions(die, k, seed=0, lattice=512, min_frac=0.1):
 - [ ] **Step 4: Run tests**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_regions.py -v
+$PY -m pytest tests/test_regions.py -v
 ```
 Expected: 4 passed。
 
@@ -531,7 +539,7 @@ def test_pin_region_bitmask():
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_region_grid.py -v
+$PY -m pytest tests/test_region_grid.py -v
 ```
 Expected: FAIL(module not found)。
 
@@ -585,7 +593,7 @@ class RegionGrid:
 - [ ] **Step 4: Run tests**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_region_grid.py -v
+$PY -m pytest tests/test_region_grid.py -v
 ```
 Expected: 3 passed。
 
@@ -652,7 +660,7 @@ import pytest
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_evaluator_ref.py -v
+$PY -m pytest tests/test_evaluator_ref.py -v
 ```
 Expected: FAIL(module not found)。
 
@@ -695,7 +703,7 @@ def net_mst_length(px, py):
 - [ ] **Step 4: Run tests**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_evaluator_ref.py -v
+$PY -m pytest tests/test_evaluator_ref.py -v
 ```
 Expected: 3 passed。
 
@@ -823,7 +831,7 @@ def test_evaluate_bruteforce_random():
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_evaluator_ref.py -v
+$PY -m pytest tests/test_evaluator_ref.py -v
 ```
 Expected: 新增測試 FAIL(`ImportError: evaluate`);Task 5 的測試仍 PASS。
 
@@ -921,7 +929,7 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256):
 - [ ] **Step 4: Run tests**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_evaluator_ref.py -v
+$PY -m pytest tests/test_evaluator_ref.py -v
 ```
 Expected: 全部 passed(含 brute-force 隨機 10 回合)。
 
@@ -987,7 +995,7 @@ def test_run_flat_simple(tmp_path):
 - [ ] **Step 3: Run test to verify it fails**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_driver.py -v -m "not slow"
+$PY -m pytest tests/test_driver.py -v -m "not slow"
 ```
 Expected: FAIL(module not found)。
 
@@ -1100,8 +1108,8 @@ if __name__ == "__main__":
 - [ ] **Step 5: Run tests + integration**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_driver.py -v -m "not slow"
-DREAMPLACE_ROOT=$DP $DP/.venv/bin/python -m pytest tests/test_driver.py -v -m slow
+$PY -m pytest tests/test_driver.py -v -m "not slow"
+DREAMPLACE_ROOT=$DP $PY -m pytest tests/test_driver.py -v -m slow
 ```
 Expected: 2 passed;slow 1 passed(simple 全流程數十秒內)。
 
@@ -1129,9 +1137,9 @@ git commit -m "feat: unified placement driver with flat baseline mode"
 - [ ] **Step 1: 安裝 Mt-KaHyPar 並確認 Python API 形態**
 
 ```bash
-uv pip install --python $DP/.venv/bin/python mtkahypar 2>/dev/null || \
-  $DP/.venv/bin/python -m pip install mtkahypar
-$DP/.venv/bin/python -c "import mtkahypar; print(mtkahypar.__version__ if hasattr(mtkahypar,'__version__') else 'ok')"
+uv pip install --python $PY mtkahypar 2>/dev/null || \
+  $PY -m pip install mtkahypar
+$PY -c "import mtkahypar; print(mtkahypar.__version__ if hasattr(mtkahypar,'__version__') else 'ok')"
 ```
 成功後,依安裝版本的官方 README(github.com/kahypar/mt-kahypar 的 Python interface 章節)確認 API 精確簽名 —— 預期形態(以此為底,依實際版本修正):
 ```python
@@ -1191,7 +1199,7 @@ def test_partition_two_clusters():
 - [ ] **Step 3: Run test to verify it fails**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_hgr.py -v
+$PY -m pytest tests/test_hgr.py -v
 ```
 Expected: FAIL(module not found)。
 
@@ -1245,7 +1253,7 @@ def partition_netlist(nl, k, epsilon=0.03, seed=0, threads=8):
 - [ ] **Step 5: Run tests**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_hgr.py -v
+$PY -m pytest tests/test_hgr.py -v
 ```
 Expected: 2 passed(若 mtkahypar API 與預期形態不符,以實際 README 修正 runner 後重跑至 pass;修正內容記入 commit message)。
 
@@ -1322,7 +1330,7 @@ def test_two_stage_simple(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_fence_inject.py -v -m "not slow"
+$PY -m pytest tests/test_fence_inject.py -v -m "not slow"
 ```
 Expected: FAIL(module not found)。
 
@@ -1412,8 +1420,8 @@ def run_two_stage(config_json, k, rtype, seed, out_json):
 - [ ] **Step 4: Run tests + integration**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_fence_inject.py -v -m "not slow"
-DREAMPLACE_ROOT=$DP $DP/.venv/bin/python -m pytest tests/test_fence_inject.py -v -m slow
+$PY -m pytest tests/test_fence_inject.py -v -m "not slow"
+DREAMPLACE_ROOT=$DP $PY -m pytest tests/test_fence_inject.py -v -m slow
 ```
 Expected: 2 passed;slow 1 passed。若 multi-electrostatics 對 simple 這種小 case 數值不穩(density weight 向量化路徑),改用 `install/test/ispd2005/adaptec1.json` 作 integration case 並標記更長 timeout。
 
@@ -1508,7 +1516,7 @@ if __name__ == "__main__":
 
 ```bash
 cd /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer
-PY=$DP/.venv/bin/python; CFG=$DP/install/test/ispd2005
+PY=$DP/.venv312/bin/python; CFG=$DP/install/test/ispd2005
 for MODE in flat two_stage; do
   for K in 8 16; do
     DREAMPLACE_ROOT=$DP $PY -m ioplace.drivers.run_placement --config $CFG/adaptec1.json \
@@ -1624,7 +1632,7 @@ def evaluate_gpu(nl, node_x, node_y, rg, max_degree=256, device="cuda"):
 - [ ] **Step 4: Run tests + 效能量測**
 
 ```bash
-DREAMPLACE_ROOT=$DP $DP/.venv/bin/python -m pytest tests/test_evaluator_gpu.py -v
+DREAMPLACE_ROOT=$DP $PY -m pytest tests/test_evaluator_gpu.py -v
 ```
 Expected: 5 passed。接著量測真實規模(寫成臨時腳本或 `python - <<EOF`,結果記入 Task 13 報告):
 ```bash
@@ -1658,7 +1666,7 @@ git commit -m "feat: GPU evaluator equivalent to reference (batch Prim, prefix-s
 - [ ] **Step 1: 打 patch(DREAMPlace 側)**
 
 ```bash
-cd $DP && git checkout -b io-aware
+cd $DP && (git checkout io-aware 2>/dev/null || git checkout -b io-aware)
 ```
 編輯 `$DP/dreamplace/NonLinearPlace.py`:在 `one_descent_step` 尾端、timing net weighting 區塊(搜尋 `enable_net_weighting`,約 462–497 行)**之後**、`logging.info(cur_metric)` 之前插入:
 ```python
@@ -1671,7 +1679,7 @@ cd $DP && git checkout -b io-aware
 ```bash
 cd $DP && git add dreamplace/NonLinearPlace.py && git commit -m "io-aware: add per-iteration callback hook"
 git diff main io-aware -- dreamplace/NonLinearPlace.py > /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/dp_patch/iteration-callback.patch
-cp $DP/dreamplace/NonLinearPlace.py $DP/install/dreamplace/NonLinearPlace.py   # install 是複本,必須同步
+cmake --build $DP/build312 --target install   # install 是複本,必須同步(fallback 3.9 環境無 build312,改用 cp 直接覆蓋 install/dreamplace/NonLinearPlace.py)
 ```
 驗證同步:`diff $DP/dreamplace/NonLinearPlace.py $DP/install/dreamplace/NonLinearPlace.py` 無輸出。
 
@@ -1771,8 +1779,8 @@ def run_reweight(config_json, k, rtype, seed, out_json, every=100, alpha=0.5):
 - [ ] **Step 5: Run tests**
 
 ```bash
-$DP/.venv/bin/python -m pytest tests/test_reweight.py -v -m "not slow"
-DREAMPLACE_ROOT=$DP $DP/.venv/bin/python -m pytest tests/test_reweight.py -v -m slow
+$PY -m pytest tests/test_reweight.py -v -m "not slow"
+DREAMPLACE_ROOT=$DP $PY -m pytest tests/test_reweight.py -v -m slow
 ```
 Expected: 全 passed;slow test 確認 callback 有被呼叫(`num_reweights >= 1`)。
 
@@ -1797,7 +1805,7 @@ git commit -m "feat: net-reweighting closed loop via DREAMPlace iteration callba
 - [ ] **Step 1: 跑 M1 實驗矩陣**
 
 ```bash
-PY=$DP/.venv/bin/python; CFG=$DP/install/test/ispd2005
+PY=$DP/.venv312/bin/python; CFG=$DP/install/test/ispd2005
 # adaptec1: 3 modes × K∈{8,16,32} grid + K=16 slicing;bigblue4: 3 modes × K=16 grid
 for K in 8 16 32; do
   DREAMPLACE_ROOT=$DP $PY -m ioplace.drivers.run_placement --config $CFG/adaptec1.json \
@@ -1833,7 +1841,7 @@ git commit -m "feat: M1 reweighting comparison report (flat vs two-stage vs rewe
 
 | # | 不確定點 | 對應驗證 |
 |---|---|---|
-| 1 | `.venv/bin/python` 遺失的修復路徑 | Task 1 Step 1 決策樹(三選一 + 最後手段回報) |
+| 1 | Python 3.12 重 build 的相容範圍(distutils、numpy 2.x、舊 pin 依賴) | Task 1 Step 2 失敗處置(3.12 → 3.11 → 修復 3.9 venv 的 fallback 鏈) |
 | 2 | 最終座標取回機制(placedb 回寫 vs placer.pos) | Task 7 Step 1 investigation(比對 simple.gp.pl) |
 | 3 | mtkahypar Python API 精確簽名(版本間變動) | Task 8 Step 1 小圖 smoke test;CLI fallback |
 | 4 | `detailed_place_engine` 欄位名 | Task 7 Step 4 注記(以 install 的 test JSON 為準) |
