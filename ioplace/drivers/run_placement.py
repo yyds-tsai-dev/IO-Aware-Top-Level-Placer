@@ -80,10 +80,10 @@ def extract_final_positions(placer, placedb):
     This is candidate A from the brief, confirmed empirically: after a full `simple`
     GP+LG run, `placedb.node_x/node_y` and `placer.pos[0]` (candidate B, sliced per
     the brief's `pos[:n_phys]` / `pos[n_all:n_all+n_phys]` scheme) were bit-for-bit
-    identical over all num_physical_nodes entries (movable and fixed alike; see
-    task-7-report.md for the comparison run). That equality is structural, not a
-    coincidence of the `simple` benchmark: `apply()` is always the last data-mutating
-    step of `__call__`, and it always assigns from a fresh clone of the same
+    identical over all num_physical_nodes entries (movable and fixed alike). That
+    equality is structural, not a coincidence of the `simple` benchmark: `apply()`
+    is always the last data-mutating step of `__call__`, and it always assigns from
+    a fresh clone of the same
     `self.pos[0]` tensor that candidate B reads. Candidate A is used here because it
     is simpler (no reliance on `pos[0]`'s internal `[x_all | y_all]` layout) and
     matches how the rest of ioplace (`netlist_from_placedb`, Task 2) already reads
