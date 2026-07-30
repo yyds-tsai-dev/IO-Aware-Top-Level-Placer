@@ -199,11 +199,19 @@ cd $DP/install && $PY dreamplace/Placer.py test/simple.json
 ```
 
 Passed after the ABI fix: exit 0, `results/simple/simple.gp.pl` written (valid `UCLA pl 1.0`
-placement, 10 nodes). DREAMPlace's own reported `non-linear placement takes 61.24 seconds`;
-total wall time ~100s including Python/torch/CUDA-context/import startup — notably longer than the
-brief's "數秒" estimate, most likely first-run CUDA module-loading/JIT overhead across the ~30
-separate compiled extension `.so`s (each importing torch and initializing its own CUDA module) on
-a freshly built, never-before-run install; not a functional problem (no errors, correct output).
+placement, 10 nodes). DREAMPlace's own reported `non-linear placement takes 61.24 seconds`
+end-to-end on the first (never-before-run) invocation; total wall time ~100s including
+Python/torch/CUDA-context/import startup — notably longer than the brief's "數秒" estimate. A
+second, immediately-following run (warm OS page cache) reported `30.986 seconds` — roughly half,
+confirming this is dominated by fixed **per-process** overhead (CUDA context creation + CUDA
+module registration for each of the ~30 separately-compiled extension `.so`s, each importing torch
+independently) rather than the actual optimization: the log's own per-iteration timing shows the
+1000-iteration inner loop itself takes ~0.1s total (`iteration 1000, ..., time 0.123ms` is the
+per-iteration figure). **This ~20–60s fixed startup cost should be expected for every fresh
+`Placer.py` invocation** (each run is a new process — there is no cross-process CUDA module
+cache) regardless of problem size; not a functional problem (no errors, correct output both
+times), but worth downstream tasks knowing about before assuming something is wrong or budgeting
+per-invocation time for tests/benchmarks.
 Only benign warnings appeared: Python 3.12 `SyntaxWarning: invalid escape sequence '\s'` from
 LaTeX-style backslashes in `dreamplace/ops/dct/discrete_spectral_transform.py`'s **docstrings**
 (cosmetic only, Python being stricter about this since 3.12; does not affect execution — left
