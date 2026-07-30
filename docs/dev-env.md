@@ -248,3 +248,93 @@ part of any repo) `deps/`, `build312/`, `install.cp39.bak/` directories.
   rebuilding (verified via `diff -rq` immediately after copying), in case of fallback.
 - `$DP/install/` — rebuilt in place; now contains both the old `cpython-38` `.so`s and the new
   `cpython-312` ones (the latter is what a 3.12 interpreter picks up automatically).
+
+## Task 8: Mt-KaHyPar Python package
+
+Installed straight from PyPI into `$PY` (the Task 1 py3.12 venv) — the pip path succeeded on the
+first try, so the brief's source-build CLI fallback was never needed:
+
+```bash
+uv pip install --python $PY mtkahypar
+```
+
+```
+Resolved 1 package in 1.67s
+Downloaded mtkahypar (6.0MiB)
+Installed 1 package in 27ms
+ + mtkahypar==1.6.2
+```
+
+**Version**: `mtkahypar==1.6.2` (pip/dist-info metadata — this is the authoritative version).
+`mtkahypar.__version__` itself reports the literal string `"dev"`, not a semver string, so don't
+rely on it for version checks; use `pip`/`uv pip show` or `importlib.metadata.version("mtkahypar")`
+instead.
+
+**Wheel**: `mtkahypar-1.6.2-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl` — a
+genuine compiled extension module (`mtkahypar.cpython-312-x86_64-linux-gnu.so`, ~65MB, built with
+`scikit-build-core`; bundled shared libs under an adjacent `mtkahypar.libs/`), **not** a
+pure-Python shim. PyPI ships a `cp312`-specific wheel directly, so — contrary to the brief's
+fallback trigger condition ("無 py3.9 wheel") — the py3.12-first environment from Task 1 is
+actually *better* served here than py3.9 would have been; no source build, no `MTKAHYPAR_BIN`
+subprocess/CLI path, no `git clone`/`cmake` needed at all.
+
+### Actual Python API vs. the brief's expected pseudocode
+
+The brief's Step 1 pseudocode was written before install and flagged as "預期形態,以實際安裝版本
+微調". Confirmed via `dir()`/docstring introspection of the installed module *and* cross-checked
+against the upstream README's own Python-interface example
+(`https://raw.githubusercontent.com/kahypar/mt-kahypar/master/README.md`, "The Python Library"
+section). Two real API differences were found, both fixed in `mtkahypar_runner.py`:
+
+1. **`create_hypergraph` takes a nested list, not a flat CSR pair.** Expected form was
+   `create_hypergraph(ctx, num_nodes, num_nets, hyperedge_indices, hyperedges)` (5 args, flat
+   index+data arrays). The installed 1.6.2 API's actual signature (from its own docstring) is:
+   `create_hypergraph(context, num_hypernodes, num_hyperedges, hyperedges: list[list[int]])` —
+   4 args, `hyperedges` is a list of per-net node-id lists (e.g. `[[0,1],[0,2,3],...]`), matching
+   the README's example verbatim. `_hyperedges(nl)` in the runner was written to produce this
+   nested-list shape directly instead of a `(idx, edges)` CSR pair.
+2. **`set_seed` is a module-level function, not a `Context` method.** Expected form was
+   `ctx.set_seed(seed)`. `Context` has no `set_seed` member at all (confirmed via `dir(Context)`);
+   the actual call, matching both the docstring and the README example, is the top-level
+   `mtkahypar.set_seed(seed)`, called after `set_partitioning_parameters(...)` and before
+   `create_hypergraph(...)`.
+
+Everything else in the pseudocode matched exactly as written: `mtkahypar.initialize(threads)` →
+`Initializer`, `mtk.context_from_preset(mtkahypar.PresetType.DEFAULT)`,
+`ctx.set_partitioning_parameters(k, epsilon, mtkahypar.Objective.KM1)`,
+`hg.partition(ctx)` → `PartitionedHypergraph`, `part.block_id(v)`.
+
+### Output noise: one real source found and silenced
+
+At `PresetType.DEFAULT` with default `ctx.logging`/`ctx.verbose_logging` (both `False` out of the
+box), a single `partition_netlist(...)` call is completely silent on both stdout and stderr
+(verified with `pytest -s`, i.e. capture disabled, and with a standalone script piping both
+streams to files) — no explicit suppression was needed for that case.
+
+However, **repeated calls in the same process** (exactly Task 9's planned usage: sweeping
+`k ∈ {8, 16, 32}` without restarting the interpreter) do produce noise: every
+`mtkahypar.initialize(threads)` call after the first process-wide init prints
+`[WARNING] Mt-KaHyPar is already initialized` to **stderr** (Mt-KaHyPar's TBB thread pool is a
+process-global singleton; re-initializing is harmless but was, by default, noisy about it).
+Reproduced with a 3-call loop varying `threads`/`seed`, then fixed by passing
+`mtkahypar.initialize(threads, print_warnings=False)` (a documented kwarg on `initialize`) —
+re-verified silent (0 bytes on stderr) across repeated calls with varying `threads` and `seed`,
+with partition correctness unaffected either way.
+
+### Minimal working call sequence (confirmed against the installed 1.6.2 API)
+
+```python
+import mtkahypar as m
+
+mtk = m.initialize(threads, print_warnings=False)
+ctx = mtk.context_from_preset(m.PresetType.DEFAULT)
+ctx.set_partitioning_parameters(k, epsilon, m.Objective.KM1)
+m.set_seed(seed)
+hg = mtk.create_hypergraph(ctx, num_nodes, num_nets, hyperedges)  # hyperedges: list[list[int]]
+part = hg.partition(ctx)
+parts = [part.block_id(v) for v in range(num_nodes)]
+```
+
+10-node smoke test (two 4-cliques bridged by one net, `k=2`): `parts` cleanly separated the two
+cliques into different blocks (`km1 == 1`, `imbalance == 0.0`), confirming the call sequence above
+end-to-end before `ioplace/partition/mtkahypar_runner.py` was written.
