@@ -68,6 +68,8 @@ def test_evaluate_tiny_netlist():
     assert list(res.per_net_crossings) == [0, 2]
     assert res.ft_count == 0
     assert res.boundary_pair_demand == {(0, 1): 1, (1, 3): 1}
+    assert res.hpwl == pytest.approx(160.0)     # net0: 20+0;net1: 60+80
+    assert res.tree_wl == pytest.approx(160.0)  # net0: 20;net1: 50+90
 
 def test_evaluate_pure_feedthrough():
     rg = _rg22()
@@ -125,3 +127,29 @@ def test_evaluate_bruteforce_random():
                     ids = rg.region_of_points(xs, ys)
                     io_bf += int(np.count_nonzero(np.diff(ids)))
         assert res.io_count == io_bf
+
+def test_evaluate_large_net_lower_bound():
+    # degree > max_degree 的 net 不建樹:presence 下界 = distinct regions - 1,
+    # 計入 io_count 與 large_net_lb;不進 tree_wl / boundary_pair_demand;hpwl 照算。
+    rg = _rg22()
+    n_pins = 5
+    node_x = np.array([10., 20., 60., 70., 90.])
+    node_y = np.array([10., 20., 10., 20., 90.])   # P0,P0,P1,P1,P3 → 3 distinct regions
+    from ioplace.netlist import Netlist
+    nl = Netlist(node_x=node_x, node_y=node_y,
+                 node_size_x=np.ones(n_pins), node_size_y=np.ones(n_pins),
+                 num_movable=n_pins, num_terminals=0, num_terminal_NIs=0,
+                 pin_offset_x=np.zeros(n_pins), pin_offset_y=np.zeros(n_pins),
+                 pin2node=np.arange(n_pins, dtype=np.int32),
+                 pin2net=np.zeros(n_pins, dtype=np.int32),
+                 flat_net2pin=np.arange(n_pins, dtype=np.int32),
+                 flat_net2pin_start=np.array([0, n_pins], dtype=np.int32),
+                 xl=0., yl=0., xh=100., yh=100.)
+    res = evaluate(nl, node_x, node_y, rg, max_degree=2)   # 5 > 2 → 強制走大 net 分支
+    assert list(res.per_net_crossings) == [2]      # 3 regions - 1
+    assert res.large_net_lb == 2
+    assert res.io_count == 2
+    assert list(res.per_net_ft) == [0]
+    assert res.tree_wl == 0.0
+    assert res.boundary_pair_demand == {}
+    assert res.hpwl == pytest.approx(160.0)        # (90-10)+(90-10)
