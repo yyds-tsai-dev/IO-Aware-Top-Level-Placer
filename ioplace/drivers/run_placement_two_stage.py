@@ -7,6 +7,22 @@ from ioplace.netlist import netlist_from_placedb
 from ioplace.partition.mtkahypar_runner import partition_netlist
 from ioplace.region_grid import RegionGrid
 
+def _pick_escape_cell(node2fence_region_map, parts, node_size_x, node_size_y, k):
+    """選一顆 cell 解除 fence(繞 DREAMPlace 隱含 no-fence bucket 為空的 crash)。
+    回傳 cell index。優先挑非 singleton block 中面積最小的 movable cell;
+    全部 block 都是 singleton 時 fallback 到全體中面積最小者。
+
+    `node2fence_region_map` is accepted for interface symmetry with the
+    caller's `node2fence_region_map[idx] = k` mutation step that follows
+    this call, and is intentionally unused here -- this function only
+    *selects* an index, it never mutates.
+    """
+    m = len(parts)
+    area = node_size_x[:m] * node_size_y[:m]
+    safe = np.bincount(parts, minlength=k)[parts] >= 2
+    pool = np.where(safe)[0] if safe.any() else np.arange(m)
+    return int(pool[np.argmin(area[pool])])
+
 def run_two_stage(config_json, k, rtype, seed, out_json):
     import torch
     t0 = time.time()
@@ -53,15 +69,20 @@ def run_two_stage(config_json, k, rtype, seed, out_json):
     # 8-cell `simple` benchmark, where mtkahypar can assign a region as few
     # as 1 cell). Real benchmarks have thousands of cells per partition, so
     # this only matters for tiny/synthetic cases, but the guard is cheap and
-    # keeps the driver correct at any scale.
+    # keeps the driver correct at any scale. Selection logic lives in the
+    # module-level _pick_escape_cell() helper (unit-tested directly in
+    # tests/test_fence_inject.py).
     m = placedb.num_movable_nodes
-    area = placedb.node_size_x[:m] * placedb.node_size_y[:m]
-    safe = np.bincount(parts, minlength=k)[parts] >= 2
-    pool = np.where(safe)[0] if safe.any() else np.arange(m)
-    escape_idx = int(pool[np.argmin(area[pool])])
+    escape_idx = _pick_escape_cell(placedb.node2fence_region_map, parts,
+                                    placedb.node_size_x, placedb.node_size_y, k)
     placedb.node2fence_region_map[escape_idx] = k
 
     # assignment 固有 IO 下界:Σ_e (touched parts − 1)
+    assert placedb.num_terminal_NIs == 0, (
+        "initial_cut_io_lb assumes no terminal_NI (IO pad) nodes; "
+        "extend node_part to num_physical with geometric assignment before using "
+        "benchmarks that have IO pads (e.g. LEF/DEF mempool cases)."
+    )
     node_part = np.concatenate([parts, placedb.node2fence_region_map[
         placedb.num_movable_nodes:]]).astype(np.int64)
     lam = 0

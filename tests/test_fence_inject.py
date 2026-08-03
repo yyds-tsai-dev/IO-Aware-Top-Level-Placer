@@ -30,6 +30,35 @@ def test_inject_rejects_wrong_parts_length():
     with pytest.raises(AssertionError):
         inject_fence_regions(db, rs, np.array([0, 1], dtype=np.int32))
 
+def test_pick_escape_cell_avoids_singletons():
+    from ioplace.drivers.run_placement_two_stage import _pick_escape_cell
+    # 5 movable cells, k=3 blocks; block 2 is a singleton (cell 4 only).
+    parts = np.array([0, 0, 1, 1, 2], dtype=np.int32)
+    # area = [2, 1, 3, 4, 0.5] -- cell 4 (the singleton block) is the
+    # smallest-area cell overall, so a correct implementation must skip it
+    # and instead pick the smallest-area cell among the non-singleton pool
+    # (cell 1, area=1), not the global minimum.
+    node_size_x = np.array([2., 1., 3., 4., 0.5])
+    node_size_y = np.array([1., 1., 1., 1., 1.])
+    node2fence_region_map = np.full(5, -1, dtype=np.int32)  # unused by helper
+    idx = _pick_escape_cell(node2fence_region_map, parts, node_size_x, node_size_y, 3)
+    assert 0 <= idx < len(parts)
+    assert parts[idx] != 2      # not a member of the singleton block
+    assert idx == 1             # min-area cell among the non-singleton pool
+
+def test_pick_escape_cell_all_singletons_fallback():
+    from ioplace.drivers.run_placement_two_stage import _pick_escape_cell
+    # 3 movable cells, k=3 blocks, every block has exactly 1 cell -- no
+    # non-singleton pool exists, so the helper must fall back to the
+    # smallest-area cell over the entire population.
+    parts = np.array([0, 1, 2], dtype=np.int32)
+    node_size_x = np.array([3., 1., 2.])
+    node_size_y = np.array([1., 1., 1.])
+    node2fence_region_map = np.full(3, -1, dtype=np.int32)  # unused by helper
+    idx = _pick_escape_cell(node2fence_region_map, parts, node_size_x, node_size_y, 3)
+    assert 0 <= idx < len(parts)
+    assert idx == 1              # global min-area fallback
+
 # NOTE on the benchmark choice below (see task-9-report.md for full detail):
 #
 # Brief Step 1 originally specified `install/test/simple.json` here. Simple
