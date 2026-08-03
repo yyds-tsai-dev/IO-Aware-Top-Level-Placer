@@ -1187,7 +1187,7 @@ def test_partition_two_clusters():
                  num_movable=8, num_terminals=0, num_terminal_NIs=0,
                  pin_offset_x=np.zeros(len(pins)), pin_offset_y=np.zeros(len(pins)),
                  pin2node=np.array(pins, np.int32), pin2net=np.array(p2n, np.int32),
-                 flat_net2pin=np.array(pins, np.int32),
+                 flat_net2pin=np.arange(len(pins), dtype=np.int32),
                  flat_net2pin_start=start.astype(np.int32),
                  xl=0., yl=0., xh=10., yh=10.)
     parts = partition_netlist(nl, 2, seed=1)
