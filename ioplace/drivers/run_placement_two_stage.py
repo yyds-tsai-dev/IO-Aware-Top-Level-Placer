@@ -37,7 +37,15 @@ def run_two_stage(config_json, k, rtype, seed, out_json):
     # initial_cut_io_lb/fence_compliance) and `rs0` are left untouched, so
     # this only affects DREAMPlace's internal filler bookkeeping, not our
     # reported partition semantics -- worst-case impact on fence_compliance
-    # is 1/num_movable_nodes (negligible for real benchmarks).
+    # is 1/num_movable_nodes (negligible for real benchmarks; confirmed
+    # exactly 1/210904 == the entire gap from 1.0 on adaptec1).
+    #
+    # Unrelated to, and still needed after, the separate shapely 2.x
+    # compatibility patch on $DREAMPLACE_ROOT's `io-aware` branch (see
+    # ioplace/dp_patch/shapely2-compat.patch) -- that patch fixes NaN
+    # region bounds in slice_non_fence_region; this fixes the always-empty
+    # filler bucket in calc_num_filler_for_fence_region. Different
+    # functions, different files, both needed.
     #
     # The escaped cell must not be the *sole* member of its own partition
     # block, or emptying that block's mask just moves the identical crash

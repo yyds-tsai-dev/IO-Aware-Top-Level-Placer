@@ -33,51 +33,27 @@ def test_inject_rejects_wrong_parts_length():
 # NOTE on the benchmark choice below (see task-9-report.md for full detail):
 #
 # Brief Step 1 originally specified `install/test/simple.json` here. Simple
-# (8 movable cells) runs GP+LG to completion without crashing, but with only
-# ~1-3 cells per region the multi-fence-region solver cannot legalize
-# cleanly: LG logs "out of fence region" errors and fence_compliance == 0.5,
-# far below the 0.9 bar -- the "small case instability" the brief's own
-# Step 4 anticipated.
+# (8 movable cells) is too small/size-homogeneous for the multi-fence-region
+# solver to legalize reliably -- fence_compliance was observed at 0.5-0.875
+# across runs, and DREAMPlace's filler-sizing heuristic can even crash
+# initialize() non-deterministically on it -- the "small case instability"
+# brief Step 4 anticipated. Per brief Step 4's own fallback ("若 simple ...
+# 改用 adaptec1.json"), this test targets adaptec1 instead; `simple` is not
+# used as an integration case (known, out-of-scope small-case instability).
 #
-# Per brief Step 4's own fallback ("若 simple ... 改用 adaptec1.json"), this
-# test targets adaptec1 instead. adaptec1 hits a *different*, deeper issue:
-# PlaceDB.initialize() unconditionally calls
-# dreamplace.ops.fence_region.fence_region.slice_non_fence_region() for
-# every fence region, which slices the die by every region/terminal box
-# edge x-coordinate and intersects each slice with the non-fence polygon.
-# adaptec1 has 480/543 terminals whose bbox extends outside the placeable
-# core (padframe-style fixed macros, e.g. terminal 28 at x=9552,y=22 with
-# size 72x432 against die (459,459,11151,11139)) -- entirely expected for a
-# real macro-heavy design. A slice built from two such out-of-core
-# x-coordinates never overlaps the die, so
-# `non_fence_region.intersection(cvx_hull)` is topologically empty; under
-# the installed shapely (2.1.2), that empty-result Polygon's `.bounds` is
-# `(nan, nan, nan, nan)` (len 4) instead of `()`, so it slips past
-# `slice_non_fence_region`'s `len(intersect.bounds) == 4` emptiness filter.
-# The resulting NaN box feeds straight into the region's electric-potential
-# density map, and `NonLinearPlace`'s very first objective/gradient
-# evaluation crashes with `TypeError: fixed_density_map(): incompatible
-# function arguments` (a NaN-valued 0-d tensor lands where a plain float is
-# expected). Reproduced directly against 4 fence regions x 543 real
-# terminals outside this driver; independent of k, rtype and of the
-# fence_inject escape-valve workaround above -- it is a pre-existing
-# DREAMPlace/shapely version incompatibility in
-# dreamplace/ops/fence_region/fence_region.py::slice_non_fence_region
-# (merge=True path), not something introduced by our injection. DREAMPlace
-# source is off-limits (Global Constraints), so this cannot be fixed from
-# our driver; xfail documents it and will flip to XPASS (a "please
-# investigate" signal) if a DREAMPlace/shapely upgrade ever resolves it.
+# adaptec1 previously hit a separate DREAMPlace bug in
+# dreamplace.ops.fence_region.fence_region.slice_non_fence_region(): 480/543
+# terminals have a bbox edge outside the core die bbox (padframe-style fixed
+# macros), producing a die slice that never overlaps the die, so shapely's
+# intersection is topologically empty -- but under shapely 2.1.2 an
+# empty-result Polygon's `.bounds` is `(nan, nan, nan, nan)` (len 4) instead
+# of `()`, slipping past the `len(intersect.bounds) == 4` emptiness filter
+# and poisoning the region's density map with NaN, crashing NonLinearPlace's
+# first obj/grad eval. Fixed upstream via a minimal, coordinator-authorized
+# compatibility patch on the `io-aware` branch of $DREAMPLACE_ROOT (see
+# ioplace/dp_patch/shapely2-compat.patch and task-9-report.md) -- this test
+# now runs the real assertions, not xfail.
 @pytest.mark.slow
-@pytest.mark.xfail(
-    reason="DREAMPlace bug: slice_non_fence_region's merge=True path treats "
-           "shapely's NaN-bounds empty-Polygon result (for a die slice built "
-           "from an out-of-core terminal x-coordinate) as a real box, "
-           "poisoning the region's density map with NaN and crashing "
-           "NonLinearPlace's first obj/grad eval with a TypeError. Hit "
-           "reliably on adaptec1 (480/543 terminals extend outside the core "
-           "bbox); not fixable without editing DREAMPlace source. See "
-           "task-9-report.md.",
-    raises=TypeError, strict=False)
 def test_two_stage_adaptec1(tmp_path):
     import os
     from ioplace.drivers.run_placement_two_stage import run_two_stage
