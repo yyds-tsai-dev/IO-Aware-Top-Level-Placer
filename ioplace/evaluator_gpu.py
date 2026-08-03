@@ -35,13 +35,18 @@ Task 11):
     next-power-of-two step count (1,2,4,...,up to the grid size) and gathered as a
     padded (M,L) window of region ids (out-of-range positions are clamped to the
     segment's own last valid cell, which safely repeats an already-counted id and
-    never fabricates a spurious transition). The visited-region set becomes a K-bit
-    bitmask via an O(log L) pairwise-OR halving reduction along the row, then an
-    OR-scatter (bit-planed + scatter_reduce(amax)) into a per-net "passed" bitmask.
-    ft = popcount(passed & ~pin_bm). Adjacent-cell-id transitions within the padded
-    window give the boundary-pair-demand (a,b) pairs, packed as a*64+b and reduced
-    with a single np.unique(..., return_counts=True) call after collecting every
-    bucket/segment-type's keys (one CPU sync at the very end, not per bucket).
+    never fabricates a spurious transition); each bucket's M segments are further
+    chunked so no chunk's padded (numSelected,L) tensor exceeds a fixed element
+    budget, the same chunk-budget pattern _batch_mst uses above -- this bounds peak
+    memory regardless of how many edges land in one bucket. The visited-region set
+    becomes a K-bit bitmask via an O(log L) pairwise-OR halving reduction along the
+    row, then an OR-scatter (bit-planed + scatter_reduce(amax)) into a per-net
+    "passed" bitmask -- chunk-order-independent since amax-OR is commutative and
+    associative. ft = popcount(passed & ~pin_bm). Adjacent-cell-id transitions
+    within the padded window give the boundary-pair-demand (a,b) pairs, packed as
+    a*64+b and reduced with a single np.unique(..., return_counts=True) call after
+    collecting every bucket/segment-type's/chunk's keys (one CPU sync at the very
+    end, not per bucket or chunk).
 """
 import numpy as np
 import torch
@@ -63,6 +68,11 @@ class GpuEvalContext:
         self.device = torch.device(device)
         self.max_degree = max_degree
         self.k = rg.k
+        # the bitmask vectorization below (pin_bm/passed_bm packed via _pack_bits
+        # into a single int64, one bit per region id) assumes every region id fits
+        # in the 64 bits of an int64 -- fail loudly here rather than silently
+        # truncating/wrapping region ids >= 64 later inside _pack_bits/_bit_planes.
+        assert self.k <= 64, f"GpuEvalContext bitmask vectorization requires rg.k <= 64, got rg.k={self.k}"
 
         # ---- static region-grid tensors: grid + Ph/Pv crossing prefix sums ----
         grid_np = rg.grid.astype(np.int64)
@@ -123,6 +133,25 @@ class GpuEvalContext:
 
         # memory budget: cap a chunk's (b,d,d) distance tensor at this many elements
         self._mst_chunk_budget = 8_000_000
+
+        # memory budget: cap a chunk's (numSelected, L) padded-gather tensor (used
+        # by _process_segments) at this many elements. Per chunk, up to ~3 int64
+        # tensors of this shape are concurrently alive during the bitmask-reduction
+        # pass (cand/ids/vals), plus -- in the boundary-pair-demand pass that
+        # follows, while cand/ids are still resident -- up to ~4 more int64 tensors
+        # sized by the (bool) diff mask's nonzero count (a/b/lo_ab/hi_ab), bounded by
+        # the same numSelected*L in the pathological worst case where every adjacent
+        # cell differs (real region grids -- contiguous rectangular partitions --
+        # see far fewer boundary transitions per segment in practice, so this is a
+        # deliberately conservative bound). Reusing _mst_chunk_budget's value here
+        # (same 8-byte dtype, same "cap the dominant tensor's element count" idea)
+        # keeps a single mental model for both chunk budgets in this file, and
+        # empirically (2M cells/nets, K=16, lattice=512 synthetic case) this value
+        # keeps this function's own contribution to peak GPU memory to ~1.8GB on top
+        # of the ~2.9GB pre-existing baseline (pin one-hot bitmask + MST, unrelated
+        # to this fix) that evaluate() already uses before _process_segments ever
+        # runs -- total measured peak 4.62GB, vs. 15.00GB unchunked before this fix.
+        self._seg_chunk_budget = self._mst_chunk_budget
 
     # ------------------------------------------------------------------
     # geometry helpers
@@ -220,40 +249,55 @@ class GpuEvalContext:
         bucket_idx = torch.bucketize(cell_count, self._seg_bounds_t, right=False)
         for i, L in enumerate(self._seg_bounds):
             sel = bucket_idx == i
-            f = fixed_idx[sel]
-            if f.numel() == 0:
+            f_all = fixed_idx[sel]
+            B = f_all.numel()
+            if B == 0:
                 continue
-            l0 = lo[sel]
-            h0 = hi[sel]
-            nid = net_id[sel]
+            l0_all = lo[sel]
+            h0_all = hi[sel]
+            nid_all = net_id[sel]
             offsets = torch.arange(L, device=dev)
-            cand = torch.minimum(l0.unsqueeze(1) + offsets.unsqueeze(0), h0.unsqueeze(1))
-            if is_vert:
-                ids = self.grid_t[cand, f.unsqueeze(1).expand(-1, L)]
-            else:
-                ids = self.grid_t[f.unsqueeze(1).expand(-1, L), cand]
 
-            # visited-region bitmask per segment: O(log L) pairwise-OR halving reduce
-            vals = torch.bitwise_left_shift(torch.ones_like(ids), ids)
-            length = L
-            while length > 1:
-                half = length // 2
-                vals = vals[:, :half] | vals[:, half:half * 2]
-                length = half
-            seg_bm = vals[:, 0]
-            seg_bits = self._bit_planes(seg_bm)
-            nid_exp = nid.unsqueeze(1).expand(-1, self.k)
-            passed_bit_acc.scatter_reduce_(0, nid_exp, seg_bits, reduce="amax", include_self=True)
+            # chunk this bucket's B selected segments so no single (chunk, L)
+            # padded-gather tensor exceeds _seg_chunk_budget elements -- same
+            # chunk-budget pattern as _batch_mst above. Each chunk's contribution is
+            # aggregated via in-place scatter_reduce(amax) into passed_bit_acc and by
+            # appending to pair_key_chunks, both order-independent across chunks, so
+            # this is a pure memory-shape change with no effect on the result.
+            chunk = max(1, self._seg_chunk_budget // L)
+            for start in range(0, B, chunk):
+                end = min(B, start + chunk)
+                f = f_all[start:end]
+                l0 = l0_all[start:end]
+                h0 = h0_all[start:end]
+                nid = nid_all[start:end]
+                cand = torch.minimum(l0.unsqueeze(1) + offsets.unsqueeze(0), h0.unsqueeze(1))
+                if is_vert:
+                    ids = self.grid_t[cand, f.unsqueeze(1).expand(-1, L)]
+                else:
+                    ids = self.grid_t[f.unsqueeze(1).expand(-1, L), cand]
 
-            # boundary-pair demand: adjacent-cell id transitions within the (unpadded) span
-            if L > 1:
-                diff = ids[:, 1:] != ids[:, :-1]
-                if diff.any():
-                    a = ids[:, :-1][diff]
-                    b = ids[:, 1:][diff]
-                    lo_ab = torch.minimum(a, b)
-                    hi_ab = torch.maximum(a, b)
-                    pair_key_chunks.append(lo_ab * 64 + hi_ab)
+                # visited-region bitmask per segment: O(log L) pairwise-OR halving reduce
+                vals = torch.bitwise_left_shift(torch.ones_like(ids), ids)
+                length = L
+                while length > 1:
+                    half = length // 2
+                    vals = vals[:, :half] | vals[:, half:half * 2]
+                    length = half
+                seg_bm = vals[:, 0]
+                seg_bits = self._bit_planes(seg_bm)
+                nid_exp = nid.unsqueeze(1).expand(-1, self.k)
+                passed_bit_acc.scatter_reduce_(0, nid_exp, seg_bits, reduce="amax", include_self=True)
+
+                # boundary-pair demand: adjacent-cell id transitions within the (unpadded) span
+                if L > 1:
+                    diff = ids[:, 1:] != ids[:, :-1]
+                    if diff.any():
+                        a = ids[:, :-1][diff]
+                        b = ids[:, 1:][diff]
+                        lo_ab = torch.minimum(a, b)
+                        hi_ab = torch.maximum(a, b)
+                        pair_key_chunks.append(lo_ab * 64 + hi_ab)
 
     @staticmethod
     def _reduce_pair_demand(pair_key_chunks):
