@@ -1,0 +1,16 @@
+{
+ "mode": "two_stage",
+ "config": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/install/test/ispd2005/adaptec1.json",
+ "k": 8,
+ "rtype": "grid",
+ "seed": 0,
+ "runtime_s": 89.3670105934143,
+ "peak_mem_mb": 371.390625,
+ "initial_cut_io_lb": 17178,
+ "fence_compliance": 0.9999952585062398,
+ "io_count": 33780,
+ "ft_count": 15911,
+ "tree_wl": 286246732.1748047,
+ "hpwl": 266381745.1748047,
+ "large_net_lb": 14
+}

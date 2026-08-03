@@ -1,0 +1,16 @@
+{
+ "mode": "two_stage",
+ "config": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/install/test/ispd2005/bigblue4.json",
+ "k": 16,
+ "rtype": "grid",
+ "seed": 0,
+ "runtime_s": 3752.6980781555176,
+ "peak_mem_mb": 6688.00927734375,
+ "initial_cut_io_lb": 104103,
+ "fence_compliance": 0.9999995389969403,
+ "io_count": 236635,
+ "ft_count": 130676,
+ "tree_wl": 5998346593.355469,
+ "hpwl": 5718403942.355469,
+ "large_net_lb": 31
+}
