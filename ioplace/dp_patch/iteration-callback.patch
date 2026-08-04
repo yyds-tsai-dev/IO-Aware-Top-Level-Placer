@@ -1,0 +1,16 @@
+diff --git a/dreamplace/NonLinearPlace.py b/dreamplace/NonLinearPlace.py
+index 073bbf2..58afdfa 100644
+--- a/dreamplace/NonLinearPlace.py
++++ b/dreamplace/NonLinearPlace.py
+@@ -513,6 +513,11 @@ class NonLinearPlace(BasicPlace.BasicPlace):
+                     if optimizer_name.lower() == "nesterov":
+                         cur_metric.objective = optimizer.param_groups[0]["obj_k_1"][0].data.clone()
+ 
++                    # io-aware: external per-iteration callback (see IO-Aware-Top-Level-Placer)
++                    cb = getattr(self, "iteration_callback", None)
++                    if cb is not None:
++                        cb(iteration, pos)
++
+                     # actually reports the metric before step
+                     logging.info(cur_metric)
+                     # record the best outer cell overflow
