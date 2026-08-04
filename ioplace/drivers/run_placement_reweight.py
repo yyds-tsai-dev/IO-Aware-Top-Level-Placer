@@ -42,11 +42,16 @@ def run_reweight(config_json, k, rtype, seed, out_json, every=100, alpha=0.5):
     placer(params, placedb, lr)
     node_x, node_y = extract_final_positions(placer, placedb)
     _, metrics = _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed)
+    # Task 12 review follow-up: placer is a local var (not returned), so this
+    # is the only way for tests to see the live net_weights tensor's range.
+    nw = placer.data_collections.net_weights.detach().cpu().numpy()
     result = {"mode": "reweight", "config": config_json, "k": k, "rtype": rtype,
               "seed": seed, "reweight_every": every, "alpha": alpha,
               "num_reweights": state["count"], "runtime_s": time.time() - t0,
               "peak_mem_mb": torch.cuda.max_memory_allocated() / 2**20
-              if torch.cuda.is_available() else 0.0, **metrics}
+              if torch.cuda.is_available() else 0.0,
+              "net_weights_min": float(nw.min()), "net_weights_max": float(nw.max()),
+              **metrics}
     os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)
     with open(out_json, "w") as f:
         json.dump(result, f, indent=1)
