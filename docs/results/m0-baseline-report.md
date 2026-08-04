@@ -8,91 +8,64 @@
 | adaptec1 | flat | 16 | grid | 0 | 30,011 | 2,582 | 84,655,386.0 | 73,928,933.0 | 58.3 | 140.8 |
 | adaptec1 | flat | 16 | slicing | 0 | 36,600 | 7,308 | 84,637,857.0 | 73,890,377.0 | 58.8 | 140.8 |
 | adaptec1 | flat | 8 | grid | 0 | 22,405 | 1,981 | 84,680,077.0 | 73,955,613.0 | 60.7 | 140.8 |
-| adaptec1 | two_stage | 16 | grid | 0 | 44,904 | 24,360 | 249,720,736.4 | 233,492,867.4 | 107.0 | 500.8 |
-| adaptec1 | two_stage | 16 | slicing | 0 | 58,850 | 37,341 | 266,599,568.3 | 247,521,637.2 | 103.1 | 506.6 |
-| adaptec1 | two_stage | 8 | grid | 0 | 33,780 | 15,911 | 286,246,732.2 | 266,381,745.2 | 89.4 | 371.4 |
+| adaptec1 | two_stage | 16 | grid | 0 | 36,783 | 16,494 | 243,933,433.2 | 226,599,966.2 | 106.5 | 501.2 |
+| adaptec1 | two_stage | 16 | slicing | 0 | 50,089 | 26,201 | 260,501,940.3 | 240,057,731.6 | 111.1 | 503.4 |
+| adaptec1 | two_stage | 8 | grid | 0 | 28,266 | 12,282 | 240,420,189.9 | 224,371,075.9 | 89.5 | 369.8 |
 
 ## bigblue4
 
 | case | mode | k | rtype | seed | io_count | ft_count | tree_wl | hpwl | runtime_s | peak_mem_mb |
 |---|---|---|---|---|---|---|---|---|---|---|
 | bigblue4 | flat | 16 | grid | 0 | 100,108 | 7,045 | 857,859,395.0 | 748,503,270.0 | 545.5 | 1,670.9 |
-| bigblue4 | two_stage | 16 | grid | 0 | 236,635 | 130,676 | 5,998,346,593.4 | 5,718,403,942.4 | 3,752.7 | 6,688.0 |
+| bigblue4 | two_stage | 16 | grid | 0 | 178,594 | 77,899 | 4,693,332,230.1 | 4,459,824,739.1 | 3,738.2 | 6,686.1 |
 
 ---
 
 ## M0 exit 檢核
 
-矩陣完成度:**8/8 runs**(adaptec1 × {flat, two_stage} × {k8-grid, k16-grid, k16-slicing} = 6,bigblue4 × {flat, two_stage} × k16-grid = 2)。無 FAILED 格,全部 run 以 exit code 0 結束並產出合法 JSON + npz。
+### baseline 修正
 
-### Sanity check 1 — flat 的 hpwl 應低於 two_stage:**PASS**
+修正內容:two-stage baseline 原本把 mtkahypar 回傳的 partition block id 直接當作幾何 region id 注入 fence(`fence_inject.py` 內 `fence_map[:m] = parts`),block id 與 region 的物理相鄰關係毫無對應;現改由新增的 `assign_blocks_to_regions()`(`ioplace/drivers/run_placement_two_stage.py`,貪婪初始指派 + 2-opt pairwise region swap,依 block-pair connectivity `C` 與 region 中心 Manhattan 距離 `D` 做指派)先把高連通度的 block 對齊到幾何相鄰的 region,再重跑受影響的 4 個 two_stage 格。
 
-| case (k, rtype) | hpwl(flat) | hpwl(two_stage) | 倍率 |
-|---|---:|---:|---:|
-| adaptec1 (k8, grid) | 73,955,613 | 266,381,745 | 3.60× |
-| adaptec1 (k16, grid) | 73,928,933 | 233,492,867 | 3.16× |
-| adaptec1 (k16, slicing) | 73,890,377 | 247,521,637 | 3.35× |
-| bigblue4 (k16, grid) | 748,503,270 | 5,718,403,942 | 7.64× |
+修正前後對照(舊值取自 `git show e8f0824:docs/results/m0-baseline-report.md`;新值取自本次重跑的 JSON,時間戳 17:05–18:12):
 
-四組配對(matched k/rtype)全數符合預期:two_stage 的 fence 約束犧牲了自由度,hpwl 一致顯著高於 flat(3.2×–7.6×,且 benchmark 越大代價越高 —— bigblue4 的 7.64× 遠高於 adaptec1 的 ~3.2–3.6×)。
+| case (k, rtype) | io_count 舊→新 | ft_count 舊→新 | hpwl 舊→新 | runtime_s 舊→新 |
+|---|---:|---:|---:|---:|
+| adaptec1 (k8, grid) | 33,780 → 28,266(0.84×) | 15,911 → 12,282(0.77×) | 266,381,745.2 → 224,371,075.9(0.84×) | 89.4 → 89.5(1.00×) |
+| adaptec1 (k16, grid) | 44,904 → 36,783(0.82×) | 24,360 → 16,494(0.68×) | 233,492,867.4 → 226,599,966.2(0.97×) | 107.0 → 106.5(1.00×) |
+| adaptec1 (k16, slicing) | 58,850 → 50,089(0.85×) | 37,341 → 26,201(0.70×) | 247,521,637.2 → 240,057,731.6(0.97×) | 103.1 → 111.1(1.08×) |
+| bigblue4 (k16, grid) | 236,635 → 178,594(0.75×) | 130,676 → 77,899(0.60×) | 5,718,403,942.4 → 4,459,824,739.1(0.78×) | 3,752.7 → 3,738.2(1.00×) |
 
-### Sanity check 2 — two_stage 的 io_count 應明顯低於 flat:**FAIL(方向相反)**
+四格全數下降(io 0.75×–0.85×,ft 0.60×–0.77×,hpwl 0.78×–0.97×),方向與「幾何相鄰對齊減少不必要繞路」的修正意圖一致,bigblue4/adaptec1-k16-grid 的 ft_count 降幅最大(0.60×/0.68×)。runtime 三格持平(1.00×),k16-slicing 上升到 1.08×,兩者皆未進一步歸因根因。
 
-| case (k, rtype) | io_count(flat) | io_count(two_stage) | 倍率 | initial_cut_io_lb | io_count/lb |
-|---|---:|---:|---:|---:|---:|
-| adaptec1 (k8, grid) | 22,405 | 33,780 | 1.51× | 17,178 | 1.97× |
-| adaptec1 (k16, grid) | 30,011 | 44,904 | 1.50× | 20,333 | 2.21× |
-| adaptec1 (k16, slicing) | 36,600 | 58,850 | 1.61× | 20,461 | 2.88× |
-| bigblue4 (k16, grid) | 100,108 | 236,635 | 2.36× | 104,103 | 2.27× |
+### sanity 重評
 
-四組配對**全數不符**brief 的預期方向 —— two_stage 的 `io_count` 不是「明顯低於」flat,而是一致地**高於** flat(1.5×–2.36×)。`ft_count` 的落差更誇張(two_stage/flat 比值:adaptec1 k8 = 8.03×,k16-grid = 9.43×,k16-slicing = 5.11×,bigblue4 = 18.55×;逐格算法見下方診斷)。這是如實記錄,不挑數字。
+**Sanity 1 — hpwl(flat) < hpwl(two_stage):仍 PASS。**
 
-**診斷假設(已用程式碼追查驗證,非臆測):**
+| case (k, rtype) | hpwl(flat) | hpwl(two_stage) 新 | 倍率(新) | 倍率(舊) |
+|---|---:|---:|---:|---:|
+| adaptec1 (k8, grid) | 73,955,613 | 224,371,075.9 | 3.03× | 3.60× |
+| adaptec1 (k16, grid) | 73,928,933 | 226,599,966.2 | 3.07× | 3.16× |
+| adaptec1 (k16, slicing) | 73,890,377 | 240,057,731.6 | 3.25× | 3.35× |
+| bigblue4 (k16, grid) | 748,503,270 | 4,459,824,739.1 | 5.96× | 7.64× |
 
-1. **`io_count`/`ft_count` 量的是「最終幾何 MST 的 boundary crossing / feed-through」,不是「hypergraph 的 cut 數」。** 後者對應 `initial_cut_io_lb`(`run_placement_two_stage.py` 內 `lam = Σ_e (touched_parts − 1)`,spec 定義的 assignment 層級下界)。表中最後一欄確認 `io_count ≥ initial_cut_io_lb` 在全部 4 組都成立(1.97×–2.88×,相對穩定的倍率窄帶,不像隨機雜訊或 bug 造成的離散結果)—— pipeline 內部是自洽的,`initial_cut_io_lb` 忠實扮演下界角色;問題出在「下界」與「flat 的實際值」之間的相對大小。
+四格 flat 的 hpwl 仍全部低於 two_stage,倍率全數縮小(修正減少了幾何繞路造成的額外膨脹),但 fence 約束犧牲自由度的結構性代價依然存在,方向未變。
 
-2. **root cause:mtkahypar 的 block id 與 region 的物理相鄰關係無關,而 `fence_inject.py` 把兩者直接劃等號。** 追查 `ioplace/partition/mtkahypar_runner.py::partition_netlist`:呼叫 `ctx.set_partitioning_parameters(k, epsilon, mtkahypar.Objective.KM1)` 只讓 mtkahypar 對**抽象 hypergraph** 做 K-way min-cut(minimize Σ(touched_parts−1)),回傳的 `block_id ∈ [0,k)` 對 mtkahypar 而言只是「顏色標籤」,對哪個 block 在物理上跟哪個 block 相鄰**一無所知**。另一方面 `ioplace/drivers/run_placement.py::get_regions_for`(經 `GRID_SHAPES`/`make_grid_regions`)產生的是**純幾何**、row-major 順序的 K 個 die 上矩形 tile,同樣與 netlist 結構無關。兩者由 `ioplace/fence_inject.py:29`(`fence_map[:m] = parts.astype(np.int32)`)直接以「block_id 當 region 索引」接起來,**中間沒有任何「把便宜切的 block pair 對齊到物理相鄰 tile」的 remapping 步驟**。因此一條被 mtkahypar 判定「切得便宜」的 net(只跨 2 個 block,對 mtkahypar 而言 cost 很低)完全可能被指派到兩個**物理上不相鄰**(例如網格對角、或 slicing 樹上很遠)的 region;其幾何最小生成樹要接起這兩個相距很遠的 pin 群,不但被迫拉長(這正是 hpwl 3–8× 膨脹的來源),而且很可能中途「路過」數個原本與該 net 完全無關的中間 region —— 每一次路過都各自貢獻一次 boundary crossing(推高 `io_count`)與一次 empty-region feed-through(推高 `ft_count`,故其膨脹倍率比 `io_count` 更誇張)。
+**Sanity 2 — io_count(two_stage) 應明顯低於 flat:仍 FAIL(方向相反),如實記錄。**
 
-3. **與 flat 對照:** flat 沒有 fence 約束,GP 本身以 HPWL 最小化驅動,同一 net 的 pins 自然被拉在一起;雖然固定的 region grid 事後疊上去仍會產生一些跨界(flat 的 `io_count` 並非 0),但那些跨界幾乎都是「短程、鄰近 tile」的局部效應,較少發生長途路過。這與觀察到的「flat 的 ft_count 遠低於 two_stage」(5×–18.6×)一致。
+| case (k, rtype) | io_count(flat) | io_count(two_stage) 新 | 倍率(新) | 倍率(舊) | initial_cut_io_lb 新 | lb/io(flat) |
+|---|---:|---:|---:|---:|---:|---:|
+| adaptec1 (k8, grid) | 22,405 | 28,266 | 1.26× | 1.51× | 15,736 | 0.70× |
+| adaptec1 (k16, grid) | 30,011 | 36,783 | 1.23× | 1.50× | 19,594 | 0.65× |
+| adaptec1 (k16, slicing) | 36,600 | 50,089 | 1.37× | 1.61× | 20,214 | 0.55× |
+| bigblue4 (k16, grid) | 100,108 | 178,594 | 1.78× | 2.36× | 98,847 | 0.99× |
 
-4. **這是 M0 baseline 的結構性特徵,不是 driver/evaluator 的 bug。** Global Constraints 定義 `io_count`/`ft_count` 的語意就是幾何 tree-crossing(非拓樸 cut),spec 也明確把 region 幾何列為固定輸入、partition 只優化 cut,兩者本就不是同一個目標函數。M0 的兩階段 baseline(partition 完全不知道 region 的物理佈局)是刻意的最簡單版本,為後續里程碑(例如把 partition 目標換成「已知 region 相鄰圖」的 geometry-aware 版本,或 M1 的 reweight 迴路用 soft 方式把 cell 拉回)留出空間;M0 exit 的任務只是「把兩條 baseline 老實跑出來、比較清楚」,而非「驗證 two_stage 一定比 flat 好」。這個發現對後續里程碑的設計是有意義的輸入,建議記錄留給下一階段參考。
+四格 two_stage 的 io_count 依然高於 flat(方向不變,如實記錄,不挑數字),但倍率全數從 1.50×–2.36× 收斂到 1.23×–1.78×,與 baseline 修正後 ft_count/hpwl 同步改善的方向一致。
 
-### Runtime / peak memory(每格)
+觀察(min-cut 的 λ−1 下界 vs 幾何 crossing 的關係):四格修正後的 `initial_cut_io_lb`(assignment 本身 Σ_e(touched_parts−1) 的下界,語意上是 hypergraph cut 量,與 block↔region 的幾何重排無關——`assign_blocks_to_regions` 對 `parts` 做的是 block id → region id 的 bijective relabeling,任一 net 觸及的相異 id 數在 bijection 下不變,理論上不可能改變這個下界)本身在四格**全部低於** flat 的 io_count(lb/io(flat) = 0.55×–0.99×,bigblue4 最接近打平,僅差 1.3%)——代表如果幾何 MST 能完美貼合這個下界,two_stage 理論上該打平甚至贏過 flat。但實際 io_count/lb 比值仍有 1.80×–2.48×(雖然已比修正前的 1.97×–2.88× 收斂;修正前後的逐格 io/lb 倍率:adaptec1 k8 1.97×→1.80×,k16-grid 2.21×→1.88×,k16-slicing 2.88×→2.48×,bigblue4 2.27×→1.81×),說明目前擋住 two_stage 追平 flat 的主因不是 partition 本身切得不夠好(它的下界已經比 flat 低),而是「把 hypergraph cut 結果轉成幾何 MST crossing」這一步仍有相當損耗——即使 block 已對齊到相鄰 region,region 內部的實際落點與 MST 路徑仍可能繞路。
 
-| case | mode | k | rtype | runtime_s | runtime(近似) | peak_mem_mb |
-|---|---|---:|---|---:|---|---:|
-| adaptec1 | flat | 8 | grid | 60.7 | 1分1秒 | 140.8 |
-| adaptec1 | flat | 16 | grid | 58.3 | 58秒 | 140.8 |
-| adaptec1 | flat | 16 | slicing | 58.8 | 59秒 | 140.8 |
-| adaptec1 | two_stage | 8 | grid | 89.4 | 1分29秒 | 371.4 |
-| adaptec1 | two_stage | 16 | grid | 107.0 | 1分47秒 | 500.8 |
-| adaptec1 | two_stage | 16 | slicing | 103.1 | 1分43秒 | 506.6 |
-| bigblue4 | flat | 16 | grid | 545.5 | 9分6秒 | 1,670.9 |
-| bigblue4 | two_stage | 16 | grid | 3,752.7 | 62分33秒 | 6,688.0 |
+**不確定處明說:** 四格修正後的 `initial_cut_io_lb` 本身也比修正前的舊值低(例如 bigblue4 從 104,103 降到 98,847,adaptec1 三格同向下降)。但如上所述,`assign_blocks_to_regions` 的 bijective relabeling 數學上不可能改變 Σ(touched_parts−1),所以這個下界的變動不可能來自這次修正本身,只能代表兩次 run 底層 mtkahypar 回傳的 partition(block 切法)並不相同。`ioplace/partition/mtkahypar_runner.py::partition_netlist` 呼叫 `mtkahypar.set_seed(seed)` 固定 seed=0,但 `threads=8` 走 TBB 平行的 multilevel coarsening/refinement——平行 hypergraph partitioner(含 Mt-KaHyPar 的 default preset)在多執行緒下普遍不保證 bit-reproducible,即使 seed 固定,這是已知特性但本次未獨立重跑 mtkahypar 隔離驗證。也就是說,上面兩張表「修正前 vs 修正後」的數字差異,除了 `assign_blocks_to_regions` 本身的效果外,還混入了「重跑時 mtkahypar 恰好切出不同 partition」的變異,兩者的相對貢獻本次未拆分——如需精確歸因,需在同一份固定的 mtkahypar 輸出上分別跑「修正前 vs 修正後」的 region 指派做控制實驗,本次沒有做這個隔離。
 
-觀察:
-- adaptec1(211K cells)全部 6 格落在 1–2 分鐘級,符合預期。
-- flat 的 peak_mem_mb 在同一 benchmark 內不隨 k/rtype 變化(140.8 MB / 1,670.9 MB 固定),符合預期 —— flat 完全不建立 fence-region 相關的 GPU 資料結構,k/rtype 只影響 post-hoc 的 evaluator region 疊圖,不影響 GP 階段的記憶體配置。two_stage 的 peak_mem_mb 隨 k 增加(adaptec1 two_stage k8→k16 grid: 371.4→500.8 MB),符合「region 數越多、per-region density/filler 簿記越多」的預期。
-- bigblue4 two_stage 實測 **62.5 分鐘**,遠超任務指示的 10–30 分鐘估計,落在 brief 原估 30–90 分鐘區間內。輪詢過程中以 `nvidia-smi` + `/proc/<pid>`(state/threads/RSS)+ log tail 交叉確認,重建出粗略的三段式時間分佈(polling 間隔約 9–10 分鐘,非逐秒 profiling,邊界為約略值):
-  - **≈0–20 分鐘:Mt-KaHyPar CPU partition。** 啟動後到 t≈19.5 分鐘的檢查點,GPU 皆為 0%、log 因 C++ extension 的 stdout 全緩衝而幾乎無輸出;t≈20 分鐘後的下一次檢查已確認 GPU 跳到 95%(7428 MiB,151 threads,RSS 10.7GB)。
-  - **≈20–49 分鐘(約 29 分鐘):fence-constrained global placement(GPU)。** 這是**佔比最大的單一階段**,且明顯比 flat bigblue4 的「GP+LG+evaluate 全部合計僅 545s(9 分鐘)」慢上 3 倍以上 —— 合理推測 fence 約束大幅限制了每次迭代的搜尋空間(cell 被鎖在 assigned region 內,density/overflow 更難收斂),導致 GP 需要更多 iteration 才能達到 `stop_overflow` 門檻,而非單純資料量放大 16 個 region 的線性開銷。
-  - **≈49–62.5 分鐘(約 13.5 分鐘):最終 Legalization(CPU)+ reference evaluator + JSON/npz 寫出。** t≈49 分鐘的檢查點看到 log 出現本節下方討論的「Standard cell legalization / Greedy legalization / ERROR legality check failed」訊息群(row 889 overlap),與 flat run 收尾前的 Greedy+Abacus legalization 屬同一類 CPU-side 步驟;bigblue4 的 evaluator(io_count/ft_count 皆遠高於 flat)需要走訪的 tree edge 數量也遠多於 flat,合理推測比 flat 評估耗時更久。
+### legality 判讀
 
-過程中 CPU 使用率穩定在 100%+、RSS 平穩不增長(無 leak 跡象),期間持續以 `kill -0`/log tail 監控,始終無 hang/crash 訊號 —— 純粹是三段式運算量大,其中 GP 階段本身(而非原先猜測的 partition 階段)是最大宗。此為下一階段值得記錄的效能觀察(例如 fence 約束下 GP 收斂變慢的具體原因、`partition_netlist` 的 `threads=8` 是否值得開放給呼叫端覆寫成更接近機器實際核數 64),但不影響本次 M0 對照表數字的正確性;三段邊界為粗粒度 polling 觀察,非精確 profiling,未來如需精確數字應改用逐 iteration 計時或 profiler。
-
-### 其他觀察:DREAMPlace 內部 legalizer 訊息(non-fatal)
-
-`two_stage` 模式的每一個 run(adaptec1 3 格 + bigblue4 1 格)在 log 中都會看到 DREAMPlace 內部 `ERROR:root:legality check failed in greedy legalization` 訊息(來自 `placedb.initialize()` 內、per-fence-region 的 filler/legalization 簿記,見 `run_placement_two_stage.py` 對 `calc_num_filler_for_fence_region()` 的既有討論)。這些訊息**全部**發生在 exit code 0、JSON/npz 正常產出的 run 中,不是 crash。
-
-`[ERROR]` 行數統計如實記錄(誠實區分「完整 log」與「只擷取尾段」兩種資料品質,不誇大也不低估):
-
-| case | log 擷取方式 | `[ERROR]` 行數 | out-of-fence-region 行數 | 最終 `fence_compliance` |
-|---|---|---:|---:|---:|
-| adaptec1 two_stage k8-grid | 完整(未截斷) | 5(全部集中在單一 node 39274) | 0 | 0.9999952585062398 |
-| adaptec1 two_stage k16-grid | **僅 tail -40**(真實總數未知) | ≥38(於 tail 內觀察到,全部集中在單一 row 889) | 0(於 tail 內) | 0.9999952585062398 |
-| adaptec1 two_stage k16-slicing | 完整(存檔於 `results/m0/logs/`) | 41,585 | 123(全部落在 region 12) | 0.999412054773736 |
-| bigblue4 two_stage k16-grid | 完整(存檔於 `results/m0/logs/`) | 4 | 0 | 0.9999995389969403 |
-
-關鍵觀察:**真正代表最終正確性的是 `fence_compliance`**(由我們自己的 driver 在放置完成後,依最終座標獨立計算,與 DREAMPlace 內部 log 無關)。k8-grid、k16-grid、bigblue4 三格的 `fence_compliance` 都精確等於「只有那顆刻意釋放的 escape cell 不合規」的公式值(adaptec1 為 1 − 1/210904 = 0.9999952585062398,與 Task 9 已記錄的數字完全吻合;bigblue4 同構但 num_movable 不同,故值不同但同型態)—— 代表 greedy legalization 階段出現的這些 transient `[ERROR]`(不論是 5 行還是 ≥38 行)最終都被後續的 Abacus legalization / GP-LG 流程收斂掉了,沒有殘留成最終落點違規。
-
-只有 **k16-slicing** 例外:41,585 行 `[ERROR]` 中有 123 行是 "out of fence region 12"(明確指出 region 12 是問題來源),對應 `fence_compliance` 降到 0.999412(約 124/210,904 顆 cell 最終落點仍不合規)。診斷假設:slicing 分割在這個 seed 下產生的 region 12 形狀/尺寸相對窄小或不規則,DREAMPlace 逐 row 的貪婪 legalizer 在該區域內較難找到可行排列,且這次未能被後續步驟完全收斂;bigblue4 在同一 k16-grid 設定下 log 乾淨(僅 4 行,無 out-of-region),支持「與特定 region 的幾何形狀相關,而非隨 benchmark 規模惡化」的假設。此現象不影響本報告數字的有效性(所有 `io_count`/`hpwl` 皆基於最終落點座標算得,`fence_compliance` 已誠實反映落點合規率),記錄於此供後續(例如改善 slicing 產生器對窄 region 的保護,呼應 progress.md 已記錄的 Task 3 已知風險)參考。
+`results/m0/logs/bigblue4_two_stage_k16_grid.rerun.log` 尾端的 4 行 `[ERROR]` 都指向同一對 node 的 row-overlap:`grep -o "overlap node [0-9]*" results/m0/logs/bigblue4_two_stage_k16_grid.rerun.log | sort -u` 只得到單一結果 `overlap node 2169386`,且每一行的 `with node` 都是 `node 1`——即 movable node 1 與 fixed macro node 2169386 重疊(2169386 > num_movable_nodes,落在 terminal/macro 範圍,與 fixed macro 的定位一致)。(a) `grep -c "overlap node" results/m0/logs/bigblue4_flat_k16_grid.log` 回傳 0(exit 1,無匹配)——flat 的合法化過程完全沒有這類 overlap,代表這**不是**「benchmark 本身 fixed macro 互相重疊」的通用特性,而是 two_stage/fence 路徑特有的現象。(b) 涉及的 node id 就只有這一對,如上。(c) 該 JSON 的 `fence_compliance = 0.9999995389969403`,驗證後這個值在 float64 精度下 bit-exact 等於 `1 − 1/2169183`(即 2,169,183 顆 movable cell 中恰好 1 顆不合規)——與 `run_placement_two_stage.py::_pick_escape_cell` 刻意釋放單一 escape-valve cell 使其不受 fence 約束的機制完全吻合,是相當有力的旁證。額外交叉檢查(非任務要求但免費且加強證據):同一對 node id(movable 1 / fixed 2169386)也出現在修正前、較早的 `results/m0/logs/bigblue4_two_stage_k16_grid.log`(16:35,同一種 overlap、相近 row 範圍),即這個 escape cell 的身份在兩次 run(底層 mtkahypar partition 疑似不同,見上一節)之間保持一致,與「node 1 的面積在 movable cell 中接近全域最小、幾乎必然落在非 singleton block 內,因此 `_pick_escape_cell` 的 argmin-area 選擇每次都會挑到它」的假設相符;但本次沒有在程式碼中插入 print 直接確認 `escape_idx == 1`,所以「node 1 就是 escape cell」仍是高度支持、但未經直接程式碼驗證的推論,在此明確標注為不確定。
