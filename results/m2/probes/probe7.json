@@ -1,0 +1,56 @@
+{
+ "cases": [
+  {
+   "case": "adaptec1",
+   "k": 8,
+   "io_count": 22405,
+   "sum_lambda_minus_1": 18553,
+   "ratio_io_over_lambda_minus_1": 1.2076214089365602,
+   "nets_with_cross_gt_lam1": 3020,
+   "n_nets_deg_ge2": 216932,
+   "excess_crossings": 3852,
+   "spearman_rho": 0.47541481193027585,
+   "spearman_pvalue": 0.0,
+   "n_nets_spearman": 17485
+  },
+  {
+   "case": "adaptec1",
+   "k": 16,
+   "io_count": 29992,
+   "sum_lambda_minus_1": 24222,
+   "ratio_io_over_lambda_minus_1": 1.2382131946164643,
+   "nets_with_cross_gt_lam1": 4413,
+   "n_nets_deg_ge2": 216932,
+   "excess_crossings": 5770,
+   "spearman_rho": 0.48401345011281294,
+   "spearman_pvalue": 0.0,
+   "n_nets_spearman": 22524
+  },
+  {
+   "case": "adaptec1",
+   "k": 32,
+   "io_count": 49123,
+   "sum_lambda_minus_1": 36186,
+   "ratio_io_over_lambda_minus_1": 1.3575139556734648,
+   "nets_with_cross_gt_lam1": 8515,
+   "n_nets_deg_ge2": 216932,
+   "excess_crossings": 12937,
+   "spearman_rho": 0.5085280868580571,
+   "spearman_pvalue": 0.0,
+   "n_nets_spearman": 32376
+  },
+  {
+   "case": "bigblue4",
+   "k": 16,
+   "io_count": 100736,
+   "sum_lambda_minus_1": 84665,
+   "ratio_io_over_lambda_minus_1": 1.1898186972184492,
+   "nets_with_cross_gt_lam1": 11231,
+   "n_nets_deg_ge2": 2222551,
+   "excess_crossings": 16071,
+   "spearman_rho": 0.39523977912103575,
+   "spearman_pvalue": 0.0,
+   "n_nets_spearman": 81795
+  }
+ ]
+}
