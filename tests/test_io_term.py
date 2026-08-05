@@ -65,12 +65,20 @@ def test_build_csr_drops_net_whose_pins_collapse_to_one_node():
     csr = build_net_node_csr(nl, 100)
     assert list(csr.net_ids) == [1]
 
-def test_net_mask_io_matches_dreamplace_predicate():
-    """DP: net_mask_ignore_large_degrees = (2 <= deg) & (deg < ignore_net_degree)."""
+@pytest.mark.parametrize("ignore", [2, 3, 4])
+def test_net_mask_io_matches_dreamplace_predicate(ignore):
+    """DP: net_mask_ignore_large_degrees = (2 <= deg) & (deg < ignore_net_degree)
+    ($DP/dreamplace/BasicPlace.py:161-163). The reference is computed here from
+    DP's literal predicate form directly on flat_net2pin_start, not via
+    net_mask_io or nl.net_degrees -- otherwise this would just be checking
+    net_mask_io against itself (Opus review Fix 2). Parametrized over
+    ignore_net_degree to pin the deg==ignore (excluded) / deg==ignore-1
+    (included) boundary implied by DP's strict '<'."""
     nl = _nl([(1., 1.)] * 6, [[0], [0, 1], [0, 1, 2], [0, 1, 2, 3], [0, 1, 2, 3, 4]])
-    got = net_mask_io(nl, ignore_net_degree=4)
-    deg = nl.net_degrees
-    assert np.array_equal(got, (deg >= 2) & (deg < 4))
+    got = net_mask_io(nl, ignore_net_degree=ignore)
+    net_degrees = nl.flat_net2pin_start[1:] - nl.flat_net2pin_start[:-1]
+    ref = np.logical_and(2 <= net_degrees, net_degrees < ignore)
+    assert np.array_equal(got, ref)
 
 def test_deg_bucket_labels_and_assignment():
     assert DEG_BUCKET_LABELS == ("2", "3", "4-7", "8-15", "16-31", "32-63", "64-99")
@@ -149,7 +157,12 @@ def test_gradient_matches_fp64_autograd_reference():
     pos = _pos(nl); term(pos, 12.0, 1.0).backward()
     g = pos.grad.clone()
     h = 1e-6
-    for i in (0, 3, 7):
+    # index 0 (and the coordinator's originally-suggested 11) are physical
+    # nodes that rng.choice never selects into any net for this seed, so their
+    # gradient is structurally 0 in both x and y -- a 0-vs-0 FD check that
+    # would still pass even if the gradient path were broken. 3,7,9 are
+    # confirmed nonzero in both x and y (Opus review Minor 7).
+    for i in (3, 7, 9):
         for off in (0, nl.num_physical):
             pp = pos.detach().clone(); pp[i + off] += h
             pm = pos.detach().clone(); pm[i + off] -= h
@@ -175,8 +188,19 @@ def test_fixed_and_filler_nodes_get_zero_gradient():
     term(pos, 25.0, 1.0).backward()
     g = pos.grad
     assert float(g[2].abs()) == 0.0 and float(g[n_all + 2].abs()) == 0.0
-    assert float(g[nl.num_physical:n_all].abs().sum()) == 0.0
+    assert float(g[nl.num_physical:n_all].abs().sum()) == 0.0                     # filler x's (g[3:7])
+    assert float(g[n_all + nl.num_physical:2 * n_all].abs().sum()) == 0.0         # filler y's (g[10:14])
     assert float(g[:2].abs().sum()) > 0.0                       # movable ones do move
+
+    # I4 zeroes the terminal's GRADIENT, not its participation in forward: a
+    # driver that silently dropped terminals from the forward pass would
+    # under-count IO cost for every net touching a fixed pad -- an intolerable
+    # failure mode for an IO-aware objective (Opus review Fix 3). Move the
+    # terminal (node 2) across the K=2 region boundary and confirm L changes.
+    base = float(term(pos.detach(), 25.0, 1.0))
+    moved_pos = pos.detach().clone(); moved_pos[2] = 99.0        # node 2 -> (99., 50.)
+    moved = float(term(moved_pos, 25.0, 1.0))
+    assert abs(moved - base) > 1e-9
 
 def test_io_grad_l1_is_unweighted_and_matches_manual_norm():
     rs = make_grid_regions(DIE, 4, 4, lattice=20)
@@ -190,18 +214,23 @@ def test_io_grad_l1_is_unweighted_and_matches_manual_norm():
 
 def test_diagnostics_shape_and_frac_soft_monotonicity():
     """Clustered fixture (coordinator resolution, see task-2a-report.md Concern 1):
-    30 nets of 3 nodes each, with a given net's 3 members co-located at one
-    (random) point. For such a net, S_{e,k} = deg'*ell_k (a single shared ell,
-    repeated deg' times), so lambda_e = sum_k [1 - (1-p_k)^deg']. f(x)=(1-x)^deg'
-    is convex for deg'>=2, so sum_k f(p_k) is Schur-convex in p; raising tau moves
-    softmax(p) toward uniform in the majorization order (standard softmax-
-    temperature fact), and a Schur-convex sum can only decrease under that move --
-    hence lambda_e = K - sum_k(1-p_k)^deg' is monotonically non-decreasing (here,
-    strictly increasing for generic non-equidistant positions) in tau. This is a
-    theorem for this fixture. frac_soft's direction is separately a theorem for
-    ANY fixture: p_max = max_k p_k is Schur-convex too, so it is non-increasing
-    in tau regardless of geometry -- which is why frac_soft's assertion already
-    held even on the old random-topology fixture.
+    30 nets, all with member nodes co-located at one (random) point per net --
+    20 nets of deg' 3, 10 of deg' 8 (Opus review Minor 4: an all-deg'-3 mix
+    gives grad_share no discriminating power, since only one of the 7 buckets
+    is ever populated). For a net whose deg' members share one position,
+    S_{e,k} = deg'*ell_k (a single shared ell, repeated deg' times), so
+    lambda_e = sum_k [1 - (1-p_k)^deg']. f(x)=(1-x)^deg' is convex for deg'>=2
+    (any deg', so mixing 3 and 8 doesn't affect this per-net argument), so
+    sum_k f(p_k) is Schur-convex in p; raising tau moves softmax(p) toward
+    uniform in the majorization order (standard softmax-temperature fact), and
+    a Schur-convex sum can only decrease under that move -- hence
+    lambda_e = K - sum_k(1-p_k)^deg' is monotonically non-decreasing (here,
+    strictly increasing for generic non-equidistant positions) in tau, and so
+    is any sum of such per-net terms. This is a theorem for this fixture.
+    frac_soft's direction is separately a theorem for ANY fixture: p_max =
+    max_k p_k is Schur-convex too, so it is non-increasing in tau regardless
+    of geometry -- which is why frac_soft's assertion already held even on the
+    old random-topology fixture.
     The random-topology direction is NOT an invariant: see task-2a-report.md's
     14-point tau sweep, where soft_lambda_sum decreased monotonically the whole
     way because degree-3 nets independent of position already sit near their
@@ -211,10 +240,15 @@ def test_diagnostics_shape_and_frac_soft_monotonicity():
     """
     rs = make_grid_regions(DIE, 4, 4, lattice=20)
     rng = np.random.default_rng(10)
-    n_nets = 30
+    n3, n8 = 20, 10
+    n_nets = n3 + n8
     cx = rng.uniform(15, 85, n_nets); cy = rng.uniform(15, 85, n_nets)
-    xy = [(float(cx[e]), float(cy[e])) for e in range(n_nets) for _ in range(3)]
-    nets = [[3 * e, 3 * e + 1, 3 * e + 2] for e in range(n_nets)]
+    degs = [3] * n3 + [8] * n8
+    xy, nets, node_i = [], [], 0
+    for e, d in enumerate(degs):
+        xy += [(float(cx[e]), float(cy[e]))] * d
+        nets.append(list(range(node_i, node_i + d)))
+        node_i += d
     nl = _nl(xy, nets)
     term = _term(nl, rs, 16)
     pos = _pos(nl).detach()
@@ -223,6 +257,10 @@ def test_diagnostics_shape_and_frac_soft_monotonicity():
     for d in diags:
         assert d["grad_share"].shape == (7,)
         assert d["grad_share"].sum() == pytest.approx(1.0, rel=1e-6)
+        # only deg'=3 (bucket 1, "3") and deg'=8 (bucket 3, "8-15") nets exist;
+        # the other 5 buckets must never receive gradient (Opus review Minor 4).
+        assert (d["grad_share"][[1, 3]] > 0).all()
+        assert (d["grad_share"][[0, 2, 4, 5, 6]] == 0.0).all()
     lam_sums = [d["soft_lambda_sum"] for d in diags]
     fracs = [d["frac_soft"] for d in diags]
     assert lam_sums[0] < lam_sums[1] < lam_sums[2]
@@ -274,6 +312,17 @@ def test_probe3_grad_loo_matches_reference():
     (grad_loo / stable_p_and_ell). Close the loop by checking that the fixed
     logic agrees with IoTermRef's autograd-based dL_IO/dpos on the same coords.
 
+    Opus review (Fix 1): the original 2-node fixture was near-vacuous -- both
+    nodes sit at y=50 so max(dx,dy) always selects dx, making the y-side
+    comparison 0-vs-0; the x-side gradient has a single magnitude and is
+    antisymmetric between the two nodes, so it cannot catch an index swap; and
+    lambda=1.79 never comes close to the clamp((lam-1),min=0) boundary, so the
+    "lam>1" indicator mask was never exercised near its edge. Reused here
+    instead: the 20-node/10-net random fixture from
+    test_gradient_matches_fp64_autograd_reference (default_rng(8), 4x4 grid,
+    K=16, tau=12.0) -- 28/40 nonzero gradient components, varied magnitudes in
+    both x and y, 10 nets spanning lambda in [1.98, 3.62].
+
     probe3_grad is script-style (loads a real ISPD netlist from a hardcoded
     path via load_netlist), so it is not directly callable here. This test
     ports its math (stable_p_and_ell + grad_loo, unchanged) as a minimal shim
@@ -291,11 +340,26 @@ def test_probe3_grad_loo_matches_reference():
     to near machine precision in float64. rtol/atol chosen to match this
     file's other exact (non finite-difference) gradient-equality checks, e.g.
     test_lambda_io_scales_value_and_gradient_linearly's rtol=1e-10/atol=1e-14.
+
+    Known real divergence risk (Opus review): at lam==1 exactly, torch's
+    tensor.clamp(min=0) passes gradient through (the boundary subgradient
+    convention is inclusive) while probe3's coefficient mask uses a strict
+    `(lam-1.0) > 0`, which zeroes that net's contribution -- so a net landing
+    exactly at lam==1 would make the two paths disagree by construction, not
+    by numerical noise. Checked directly on this fixture: lam = [1.987, 2.783,
+    2.725, 1.985, 1.999, 2.782, 3.306, 2.490, 3.169, 3.615], min|lam-1| = 0.985
+    -- no net is anywhere near the boundary, so this risk does not materialize
+    here (both allclose calls pass at max abs diff ~3.4e-16 (x) / ~8.6e-17 (y),
+    i.e. float64 round-off, not a fixture-dependent near-miss).
     """
-    rs = make_grid_regions(DIE, 2, 1, lattice=10)
-    nl = _nl([(25., 50.), (75., 50.)], [[0, 1]])
-    K = 2
-    tau = 25.0
+    rs = make_grid_regions(DIE, 4, 4, lattice=20)
+    rng = np.random.default_rng(8)
+    xy = [(float(a), float(b)) for a, b in zip(rng.uniform(2, 98, 20), rng.uniform(2, 98, 20))]
+    nets = [sorted(rng.choice(20, int(rng.integers(2, 5)), replace=False).tolist())
+            for _ in range(10)]
+    nl = _nl(xy, nets)
+    K = 16
+    tau = 12.0
 
     # --- reference: IoTermRef's autograd path ---
     term = _term(nl, rs, K)
