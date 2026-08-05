@@ -751,19 +751,44 @@ def test_io_grad_l1_is_unweighted_and_matches_manual_norm():
     assert term.io_grad_l1(pos.detach(), 9.0) == pytest.approx(float(pos.grad.abs().sum()), rel=1e-9)
 
 def test_diagnostics_shape_and_frac_soft_monotonicity():
+    """Clustered fixture (coordinator resolution, see task-2a-report.md Concern 1):
+    30 nets of 3 nodes each, with a given net's 3 members co-located at one
+    (random) point. For such a net, S_{e,k} = deg'*ell_k (a single shared ell,
+    repeated deg' times), so lambda_e = sum_k [1 - (1-p_k)^deg']. f(x)=(1-x)^deg'
+    is convex for deg'>=2, so sum_k f(p_k) is Schur-convex in p; raising tau moves
+    softmax(p) toward uniform in the majorization order (standard softmax-
+    temperature fact), and a Schur-convex sum can only decrease under that move --
+    hence lambda_e = K - sum_k(1-p_k)^deg' is monotonically non-decreasing (here,
+    strictly increasing for generic non-equidistant positions) in tau. This is a
+    theorem for this fixture. frac_soft's direction is separately a theorem for
+    ANY fixture: p_max = max_k p_k is Schur-convex too, so it is non-increasing
+    in tau regardless of geometry -- which is why frac_soft's assertion already
+    held even on the old random-topology fixture.
+    The random-topology direction is NOT an invariant: see task-2a-report.md's
+    14-point tau sweep, where soft_lambda_sum decreased monotonically the whole
+    way because degree-3 nets independent of position already sit near their
+    per-net ceiling at the hard limit, leaving smearing nowhere to go but down --
+    finite-sample noise from that fixture's topology, not a property of the
+    surrogate.
+    """
     rs = make_grid_regions(DIE, 4, 4, lattice=20)
     rng = np.random.default_rng(10)
-    xy = [(float(a), float(b)) for a, b in zip(rng.uniform(2, 98, 40), rng.uniform(2, 98, 40))]
-    nets = [sorted(rng.choice(40, 3, replace=False).tolist()) for _ in range(20)]
+    n_nets = 30
+    cx = rng.uniform(15, 85, n_nets); cy = rng.uniform(15, 85, n_nets)
+    xy = [(float(cx[e]), float(cy[e])) for e in range(n_nets) for _ in range(3)]
+    nets = [[3 * e, 3 * e + 1, 3 * e + 2] for e in range(n_nets)]
     nl = _nl(xy, nets)
     term = _term(nl, rs, 16)
     pos = _pos(nl).detach()
-    d_big = term.diagnostics(pos, tau=25.0)
-    d_small = term.diagnostics(pos, tau=0.25)
-    assert d_big["grad_share"].shape == (7,)
-    assert d_big["grad_share"].sum() == pytest.approx(1.0, rel=1e-6)
-    assert d_big["frac_soft"] > d_small["frac_soft"]
-    assert d_big["soft_lambda_sum"] > d_small["soft_lambda_sum"]
+    taus = (0.25, 2.5, 25.0)
+    diags = [term.diagnostics(pos, tau=t) for t in taus]
+    for d in diags:
+        assert d["grad_share"].shape == (7,)
+        assert d["grad_share"].sum() == pytest.approx(1.0, rel=1e-6)
+    lam_sums = [d["soft_lambda_sum"] for d in diags]
+    fracs = [d["frac_soft"] for d in diags]
+    assert lam_sums[0] < lam_sums[1] < lam_sums[2]
+    assert fracs[0] <= fracs[1] <= fracs[2]
 
 # ---------------------------------------------------------------- margin (design v2 sec 9.2)
 @pytest.mark.parametrize("D,expect_grad", [(0.5, -3.432596e-01), (2.5, -2.924234e-01),
@@ -943,7 +968,7 @@ os.makedirs('results/m2/probes', exist_ok=True)
 json.dump(out, open('results/m2/probes/degree_distribution.json','w'), indent=1); print(json.dumps(out, indent=1))
 " 2>&1 | tail -40
 ```
-Expected: 寫出 `results/m2/probes/degree_distribution.json`;adaptec1 的 `n_deg_100_to_256 == 2`(與設計 §3.1 一致)。
+Expected: 寫出 `results/m2/probes/degree_distribution.json`;adaptec1 的 `n_deg_100_to_256 == 0`——adaptec1 只有 2 個 net degree>100(403、1269),且兩者皆 >256,故落在 `n_deg_gt_256`,不落在 `n_deg_100_to_256` 這個桶(與設計 §3.1「只有 2 個 net 需要關注」的實務結論一致,但精確桶號是 `n_deg_gt_256 == 2`)。
 
 - [ ] **Step 6: Commit**
 
