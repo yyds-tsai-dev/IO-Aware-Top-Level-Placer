@@ -84,7 +84,7 @@ bigblue4 −4.4%);`construction`/`cold evaluate()` 這兩個單次量測本身�
 真正 root cause 是 `ioplace/evaluator_gpu.py` 的 `GpuEvalContext._to_idx`(修復前)用 python float
 `self.cell_w`/`self.cell_h` 當除數:CUDA 把 `tensor / python_float` 編譯成 reciprocal-multiply
 (先算 `1/cell_w` 再相乘),不是正確捨入的除法。例如 adaptec1 的 `cell_w = 10692/512 = 20.8828125`,
-`2673.0 / 20.8828125` 的精確值是 128.0,但 reciprocal-multiply 算出 `127.999999999999999`,
+`2673.0 / 20.8828125` 的精確值是 128.0,但 reciprocal-multiply 算出 `127.99999999999999`,
 `.to(torch.int64)` 向下截斷得 127;numpy(reference)的除法正確捨入直接得 128。座標恰好落在 lattice
 邊界時,GPU 因此把該點分到相鄰的錯誤 region,少算一次 crossing——這正是造成 adaptec1 168 個 net
 分歧的機制,與 MST tie-breaking 無關。

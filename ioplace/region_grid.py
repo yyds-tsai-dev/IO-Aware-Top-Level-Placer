@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 from ioplace.netlist import pin_positions
 
@@ -30,6 +31,7 @@ class RegionGrid:
     def _to_idx(self, x, y):
         """Deprecated alias for to_idx -- kept so any pre-existing external caller
         of the old private name keeps working. New code should call to_idx()."""
+        warnings.warn("RegionGrid._to_idx is deprecated; use to_idx()", DeprecationWarning, stacklevel=2)
         return self.to_idx(x, y)
 
     def region_of_points(self, x, y):

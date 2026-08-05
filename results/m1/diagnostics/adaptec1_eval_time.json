@@ -26,5 +26,6 @@
  "median_warm_evaluate_s": 0.15837883949279785,
  "last_warm_io_count": 30004,
  "last_warm_ft_count": 2326,
- "peak_gpu_mem_mb": 491.53466796875
+ "peak_gpu_mem_mb": 491.53466796875,
+ "note": "cold_io_count/last_warm_io_count (30,004) predate the C1 fix (28c016d); re-running this diagnostic post-fix yields io_count 29,992, matching evaluator_ref"
 }

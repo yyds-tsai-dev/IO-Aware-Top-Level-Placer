@@ -87,11 +87,15 @@ class GpuEvalContext:
         # may still want them). CUDA compiles `tensor / python_float` as a
         # reciprocal-multiply (x * (1/c)) rather than a true divide -- (1/c) is
         # itself rounded, so the product can land one ULP below an exact integer
-        # boundary (e.g. 2673.0 / (10692/512) -> 127.999999999999999 instead of
+        # boundary (e.g. 2673.0 / (10692/512) -> 127.99999999999999 instead of
         # 128.0), which `.to(torch.int64)` then truncates down to 127: an off-by-one
-        # lattice-cell mis-assignment exactly at region boundaries. `tensor / tensor`
-        # (even a 0-dim one) instead dispatches to a correctly-rounded elementwise
-        # divide, matching numpy's (and hence evaluator_ref's) result bit-for-bit.
+        # lattice-cell mis-assignment exactly at region boundaries. `tensor / tensor`,
+        # where the 0-dim tensor lives on the same (CUDA) device, instead dispatches
+        # to a correctly-rounded elementwise divide, matching numpy's (and hence
+        # evaluator_ref's) result bit-for-bit. This is device-dependent: a 0-dim CPU
+        # tensor divided into a CUDA tensor gets lifted back to a Scalar and
+        # mis-rounds identically -- hoisting these tensors to CPU would silently
+        # reintroduce the bug.
         # Verified empirically on this host (torch 2.8.0+cu128, L4/sm_89): dividing
         # by the python float mis-rounds 80/511 lattice-boundary indices for
         # cell_w=10692/512 (including the region-grid boundaries at index 128 and
@@ -100,6 +104,7 @@ class GpuEvalContext:
         # and tests/test_evaluator_gpu.py::test_gpu_matches_reference_on_lattice_boundaries.
         self._cell_w_t = torch.tensor(self.cell_w, dtype=torch.float64, device=self.device)
         self._cell_h_t = torch.tensor(self.cell_h, dtype=torch.float64, device=self.device)
+        assert self._cell_w_t.device == self.grid_t.device and self._cell_h_t.device == self.grid_t.device
 
         hdiff = (self.grid_t[:, :-1] != self.grid_t[:, 1:]).to(torch.int64)
         Ph = torch.zeros((ny, nx), dtype=torch.int64, device=self.device)

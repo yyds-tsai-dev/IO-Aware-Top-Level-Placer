@@ -85,7 +85,7 @@ def test_gpu_matches_reference_on_lattice_boundaries():
     by the plain python floats self.cell_w/self.cell_h. CUDA compiles
     `tensor / python_float` as a reciprocal-multiply (x * (1/c)), and (1/c) is
     itself rounded -- so a coordinate that lands exactly on a lattice boundary can
-    come out one ULP low (e.g. 2673.0 / (10692/512) -> 127.999999999999999, not
+    come out one ULP low (e.g. 2673.0 / (10692/512) -> 127.99999999999999, not
     128.0), which `.to(torch.int64)` truncates down to 127 instead of 128: an
     off-by-one lattice-cell mis-assignment exactly at region boundaries. Plain
     `tensor / tensor` (even a 0-dim one) instead correctly rounds, matching numpy.
@@ -133,6 +133,7 @@ def test_gpu_matches_reference_on_lattice_boundaries():
                  xl=0., yl=0., xh=10692., yh=10680.)
 
     ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    assert ref.per_net_crossings.tolist() == [1, 1, 3]
     gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
     assert np.array_equal(gpu.per_net_crossings, ref.per_net_crossings)
     assert np.array_equal(gpu.per_net_ft, ref.per_net_ft)
