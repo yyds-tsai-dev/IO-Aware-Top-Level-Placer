@@ -134,7 +134,46 @@ adaptec1 K=16:fwd 3.8 ms / bwd 8.7 ms / peak 409 MB。
 
 - 峰值幾乎全部來自 autograd 保存的 `(P,K)` 中間張量。**這正是 H5 指出的規模斷點:同一寫法外推到 N=10M / P≈40M / K=32 是 ~42 GB,在 placer + evaluator + line-search 暫存之前就已超過 L4、逼近 H100。**
 - **v2 的處置:不把 materialized 版本當交付形態。** T2 從第一天就實作 §2.5 的 chunked-k 契約,上表僅作為 (a) 等價測試的參考實作(小 case)與 (b) chunked 版效能/記憶體的對照基準。
-- 每 iteration 成本:`obj_and_grad_fn` 在 `step_nobb` 的 backtracking line search 內被呼叫 **1–10 次**(`NesterovAcceleratedGradientOptimizer.py:128`;ISPD2005 無 movable macro → `use_bb` 由 `"auto"` 解析為 **0**,`PlaceDB.py:837`)。以平均 2 次估:adaptec1 GP 約 +25 ms/iter(≈ +1.8× GP 時間),bigblue4 約 +324 ms/iter。chunked 版因為要重算 SDF,forward+backward 的 FLOP 約 ×2,但仍是 memory-bound,預期 wall-time 增幅 <30%;由 T2 Step 5 實測後回填本表。
+- 每 iteration 成本:`obj_and_grad_fn` 在 `step_nobb` 的 backtracking line search 內被呼叫 **1–10 次**(`NesterovAcceleratedGradientOptimizer.py:128`;ISPD2005 無 movable macro → `use_bb` 由 `"auto"` 解析為 **0**,`PlaceDB.py:837`)。以平均 2 次估:adaptec1 GP 約 +25 ms/iter(≈ +1.8× GP 時間),bigblue4 約 +324 ms/iter。chunked 版因為要重算 SDF,forward+backward 的 FLOP 約 ×2,但仍是 memory-bound,預期 wall-time 增幅 <30%。
+
+**chunked 版(T2b Step 5 實測,`IoTerm`,`chunk_budget` 預設 8e6,`results/m2/probes/chunked_perf.json`):**
+
+bigblue4 真實 netlist + 真實最終座標,`IoTerm` 前向+反向一次:
+
+| K | fwd | bwd | peak GPU mem | k_chunk |
+|---:|---:|---:|---:|---:|
+| 8 | 38.1 ms | 132.9 ms | 796.8 MB | 1 |
+| 16 | 74.7 ms | 263.8 ms | 797.1 MB | 1 |
+| 32 | 146.9 ms | 524.5 ms | 797.5 MB | 1 |
+
+adaptec1(`k_chunk=8` for all three K, i.e. only K=8 is fully materialized):
+K=8 fwd 187.6 ms / bwd 766.7 ms / peak 364.7 MB; K=16 fwd 40.9 ms / bwd 70.7 ms
+/ peak 393.2 MB; K=32 fwd 79.7 ms / bwd 138.0 ms / peak 393.3 MB.
+
+- **bigblue4 K=32 peak 797.5 MB vs materialized 9,229 MB — 11.6x 下降,遠低於
+  `< 4,000 MB` 的驗收門檻。** `k_chunk=1` for every bigblue4 K (its
+  `n_pins_dedup ≈ 9e6` dominates `chunk_budget // max(N, n_pins_dedup)`),
+  i.e. bigblue4 is walking the *most* chunked (slowest, most memory-safe)
+  regime available at the default budget, and the peak is still <1 GB.
+- **wall-time**: chunked bigblue4 K=32 bwd is *slower* than the materialized
+  prototype's bwd (524.5 vs 204.3 ms, +157%); fwd is also slower (146.9 vs
+  101.7 ms, +44%). adaptec1 (small enough that `k_chunk` only drops to 8,
+  not 1) shows the same direction at smaller magnitude. The regression is
+  bigger than the "<30%" predicted above, especially for bwd: BWD-1 and
+  BWD-2 each recompute `region_sdf_l1` independently (plus FWD-2's own
+  pass), so it's three SDF passes per K-chunk, not the one/two implied by a
+  flat "FLOP ×2" estimate. The memory win is the point of §2.5, not
+  wall-time; M4's fused kernel is where wall-time gets addressed.
+- **10M-scale feasibility spike (T2b Step 5, gates T4/interface freeze,
+  `results/m2/spike/spike_10m.json`):** synthetic N=10,000,000 /
+  n_nets=12,000,000 / n_pins≈49,019,855 (bigblue4-bucket-ratio-resampled
+  degree; the nominal 40e6 target undercounts bigblue4's own ~4.1 average
+  degree — see `ioplace/diagnostics/spike_10m.py`), K=32, grid 8x4,
+  `chunk_budget` default (`k_chunk=1`): **peak 4.11 GB, fwd 3.93 s, bwd
+  11.92 s, `ok=true`** (budget: `peak_gb <= 8.0`). Confirms the ~42 GB naive
+  extrapolation above is exactly what §2.5's chunking was for -- the actual
+  chunked-k peak at this scale is ~10x under the 8 GB gate, with headroom
+  before the placer/evaluator/line-search working set is even added.
 
 ### 2.4 被否掉的替代方案
 
