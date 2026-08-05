@@ -41,8 +41,8 @@
 
 ### 本次真實 case 實測(adaptec1 / bigblue4,k=16 grid,reweight 跑出的最終擺放位置)
 
-沿用 Task 11 §3 的方法論(ctor 一次,`evaluate()` 跑 1 次 cold + 10 次 warm,取 warm 中位數),量測腳本
-`/tmp/.../scratchpad/measure_real_case_eval_time.py`(scratchpad,未 commit),讀取
+沿用 Task 11 §3 的方法論(ctor 一次,`evaluate()` 跑 1 次 cold + 10 次 warm,取 warm 中位數),量測腳本已整理
+提交至 `ioplace/diagnostics/measure_real_case_eval_time.py`,讀取
 `results/m1/{adaptec1,bigblue4}_reweight_k16_grid.json.npz` 的最終 `node_x/node_y`:
 
 | | adaptec1(k=16) | bigblue4(k=16) |
@@ -55,6 +55,22 @@
 
 Task 11 brief 原定的 adaptec1 `<0.5s` / bigblue4 `<5s` 目標(該報告因當時無真實 placement 結果只能用合成
 case 驗證),本次用真實 case 驗證:**兩者皆 PASS**(0.159s / 1.318s)。
+
+**證據留存與重跑校驗(review Finding 1 跟進,2026-08-05):** 上表數字原始的 console 輸出當時未落盤(僅腳本
+留在 scratchpad、未 commit),為補齊證據鏈,已將腳本整理提交(路徑見上),並用相同方法論、相同 npz 座標重跑
+一次,原始輸出存於 `results/m1/diagnostics/{adaptec1,bigblue4}_eval_time.json`。重跑校驗值:adaptec1
+construction 0.184s(與原記載一致)、cold `evaluate()` 0.388s(原 0.282s)、**median warm 0.158s**(原
+0.159s)、peak GPU memory 491.5MB(與原記載完全一致)、io_count/ft_count 30,004/2,326(與下段「觀察到的小
+差異」完全重現);bigblue4 construction 0.551s(原 0.635s)、cold `evaluate()` 2.343s(原 2.720s)、
+**median warm 1.260s**(原 1.318s)、peak GPU memory 4,830.5MB(與原記載完全一致)、io_count/ft_count
+100,736/3,585(與原記載完全一致)。結論不變:兩案例的 median warm 皆仍遠優於 brief 的 `<0.5s`/`<5s` 門檻;
+peak memory 與 io/ft_count 兩類非計時型指標精確重現。三類計時數字中,**median warm**(唯一被拿來對照
+`<0.5s`/`<5s` 門檻、也是下方「evaluator 開銷佔比」表格輸入的數字)差距最小、最穩健(adaptec1 −0.4%、
+bigblue4 −4.4%);`construction`/`cold evaluate()` 這兩個單次量測本身噪聲較大,bigblue4 兩者分別差
+−13.2%/−13.9%,adaptec1 的 `cold evaluate()` 差距最大(+37.7%,0.282s→0.388s)——adaptec1 是本報告中
+最小的 case,cold-start 的一次性 CUDA kernel 暖機/編譯開銷相對其本身 ~0.3s 的量級佔比最大,故相對噪聲也
+最大,但兩次量測的絕對值都遠低於下方表格與門檻會用到的任何數字量級,不影響本節或「evaluator 開銷佔比」
+表格的判讀。
 
 **觀察到的小差異(誠實記錄,非本 task 範圍的修復):** adaptec1 用本量測腳本(GPU evaluator)算出的
 `io_count=30,004` 與該次 run 主表中(CPU `evaluator_ref`)記錄的 `29,992` 相差 12(0.04%),`ft_count`
@@ -76,10 +92,15 @@ flat/two_stage 一樣走 CPU reference,GPU evaluator 只在跑動過程中用於
 | adaptec1 k=16(α=0.2,every=100) | 6 | 0.159 s | 0.954 s | 1.260 s | 60.77 s | 1.57% / 2.07% |
 | bigblue4 k=16(α=0.2,every=100) | 8 | 1.318 s | 10.541 s | 12.579 s | 535.29 s | 1.97% / 2.35% |
 
+（`簡單估計`/`精算估計` 兩欄用未四捨五入的完整精度 median warm/cold/ctor 值算出,並非直接拿上面顯示的
+3 位小數相乘——例如 1.318 s × 8 = 10.544 s,與表中 10.541 s 相差 0.003 s,屬顯示精度的四捨五入,非計算
+錯誤。）
+
 兩個 real case 的 evaluator 開銷都 **< 2.5%** 的總 runtime——reweight 閉環的時間成本主要來自 DREAMPlace
 自身的 GP/LG 迭代,不是我們的 evaluator;§5.3 節「evaluator 效能」层面判定 PASS。GPU 記憶體方面,
 reweight 模式的 `peak_mem_mb`(來自實際 run 的 JSON,含 placer + `GpuEvalContext` 全程共存的合計峰值)
-比對應 flat 高出 adaptec1 +330%(140.8→606.6 MB)、bigblue4 +276%(1,670.9→6,280.5 MB)——量級符合預期
+比對應 flat 高出 adaptec1 +331%(140.8→606.6 MB,精確值 330.92%)、bigblue4 +276%(1,670.9→6,280.5 MB)
+——量級符合預期
 (`GpuEvalContext` 的靜態拓撲快取 + 全程與 placer 共駐),bigblue4 的絕對峰值(6.28 GB)距 L4 的 23 GB
 仍有充足餘裕。
 
@@ -101,8 +122,8 @@ reweight 模式的 `peak_mem_mb`(來自實際 run 的 JSON,含 placer + `GpuEval
 六組掃描在 α 與 every 兩個維度上**都單調**:α 越大 io_count 越差(0.2→0.5→1.0 在兩個 every 下皆遞增),
 every 越小(reweight 越頻繁)io_count 也越差(50 在三個 α 下皆比對應的 100 差)。**只有最溫和的設定
 (α=0.2, every=100)略優於 flat,其餘五組全部更差**,最差(α=1.0, every=50)比 flat 高 19.16%。選定
-**(α\*, every\*) = (0.2, 100)** 作為主矩陣設定——但如診斷段所述,這個「勝出」的 −0.06% 本身落在後續量到
-的 run-to-run 噪聲量級(~1%)之內,不宜解讀為確認的改善。
+**(α\*, every\*) = (0.2, 100)** 作為主矩陣設定——但如診斷段所述,這個「勝出」的 −0.06% 本身與單次重跑觀察
+到的 run-to-run 差異(~1%,n=1)同量級,不宜解讀為確認的改善;多 seed 分佈量測留待 M5。
 
 ### 三方對照(reweight[最佳設定] vs flat vs two_stage)
 
@@ -122,7 +143,9 @@ adaptec1 k=32 grid(reweight only,M0 未跑此 k 的 flat/two_stage,無基準可�
 io_count=49,123、ft_count=7,514、hpwl=75,822,539、runtime_s=58.9、num_reweights=6。
 
 **io_count 方向:三個有基準的 case 中,兩個持平(k=8 完全打平、k=16 −0.06%,皆落在下方診斷段量到的
-run-to-run 噪聲範圍內),bigblue4 k=16 略差(+0.63%)。没有任何一個 case 顯示「明顯下降」。**
+run-to-run 噪聲範圍內),bigblue4 k=16 略差(+0.63%)。没有任何一個 case 顯示「明顯下降」。**(k=8 的
+flat 與 reweight 是兩次獨立 run——ft_count(1,981 vs 1,576)、hpwl(73,955,613 vs 74,631,933)、tree_wl
+(84,680,077.0 vs 84,849,402.0)皆不同,io_count 精確打平純屬巧合,並非重複資料或誤植。)
 
 **ft_count 方向則相反:三個 case 全部明顯下降(−20.44% / −9.91% / −49.11%),且降幅隨 case 規模擴大而
 擴大**——這是本次量到最一致、效果量最大、且不落在噪聲範圍內的正面結果,但它不是 M1 exit 條件 2 要求的
@@ -132,10 +155,13 @@ fence 約束),自然繼承 flat 遠低於 two_stage 的 io_count 基準。
 
 ### io/ft 軌跡診斷(adaptec1 k=16, α=0.2/every=100,對照 α=0 no-op control)
 
-為了直接回應「reweight 有沒有用」而非只看終值,用 ad hoc 診斷腳本(scratchpad,未改動已 commit 的
-`run_placement_reweight.py`)重跑同一設定,額外記錄每次 callback 當下的 `ctx.evaluate()` 結果
-(`io_count`/`ft_count` 是迴圈本來就會算出的值,純記錄不增加額外開銷),並用 **α=0(net_weights 恆為
-1.0,真正的 no-op)** 重跑一次同樣腳本作控制組,隔離「reweight 事件本身」與「GP+LG 本身的自然軌跡」:
+為了直接回應「reweight 有沒有用」而非只看終值,用診斷腳本(不改動已 commit 的
+`run_placement_reweight.py`,已整理提交至 `ioplace/diagnostics/run_reweight_trajectory.py`)重跑同一設定,
+額外記錄每次 callback 當下的 `ctx.evaluate()` 結果(`io_count`/`ft_count` 是迴圈本來就會算出的值,純記錄不
+增加額外開銷),並用 **α=0(net_weights 恆為 1.0,真正的 no-op)** 重跑一次同樣腳本作控制組,隔離「reweight
+事件本身」與「GP+LG 本身的自然軌跡」。兩次跑的原始逐-iteration io/ft 序列(即下表出處,非重跑校驗值,是
+當時量測的原始資料)已提交於 `results/m1/diagnostics/adaptec1_reweight_k16_trajectory.json`(α=0.2)與
+`results/m1/diagnostics/adaptec1_control_alpha0_k16_trajectory.json`(α=0 控制組):
 
 | iteration | io(α=0.2) | io(α=0,control) | ft(α=0.2) | ft(α=0,control) | net_weights_max(α=0.2,更新後) |
 |---:|---:|---:|---:|---:|---:|
@@ -202,9 +228,9 @@ fence 約束),自然繼承 flat 遠低於 two_stage 的 io_count 基準。
   runtime,非瓶頸)。**PASS。**
 - [ ] **條件 2:reweight 的 io_count 相對 flat 明顯下降。** **未達成,如實記錄,不挑好看的 case。**
   三個有 flat 基準的 case 中,最好的結果是 k=16 的 −0.06%(29,992 vs 30,011)與 k=8 的完全打平(0 delta)
-  ,bigblue4 k=16 則是 +0.63%(略差);六組敏感度掃描中五組明顯更差(最差 +19.16%)。−0.06% 本身落在
-  獨立量到的 ~1.0% run-to-run 噪聲範圍內,不能視為確認的改善。**Sanity 判讀:FAIL(方向未達「明顯下降」
-  的門檻)。** 診斷段(上)給出三個數據支持的假設(WL 項對離散 region 歸屬缺乏直接槓桿 / cap 飽和 /
+  ,bigblue4 k=16 則是 +0.63%(略差);六組敏感度掃描中五組明顯更差(最差 +19.16%)。−0.06% 本身與單次
+  重跑觀察到的 run-to-run 差異(~1.0%,n=1)同量級,不能視為確認的改善;多 seed 分佈量測留待 M5。
+  **Sanity 判讀:FAIL(方向未達「明顯下降」的門檻)。** 診斷段(上)給出三個數據支持的假設(WL 項對離散 region 歸屬缺乏直接槓桿 / cap 飽和 /
   GP→LG 交界流失改善)並用控制組實驗排除了「reweight 事件本身造成晚期擾動」這個更簡單的競爭假設,同時
   記錄了 ft_count 方向一致轉好(−9.9%~−49.1%)、run-to-run 噪聲不可忽略兩個旁證。此負面結果與診斷是
   M2(可微化 region 歸屬)工作的直接 motivation,見診斷第 7 點。

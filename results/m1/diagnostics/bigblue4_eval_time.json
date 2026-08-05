@@ -1,0 +1,30 @@
+{
+ "config": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/install/test/ispd2005/bigblue4.json",
+ "k": 16,
+ "rtype": "grid",
+ "seed": 0,
+ "npz_path": "results/m1/bigblue4_reweight_k16_grid.json.npz",
+ "n_nets": 2229886,
+ "n_pins": 8731365,
+ "n_nodes": 2177353,
+ "ctor_s": 0.5509717464447021,
+ "cold_evaluate_s": 2.342611789703369,
+ "cold_io_count": 100736,
+ "cold_ft_count": 3585,
+ "warm_times_s": [
+  1.2457633018493652,
+  1.2482421398162842,
+  1.2514219284057617,
+  1.2519607543945312,
+  1.2576072216033936,
+  1.259828805923462,
+  1.2610225677490234,
+  1.2616171836853027,
+  1.2619647979736328,
+  1.2631096839904785
+ ],
+ "median_warm_evaluate_s": 1.259828805923462,
+ "last_warm_io_count": 100736,
+ "last_warm_ft_count": 3585,
+ "peak_gpu_mem_mb": 4830.4697265625
+}
