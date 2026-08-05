@@ -49,12 +49,12 @@ def _walk_segment(rg, x0, y0, x1, y1, regions, pairs):
         regions.add(int(ids0))
         return 0
     if y0 == y1:  # 水平
-        ix0, iy = rg._to_idx(np.array([min(x0, x1)]), np.array([y0]))
-        ix1, _ = rg._to_idx(np.array([max(x0, x1)]), np.array([y0]))
+        ix0, iy = rg.to_idx(np.array([min(x0, x1)]), np.array([y0]))
+        ix1, _ = rg.to_idx(np.array([max(x0, x1)]), np.array([y0]))
         row = rg.grid[iy[0], ix0[0]:ix1[0] + 1]
     else:         # 垂直
-        ix, iy0 = rg._to_idx(np.array([x0]), np.array([min(y0, y1)]))
-        _, iy1 = rg._to_idx(np.array([x0]), np.array([max(y0, y1)]))
+        ix, iy0 = rg.to_idx(np.array([x0]), np.array([min(y0, y1)]))
+        _, iy1 = rg.to_idx(np.array([x0]), np.array([max(y0, y1)]))
         row = rg.grid[iy0[0]:iy1[0] + 1, ix[0]]
     regions.update(np.unique(row).tolist())
     diff_pos = np.nonzero(np.diff(row))[0]

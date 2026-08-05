@@ -26,6 +26,13 @@ def test_validate_rejects_overlap():
     with pytest.raises(ValueError):
         bad.validate()
 
+def test_validate_rejects_zero_area_region():
+    bad = RegionSet(die=DIE, lattice=512, regions=[
+        RegionSpec("P0", np.array([[0., 0., 1024., 1024.]])),
+        RegionSpec("P1", np.array([[500., 500., 500., 500.]]))])
+    with pytest.raises(ValueError, match="zero area"):
+        bad.validate()
+
 def test_json_roundtrip(tmp_path):
     rs = make_grid_regions(DIE, 2, 2)
     p = tmp_path / "r.json"

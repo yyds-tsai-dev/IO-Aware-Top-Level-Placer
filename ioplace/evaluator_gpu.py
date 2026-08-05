@@ -82,6 +82,24 @@ class GpuEvalContext:
         xl, yl, xh, yh = rg.die
         self.xl, self.yl = float(xl), float(yl)
         self.cell_w, self.cell_h = float(rg.cell_w), float(rg.cell_h)
+        # 0-dim tensors for _to_idx's division, NOT a stylistic substitute for the
+        # plain python floats above (self.cell_w/cell_h are kept as-is; other code
+        # may still want them). CUDA compiles `tensor / python_float` as a
+        # reciprocal-multiply (x * (1/c)) rather than a true divide -- (1/c) is
+        # itself rounded, so the product can land one ULP below an exact integer
+        # boundary (e.g. 2673.0 / (10692/512) -> 127.999999999999999 instead of
+        # 128.0), which `.to(torch.int64)` then truncates down to 127: an off-by-one
+        # lattice-cell mis-assignment exactly at region boundaries. `tensor / tensor`
+        # (even a 0-dim one) instead dispatches to a correctly-rounded elementwise
+        # divide, matching numpy's (and hence evaluator_ref's) result bit-for-bit.
+        # Verified empirically on this host (torch 2.8.0+cu128, L4/sm_89): dividing
+        # by the python float mis-rounds 80/511 lattice-boundary indices for
+        # cell_w=10692/512 (including the region-grid boundaries at index 128 and
+        # 256 for a 4x4 partition), while dividing by this tensor matches numpy
+        # exactly at every one of those points. See C1 in the whole-branch review
+        # and tests/test_evaluator_gpu.py::test_gpu_matches_reference_on_lattice_boundaries.
+        self._cell_w_t = torch.tensor(self.cell_w, dtype=torch.float64, device=self.device)
+        self._cell_h_t = torch.tensor(self.cell_h, dtype=torch.float64, device=self.device)
 
         hdiff = (self.grid_t[:, :-1] != self.grid_t[:, 1:]).to(torch.int64)
         Ph = torch.zeros((ny, nx), dtype=torch.int64, device=self.device)
@@ -157,8 +175,11 @@ class GpuEvalContext:
     # geometry helpers
     # ------------------------------------------------------------------
     def _to_idx(self, x, y):
-        ix = ((x - self.xl) / self.cell_w).to(torch.int64).clamp_(0, self.nx - 1)
-        iy = ((y - self.yl) / self.cell_h).to(torch.int64).clamp_(0, self.ny - 1)
+        # divide by the cached 0-dim tensors, not self.cell_w/cell_h (python floats)
+        # -- see the comment where they're constructed in __init__ for why this
+        # matters (C1: CUDA reciprocal-multiply off-by-one at lattice boundaries).
+        ix = ((x - self.xl) / self._cell_w_t).to(torch.int64).clamp_(0, self.nx - 1)
+        iy = ((y - self.yl) / self._cell_h_t).to(torch.int64).clamp_(0, self.ny - 1)
         return ix, iy
 
     def _pin_positions(self, node_x, node_y):

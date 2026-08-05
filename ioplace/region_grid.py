@@ -21,14 +21,19 @@ class RegionGrid:
                 self.grid[iy0:iy1, ix0:ix1] = rid
         assert (self.grid >= 0).all()
 
-    def _to_idx(self, x, y):
+    def to_idx(self, x, y):
         xl, yl, xh, yh = self.die
         ix = np.clip(((x - xl) / self.cell_w).astype(np.int64), 0, self.nx - 1)
         iy = np.clip(((y - yl) / self.cell_h).astype(np.int64), 0, self.ny - 1)
         return ix, iy
 
+    def _to_idx(self, x, y):
+        """Deprecated alias for to_idx -- kept so any pre-existing external caller
+        of the old private name keeps working. New code should call to_idx()."""
+        return self.to_idx(x, y)
+
     def region_of_points(self, x, y):
-        ix, iy = self._to_idx(np.asarray(x, dtype=np.float64),
+        ix, iy = self.to_idx(np.asarray(x, dtype=np.float64),
                               np.asarray(y, dtype=np.float64))
         return self.grid[iy, ix]
 

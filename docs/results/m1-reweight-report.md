@@ -60,8 +60,9 @@ case 驗證),本次用真實 case 驗證:**兩者皆 PASS**(0.159s / 1.318s)。
 留在 scratchpad、未 commit),為補齊證據鏈,已將腳本整理提交(路徑見上),並用相同方法論、相同 npz 座標重跑
 一次,原始輸出存於 `results/m1/diagnostics/{adaptec1,bigblue4}_eval_time.json`。重跑校驗值:adaptec1
 construction 0.184s(與原記載一致)、cold `evaluate()` 0.388s(原 0.282s)、**median warm 0.158s**(原
-0.159s)、peak GPU memory 491.5MB(與原記載完全一致)、io_count/ft_count 30,004/2,326(與下段「觀察到的小
-差異」完全重現);bigblue4 construction 0.551s(原 0.635s)、cold `evaluate()` 2.343s(原 2.720s)、
+0.159s)、peak GPU memory 491.5MB(與原記載完全一致)、io_count/ft_count 30,004/2,326(與下段「GPU/CPU
+差異回顧與修復」記載的、C1 修復前的分歧數字完全重現——該分歧已在本次修復後消除,見下段);bigblue4
+construction 0.551s(原 0.635s)、cold `evaluate()` 2.343s(原 2.720s)、
 **median warm 1.260s**(原 1.318s)、peak GPU memory 4,830.5MB(與原記載完全一致)、io_count/ft_count
 100,736/3,585(與原記載完全一致)。結論不變:兩案例的 median warm 皆仍遠優於 brief 的 `<0.5s`/`<5s` 門檻;
 peak memory 與 io/ft_count 兩類非計時型指標精確重現。三類計時數字中,**median warm**(唯一被拿來對照
@@ -72,18 +73,40 @@ bigblue4 −4.4%);`construction`/`cold evaluate()` 這兩個單次量測本身�
 最大,但兩次量測的絕對值都遠低於下方表格與門檻會用到的任何數字量級,不影響本節或「evaluator 開銷佔比」
 表格的判讀。
 
-**觀察到的小差異(誠實記錄,非本 task 範圍的修復):** adaptec1 用本量測腳本(GPU evaluator)算出的
-`io_count=30,004` 與該次 run 主表中(CPU `evaluator_ref`)記錄的 `29,992` 相差 12(0.04%),`ft_count`
-則完全一致(2,326 == 2,326);bigblue4 兩者的 `io_count`/`ft_count` 完全一致(100,736 / 3,585)。Task 11
-的等價測試(7/7)全部使用隨機合成座標,其 docstring 已註明「real-valued random coordinates make exact
-ties measure-zero anyway」——真實 placement(尤其 legalize 後大量 cell 對齊到相同 row/site 網格座標)比
-合成隨機座標更容易撞上 Manhattan 距離的 exact tie,GPU(`torch.argmin`)與 CPU(`numpy`)在此類簡併情況下
-的 first-occurrence tie-break 判定路徑可能不同,導致極少數 net 選到等長但幾何路徑不同的 MST 邊,因而
-`io_count` 有機率性的極小偏差。**這不影響 Task 11 已驗證的語意等價性(exact-tie 案例是測度為零的邊界
-情況),也不影響 reweight 迴圈本身(迴圈全程自洽地只用 GPU evaluator 更新權重,從不混用兩者)**;僅記錄
-於此供未來若要收斂到 bit-exact 兩實作時參考,未進一步深究(不在本 task 範圍)。主表中所有 `io_count`/
-`ft_count` 數字一律取自 `evaluator_ref`(CPU),與 M0 報告的既有慣例一致——reweight 模式的最終指標和
-flat/two_stage 一樣走 CPU reference,GPU evaluator 只在跑動過程中用於 reweight 迴圈本身。
+**GPU/CPU 差異回顧與修復(Critical C1,whole-branch review 追蹤,修復於 2026-08-05):** 本節先前版本
+記錄 adaptec1 用本量測腳本(GPU evaluator)算出的 `io_count=30,004` 與該次 run 主表中(CPU
+`evaluator_ref`)記錄的 `29,992` 相差 12(168 個 net 分歧),並把 root cause 歸因於 `torch.argmin`
+與 numpy 在 exact-tie 情況下 first-occurrence 判定路徑不同、真實 placement 座標比合成隨機座標更容易
+撞上 Manhattan 距離 tie。**該解釋是錯的**——whole-branch review 用刻意構造的 tie-saturated 合成掃描
+(大量座標製造等長 Manhattan 距離的簡併 MST 選邊)逐一比對 GPU/CPU 的 first-occurrence tie-break
+結果,並未發現任何分歧,證偽了這個假設。
+
+真正 root cause 是 `ioplace/evaluator_gpu.py` 的 `GpuEvalContext._to_idx`(修復前)用 python float
+`self.cell_w`/`self.cell_h` 當除數:CUDA 把 `tensor / python_float` 編譯成 reciprocal-multiply
+(先算 `1/cell_w` 再相乘),不是正確捨入的除法。例如 adaptec1 的 `cell_w = 10692/512 = 20.8828125`,
+`2673.0 / 20.8828125` 的精確值是 128.0,但 reciprocal-multiply 算出 `127.999999999999999`,
+`.to(torch.int64)` 向下截斷得 127;numpy(reference)的除法正確捨入直接得 128。座標恰好落在 lattice
+邊界時,GPU 因此把該點分到相鄰的錯誤 region,少算一次 crossing——這正是造成 adaptec1 168 個 net
+分歧的機制,與 MST tie-breaking 無關。
+
+**修復**:`GpuEvalContext.__init__` 新增 `self._cell_w_t`/`self._cell_h_t`(0-dim float64 tensor,
+由 `self.cell_w`/`cell_h` 建構),`_to_idx` 改除以這兩個 tensor(`tensor / tensor`,即使是 0-dim,
+也是正確捨入的)取代原本除以 python float。新增回歸測試
+`tests/test_evaluator_gpu.py::test_gpu_matches_reference_on_lattice_boundaries`(non-dyadic
+lattice + 座標恰壓在 region 邊界上),**修復前 FAIL**(`per_net_crossings` ref `[1,1,3]` vs gpu
+`[0,0,3]`、`boundary_pair_demand` 分歧),**修復後 PASS**——RED→GREEN 兩態都已用 pytest 實跑確認。
+
+**adaptec1 實測(k=16 grid,本次 reweight run 的最終 placement 座標,即
+`results/m1/adaptec1_reweight_k16_grid.json.npz`):** 修復後 `evaluate_gpu` 與 `evaluate`(CPU
+reference)**精確一致**——`io_count` 29,992 == 29,992(先前的 168-net 分歧完全消失)、`ft_count`
+2,326 == 2,326、`per_net_crossings`/`per_net_ft` 逐 net 全等(0 個 net 分歧)、`boundary_pair_demand`
+相等、`tree_wl` 相對差 0.0(85,034,661.0 == 85,034,661.0)、`large_net_lb` 相等。主表中所有
+`io_count`/`ft_count` 數字仍一律取自 `evaluator_ref`(CPU),與 M0 報告既有慣例一致(此慣例不受本次
+修復影響,純屬既有的量測協定)。
+
+**MST argmin tie-breaking(縮記):** Task 11 docstring 記錄的「`torch.argmin` first-occurrence
+tie-break 與 numpy 一致」的經驗觀察未被推翻,但仍只是特定 torch/CUDA 版本上的經驗結果而非規格保證
+——torch 升級時應重驗 tie 行為。
 
 ### reweight 閉環的 evaluator 開銷佔比(num_reweights × 單次時間 vs 總 runtime)
 

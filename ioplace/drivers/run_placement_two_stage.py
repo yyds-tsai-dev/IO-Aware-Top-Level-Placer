@@ -180,6 +180,7 @@ def run_two_stage(config_json, k, rtype, seed, out_json):
     parts = partition_netlist(nl0, k, seed=seed)[:placedb.num_movable_nodes]
     die0 = (float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh))
     rs0 = get_regions_for(die0, k, rtype, seed)
+    assert rs0.k == k
     # M0 fix (task-10-report.md): mtkahypar's block id carries no geometric
     # meaning on its own -- remap block -> region so heavily-connected
     # blocks land in adjacent regions before anything downstream (fence

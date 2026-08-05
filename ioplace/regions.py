@@ -26,6 +26,10 @@ class RegionSet:
         cw, ch = self._cell_wh()
         cover = np.zeros((self.lattice, self.lattice), dtype=np.int32)
         for r in self.regions:
+            rects = np.asarray(r.rects, dtype=np.float64).reshape(-1, 4)
+            area = float(((rects[:, 2] - rects[:, 0]) * (rects[:, 3] - rects[:, 1])).sum())
+            if area == 0:
+                raise ValueError(f"region {r.name} has zero area")
             for (rxl, ryl, rxh, ryh) in r.rects:
                 for v, lo, step in ((rxl, xl, cw), (rxh, xl, cw), (ryl, yl, ch), (ryh, yl, ch)):
                     idx = (v - lo) / step
