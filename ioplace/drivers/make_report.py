@@ -1,17 +1,22 @@
-"""Collect Task 7/9 result JSON files into a Markdown comparison table (M0 exit).
+"""Collect Task 7/9/12 result JSON files into a Markdown comparison table
+(M0/M1 exit).
 
 Consumes the flat result schema written by ``run_placement.run_flat`` /
-``run_two_stage`` (Tasks 7/9): a flat dict with at least ``mode``, ``config``,
-``k``, ``rtype``, ``seed``, ``io_count``, ``ft_count``, ``tree_wl``, ``hpwl``,
-``runtime_s``, ``peak_mem_mb``. ``case`` is derived here from ``config``'s
-basename (e.g. ``.../adaptec1.json`` -> ``adaptec1``) rather than stored in
-the JSON, so results from any config path collect_results() reads normalize
-uniformly into the same field name Task 10's brief/spec Step 2 asserts on.
+``run_two_stage`` / ``run_reweight`` (Tasks 7/9/12): a flat dict with at
+least ``mode``, ``config``, ``k``, ``rtype``, ``seed``, ``io_count``,
+``ft_count``, ``tree_wl``, ``hpwl``, ``runtime_s``, ``peak_mem_mb``.
+``run_reweight`` additionally sets ``num_reweights`` (Task 13); flat/
+two_stage rows never set it, so ``_fmt(r.get(c, ""))`` renders that cell
+blank for them rather than erroring or showing a placeholder. ``case`` is
+derived here from ``config``'s basename (e.g. ``.../adaptec1.json`` ->
+``adaptec1``) rather than stored in the JSON, so results from any config
+path collect_results() reads normalize uniformly into the same field name
+Task 10's brief/spec Step 2 asserts on.
 """
 import argparse, glob, json, os
 
 COLS = ["mode", "k", "rtype", "seed", "io_count", "ft_count",
-        "tree_wl", "hpwl", "runtime_s", "peak_mem_mb"]
+        "tree_wl", "hpwl", "runtime_s", "peak_mem_mb", "num_reweights"]
 
 def collect_results(d):
     """Read every ``*.json`` in ``d`` and tag each with a ``case`` field.

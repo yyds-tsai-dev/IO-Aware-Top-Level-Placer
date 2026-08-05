@@ -1,0 +1,19 @@
+{
+ "mode": "reweight",
+ "config": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/install/test/ispd2005/adaptec1.json",
+ "k": 16,
+ "rtype": "grid",
+ "seed": 0,
+ "reweight_every": 50,
+ "alpha": 0.5,
+ "num_reweights": 15,
+ "runtime_s": 60.93970227241516,
+ "peak_mem_mb": 604.734375,
+ "net_weights_min": 1.0,
+ "net_weights_max": 6.0,
+ "io_count": 32455,
+ "ft_count": 2449,
+ "tree_wl": 90648767.0,
+ "hpwl": 80026906.0,
+ "large_net_lb": 28
+}
