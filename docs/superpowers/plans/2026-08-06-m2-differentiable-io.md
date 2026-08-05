@@ -344,14 +344,17 @@ def test_softmax_stats_chunk_invariant(chunk):
 
 def test_t_excludes_argmax_and_never_cancels():
     """t must be summed over j != argmax; s-1 would lose all precision when the
-    winner dominates (design v2 sec 2.2)."""
+    winner dominates (design v2 sec 2.2). gap=500 keeps exp(-gap) representable
+    (~7.1e-218), so a naive s-1 implementation erases it (1 + 7.1e-218 == 1.0 in
+    fp64) while direct summation over j != argmax preserves it — this is what
+    makes the case discriminating."""
     rs = make_grid_regions(DIE, 2, 1, lattice=10)
     rects, r2k = _tables(rs)
     x = _t([25.]); y = _t([50.])
-    m, t, am = softmax_stats(x, y, rects, r2k, 2, tau=0.05)   # gap 50 / 0.05 = 1000
+    m, t, am = softmax_stats(x, y, rects, r2k, 2, tau=0.1)   # gap 50 / 0.1 = 500
     assert int(am.item()) == 0
     assert t.item() > 0.0 and np.isfinite(t.item())
-    assert t.item() == pytest.approx(np.exp(-1000.0), rel=1e-6, abs=0.0) or t.item() > 0.0
+    assert t.item() == pytest.approx(np.exp(-500.0), rel=1e-6, abs=0.0)
 
 def test_ell_matches_log1p_in_unsaturated_region():
     rs = make_grid_regions(DIE, 4, 4, lattice=16)
@@ -518,7 +521,7 @@ def d_star_from_m(m, tau):
 ```bash
 $PY -m pytest tests/test_soft_assign.py -v
 ```
-Expected: 全部 passed(15 個 test case,含 parametrize 展開)。
+Expected: 全部 passed(16 個 test case,含 parametrize 展開)。
 
 - [ ] **Step 5: Commit**
 
