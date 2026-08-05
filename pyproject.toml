@@ -1,0 +1,8 @@
+[project]
+name = "ioplace"
+version = "0.0.1"
+requires-python = ">=3.9"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: integration tests that run real placements"]

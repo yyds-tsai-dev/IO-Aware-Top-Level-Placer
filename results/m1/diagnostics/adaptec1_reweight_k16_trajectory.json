@@ -1,0 +1,63 @@
+{
+ "mode": "reweight",
+ "config": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/install/test/ispd2005/adaptec1.json",
+ "k": 16,
+ "rtype": "grid",
+ "seed": 0,
+ "reweight_every": 100,
+ "alpha": 0.2,
+ "num_reweights": 6,
+ "runtime_s": 70.61749482154846,
+ "peak_mem_mb": 606.53564453125,
+ "net_weights_min": 1.0,
+ "net_weights_max": 3.0,
+ "trajectory": [
+  {
+   "iteration": 100,
+   "io_count": 23565,
+   "ft_count": 1214,
+   "net_weights_min_before": 1.0,
+   "net_weights_max_before": 1.0
+  },
+  {
+   "iteration": 200,
+   "io_count": 22088,
+   "ft_count": 1049,
+   "net_weights_min_before": 1.0,
+   "net_weights_max_before": 3.0
+  },
+  {
+   "iteration": 300,
+   "io_count": 25811,
+   "ft_count": 1402,
+   "net_weights_min_before": 1.0,
+   "net_weights_max_before": 3.0
+  },
+  {
+   "iteration": 400,
+   "io_count": 26134,
+   "ft_count": 1925,
+   "net_weights_min_before": 1.0,
+   "net_weights_max_before": 3.0
+  },
+  {
+   "iteration": 500,
+   "io_count": 28103,
+   "ft_count": 2717,
+   "net_weights_min_before": 1.0,
+   "net_weights_max_before": 3.0
+  },
+  {
+   "iteration": 600,
+   "io_count": 27557,
+   "ft_count": 2787,
+   "net_weights_min_before": 1.0,
+   "net_weights_max_before": 3.0
+  }
+ ],
+ "io_count": 30295,
+ "ft_count": 2420,
+ "tree_wl": 85027846.0,
+ "hpwl": 74829119.0,
+ "large_net_lb": 27
+}

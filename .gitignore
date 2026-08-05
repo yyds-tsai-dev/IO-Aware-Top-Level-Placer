@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+results/**/*.pl
+results/**/*.def
+results/**/*.log
+results/**/*.npz
+.superpowers/
