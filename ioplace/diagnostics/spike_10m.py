@@ -103,15 +103,23 @@ def run(n_nodes=10_000_000, n_nets=12_000_000, n_pins=40_000_000, K=32) -> dict:
         torch.cuda.synchronize(); t2 = time.time()
 
         peak_gb = torch.cuda.max_memory_allocated() / 2**30
+        # reviewer addition M5: max_memory_allocated() is only the allocator's
+        # high-water mark of *tensors actually in use*; max_memory_reserved()
+        # is the caching allocator's own high-water mark (blocks it holds
+        # onto for reuse, generally >= allocated) -- closer to the real GPU
+        # footprint this process claims.
+        peak_reserved_gb = torch.cuda.max_memory_reserved() / 2**30
         result.update({
             "fwd_ms": 1000 * (t1 - t0), "bwd_ms": 1000 * (t2 - t1),
-            "peak_gb": peak_gb, "k_chunk": term.k_chunk, "n_active": term.n_active,
+            "peak_gb": peak_gb, "peak_reserved_gb": peak_reserved_gb,
+            "k_chunk": term.k_chunk, "n_active": term.n_active,
             "loss": float(L.detach()), "ok": bool(peak_gb <= 8.0),
         })
     except RuntimeError as e:
         if "out of memory" not in str(e).lower():
             raise
         result.update({"peak_gb": torch.cuda.max_memory_allocated() / 2**30,
+                       "peak_reserved_gb": torch.cuda.max_memory_reserved() / 2**30,
                        "oom": True, "ok": False, "error": str(e)})
     return result
 

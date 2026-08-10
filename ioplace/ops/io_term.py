@@ -37,8 +37,8 @@ def build_net_node_csr(nl, ignore_net_degree):
     mask = net_mask_io(nl, ignore_net_degree)
     nodes_of_pin = nl.pin2node[nl.flat_net2pin].astype(np.int64)
     net_of_pin = nl.pin2net[nl.flat_net2pin].astype(np.int64)
-    keep = mask[net_of_pin]
-    key = net_of_pin[keep] * np.int64(nl.num_physical) + nodes_of_pin[keep]
+    pin_keep = mask[net_of_pin]
+    key = net_of_pin[pin_keep] * np.int64(nl.num_physical) + nodes_of_pin[pin_keep]
     key = np.unique(key)                       # sorted -> grouped by net, dedup'd
     unet = key // np.int64(nl.num_physical)
     unode = key % np.int64(nl.num_physical)
@@ -212,6 +212,7 @@ class _IoFn(torch.autograd.Function):
         return lambda_io * L_io + lambda_margin * L_margin
 
     @staticmethod
+    @torch.autograd.function.once_differentiable
     def backward(ctx, gout):
         x, y, m, t, am, lam = ctx.saved_tensors
         meta = ctx.meta
@@ -343,62 +344,66 @@ class IoTerm(torch.nn.Module):
         L.backward()
         return float(p.grad.abs().sum())
 
-    def _split_xy(self, pos):
-        """I4, mirrored from IoTermRef: diagnostics() goes through plain
-        (chunked-forward) autograd rather than _IoFn -- unlike forward(),
-        which lets _IoFn.backward zero out the terminal/filler gradient, this
-        path needs the explicit detach so fixed/filler positions still enter
-        the forward value but never receive gradient."""
-        x = pos[:self.num_physical]
-        y = pos[self.num_nodes:self.num_nodes + self.num_physical]
-        x = torch.cat([x[:self.num_movable], x[self.num_movable:].detach()])
-        y = torch.cat([y[:self.num_movable], y[self.num_movable:].detach()])
-        return x, y
-
     def diagnostics(self, pos, tau) -> dict:
         """Reporting-only (design v2 sec 3.2.5), not on the training hot
-        path: builds lam/contrib through a chunk loop (chunk=self.k_chunk,
-        so still no (N,K)/(P,K) tensor along the way) using plain
-        differentiable ops, then reuses IoTermRef's per-bucket
-        autograd.grad(contrib, p, grad_outputs=bucket_mask) technique for
-        grad_share so the two match to floating-point round-off."""
-        p = pos.detach().clone().requires_grad_(True)
-        x, y = self._split_xy(p)
-        rects = self.rects.to(dtype=x.dtype)
-
+        path, but still bound by the chunked memory contract. An earlier
+        version built one differentiable graph spanning every K-chunk and
+        called autograd.grad on it once per degree bucket with
+        retain_graph=True -- that keeps every chunk's intermediates alive
+        across all 7 calls, which in aggregate is exactly the (N,K)
+        materialization sec 2.5 forbids, and OOMs on bigblue4-scale real
+        data (Task 2b review Finding C1). Fixed two ways: (a) the no-grad
+        totals (frac_soft/lam/contrib/L_io) run under torch.no_grad() on
+        pos.detach(), no graph at all; (b) grad_share reuses _IoFn itself --
+        lam does not depend on w (only the final L_io = sum_e
+        w_e*clamp(lam_e-1,0) does), so masking w to zero out nets outside
+        the current bucket and calling the ordinary (already memory-safe)
+        forward()+backward() gives exactly that bucket's gradient, at the
+        cost of redoing the full chunked fwd+bwd once per bucket instead of
+        sharing one graph -- more compute, still bounded memory."""
         with torch.no_grad():
+            x = pos.detach()[:self.num_physical]
+            y = pos.detach()[self.num_nodes:self.num_nodes + self.num_physical]
+            rects = self.rects.to(dtype=x.dtype)
+
             _, t_mv, _ = softmax_stats(x[:self.num_movable], y[:self.num_movable],
                                        rects, self.rect2region, self.K, tau, chunk=self.k_chunk)
             p_max = 1.0 / (1.0 + t_mv)          # e[argmax]=1 -> p_max = 1/(1+t)
             frac_soft = float((p_max < (1.0 - 1e-3)).double().mean())
 
-        m, t, am = softmax_stats(x, y, rects, self.rect2region, self.K, tau, chunk=self.k_chunk)
-        lam = torch.zeros(self.n_active, dtype=torch.float64, device=x.device)
-        for lo, hi in _chunks(self.K, self.k_chunk):
-            sdf_c = region_sdf_l1(x, y, rects, self.rect2region, lo, hi)
-            _, ell_c = chunk_p_ell(sdf_c, m, t, am, lo, tau)
-            S_c = torch.zeros((self.n_active, hi - lo), dtype=torch.float64,
-                              device=x.device).index_add_(0, self.net_idx,
-                                                           ell_c[self.node_idx].double())
-            lam = lam + (-torch.expm1(S_c)).sum(dim=1)
-        contrib = self.w * (lam - 1.0).clamp(min=0)     # (n_active,), sums to L_io
-        L_io = contrib.sum()
+            m, t, am = softmax_stats(x, y, rects, self.rect2region, self.K, tau, chunk=self.k_chunk)
+            lam = torch.zeros(self.n_active, dtype=torch.float64, device=x.device)
+            for lo, hi in _chunks(self.K, self.k_chunk):
+                sdf_c = region_sdf_l1(x, y, rects, self.rect2region, lo, hi)
+                _, ell_c = chunk_p_ell(sdf_c, m, t, am, lo, tau)
+                S_c = torch.zeros((self.n_active, hi - lo), dtype=torch.float64,
+                                  device=x.device).index_add_(0, self.net_idx,
+                                                               ell_c[self.node_idx].double())
+                lam = lam + (-torch.expm1(S_c)).sum(dim=1)
+            contrib = self.w * (lam - 1.0).clamp(min=0)     # (n_active,), sums to L_io
+            L_io = contrib.sum()
 
         n_b = len(DEG_BUCKET_LABELS)
         grad_share = np.zeros(n_b, dtype=np.float64)
-        for b in range(n_b):
-            bucket_mask = (self.deg_bucket == b).double()
-            if float(bucket_mask.sum()) == 0.0:
-                continue
-            (g,) = torch.autograd.grad(contrib, p, grad_outputs=bucket_mask, retain_graph=True)
-            grad_share[b] = float(g.abs().sum())
+        w_full = self.w
+        try:
+            for b in range(n_b):
+                mask = (self.deg_bucket == b)
+                if not bool(mask.any()):
+                    continue
+                self.w = w_full * mask.double()
+                pb = pos.detach().clone().requires_grad_(True)
+                self.forward(pb, tau, lambda_io=1.0, lambda_margin=0.0).backward()
+                grad_share[b] = float(pb.grad.abs().sum())
+        finally:
+            self.w = w_full
         total = grad_share.sum()
         if total > 0.0:
             grad_share = grad_share / total
 
         return {
-            "soft_lambda_sum": float(lam.detach().sum()),
+            "soft_lambda_sum": float(lam.sum()),
             "frac_soft": frac_soft,
             "grad_share": grad_share,
-            "l_io": float(L_io.detach()),
+            "l_io": float(L_io),
         }
