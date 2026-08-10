@@ -24,6 +24,10 @@ def run_reweight(config_json, k, rtype, seed, out_json, every=100, alpha=0.5):
     rg = RegionGrid(get_regions_for(die, k, rtype, seed))
     ctx = GpuEvalContext(nl, rg, device="cuda")
     lr = params.global_place_stages[0]["learning_rate"]
+    # Same init_pos determinism guard as run_placement._place(): BasicPlace
+    # draws centre-noise/filler init from numpy's global RNG, seeded only by
+    # Placer.py's flow which we bypass.
+    np.random.seed(params.random_seed)
     placer = NonLinearPlace.NonLinearPlace(params, placedb, None)
     n_all, n_phys = placedb.num_nodes, placedb.num_physical_nodes
     state = {"count": 0}

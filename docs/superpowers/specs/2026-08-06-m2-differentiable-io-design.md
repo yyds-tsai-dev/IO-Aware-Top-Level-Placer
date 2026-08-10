@@ -578,6 +578,8 @@ M1 報告已警告:同設定重跑的 `io_count` 差 303(~1.0%),而它量到的�
 
 **既有 driver 缺口(必須在 T5 修):** `run_flat(config, k, rtype, seed, out)` 的 `seed` **只餵給 `get_regions_for`**(`run_placement.py:102`),而 `rtype="grid"` 時 `make_grid_regions` 根本不用 seed——**現有的 `--seed` 在 grid 模式下完全不改變 placement**。必須新增 `--dp-seed` 直接寫 `params.random_seed`,否則 M2 的「多 seed」是假的。
 
+**init_pos 缺口(T4 診斷發現,已修):** driver 繞過 `Placer.place()`,而那是唯一呼叫 `np.random.seed(params.random_seed)`(`Placer.py:36`)的地方;`BasicPlace.__init__` 只重設 torch(`:265`),init_pos 的中心噪聲與 filler 初始位置(`:272-289`/`:352-362`)卻吃 **numpy 全域 RNG** ⇒ 修正前同 process 內每次 placement 的 init_pos 都是不受控 draw(實測 adaptec1 k16 grid、det=1:`io_count` run-to-run ~0.8%、`ft_count` ~1.4%、hpwl ~0.01%)。`_place()` 現在自行 `np.random.seed(params.random_seed)`,因此 **`--dp-seed` 同時控制 init_pos 與 torch 側 `gp_noise`**。兩個後果:(a) M0/M1 的既有 results 檔帶著這個不受控噪聲產出,與修正後的 run **不 bit-可比**(M1 reweight 的 Δio=−0.06% 在該噪聲帶內,本來就非 signal;ft −9.9% 在帶外,結論不變);(b) T6 的 σ_rep/σ_seed **必須在此修正之後量測**,且 flat 基準照 §7.2 規則在選定 regime 下重測,否則 σ_rep 會把 init draw 的變異混進 GPU 非決定性。
+
 ### 7.3 Case 與規模
 
 | 角色 | case | k | rtype | 次數 |

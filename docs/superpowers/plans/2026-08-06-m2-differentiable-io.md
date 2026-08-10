@@ -1723,15 +1723,32 @@ def test_real_params_serialisation_survives_attached_terms(tmp_path):
 @pytest.mark.slow
 def test_simple_benchmark_runs_with_a_constant_extra_term_and_is_bit_identical():
     """design v2 sec 3.2.4: under the locked configuration the objective VALUE
-    cannot affect the trajectory. A constant term changes obj but nothing else."""
+    cannot affect the trajectory. A constant term changes obj but nothing else.
+    Three environmental guards make this assertable and non-vacuous:
+    - deterministic_flag=1 on both runs: GPU float32 atomics otherwise make
+      even two *unmodified* identical runs differ (verified on this host);
+    - init_pos reproducibility comes from _place() seeding numpy's global RNG
+      (BasicPlace draws centre-noise/filler init from numpy's global RNG and
+      reseeds only torch per run; the reference Placer.py flow we bypass is
+      what normally seeds numpy);
+    - random_center_init_flag=0: under simple's default (1) the 8 movable
+      cells collapse onto the die centre, the estimated lr overshoots, the
+      first Nesterov step is clamped by move_boundary, alpha_k collapses to 0
+      at iteration 1 and pos is bit-frozen for all 1000 iterations -- the
+      equality would then assert nothing about a trajectory. The len(metrics)
+      guard locks the live-trajectory premise (~433 iters live, 1001 stalled)."""
     from ioplace.drivers.run_placement import _load_dreamplace, _place, extract_final_positions
     cfg = os.path.join(DP, "install", "test", "simple.json")
-    p1, db1 = _load_dreamplace(cfg); db1.initialize(p1)
-    pl1, _ = _place(p1, db1); x1, y1 = extract_final_positions(pl1, db1)
+    p1, db1 = _load_dreamplace(cfg)
+    p1.deterministic_flag = 1; p1.random_center_init_flag = 0
+    db1.initialize(p1)
+    pl1, m1 = _place(p1, db1); x1, y1 = extract_final_positions(pl1, db1)
     p2, db2 = _load_dreamplace(cfg)
+    p2.deterministic_flag = 1; p2.random_center_init_flag = 0
     attach_terms(p2, [lambda pos: pos.new_tensor(1e6)])
     db2.initialize(p2)
-    pl2, _ = _place(p2, db2); x2, y2 = extract_final_positions(pl2, db2)
+    pl2, m2 = _place(p2, db2); x2, y2 = extract_final_positions(pl2, db2)
+    assert len(m1) < 900 and len(m2) < 900, "GP stalled; bit-identity would be vacuous"
     assert np.array_equal(x1, x2) and np.array_equal(y1, y2)
 
 @pytest.mark.slow
@@ -2079,7 +2096,7 @@ RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  "num_refreshes", "backtrack_median", "observer_mode", "trajectory")
 ```
 主流程:
-1. `params, placedb = _load_dreamplace(config_json)`;若 `dp_seed` 非 None 設 `params.random_seed = dp_seed`;若 `deterministic` 非 None 設 `params.deterministic_flag = deterministic`。
+1. `params, placedb = _load_dreamplace(config_json)`;若 `dp_seed` 非 None 設 `params.random_seed = dp_seed`;若 `deterministic` 非 None 設 `params.deterministic_flag = deterministic`。(`params.random_seed` 經 `_place()` 的 `np.random.seed` 同時決定 init_pos 與 torch 側 gp_noise——設計 §7.2「init_pos 缺口」。)
 2. `placedb.initialize(params)` → `assert_optimizer_lock(params)`(**必須在 initialize 之後**,`use_bb` 才被 `PlaceDB.py:837` 解析成 0/1)。
 3. 建 `nl`、`rg`、`GpuEvalContext`、`rect_table`、`build_net_node_csr`、`IoTerm`;`L_R = sqrt(die_area/k)`;`state = ScheduleState(...)`。
 4. **Observer mode:** 若 `rho_max == 0.0 and rho_margin == 0.0`,走純觀測路徑——**不** `attach_terms`、**不**呼叫 `update_ratio` / `refresh_nesterov_secant`,只跑 evaluator 記軌跡。這讓 `rho_max=0` 成為可證明的 no-op(objective 完全未被觸碰),同時仍產出 `io_gp` / `lg_loss` / `hard_lambda_sum` 欄位——**T6 的 flat 基準就是用這個模式跑的**,`lg_loss_flat` 因此有定義(T7 的 F5 需要)。
@@ -2132,6 +2149,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ## Task 6 (T6): 噪聲底線與 `deterministic_flag` regime 裁決
 
 **無單元測試(實驗型 task)。** 這個 task 擋在 T7 之前:沒有噪聲底線就無法判讀掃描結果(M1 的教訓)。
+
+**前提(T4 診斷後新增):** σ_rep/σ_seed 必須在 `_place()` 的 numpy seed 修正(設計 §7.2「init_pos 缺口」)之後量測——修正前 init_pos 是不受控 draw(adaptec1 io_count ~0.8% run-to-run),會把 init 變異混進 GPU 非決定性;flat 基準也因此必須在選定 regime 下重測,不可沿用 M0/M1 的舊 JSON 數字。
 
 **Files:**
 - Create: `ioplace/diagnostics/measure_noise_floor.py`

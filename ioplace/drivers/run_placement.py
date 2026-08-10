@@ -52,6 +52,12 @@ def _load_dreamplace(config_json):
 def _place(params, placedb):
     import NonLinearPlace
     lr = params.global_place_stages[0]["learning_rate"]
+    # BasicPlace.py:272-289/352-362 draws init_pos (centre noise + filler
+    # positions) from numpy's *global* RNG; only torch is reseeded per run
+    # (BasicPlace.py:265). Placer.py:36 seeds numpy for the reference flow,
+    # which we bypass -- without this every placement in a process starts from
+    # a different init_pos (measured ~0.8% run-to-run on adaptec1 io_count).
+    np.random.seed(params.random_seed)
     placer = NonLinearPlace.NonLinearPlace(params, placedb, None)
     metrics = placer(params, placedb, lr)
     return placer, metrics
