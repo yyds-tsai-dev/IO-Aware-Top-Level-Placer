@@ -12,6 +12,8 @@ class EvalResult:
     per_net_ft: np.ndarray
     boundary_pair_demand: dict
     large_net_lb: int
+    hard_lambda_sum: int = 0
+    per_net_lambda: np.ndarray = None
 
 def net_mst_edges(px, py):
     d = len(px)
@@ -75,6 +77,7 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256):
     n_nets = nl.num_nets
     per_net_crossings = np.zeros(n_nets, dtype=np.int32)
     per_net_ft = np.zeros(n_nets, dtype=np.int32)
+    per_net_lambda = np.zeros(n_nets, dtype=np.int32)
     pair_demand = {}
     tree_wl = 0.0
     hpwl = 0.0
@@ -89,6 +92,7 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256):
         nx_, ny_ = px[pin_idx], py[pin_idx]
         hpwl += (nx_.max() - nx_.min()) + (ny_.max() - ny_.min())
         pin_regions = set(pin_rid_all[pin_idx].tolist())
+        per_net_lambda[net] = len(pin_regions)
         if d > max_degree:
             lb = len(pin_regions) - 1
             per_net_crossings[net] = lb
@@ -112,4 +116,6 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256):
         ft_count=int(per_net_ft.sum()),
         tree_wl=float(tree_wl), hpwl=float(hpwl),
         per_net_crossings=per_net_crossings, per_net_ft=per_net_ft,
-        boundary_pair_demand=pair_demand, large_net_lb=int(large_lb))
+        boundary_pair_demand=pair_demand, large_net_lb=int(large_lb),
+        hard_lambda_sum=int(np.maximum(per_net_lambda - 1, 0).sum()),
+        per_net_lambda=per_net_lambda)

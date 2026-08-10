@@ -153,3 +153,22 @@ def test_evaluate_large_net_lower_bound():
     assert res.tree_wl == 0.0
     assert res.boundary_pair_demand == {}
     assert res.hpwl == pytest.approx(160.0)        # (90-10)+(90-10)
+
+def test_hard_lambda_fields_on_tiny_netlist():
+    rg = _rg22()
+    nl = make_tiny_netlist()
+    # n0={c0,c1} both in P0 -> lambda=1 ; n1={c1,c2,f3} in P0,P1,P3 -> lambda=3
+    res = evaluate(nl, nl.node_x, nl.node_y, rg)
+    assert list(res.per_net_lambda) == [1, 3]
+    assert res.hard_lambda_sum == 2
+
+def test_hard_lambda_sum_never_exceeds_io_count():
+    rng = np.random.default_rng(21)
+    rs = make_grid_regions(DIE, 4, 4, lattice=20)
+    rg = RegionGrid(rs)
+    from tests.test_evaluator_gpu import _random_case
+    for s in range(5):
+        nl = _random_case(np.random.default_rng(s))
+        res = evaluate(nl, nl.node_x, nl.node_y, rg)
+        assert res.hard_lambda_sum <= res.io_count
+        assert len(res.per_net_lambda) == nl.num_nets

@@ -111,16 +111,21 @@ def _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed):
                 "tree_wl": res.tree_wl, "hpwl": res.hpwl,
                 "large_net_lb": res.large_net_lb}
 
-def run_flat(config_json, k, rtype, seed, out_json):
+def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, deterministic=None):
     import torch
     t0 = time.time()
     params, placedb = _load_dreamplace(config_json)
+    if dp_seed is not None:
+        params.random_seed = dp_seed
+    if deterministic is not None:
+        params.deterministic_flag = deterministic
     placedb.initialize(params)
     placer, _ = _place(params, placedb)
     node_x, node_y = extract_final_positions(placer, placedb)
     _, metrics = _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed)
     result = {"mode": "flat", "config": config_json, "k": k, "rtype": rtype,
-              "seed": seed, "runtime_s": time.time() - t0,
+              "seed": seed, "dp_seed": int(params.random_seed),
+              "det": int(params.deterministic_flag), "runtime_s": time.time() - t0,
               "peak_mem_mb": torch.cuda.max_memory_allocated() / 2**20
               if torch.cuda.is_available() else 0.0, **metrics}
     os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)
@@ -132,23 +137,41 @@ def run_flat(config_json, k, rtype, seed, out_json):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
-    ap.add_argument("--mode", required=True, choices=["flat", "two_stage", "reweight"])
+    ap.add_argument("--mode", required=True, choices=["flat", "two_stage", "reweight", "io"])
     ap.add_argument("--k", type=int, default=16)
     ap.add_argument("--rtype", default="grid", choices=["grid", "slicing"])
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", required=True)
     ap.add_argument("--reweight-every", type=int, default=100)
     ap.add_argument("--alpha", type=float, default=0.5)
+    ap.add_argument("--rho-max", type=float, default=0.1)
+    ap.add_argument("--tau-hi", type=float, default=0.30)
+    ap.add_argument("--tau-lo", type=float, default=0.03)
+    ap.add_argument("--alpha-io", type=float, default=0.0)
+    ap.add_argument("--rho-margin", type=float, default=0.0)
+    ap.add_argument("--w-mode", default="unit", choices=["unit", "inv_deg"])
+    ap.add_argument("--d-max", type=int, default=None)
+    ap.add_argument("--every", type=int, default=50)
+    ap.add_argument("--dp-seed", type=int, default=None)
+    ap.add_argument("--deterministic", type=int, default=None)
     args = ap.parse_args()
     if args.mode == "flat":
-        run_flat(args.config, args.k, args.rtype, args.seed, args.out)
+        run_flat(args.config, args.k, args.rtype, args.seed, args.out,
+                 dp_seed=args.dp_seed, deterministic=args.deterministic)
     elif args.mode == "two_stage":
         from ioplace.drivers.run_placement_two_stage import run_two_stage  # Task 9
         run_two_stage(args.config, args.k, args.rtype, args.seed, args.out)
-    else:
+    elif args.mode == "reweight":
         from ioplace.drivers.run_placement_reweight import run_reweight    # Task 12
         run_reweight(args.config, args.k, args.rtype, args.seed, args.out,
                      every=args.reweight_every, alpha=args.alpha)
+    else:
+        from ioplace.drivers.run_placement_io import run_io
+        run_io(args.config, args.k, args.rtype, args.seed, args.out,
+              rho_max=args.rho_max, tau_hi=args.tau_hi, tau_lo=args.tau_lo,
+              alpha_io=args.alpha_io, rho_margin=args.rho_margin, w_mode=args.w_mode,
+              ignore_net_degree=args.d_max, every=args.every,
+              dp_seed=args.dp_seed, deterministic=args.deterministic)
 
 if __name__ == "__main__":
     main()

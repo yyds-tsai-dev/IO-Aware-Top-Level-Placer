@@ -354,6 +354,10 @@ class GpuEvalContext:
         pin_bit_acc.scatter_reduce_(0, idx_exp, pin_bits, reduce="amax", include_self=True)
         pin_bm = self._pack_bits(pin_bit_acc)
 
+        per_net_lambda = torch.where(self.degrees_t >= 2, self._popcount_k(pin_bm),
+                                     torch.zeros_like(pin_bm))
+        hard_lambda_sum = int((per_net_lambda - 1).clamp(min=0).sum().item())
+
         # hpwl: only degree>=2 nets contribute (matches evaluate_ref's `if d<=1: continue`)
         neg_inf = torch.finfo(torch.float64).min
         pos_inf = torch.finfo(torch.float64).max
@@ -426,6 +430,8 @@ class GpuEvalContext:
             per_net_ft=per_net_ft.to(torch.int32).cpu().numpy(),
             boundary_pair_demand=pair_demand,
             large_net_lb=large_lb,
+            hard_lambda_sum=hard_lambda_sum,
+            per_net_lambda=per_net_lambda.to(torch.int32).cpu().numpy(),
         )
 
 

@@ -140,6 +140,22 @@ def test_gpu_matches_reference_on_lattice_boundaries():
     assert gpu.boundary_pair_demand == ref.boundary_pair_demand
 
 
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_gpu_hard_lambda_matches_reference_and_legacy_fields_unchanged(seed):
+    rng = np.random.default_rng(seed)
+    rg = RegionGrid(make_grid_regions(DIE, 4, 4, lattice=20))
+    nl = _random_case(rng)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    assert gpu.hard_lambda_sum == ref.hard_lambda_sum
+    assert np.array_equal(gpu.per_net_lambda, ref.per_net_lambda)
+    # legacy fields must be bit-identical (Global Constraints: evaluator semantics frozen)
+    assert gpu.io_count == ref.io_count and gpu.ft_count == ref.ft_count
+    assert np.array_equal(gpu.per_net_crossings, ref.per_net_crossings)
+    assert np.array_equal(gpu.per_net_ft, ref.per_net_ft)
+    assert gpu.boundary_pair_demand == ref.boundary_pair_demand
+
+
 def test_gpu_matches_reference_k64():
     """8x8 region grid (K=64) -- the required 5-seed test above only covers K=16
     (4x4). This exercises the K<=64 bitmask-vectorization boundary GpuEvalContext

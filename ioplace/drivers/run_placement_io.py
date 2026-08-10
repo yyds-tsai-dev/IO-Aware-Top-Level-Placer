@@ -1,0 +1,211 @@
+import json, os, time
+import numpy as np
+import scipy.stats
+from ioplace.drivers.run_placement import (_load_dreamplace, extract_final_positions,
+    _evaluate_and_pack, get_regions_for)
+from ioplace.netlist import netlist_from_placedb
+from ioplace.region_grid import RegionGrid
+from ioplace.evaluator_gpu import GpuEvalContext
+from ioplace.ops.soft_assign import rect_table
+from ioplace.ops.io_term import build_net_node_csr, IoTerm
+from ioplace.schedules import ScheduleState
+from ioplace.dp_hook import (attach_terms, detach_terms, assert_optimizer_lock,
+                             refresh_nesterov_secant, install_version_invariant)
+
+RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
+                 "io_count", "io_gp", "ft_count", "hard_lambda_sum", "tree_wl", "hpwl",
+                 "lg_loss", "runtime_s", "peak_mem_mb", "rho_max", "tau_hi", "tau_lo",
+                 "of_on", "of_end", "alpha_io", "w_mode", "d_max", "rho_margin",
+                 "margin_m", "lambda_io_final", "spearman_rho", "num_callbacks",
+                 "num_refreshes", "backtrack_median", "observer_mode", "trajectory")
+
+
+def run_io(config_json, k, rtype, seed, out_json, *,
+           rho_max=0.1, tau_hi=0.30, tau_lo=0.03,
+           of_on=0.90, of_end=None, of_full=0.20,
+           alpha_io=0.0, cap=64.0, ignore_net_degree=None,
+           rho_margin=0.0, margin_m=None, margin_tau=None,
+           of_margin=0.15, w_mode="unit", every=50,
+           dp_seed=None, deterministic=None, check_invariant=False):
+    import torch
+    t0 = time.time()
+    params, placedb = _load_dreamplace(config_json)
+    if dp_seed is not None:
+        params.random_seed = dp_seed
+    if deterministic is not None:
+        params.deterministic_flag = deterministic
+    placedb.initialize(params)
+    # design v2 sec 3.2.4: use_bb is only resolved to a concrete 0/1 by
+    # PlaceDB.py:837, which runs inside initialize() -- must check after.
+    assert_optimizer_lock(params)
+    # NonLinearPlace is a bare top-level module inside $DREAMPLACE_ROOT/install
+    # (see Global Constraints), only importable once _load_dreamplace has
+    # called setup_dreamplace() and pushed install/ onto sys.path.
+    import NonLinearPlace
+
+    nl = netlist_from_placedb(placedb)           # initialize 後(scale 後)座標系
+    die = (float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh))
+    rs = get_regions_for(die, k, rtype, seed)
+    rg = RegionGrid(rs)
+    ctx = GpuEvalContext(nl, rg, device="cuda")
+
+    if of_end is None:
+        of_end = float(params.stop_overflow)
+    if ignore_net_degree is None:
+        ignore_net_degree = int(params.ignore_net_degree)
+    if margin_m is None:
+        margin_m = 2.0 * float(np.median(nl.node_size_y[:nl.num_movable]))
+    if margin_tau is None:
+        margin_tau = margin_m / 2.0
+
+    rects, r2k = rect_table(rs)
+    csr = build_net_node_csr(nl, ignore_net_degree)
+    io_term = IoTerm(csr=csr, rects=rects, rect2region=r2k, K=k,
+                     num_movable=nl.num_movable, num_physical=nl.num_physical,
+                     num_nodes=placedb.num_nodes, device="cuda", w_mode=w_mode)
+
+    L_R = ((die[2] - die[0]) * (die[3] - die[1]) / k) ** 0.5
+
+    state = ScheduleState(rho_max=rho_max, tau_hi=tau_hi, tau_lo=tau_lo,
+                          of_on=of_on, of_end=of_end, of_full=of_full,
+                          alpha_io=alpha_io, rho_margin=rho_margin,
+                          margin_m=margin_m, margin_tau=margin_tau, of_margin=of_margin)
+
+    # design v2 sec 5.2/6.4: rho_max==0 and rho_margin==0 is a *provable* no-op
+    # -- the term is never attached, so the objective is bit-identical to
+    # run_flat. T6's flat baseline runs through this path to get the
+    # io_gp/lg_loss/hard_lambda_sum columns it needs.
+    observer_mode = (rho_max == 0.0 and rho_margin == 0.0)
+
+    def term_fn(pos):
+        if not state.active or (state.lambda_io == 0.0 and state.lambda_margin == 0.0):
+            return pos.new_zeros(())
+        return io_term(pos, state.tau, state.lambda_io, state.lambda_margin,
+                       state.margin_m, state.margin_tau)
+
+    if not observer_mode:
+        attach_terms(params, [term_fn])   # must precede NonLinearPlace(...) construction
+
+    # Same init_pos determinism guard as run_placement._place() / run_reweight:
+    # BasicPlace draws centre-noise/filler init from numpy's global RNG, seeded
+    # only by Placer.py's flow which we bypass here.
+    np.random.seed(params.random_seed)
+    placer = NonLinearPlace.NonLinearPlace(params, placedb, None)
+
+    n_all, n_phys = placedb.num_nodes, placedb.num_physical_nodes
+    total_iterations = params.global_place_stages[0]["iteration"]
+
+    trajectory = []
+    cb_state = {"num_refreshes": 0, "io_gp": 0, "prev_obj_evals": 0,
+               "installed_invariant": False}
+
+    def cb(iteration, pos):
+        of = float(placer.model.overflow.max())
+        gamma = float(placer.model.gamma)
+        discrete = state.update_continuous(iteration, of, L_R, gamma)
+
+        # Step 8: io_gp must reflect the *last* callback's exact io_count; since
+        # GP may stop before hitting total_iterations, force one extra evaluator
+        # call right at the iteration budget's edge so a run that uses the full
+        # budget still gets an up-to-date io_gp (best-effort -- a run that stops
+        # earlier via Lgamma_stop_criterion is covered by the periodic `every`
+        # evaluator calls below instead).
+        force_eval = (iteration == total_iterations - 1)
+        if (iteration > 0 and iteration % every == 0) or force_eval:
+            node_x = pos.data[:n_phys]
+            node_y = pos.data[n_all:n_all + n_phys]
+            res = ctx.evaluate(node_x, node_y)
+            cb_state["io_gp"] = res.io_count
+
+            n_now = placer.optimizer.param_groups[0]["obj_eval_count"]
+            obj_evals = n_now - cb_state["prev_obj_evals"]
+            cb_state["prev_obj_evals"] = n_now
+
+            entry = {"iteration": iteration, "overflow": of, "tau": state.tau,
+                     "lambda_io": state.lambda_io, "obj_evals": obj_evals,
+                     "io_count": res.io_count, "ft_count": res.ft_count,
+                     "hard_lambda_sum": res.hard_lambda_sum,
+                     "soft_lambda_ref_tau": 0.0, "grad_l1_io": 0.0, "grad_l1_wl": 0.0,
+                     "frac_soft": 0.0, "grad_share": []}
+
+            if not observer_mode:
+                # auto-normalization (design v2 sec 5.2): one extra backward on
+                # the WL-only op, L1 norm, taken *before* the io_term backward
+                # below so its grad is isolated.
+                wl = placer.model.op_collections.wirelength_op(pos)
+                wl.backward()
+                g_wl_l1 = float(pos.grad.abs().sum())
+                pos.grad.zero_()
+                g_io_l1 = io_term.io_grad_l1(pos.detach(), state.tau)
+                state.update_ratio(g_wl_l1, g_io_l1)
+
+                if alpha_io > 0:
+                    c_e = res.per_net_crossings[csr.net_ids].astype(np.float64)
+                    new_w = 1.0 + alpha_io * np.minimum(c_e, cap)
+                    io_term.w.copy_(torch.as_tensor(new_w, dtype=io_term.w.dtype,
+                                                     device=io_term.w.device))
+                    state.obj_version += 1
+
+                diag = io_term.diagnostics(pos, 0.05 * L_R)
+                entry["soft_lambda_ref_tau"] = diag["soft_lambda_sum"]
+                entry["grad_l1_io"] = g_io_l1
+                entry["grad_l1_wl"] = g_wl_l1
+                entry["frac_soft"] = diag["frac_soft"]
+                entry["grad_share"] = diag["grad_share"].tolist()
+
+            trajectory.append(entry)
+
+        # 順序不可換:先讓新 τ/λ/w 生效,再 refresh。
+        if not observer_mode and (discrete or state.needs_refresh()):
+            refresh_nesterov_secant(placer.optimizer)
+            state.mark_refreshed()
+            cb_state["num_refreshes"] += 1
+
+        if check_invariant and not cb_state["installed_invariant"]:
+            install_version_invariant(placer.optimizer, state)
+            cb_state["installed_invariant"] = True
+
+    placer.iteration_callback = cb
+    lr = params.global_place_stages[0]["learning_rate"]
+    placer(params, placedb, lr)
+    lambda_io_final = state.lambda_io
+
+    node_x, node_y = extract_final_positions(placer, placedb)
+    _, metrics = _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed)
+    res = ctx.evaluate(node_x, node_y)
+    m = res.per_net_crossings > 0
+    if np.count_nonzero(m) >= 2:
+        spearman_rho = float(scipy.stats.spearmanr(
+            res.per_net_crossings[m], (res.per_net_lambda - 1)[m]).correlation)
+    else:
+        spearman_rho = float("nan")
+
+    detach_terms(params)
+
+    backtrack_median = float(np.median([t["obj_evals"] for t in trajectory])) \
+        if trajectory else 0.0
+
+    result = {
+        "mode": "io", "config": config_json, "k": k, "rtype": rtype, "seed": seed,
+        "dp_seed": int(params.random_seed), "det": int(params.deterministic_flag),
+        "io_count": metrics["io_count"], "io_gp": cb_state["io_gp"],
+        "ft_count": metrics["ft_count"], "hard_lambda_sum": res.hard_lambda_sum,
+        "tree_wl": metrics["tree_wl"], "hpwl": metrics["hpwl"],
+        "lg_loss": metrics["io_count"] - cb_state["io_gp"],
+        "runtime_s": time.time() - t0,
+        "peak_mem_mb": torch.cuda.max_memory_allocated() / 2**20
+        if torch.cuda.is_available() else 0.0,
+        "rho_max": rho_max, "tau_hi": tau_hi, "tau_lo": tau_lo,
+        "of_on": of_on, "of_end": of_end, "alpha_io": alpha_io,
+        "w_mode": w_mode, "d_max": ignore_net_degree, "rho_margin": rho_margin,
+        "margin_m": margin_m, "lambda_io_final": lambda_io_final,
+        "spearman_rho": spearman_rho, "num_callbacks": len(trajectory),
+        "num_refreshes": cb_state["num_refreshes"],
+        "backtrack_median": backtrack_median, "observer_mode": observer_mode,
+        "trajectory": trajectory,
+    }
+    os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)
+    with open(out_json, "w") as f:
+        json.dump(result, f, indent=1)
+    np.savez_compressed(out_json + ".npz", node_x=node_x, node_y=node_y)
+    return result
