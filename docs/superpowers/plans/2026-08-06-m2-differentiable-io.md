@@ -1339,11 +1339,11 @@ def test_state_tau_tracks_overflow_every_iteration():
 
 def test_lambda_is_zero_until_ratio_known_then_ramped():
     s = ScheduleState(rho_max=0.4, n_ramp=20)
-    s.update_continuous(10, 0.85, 1000.0, 1e9)     # gamma huge -> cap inactive
+    s.update_continuous(10, 0.85, 1000.0, 1e-12)   # gamma tiny -> cap ~ tau^2/gamma huge -> inactive
     assert s.lambda_io == 0.0                       # no ratio yet
     s.update_ratio(g_wl_l1=1000.0, g_io_l1=2.0)     # ratio = 500
     assert s.ratio_ema == pytest.approx(500.0, rel=1e-12)
-    s.update_continuous(20, 0.55, 1000.0, 1e9)      # rho = 0.4*0.5 = 0.2 ; ramp = 0.5
+    s.update_continuous(20, 0.55, 1000.0, 1e-12)    # rho = 0.4*0.5 = 0.2 ; ramp = 0.5
     assert s.lambda_io == pytest.approx(0.4 * 0.5 * 0.5 * 500.0, rel=1e-9)
 
 def test_ratio_uses_ema_damping():
