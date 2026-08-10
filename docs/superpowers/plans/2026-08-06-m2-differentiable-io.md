@@ -1554,6 +1554,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 >     if not g["g_k"]:                       # 尚未跑過第一步,無快取可汙染
 >         return
 >     f = optimizer.obj_and_grad_fn          # 已綁定的 model.obj_and_grad_fn
+>     f = getattr(f, "__wrapped__", f)       # refresh 是版本失配的授權解法,穿透 (3) 的 invariant wrapper
 >     obj_k, grad_k = f(g["v_k"][0])         # v_k 就是 pos 本身
 >     g["g_k"][0].copy_(grad_k.data)
 >     g["obj_k"][0].copy_(obj_k.data)
@@ -1569,7 +1570,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 >
 > 呼叫時機:**在新的 τ/λ/w 生效之後、`iteration_callback` 返回之前**(callback 本身就在 `optimizer.step()` 之後,`v_k` 已等於當前 `pos`,正是下一步要用的參考點)。成本:2 次 obj+grad / 事件 ≈ 每 50 iter 加 2 次 ⇒ ~2% runtime。
 >
-> **(3) 版本號 invariant(測試用,可在 production 關閉)。** schedule state 持有單調遞增的 `obj_version`,每次離散變更 +1;`refresh_nesterov_secant` 記錄 `refreshed_version`。在測試模式下包裝 `obj_and_grad_fn`,於每次呼叫斷言 `obj_version == refreshed_version`——亦即**不存在任何一次梯度求值發生在「已變更但未刷新」的狀態下**。
+> **(3) 版本號 invariant(測試用,可在 production 關閉)。** schedule state 持有單調遞增的 `obj_version`,每次離散變更 +1;`refresh_nesterov_secant` 記錄 `refreshed_version`。在測試模式下包裝 `obj_and_grad_fn`,於每次呼叫斷言 `obj_version == refreshed_version`——亦即**不存在任何一次 optimizer-step 梯度求值發生在「已變更但未刷新」的狀態下**。wrapper 以 `__wrapped__` 暴露原函式,`refresh_nesterov_secant` 自身的兩次求值經由它穿透(refresh 依規定順序在 `mark_refreshed()` 之前執行、且它正是解除失配的授權機制,否則會對自己斷言成死鎖——T5 整合實測);穿透不弱化保護,refresh 後未 mark 的 `opt.step()` 仍被攔下。
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1667,6 +1668,27 @@ def test_version_invariant_silent_after_mark_refreshed():
     st = ScheduleState(rho_max=0.1)
     uninstall = install_version_invariant(opt, st)
     st.obj_version += 1
+    st.mark_refreshed()
+    opt.step()                              # must not raise
+    uninstall()
+
+def test_refresh_passes_through_installed_invariant():
+    """T5 integration finding: the refresh is the sanctioned resolver of a
+    version mismatch and by the mandated call order runs *before*
+    mark_refreshed(), so its own obj_and_grad_fn evaluations must bypass the
+    invariant wrapper (via __wrapped__) instead of asserting against itself.
+    The optimizer step immediately after a refresh-without-mark must still
+    fire, so bypassing does not weaken what the invariant locks."""
+    ver, fn = _make_problem()
+    p = torch.nn.Parameter(torch.tensor([2.0, -3.0]))
+    opt = NAG([p], lr=0.01, obj_and_grad_fn=fn, constraint_fn=lambda t: None, use_bb=False)
+    fn(p); opt.step()
+    st = ScheduleState(rho_max=0.1)
+    uninstall = install_version_invariant(opt, st)
+    st.obj_version += 1                     # discrete change, not yet refreshed
+    refresh_nesterov_secant(opt)            # must not raise (bypasses wrapper)
+    with pytest.raises(AssertionError):
+        opt.step()                          # still stale for the *step* path
     st.mark_refreshed()
     opt.step()                              # must not raise
     uninstall()
@@ -1854,11 +1876,17 @@ def detach_terms(params):
 
 def assert_optimizer_lock(params):
     """design v2 sec 3.2.4: the surrogate-only forward is only behaviourally
-    equivalent under nesterov + use_bb=0 + Lsub_iteration=1."""
+    equivalent under nesterov + use_bb=0 + Lsub_iteration=1. Must run after
+    placedb.initialize(params): use_bb defaults to the string 'auto' and is
+    only resolved to 0/1 there (PlaceDB.py:837)."""
     stage = params.global_place_stages[0]
     opt = str(stage.get("optimizer", "")).lower()
     assert opt == "nesterov", f"optimizer lock: expected nesterov, got {opt!r}"
-    assert int(getattr(params, "use_bb", 0)) == 0, \
+    use_bb = getattr(params, "use_bb", 0)
+    assert not isinstance(use_bb, str), (
+        f"optimizer lock: use_bb still unresolved ({use_bb!r}); "
+        "call assert_optimizer_lock after placedb.initialize(params)")
+    assert int(use_bb) == 0, \
         f"optimizer lock: expected use_bb==0 (step_nobb), got {params.use_bb!r}"
     lsub = int(stage.get("Lsub_iteration", 1))
     assert lsub == 1, f"optimizer lock: expected Lsub_iteration==1, got {lsub}"
@@ -1869,7 +1897,12 @@ def refresh_nesterov_secant(optimizer):
     g = optimizer.param_groups[0]
     if not g["g_k"]:
         return
+    # The refresh IS the mechanism that resolves a version mismatch, so its own
+    # evaluations must not be vetted by install_version_invariant's wrapper
+    # (they run before mark_refreshed() by the mandated call order); unwrap to
+    # the original obj_and_grad_fn if the invariant is installed.
     f = optimizer.obj_and_grad_fn
+    f = getattr(f, "__wrapped__", f)
     obj_k, grad_k = f(g["v_k"][0])
     g["g_k"][0].copy_(grad_k.data)
     g["obj_k"][0].copy_(obj_k.data)
@@ -1884,8 +1917,11 @@ def refresh_nesterov_secant(optimizer):
 
 
 def install_version_invariant(optimizer, state):
-    """Assert that no gradient evaluation happens while the objective has changed
-    but the Nesterov cache has not been refreshed (design v2 sec 6.4.2 (3))."""
+    """Assert that no *optimizer-step* gradient evaluation happens while the
+    objective has changed but the Nesterov cache has not been refreshed
+    (design v2 sec 6.4.2 (3)). The wrapper carries __wrapped__ so that
+    refresh_nesterov_secant -- the sanctioned resolver of exactly that state --
+    can evaluate through the original fn without asserting against itself."""
     orig = optimizer.obj_and_grad_fn
 
     def wrapped(p):
@@ -1894,6 +1930,7 @@ def install_version_invariant(optimizer, state):
             f"{state.refreshed_version}; refresh_nesterov_secant() was not called")
         return orig(p)
 
+    wrapped.__wrapped__ = orig
     optimizer.obj_and_grad_fn = wrapped
     return lambda: setattr(optimizer, "obj_and_grad_fn", orig)
 ```
@@ -2070,9 +2107,15 @@ def test_rho_zero_is_observer_mode_and_bit_identical_to_flat(tmp_path):
 def test_optimizer_lock_is_enforced(tmp_path):
     import Params
     from ioplace.drivers.run_placement import _load_dreamplace
-    p, db = _load_dreamplace(SIMPLE)
-    p.global_place_stages[0]["Lsub_iteration"] = 2
     from ioplace.dp_hook import assert_optimizer_lock
+    p, db = _load_dreamplace(SIMPLE)
+    # before initialize, use_bb is the unresolved string 'auto' -- the lock
+    # must refuse that state with a clear AssertionError (not a ValueError)
+    with pytest.raises(AssertionError, match="unresolved"):
+        assert_optimizer_lock(p)
+    db.initialize(p)
+    assert_optimizer_lock(p)                       # locked config passes
+    p.global_place_stages[0]["Lsub_iteration"] = 2
     with pytest.raises(AssertionError):
         assert_optimizer_lock(p)
 ```

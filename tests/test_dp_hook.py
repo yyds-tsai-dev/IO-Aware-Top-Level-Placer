@@ -94,6 +94,27 @@ def test_version_invariant_silent_after_mark_refreshed():
     opt.step()                              # must not raise
     uninstall()
 
+def test_refresh_passes_through_installed_invariant():
+    """T5 integration finding: the refresh is the sanctioned resolver of a
+    version mismatch and by the mandated call order runs *before*
+    mark_refreshed(), so its own obj_and_grad_fn evaluations must bypass the
+    invariant wrapper (via __wrapped__) instead of asserting against itself.
+    The optimizer step immediately after a refresh-without-mark must still
+    fire, so bypassing does not weaken what the invariant locks."""
+    ver, fn = _make_problem()
+    p = torch.nn.Parameter(torch.tensor([2.0, -3.0]))
+    opt = NAG([p], lr=0.01, obj_and_grad_fn=fn, constraint_fn=lambda t: None, use_bb=False)
+    fn(p); opt.step()
+    st = ScheduleState(rho_max=0.1)
+    uninstall = install_version_invariant(opt, st)
+    st.obj_version += 1                     # discrete change, not yet refreshed
+    refresh_nesterov_secant(opt)            # must not raise (bypasses wrapper)
+    with pytest.raises(AssertionError):
+        opt.step()                          # still stale for the *step* path
+    st.mark_refreshed()
+    opt.step()                              # must not raise
+    uninstall()
+
 # ---------------------------------------------------------------- params plumbing
 class _FakeParams:
     def __init__(self):

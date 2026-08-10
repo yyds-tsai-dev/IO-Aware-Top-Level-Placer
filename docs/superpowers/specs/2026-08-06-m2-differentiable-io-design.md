@@ -523,6 +523,7 @@ def refresh_nesterov_secant(optimizer):
     if not g["g_k"]:                       # 尚未跑過第一步,無快取可汙染
         return
     f = optimizer.obj_and_grad_fn          # 已綁定的 model.obj_and_grad_fn
+    f = getattr(f, "__wrapped__", f)       # refresh 是版本失配的授權解法,穿透 (3) 的 invariant wrapper
     obj_k, grad_k = f(g["v_k"][0])         # v_k 就是 pos 本身
     g["g_k"][0].copy_(grad_k.data)
     g["obj_k"][0].copy_(obj_k.data)
@@ -538,7 +539,7 @@ def refresh_nesterov_secant(optimizer):
 
 呼叫時機:**在新的 τ/λ/w 生效之後、`iteration_callback` 返回之前**(callback 本身就在 `optimizer.step()` 之後,`v_k` 已等於當前 `pos`,正是下一步要用的參考點)。成本:2 次 obj+grad / 事件 ≈ 每 50 iter 加 2 次 ⇒ ~2% runtime。
 
-**(3) 版本號 invariant(測試用,可在 production 關閉)。** schedule state 持有單調遞增的 `obj_version`,每次離散變更 +1;`refresh_nesterov_secant` 記錄 `refreshed_version`。在測試模式下包裝 `obj_and_grad_fn`,於每次呼叫斷言 `obj_version == refreshed_version`——亦即**不存在任何一次梯度求值發生在「已變更但未刷新」的狀態下**。
+**(3) 版本號 invariant(測試用,可在 production 關閉)。** schedule state 持有單調遞增的 `obj_version`,每次離散變更 +1;`refresh_nesterov_secant` 記錄 `refreshed_version`。在測試模式下包裝 `obj_and_grad_fn`,於每次呼叫斷言 `obj_version == refreshed_version`——亦即**不存在任何一次 optimizer-step 梯度求值發生在「已變更但未刷新」的狀態下**。wrapper 以 `__wrapped__` 暴露原函式,`refresh_nesterov_secant` 自身的兩次求值經由它穿透:refresh 依規定順序在 `mark_refreshed()` **之前**執行、且它正是解除失配的授權機制,若也被 invariant 檢查會對自己斷言成死鎖(T5 整合實測)。穿透不弱化保護——refresh 之後、`mark_refreshed()` 之前的 `opt.step()` 仍會被攔下。
 
 #### 6.4.3 T4 的驗收測試(RED/GREEN 明確)
 
