@@ -1,0 +1,16 @@
+{
+ "sigma_rep_det0": 82.64804897878716,
+ "mean_det0": 30033.8,
+ "runtime_det0": 60.63947057723999,
+ "sigma_rep_det1": 0.0,
+ "mean_det1": 30256,
+ "runtime_det1": 59.923628664016725,
+ "sigma_seed": 176.3697819922676,
+ "mean_seed": 29987.4,
+ "sigma_rep": 0.0,
+ "flat_io": 30256,
+ "flat_hpwl": 73923673.0,
+ "lg_loss_flat": 1958,
+ "regime": 1,
+ "reason": "det=1: sigma_rep/mean < 0.2% and runtime penalty < 20%"
+}
