@@ -97,12 +97,22 @@ def run_io(config_json, k, rtype, seed, out_json, *,
 
     trajectory = []
     cb_state = {"num_refreshes": 0, "io_gp": 0, "prev_obj_evals": 0,
-               "installed_invariant": False}
+               "obj_evals_per_iter": [], "installed_invariant": False}
 
     def cb(iteration, pos):
         of = float(placer.model.overflow.max())
         gamma = float(placer.model.gamma)
         discrete = state.update_continuous(iteration, of, L_R, gamma)
+
+        # Per-iteration line-search cost (design v2 sec 9.1 F3: the *median
+        # per scheduled iteration* obj_eval_count increment, threshold >= 5).
+        # Tracked on every callback, not just the `every`-gated evaluator
+        # entries below -- a window-cumulative delta would read ~`every` for a
+        # perfectly healthy 1 eval/iter run and falsely trip F3.
+        n_now = placer.optimizer.param_groups[0]["obj_eval_count"]
+        obj_evals = n_now - cb_state["prev_obj_evals"]
+        cb_state["prev_obj_evals"] = n_now
+        cb_state["obj_evals_per_iter"].append(obj_evals)
 
         # Step 8: io_gp must reflect the *last* callback's exact io_count; since
         # GP may stop before hitting total_iterations, force one extra evaluator
@@ -116,10 +126,6 @@ def run_io(config_json, k, rtype, seed, out_json, *,
             node_y = pos.data[n_all:n_all + n_phys]
             res = ctx.evaluate(node_x, node_y)
             cb_state["io_gp"] = res.io_count
-
-            n_now = placer.optimizer.param_groups[0]["obj_eval_count"]
-            obj_evals = n_now - cb_state["prev_obj_evals"]
-            cb_state["prev_obj_evals"] = n_now
 
             entry = {"iteration": iteration, "overflow": of, "tau": state.tau,
                      "lambda_io": state.lambda_io, "obj_evals": obj_evals,
@@ -182,8 +188,8 @@ def run_io(config_json, k, rtype, seed, out_json, *,
 
     detach_terms(params)
 
-    backtrack_median = float(np.median([t["obj_evals"] for t in trajectory])) \
-        if trajectory else 0.0
+    backtrack_median = float(np.median(cb_state["obj_evals_per_iter"])) \
+        if cb_state["obj_evals_per_iter"] else 0.0
 
     result = {
         "mode": "io", "config": config_json, "k": k, "rtype": rtype, "seed": seed,
