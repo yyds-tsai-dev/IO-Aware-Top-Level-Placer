@@ -1,0 +1,21 @@
+{
+ "mode": "reweight",
+ "config": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/install/test/ispd2005/bigblue4.json",
+ "k": 16,
+ "rtype": "grid",
+ "seed": 0,
+ "dp_seed": 1000,
+ "det": 1,
+ "reweight_every": 100,
+ "alpha": 0.2,
+ "num_reweights": 8,
+ "runtime_s": 546.5991714000702,
+ "peak_mem_mb": 8684.240234375,
+ "net_weights_min": 1.0,
+ "net_weights_max": 3.0,
+ "io_count": 100860,
+ "ft_count": 2948,
+ "tree_wl": 864720416.0,
+ "hpwl": 755435247.0,
+ "large_net_lb": 31
+}

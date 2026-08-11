@@ -7,10 +7,17 @@ from ioplace.region_grid import RegionGrid
 from ioplace.evaluator_gpu import GpuEvalContext
 from ioplace.reweight import update_net_weights
 
-def run_reweight(config_json, k, rtype, seed, out_json, every=100, alpha=0.5):
+def run_reweight(config_json, k, rtype, seed, out_json, every=100, alpha=0.5,
+                 *, dp_seed=None, deterministic=None):
     import torch
     t0 = time.time()
     params, placedb = _load_dreamplace(config_json)
+    # same semantics as run_flat/run_io (T8 needs the A1 arm in the same
+    # dp_seed/det regime as every other arm, or the deltas are not comparable)
+    if dp_seed is not None:
+        params.random_seed = dp_seed
+    if deterministic is not None:
+        params.deterministic_flag = deterministic
     # NonLinearPlace is a bare top-level module inside $DREAMPLACE_ROOT/install
     # (see Global Constraints: DREAMPlace mixes `import dreamplace.ops.*` and
     # bare `import Params`/`import NonLinearPlace` styles) -- it only becomes
@@ -50,7 +57,9 @@ def run_reweight(config_json, k, rtype, seed, out_json, every=100, alpha=0.5):
     # is the only way for tests to see the live net_weights tensor's range.
     nw = placer.data_collections.net_weights.detach().cpu().numpy()
     result = {"mode": "reweight", "config": config_json, "k": k, "rtype": rtype,
-              "seed": seed, "reweight_every": every, "alpha": alpha,
+              "seed": seed, "dp_seed": int(params.random_seed),
+              "det": int(params.deterministic_flag),
+              "reweight_every": every, "alpha": alpha,
               "num_reweights": state["count"], "runtime_s": time.time() - t0,
               "peak_mem_mb": torch.cuda.max_memory_allocated() / 2**20
               if torch.cuda.is_available() else 0.0,
