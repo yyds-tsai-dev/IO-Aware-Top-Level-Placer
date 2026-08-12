@@ -136,29 +136,31 @@ adaptec1 K=16:fwd 3.8 ms / bwd 8.7 ms / peak 409 MB。
 - **v2 的處置:不把 materialized 版本當交付形態。** T2 從第一天就實作 §2.5 的 chunked-k 契約,上表僅作為 (a) 等價測試的參考實作(小 case)與 (b) chunked 版效能/記憶體的對照基準。
 - 每 iteration 成本:`obj_and_grad_fn` 在 `step_nobb` 的 backtracking line search 內被呼叫 **1–10 次**(`NesterovAcceleratedGradientOptimizer.py:128`;ISPD2005 無 movable macro → `use_bb` 由 `"auto"` 解析為 **0**,`PlaceDB.py:837`)。以平均 2 次估:adaptec1 GP 約 +25 ms/iter(≈ +1.8× GP 時間),bigblue4 約 +324 ms/iter。chunked 版因為要重算 SDF,forward+backward 的 FLOP 約 ×2,但仍是 memory-bound,預期 wall-time 增幅 <30%。
 
-**chunked 版(T2b Step 5 實測,`IoTerm`,`chunk_budget` 預設 8e6,`results/m2/probes/chunked_perf.json`):**
+**chunked 版(T2b Step 5 實測,`IoTerm`,`chunk_budget` 預設 8e6,`results/m2/probes/chunked_perf.json`。T9 重測回填:下表為 T2b review-fix 後(commit `be888cc`,`diagnostics()` 改走 no-grad 總量 + per-bucket w-masked forward/backward)重新量測的數字,取代本節先前版本記載的初版 T2b 數字):**
 
 bigblue4 真實 netlist + 真實最終座標,`IoTerm` 前向+反向一次:
 
 | K | fwd | bwd | peak GPU mem | k_chunk |
 |---:|---:|---:|---:|---:|
-| 8 | 38.1 ms | 132.9 ms | 796.8 MB | 1 |
-| 16 | 74.7 ms | 263.8 ms | 797.1 MB | 1 |
-| 32 | 146.9 ms | 524.5 ms | 797.5 MB | 1 |
+| 8 | 163.2 ms | 349.0 ms | 797.5 MB | 1 |
+| 16 | 74.4 ms | 263.6 ms | 797.1 MB | 1 |
+| 32 | 656.7 ms | 1,363.1 ms | 797.8 MB | 1 |
 
 adaptec1(`k_chunk=8` for all three K, i.e. only K=8 is fully materialized):
-K=8 fwd 187.6 ms / bwd 766.7 ms / peak 364.7 MB; K=16 fwd 40.9 ms / bwd 70.7 ms
-/ peak 393.2 MB; K=32 fwd 79.7 ms / bwd 138.0 ms / peak 393.3 MB.
+K=8 fwd 16.0 ms / bwd 17.1 ms / peak 364.7 MB; K=16 fwd 33.1 ms / bwd 65.2 ms
+/ peak 393.2 MB; K=32 fwd 12.4 ms / bwd 46.6 ms / peak 393.3 MB.
 
-- **bigblue4 K=32 peak 797.5 MB vs materialized 9,229 MB — 11.6x 下降,遠低於
+- **bigblue4 K=32 peak 797.8 MB vs materialized 9,229 MB — 11.6x 下降,遠低於
   `< 4,000 MB` 的驗收門檻。** `k_chunk=1` for every bigblue4 K (its
   `n_pins_dedup ≈ 9e6` dominates `chunk_budget // max(N, n_pins_dedup)`),
   i.e. bigblue4 is walking the *most* chunked (slowest, most memory-safe)
   regime available at the default budget, and the peak is still <1 GB.
 - **wall-time**: chunked bigblue4 K=32 bwd is *slower* than the materialized
-  prototype's bwd (524.5 vs 204.3 ms, +157%); fwd is also slower (146.9 vs
-  101.7 ms, +44%). adaptec1 (small enough that `k_chunk` only drops to 8,
-  not 1) shows the same direction at smaller magnitude. The regression is
+  prototype's bwd (1,363.1 vs 204.3 ms, +567%); fwd is also slower (656.7 vs
+  101.7 ms, +546%). adaptec1 (small enough that `k_chunk` only drops to 8,
+  not 1) shows the same direction, smaller in absolute ms terms (K16 bwd
+  +56.5 ms vs bigblue4 K32's +1,158.8 ms) even though its percentage swing
+  looks larger against a sub-10ms materialized baseline. The regression is
   bigger than the "<30%" predicted above, especially for bwd: BWD-1 and
   BWD-2 each recompute `region_sdf_l1` independently (plus FWD-2's own
   pass), so it's three SDF passes per K-chunk, not the one/two implied by a
