@@ -7,7 +7,7 @@ if not torch.cuda.is_available():
 
 from ioplace.regions import make_grid_regions
 from ioplace.ops.soft_assign import rect_table
-from ioplace.ops.io_term import build_net_node_csr, IoTerm, IoTermRef
+from ioplace.ops.io_term import build_net_node_csr, IoTerm, IoTermRef, DEG_BUCKET_LABELS
 from tests.test_io_term import _nl, _pos, DIE
 
 def _pair(nl, rs, K, chunk_budget, w_mode="unit", num_movable=None, n_filler=0):
@@ -93,6 +93,25 @@ def test_chunked_diagnostics_match_reference():
     assert a["soft_lambda_sum"] == pytest.approx(b["soft_lambda_sum"], rel=1e-9)
     assert a["frac_soft"] == pytest.approx(b["frac_soft"], rel=1e-12)
     assert np.allclose(a["grad_share"], b["grad_share"], rtol=1e-6, atol=1e-9)
+    assert a["n_backward_passes"] == b["n_backward_passes"]
+
+def test_diagnostics_reports_n_backward_passes_as_1_plus_nonempty_buckets():
+    """Codex review of the M4 draft (sec 1.4 B2): diagnostics()'s cost is
+    `1 (the driver's separate io_grad_l1 call) + one chunked fwd+bwd per
+    *non-empty* degree bucket` -- not a fixed 8, since a run whose nets all
+    land in fewer than 7 of DEG_BUCKET_LABELS's buckets does fewer passes.
+    This net set (degrees in {2,3}) only ever populates 2 of the 7 buckets."""
+    rs = make_grid_regions(DIE, 2, 2, lattice=10)
+    nl = _nl([(25., 25.), (75., 25.), (25., 75.), (75., 75.)],
+            [[0, 1], [0, 1, 2]])              # degree 2 and degree 3 -> 2 buckets
+    fast, ref = _pair(nl, rs, 4, 8)
+    pos = _pos(nl).detach()
+    for term in (fast, ref):
+        d = term.diagnostics(pos, 8.0)
+        n_nonempty = int((np.bincount(term.deg_bucket.cpu().numpy(),
+                                      minlength=len(DEG_BUCKET_LABELS)) > 0).sum())
+        assert n_nonempty == 2
+        assert d["n_backward_passes"] == 1 + n_nonempty
     assert fast.io_grad_l1(pos, 8.0) == pytest.approx(ref.io_grad_l1(pos, 8.0), rel=1e-9)
 
 def test_chunked_zero_gradient_for_fixed_and_filler():

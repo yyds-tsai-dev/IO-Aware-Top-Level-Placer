@@ -35,3 +35,29 @@ def test_load_dreamplace_forces_dp_off():
     assert params.detailed_place_flag == 0
     assert params.detailed_place_engine == ""
     assert placedb.num_movable_nodes > 0
+
+@pytest.mark.slow
+def test_peak_mem_is_flagged_and_not_the_process_cumulative_hwm(tmp_path):
+    """M4 design draft sec 1.4 B1: pre-fix, peak_mem_mb was the *process*
+    cumulative high-water mark (no reset_peak_memory_stats() at the run's
+    measurement start), so a second run_flat() call in the same process
+    reported a peak_mem_mb bloated by an unrelated earlier allocation.
+    reset_peak_memory_stats() clears the allocator's counters at run start,
+    not any tensor still resident from earlier in the process (necessary,
+    not sufficient -- a true per-arm ablation still wants a subprocess per
+    arm); this test only pins the part that reset *does* fix."""
+    import torch
+    from ioplace.drivers.run_placement import run_flat
+    root = os.environ.get("DREAMPLACE_ROOT", "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace")
+    cfg = os.path.join(root, "install/test/simple.json")
+    # Inflate the process-wide allocator high-water mark well above anything
+    # a `simple.json` run alone would reach, then free it -- a pre-fix
+    # run_flat (no reset) would still report this inflated figure.
+    junk = torch.empty(400_000_000, dtype=torch.uint8, device="cuda")  # ~400MB
+    del junk
+    torch.cuda.empty_cache()
+    inflated_peak_mb = torch.cuda.max_memory_allocated() / 2**20
+
+    res = run_flat(cfg, 4, "grid", 0, str(tmp_path / "flat.json"))
+    assert res["peak_mem_mb_reset_semantics"] is True
+    assert res["peak_mem_mb"] < inflated_peak_mb

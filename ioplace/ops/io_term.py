@@ -148,10 +148,12 @@ class IoTermRef(torch.nn.Module):
 
         n_b = len(DEG_BUCKET_LABELS)
         grad_share = np.zeros(n_b, dtype=np.float64)
+        n_nonempty = 0
         for b in range(n_b):
             bucket_mask = (self.deg_bucket == b).double()
             if float(bucket_mask.sum()) == 0.0:
                 continue
+            n_nonempty += 1
             (g,) = torch.autograd.grad(contrib, p, grad_outputs=bucket_mask, retain_graph=True)
             grad_share[b] = float(g.abs().sum())
         total = grad_share.sum()
@@ -165,6 +167,13 @@ class IoTermRef(torch.nn.Module):
             "frac_soft": frac_soft,
             "grad_share": grad_share,
             "l_io": float(L_io.detach()),
+            # M4 design draft sec 1.4 B2 (Codex review): the driver's per-
+            # callback cost of "diagnostics" is this call's n_nonempty
+            # bucket backward passes *plus* the one separate io_grad_l1
+            # backward the driver always takes right before it -- general
+            # formula, not the fixed "7 buckets + 1 = 8" the draft's first
+            # pass assumed (a run whose nets miss some buckets does fewer).
+            "n_backward_passes": 1 + n_nonempty,
         }
 
 
@@ -386,11 +395,13 @@ class IoTerm(torch.nn.Module):
         n_b = len(DEG_BUCKET_LABELS)
         grad_share = np.zeros(n_b, dtype=np.float64)
         w_full = self.w
+        n_nonempty = 0
         try:
             for b in range(n_b):
                 mask = (self.deg_bucket == b)
                 if not bool(mask.any()):
                     continue
+                n_nonempty += 1
                 self.w = w_full * mask.double()
                 pb = pos.detach().clone().requires_grad_(True)
                 self.forward(pb, tau, lambda_io=1.0, lambda_margin=0.0).backward()
@@ -406,4 +417,7 @@ class IoTerm(torch.nn.Module):
             "frac_soft": frac_soft,
             "grad_share": grad_share,
             "l_io": float(L_io),
+            # see IoTermRef.diagnostics's matching comment: general formula,
+            # not a fixed 8 (M4 design draft sec 1.4 B2, Codex review).
+            "n_backward_passes": 1 + n_nonempty,
         }

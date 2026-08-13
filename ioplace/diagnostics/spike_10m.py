@@ -13,11 +13,19 @@ task-2b-report.md for the actual figure; n_pins is a target/label here, not
 an enforced count (forcing an exact match would mean distorting the bucket
 ratios, defeating the point of resampling from real data).
 
-ok = peak_gb <= 8.0 and not OOM. A `false`/OOM result BLOCKS T2b -- it does
-not proceed to T4 (design v2 sec 2.5).
+ok = peak_gb <= budget_gb and not OOM (budget_gb defaults to 8.0, the M2
+10M/8GB contract design v2 sec 2.5 fixed). A `false`/OOM result BLOCKS T2b
+-- it does not proceed to T4.
+
+M4 design draft sec 1.4 B3: the 8.0 threshold was hardcoded, so a 30M-scale
+spike (measured 12.32 GB) was misjudged as a failure against a budget that
+was only ever meant for the 10M case. `budget_gb` is now a parameter (CLI:
+--budget-gb); the default stays 8.0 so M2's own 10M/8GB judgement is
+unchanged.
 
 Usage:
     PYTHONPATH=. $PY -m ioplace.diagnostics.spike_10m > results/m2/spike/spike_10m.json
+    PYTHONPATH=. $PY -m ioplace.diagnostics.spike_10m --budget-gb 16 > out.json
 """
 import json
 import time
@@ -73,7 +81,8 @@ def _synthesize_netlist(n_nodes, n_nets, die):
     return nl, total_pins
 
 
-def run(n_nodes=10_000_000, n_nets=12_000_000, n_pins=40_000_000, K=32) -> dict:
+def run(n_nodes=10_000_000, n_nets=12_000_000, n_pins=40_000_000, K=32,
+       budget_gb=8.0) -> dict:
     die = (0.0, 0.0, 100_000.0, 100_000.0)
 
     t0 = time.time()
@@ -85,7 +94,8 @@ def run(n_nodes=10_000_000, n_nets=12_000_000, n_pins=40_000_000, K=32) -> dict:
     csr = build_net_node_csr(nl, 100)
 
     result = {"n_nodes": n_nodes, "n_nets": n_nets, "n_pins_target": n_pins,
-              "n_pins_actual": total_pins, "K": K, "synth_s": synth_s, "ok": False}
+              "n_pins_actual": total_pins, "K": K, "budget_gb": budget_gb,
+              "synth_s": synth_s, "ok": False}
     torch.cuda.reset_peak_memory_stats()
     try:
         term = IoTerm(csr=csr, rects=rects, rect2region=r2k, K=K,
@@ -113,7 +123,7 @@ def run(n_nodes=10_000_000, n_nets=12_000_000, n_pins=40_000_000, K=32) -> dict:
             "fwd_ms": 1000 * (t1 - t0), "bwd_ms": 1000 * (t2 - t1),
             "peak_gb": peak_gb, "peak_reserved_gb": peak_reserved_gb,
             "k_chunk": term.k_chunk, "n_active": term.n_active,
-            "loss": float(L.detach()), "ok": bool(peak_gb <= 8.0),
+            "loss": float(L.detach()), "ok": bool(peak_gb <= budget_gb),
         })
     except RuntimeError as e:
         if "out of memory" not in str(e).lower():
@@ -125,4 +135,12 @@ def run(n_nodes=10_000_000, n_nets=12_000_000, n_pins=40_000_000, K=32) -> dict:
 
 
 if __name__ == "__main__":
-    print(json.dumps(run(), indent=1))
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--budget-gb", type=float, default=8.0,
+                    help="peak_gb <= budget_gb pass/fail threshold (default "
+                         "8.0, the M2 10M/8GB contract; M4 design draft sec "
+                         "1.4 B3: parametrized so a 30M-scale spike isn't "
+                         "misjudged against a threshold sized for 10M)")
+    args = ap.parse_args()
+    print(json.dumps(run(budget_gb=args.budget_gb), indent=1))

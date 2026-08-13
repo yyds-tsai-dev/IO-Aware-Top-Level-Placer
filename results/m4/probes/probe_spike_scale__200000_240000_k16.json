@@ -1,0 +1,29 @@
+{
+ "n_nodes": 200000,
+ "n_nets": 240000,
+ "n_pins_target": 840000,
+ "n_pins_actual": 979208,
+ "K": 16,
+ "budget_gb": 8.0,
+ "synth_s": 0.023093223571777344,
+ "ok": true,
+ "fwd_ms": 178.73263359069824,
+ "bwd_ms": 495.0416088104248,
+ "peak_gb": 0.3948359489440918,
+ "peak_reserved_gb": 0.482421875,
+ "k_chunk": 8,
+ "n_active": 239999,
+ "loss": 491551.44012286165,
+ "host_rss_gb": 1.0530586242675781,
+ "env": {
+  "torch_version": "2.8.0+cu128",
+  "cuda_version": "12.8",
+  "gpu_name": "NVIDIA L4",
+  "numpy_version": "1.26.4",
+  "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
+  "ioplace_commit": "3c2ad5d21fe58943bbc71452d32c59f15ce99bb0",
+  "input_sha256": {
+   "results/m2/probes/degree_distribution.json": "55d805e9e8843b654d8e8238784d790431d51511efd05ba5f216521315774cda"
+  }
+ }
+}

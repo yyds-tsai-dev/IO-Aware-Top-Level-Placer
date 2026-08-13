@@ -14,10 +14,12 @@ from ioplace.dp_hook import (attach_terms, detach_terms, assert_optimizer_lock,
 
 RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  "io_count", "io_gp", "ft_count", "hard_lambda_sum", "tree_wl", "hpwl",
-                 "lg_loss", "runtime_s", "peak_mem_mb", "rho_max", "tau_hi", "tau_lo",
+                 "lg_loss", "runtime_s", "peak_mem_mb", "peak_mem_mb_reset_semantics",
+                 "rho_max", "tau_hi", "tau_lo",
                  "of_on", "of_end", "alpha_io", "w_mode", "d_max", "rho_margin",
                  "margin_m", "lambda_io_final", "spearman_rho", "num_callbacks",
-                 "num_refreshes", "backtrack_median", "observer_mode", "trajectory")
+                 "num_refreshes", "backtrack_median", "observer_mode",
+                 "diag_every", "no_diag", "trajectory")
 
 
 def run_io(config_json, k, rtype, seed, out_json, *,
@@ -26,9 +28,15 @@ def run_io(config_json, k, rtype, seed, out_json, *,
            alpha_io=0.0, cap=64.0, ignore_net_degree=None,
            rho_margin=0.0, margin_m=None, margin_tau=None,
            of_margin=0.15, w_mode="unit", every=50,
-           dp_seed=None, deterministic=None, check_invariant=False):
+           dp_seed=None, deterministic=None, check_invariant=False,
+           diag_every=1, no_diag=False):
     import torch
     t0 = time.time()
+    # M4 design draft sec 1.4 B1 (same fix/caveat as run_placement.run_flat):
+    # necessary but not sufficient for per-run isolation -- see that
+    # function's comment for what this does and does not clear.
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
     params, placedb = _load_dreamplace(config_json)
     if dp_seed is not None:
         params.random_seed = dp_seed
@@ -95,9 +103,13 @@ def run_io(config_json, k, rtype, seed, out_json, *,
     n_all, n_phys = placedb.num_nodes, placedb.num_physical_nodes
     total_iterations = params.global_place_stages[0]["iteration"]
 
+    if diag_every < 1:
+        raise ValueError(f"diag_every must be >= 1, got {diag_every}")
+
     trajectory = []
     cb_state = {"num_refreshes": 0, "io_gp": 0, "prev_obj_evals": 0,
-               "obj_evals_per_iter": [], "installed_invariant": False}
+               "obj_evals_per_iter": [], "installed_invariant": False,
+               "diag_occurrences": 0}
 
     def cb(iteration, pos):
         of = float(placer.model.overflow.max())
@@ -137,13 +149,18 @@ def run_io(config_json, k, rtype, seed, out_json, *,
             if not observer_mode:
                 # auto-normalization (design v2 sec 5.2): one extra backward on
                 # the WL-only op, L1 norm, taken *before* the io_term backward
-                # below so its grad is isolated.
+                # below so its grad is isolated. Always computed, independent
+                # of --diag-every/--no-diag below: state.update_ratio() feeds
+                # the schedule's live lambda_io calibration every callback,
+                # not just the sampled ones diagnostics() reports on.
                 wl = placer.model.op_collections.wirelength_op(pos)
                 wl.backward()
                 g_wl_l1 = float(pos.grad.abs().sum())
                 pos.grad.zero_()
                 g_io_l1 = io_term.io_grad_l1(pos.detach(), state.tau)
                 state.update_ratio(g_wl_l1, g_io_l1)
+                entry["grad_l1_io"] = g_io_l1
+                entry["grad_l1_wl"] = g_wl_l1
 
                 if alpha_io > 0:
                     c_e = res.per_net_crossings[csr.net_ids].astype(np.float64)
@@ -152,12 +169,28 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                                                      device=io_term.w.device))
                     state.obj_version += 1
 
-                diag = io_term.diagnostics(pos, 0.05 * L_R)
-                entry["soft_lambda_ref_tau"] = diag["soft_lambda_sum"]
-                entry["grad_l1_io"] = g_io_l1
-                entry["grad_l1_wl"] = g_wl_l1
-                entry["frac_soft"] = diag["frac_soft"]
-                entry["grad_share"] = diag["grad_share"].tolist()
+                # M4 design draft sec 1.4 B2: diagnostics() runs one full
+                # chunked fwd+bwd per non-empty degree bucket (io_term.py's
+                # own n_backward_passes field) -- expensive at scale (30M:
+                # ~213s/callback per the draft). --diag-every N samples this
+                # call every N-th `every`-gated occurrence (N=1 default =
+                # every occurrence, i.e. unchanged pre-fix behavior);
+                # --no-diag drops it entirely. g_io_l1 above is NOT reused
+                # here (Codex review of the draft): diagnostics's
+                # grad_share is a *bucket-masked* backward at a fixed
+                # reference tau (0.05*L_R), while g_io_l1 is the full
+                # (unmasked) gradient at the schedule's live state.tau --
+                # bucket-masked L1 norms don't reconstruct the unmasked L1
+                # norm (cross-bucket gradient contributions at a shared node
+                # can cancel), and the two tau values generally differ, so
+                # there is no single backward pass both could share.
+                do_diag = (not no_diag) and (cb_state["diag_occurrences"] % diag_every == 0)
+                cb_state["diag_occurrences"] += 1
+                if do_diag:
+                    diag = io_term.diagnostics(pos, 0.05 * L_R)
+                    entry["soft_lambda_ref_tau"] = diag["soft_lambda_sum"]
+                    entry["frac_soft"] = diag["frac_soft"]
+                    entry["grad_share"] = diag["grad_share"].tolist()
 
             trajectory.append(entry)
 
@@ -201,6 +234,9 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         "runtime_s": time.time() - t0,
         "peak_mem_mb": torch.cuda.max_memory_allocated() / 2**20
         if torch.cuda.is_available() else 0.0,
+        # sec 1.4 B1: see run_flat's matching field for what this does/does
+        # not guarantee (per-run reset, not full process isolation).
+        "peak_mem_mb_reset_semantics": True,
         "rho_max": rho_max, "tau_hi": tau_hi, "tau_lo": tau_lo,
         "of_on": of_on, "of_end": of_end, "alpha_io": alpha_io,
         "w_mode": w_mode, "d_max": ignore_net_degree, "rho_margin": rho_margin,
@@ -208,6 +244,7 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         "spearman_rho": spearman_rho, "num_callbacks": len(trajectory),
         "num_refreshes": cb_state["num_refreshes"],
         "backtrack_median": backtrack_median, "observer_mode": observer_mode,
+        "diag_every": diag_every, "no_diag": no_diag,
         "trajectory": trajectory,
     }
     os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)

@@ -114,6 +114,16 @@ def _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed):
 def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, deterministic=None):
     import torch
     t0 = time.time()
+    # M4 design draft sec 1.4 B1: pre-fix, peak_mem_mb was the *process*
+    # cumulative allocator high-water mark, not this run's own peak (no
+    # reset here meant a second run_flat() call in the same process, e.g.
+    # run_ablation_m2.py's multi-arm loop, inherited every earlier arm's
+    # peak too). Necessary but NOT sufficient for per-run isolation: this
+    # only zeroes the allocator's peak-tracking *counters* -- any tensor
+    # still resident from an earlier call in this process is untouched. A
+    # correct per-arm ablation still wants each arm in its own subprocess.
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
     params, placedb = _load_dreamplace(config_json)
     if dp_seed is not None:
         params.random_seed = dp_seed
@@ -127,7 +137,13 @@ def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, determinist
               "seed": seed, "dp_seed": int(params.random_seed),
               "det": int(params.deterministic_flag), "runtime_s": time.time() - t0,
               "peak_mem_mb": torch.cuda.max_memory_allocated() / 2**20
-              if torch.cuda.is_available() else 0.0, **metrics}
+              if torch.cuda.is_available() else 0.0,
+              # sec 1.4 B1: marks this JSON as post-fix (per-run reset at
+              # measurement start) so it can be told apart from pre-fix
+              # results whose peak_mem_mb was the process cumulative HWM
+              # (sec 1.4 B1 gate M4-G7 -- those must be flagged as stale,
+              # not silently compared against this field).
+              "peak_mem_mb_reset_semantics": True, **metrics}
     os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)
     with open(out_json, "w") as f:
         json.dump(result, f, indent=1)
@@ -154,6 +170,14 @@ def main():
     ap.add_argument("--every", type=int, default=50)
     ap.add_argument("--dp-seed", type=int, default=None)
     ap.add_argument("--deterministic", type=int, default=None)
+    # sec 1.4 B2: gates run_placement_io.py's expensive per-callback
+    # io_term.diagnostics() call (mode="io" only; no-op for other modes).
+    ap.add_argument("--diag-every", type=int, default=1,
+                    help="run io_term.diagnostics() every N-th `--every`-gated "
+                         "callback (default 1 = every occurrence, matching "
+                         "pre-B2 behavior)")
+    ap.add_argument("--no-diag", action="store_true",
+                    help="never run io_term.diagnostics() (overrides --diag-every)")
     args = ap.parse_args()
     if args.mode == "flat":
         run_flat(args.config, args.k, args.rtype, args.seed, args.out,
@@ -171,7 +195,8 @@ def main():
               rho_max=args.rho_max, tau_hi=args.tau_hi, tau_lo=args.tau_lo,
               alpha_io=args.alpha_io, rho_margin=args.rho_margin, w_mode=args.w_mode,
               ignore_net_degree=args.d_max, every=args.every,
-              dp_seed=args.dp_seed, deterministic=args.deterministic)
+              dp_seed=args.dp_seed, deterministic=args.deterministic,
+              diag_every=args.diag_every, no_diag=args.no_diag)
 
 if __name__ == "__main__":
     main()

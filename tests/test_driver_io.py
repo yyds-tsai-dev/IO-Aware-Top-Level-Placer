@@ -13,7 +13,7 @@ def test_result_fields_contract_is_declared():
               "lg_loss", "rho_max", "tau_hi", "tau_lo", "alpha_io", "w_mode", "d_max",
               "rho_margin", "lambda_io_final", "spearman_rho", "num_callbacks",
               "num_refreshes", "backtrack_median", "observer_mode", "dp_seed", "det",
-              "trajectory"):
+              "trajectory", "peak_mem_mb_reset_semantics", "diag_every", "no_diag"):
         assert f in RESULT_FIELDS
 
 @pytest.mark.slow
@@ -55,6 +55,62 @@ def test_rho_zero_is_observer_mode_and_bit_identical_to_flat(tmp_path):
     assert np.array_equal(xa, xb)
     assert b["observer_mode"] is True and b["num_refreshes"] == 0
     assert b["io_count"] == a["io_count"] and b["io_gp"] >= 0
+
+@pytest.mark.slow
+def test_peak_mem_io_is_flagged_and_not_the_process_cumulative_hwm(tmp_path):
+    """Same B1 fix as run_flat (M4 design draft sec 1.4), applied to run_io:
+    reset_peak_memory_stats() at the run's measurement start, necessary but
+    not sufficient (see run_placement.py's matching comment) for per-run
+    isolation."""
+    junk = torch.empty(400_000_000, dtype=torch.uint8, device="cuda")  # ~400MB
+    del junk
+    torch.cuda.empty_cache()
+    inflated_peak_mb = torch.cuda.max_memory_allocated() / 2**20
+
+    res = run_io(SIMPLE, 4, "grid", 0, str(tmp_path / "io.json"), rho_max=0.05)
+    assert res["peak_mem_mb_reset_semantics"] is True
+    assert res["peak_mem_mb"] < inflated_peak_mb
+
+@pytest.mark.slow
+def test_diag_every_n_subsamples_and_no_diag_disables(tmp_path, monkeypatch):
+    """B2 (M4 design draft sec 1.4 / Codex review): diagnostics() runs a
+    full chunked fwd+bwd per non-empty degree bucket -- expensive at scale.
+    --diag-every N / --no-diag must gate *only* that call; grad_l1_io/
+    grad_l1_wl (needed every callback for the schedule's auto-normalization
+    ratio, sec 5.2) are NOT reusable from diagnostics()'s backward passes
+    (they run at different tau -- state.tau vs diagnostics's fixed
+    0.05*L_R reference -- so they stay independent, computed every time)."""
+    from ioplace.ops.io_term import IoTerm
+    calls = {"n": 0}
+    orig = IoTerm.diagnostics
+    def counting(self, *a, **kw):
+        calls["n"] += 1
+        return orig(self, *a, **kw)
+    monkeypatch.setattr(IoTerm, "diagnostics", counting)
+
+    res_every1 = run_io(SIMPLE, 4, "grid", 0, str(tmp_path / "io1.json"),
+                        rho_max=0.05, every=10, diag_every=1)
+    calls_every1 = calls["n"]; calls["n"] = 0
+
+    res_every2 = run_io(SIMPLE, 4, "grid", 0, str(tmp_path / "io2.json"),
+                        rho_max=0.05, every=10, diag_every=2)
+    calls_every2 = calls["n"]; calls["n"] = 0
+
+    # diag_every=1 must reproduce the pre-fix always-on behavior exactly.
+    assert calls_every1 == res_every1["num_callbacks"]
+    assert 0 < calls_every2 < calls_every1
+    # `every`'s own callback cadence (num_callbacks/trajectory) is untouched.
+    assert res_every2["num_callbacks"] == res_every1["num_callbacks"]
+
+    res_nodiag = run_io(SIMPLE, 4, "grid", 0, str(tmp_path / "io3.json"),
+                        rho_max=0.05, every=10, no_diag=True)
+    assert calls["n"] == 0
+    assert all(e["soft_lambda_ref_tau"] == 0.0 and e["frac_soft"] == 0.0
+              and e["grad_share"] == [] for e in res_nodiag["trajectory"])
+    # grad_l1_io/grad_l1_wl are independent of diag gating -- still present
+    # and still real (nonzero) values on every callback.
+    assert all("grad_l1_io" in e and "grad_l1_wl" in e for e in res_nodiag["trajectory"])
+    assert res_nodiag["diag_every"] == 1 and res_nodiag["no_diag"] is True
 
 @pytest.mark.slow
 def test_optimizer_lock_is_enforced(tmp_path):
