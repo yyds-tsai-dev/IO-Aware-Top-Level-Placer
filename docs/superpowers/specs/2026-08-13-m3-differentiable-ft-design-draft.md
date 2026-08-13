@@ -131,7 +131,7 @@ io_rg = Σ_e ST_e = hard_lambda_sum + ft_rg;   io_mst = io_rg + mst_excess
 
 1. `EvalResult` 分離 `st_exact/ft_exact`(Λ≤8)與 `st_ub/ft_ub`(Λ>8),提供 `n_nets_ub`;聚合值以 **[下界, 上界] 區間**報。
 2. Λ≥4 的解必須**展開成 `G_R` 上的實際子樹**,`ST` 取邊數、`ft_rg` 取**非 terminal 頂點數**(與 `evaluator_ref.py:113` 的 distinct 語意同構),使 `FT = ST + 1 − Λ` 每條 net 精確成立。
-3. 順帶修 R2:`evaluator_gpu.py:352` 的 `pin_bit_acc` 與 `:413` 的 `passed_bit_acc` 是 `(E,K)` int64(12M×32 各 3.0 GB),改 packed bitmask 或按 net 分塊。**列為 T1 驗收條件。**
+3. 順帶修 R2:`evaluator_gpu.py:352` 的 `pin_bit_acc` 與 `:413` 的 `passed_bit_acc` 是 `(E,K)` int64(12M×32 各 3.0 GB),改 **source bit planes 與 accumulator 成對 int64→int8**(scatter 要求 self.dtype==src.dtype;0/1 上 `amax`≡OR)。注意 **packed bitmask + amax 對 `passed_bit_acc` 數學上錯誤**(兩個 packed mask 的 max ≠ OR,M4 design §4.5),不得採用。**列為 T1 驗收條件。**
 4. 新增 `per_net_topology_class`(§1 的五分類),供 P0b 與 G9 使用。
 
 ---
