@@ -52,6 +52,7 @@ import numpy as np
 import torch
 
 from ioplace.evaluator_ref import EvalResult
+from ioplace.region_graph import region_graph as build_region_graph, next_hop_table, steiner_tree_stats
 
 
 def _pow2_bounds(n):
@@ -72,7 +73,16 @@ class GpuEvalContext:
         # into a single int64, one bit per region id) assumes every region id fits
         # in the 64 bits of an int64 -- fail loudly here rather than silently
         # truncating/wrapping region ids >= 64 later inside _pack_bits/_bit_planes.
-        assert self.k <= 64, f"GpuEvalContext bitmask vectorization requires rg.k <= 64, got rg.k={self.k}"
+        #
+        # M3 T1 (R2 remedy) tightens this from <=64 to <=32: _pow2_k below is a
+        # *signed* int64 (`1 << 63 == INT64_MIN`), so K=64 was already out of
+        # contract even before this change silently relied on bit-pattern
+        # equality rather than well-defined arithmetic; K<=32 also matches the
+        # M3 experiment matrix (K in {8,16,32}, spec §1) and is required for
+        # region_graph()'s Steiner-tree tables. See
+        # docs/superpowers/specs/2026-08-13-m4-scale-up-design-draft.md §4.2 and
+        # docs/reviews/2026-08-13-m4-draft-v1-adversarial-codex.md finding 9.
+        assert self.k <= 32, f"GpuEvalContext bitmask vectorization requires rg.k <= 32, got rg.k={self.k}"
 
         # ---- static region-grid tensors: grid + Ph/Pv crossing prefix sums ----
         grid_np = rg.grid.astype(np.int64)
@@ -123,6 +133,17 @@ class GpuEvalContext:
         self._bit_range = torch.arange(self.k, device=self.device, dtype=torch.int64)
         self._pow2_k = torch.bitwise_left_shift(torch.ones(self.k, dtype=torch.int64, device=self.device),
                                                  self._bit_range)
+
+        # ---- M3 T1: region-adjacency graph G_R (K<=32 constant tables) ----
+        # Cheap (K<=32) to build on CPU/numpy once per context; the CPU copies
+        # (self._rg_D / self._rg_next_hop) are reused by the rare Λ>=4 tier
+        # below (delegated to region_graph.steiner_tree_stats, the exact same
+        # routine evaluator_ref.py uses per net), while self.D_t is the device
+        # copy the bulk Λ<=3 closed-form gather uses.
+        rg_adj, rg_D, rg_ell = build_region_graph(rg)
+        self._rg_D = rg_D.astype(np.int64)
+        self._rg_next_hop = next_hop_table(rg_adj, rg_D)
+        self.D_t = torch.from_numpy(self._rg_D).to(self.device)
 
         # ---- static pin/net topology tensors ----
         self.pin2node_t = torch.from_numpy(nl.pin2node.astype(np.int64)).to(self.device)
@@ -192,20 +213,36 @@ class GpuEvalContext:
         py = node_y[self.pin2node_t] + self.pin_offset_y_t
         return px, py
 
-    def _bit_planes(self, bm):
+    def _bit_planes(self, bm, dtype=None):
         """(...,) int64 *already-combined* bitmask -> (...,K) 0/1 bit planes.
 
         NOT for one-hot-encoding a single id -- decomposing a raw id value's own
         binary digits is a different (wrong) operation; use _one_hot_planes for that.
-        """
-        return torch.bitwise_and(torch.bitwise_right_shift(bm.unsqueeze(-1), self._bit_range), 1)
 
-    def _one_hot_planes(self, ids):
+        `dtype` (default int64, unchanged behaviour for existing callers):
+        pass torch.int8 to produce the output directly at int8 -- required by
+        R2 (T1 §2.5 item 3): pin_bit_acc/passed_bit_acc go from (E,K) int64 to
+        int8, and scatter_reduce_ requires self.dtype == src.dtype, so the
+        *source* planes must be produced as int8 directly (the bitwise
+        extraction itself still happens on `bm` at its own width -- only the
+        final 0/1 result is narrowed, so this is not the "int64 then .to(int8)"
+        pattern that would transiently double memory).
+        """
+        planes = torch.bitwise_and(torch.bitwise_right_shift(bm.unsqueeze(-1), self._bit_range), 1)
+        return planes if dtype is None else planes.to(dtype)
+
+    def _one_hot_planes(self, ids, dtype=None):
         """(...,) int64 id values in [0,K) -> (...,K) 0/1 one-hot planes (plane
         i is 1 iff ids==i). This is the "id -> single-bit-set bitmask" direction;
         _bit_planes is the reverse (combined bitmask -> planes) and is not
-        interchangeable with this."""
-        return (ids.unsqueeze(-1) == self._bit_range).to(torch.int64)
+        interchangeable with this.
+
+        `dtype` (default int64, unchanged behaviour for existing callers): see
+        _bit_planes above -- the `==` comparison already produces a bool (1
+        byte/element) tensor, so `.to(torch.int8)` is a cheap narrow, not a
+        widen-then-narrow round trip.
+        """
+        return (ids.unsqueeze(-1) == self._bit_range).to(dtype or torch.int64)
 
     def _popcount_k(self, bm):
         return self._bit_planes(bm).sum(dim=-1)
@@ -269,7 +306,7 @@ class GpuEvalContext:
     # ------------------------------------------------------------------
     # FT (passed-region bitmask) + boundary pair demand, via bucketed padded gather
     # ------------------------------------------------------------------
-    def _process_segments(self, fixed_idx, lo, hi, net_id, is_vert, passed_bit_acc, pair_key_chunks):
+    def _process_segments(self, fixed_idx, lo, hi, net_id, is_vert, passed_bit_acc, pair_count_acc):
         dev = self.device
         cell_count = hi - lo + 1
         bucket_idx = torch.bucketize(cell_count, self._seg_bounds_t, right=False)
@@ -288,8 +325,16 @@ class GpuEvalContext:
             # padded-gather tensor exceeds _seg_chunk_budget elements -- same
             # chunk-budget pattern as _batch_mst above. Each chunk's contribution is
             # aggregated via in-place scatter_reduce(amax) into passed_bit_acc and by
-            # appending to pair_key_chunks, both order-independent across chunks, so
-            # this is a pure memory-shape change with no effect on the result.
+            # a per-chunk torch.bincount accumulated into pair_count_acc (M3-scope
+            # memory fix #2: this replaces appending each chunk's raw keys to a
+            # growing Python list that used to be torch.cat(...).cpu().numpy()'d in
+            # one shot at the very end -- that one final sync/concat held every
+            # chunk's keys live on the GPU simultaneously; accumulating a fixed
+            # 64*64-sized count tensor per chunk instead needs no such buildup and
+            # only syncs once, on that small fixed-size tensor, in
+            # _reduce_pair_demand). Both amax-OR and count-accumulation are
+            # order-independent across chunks, so this is a pure memory-shape
+            # change with no effect on the result.
             chunk = max(1, self._seg_chunk_budget // L)
             for start in range(0, B, chunk):
                 end = min(B, start + chunk)
@@ -311,7 +356,12 @@ class GpuEvalContext:
                     vals = vals[:, :half] | vals[:, half:half * 2]
                     length = half
                 seg_bm = vals[:, 0]
-                seg_bits = self._bit_planes(seg_bm)
+                # R2 remedy (T1 §2.5 item 3): source bit planes + accumulator
+                # go int8 together (scatter_reduce_ requires self.dtype ==
+                # src.dtype; 0/1 amax === bitwise OR, so the reduce semantics
+                # are unchanged -- see docs/superpowers/specs/2026-08-13-m4-
+                # scale-up-design-draft.md §4.2).
+                seg_bits = self._bit_planes(seg_bm, dtype=torch.int8)
                 nid_exp = nid.unsqueeze(1).expand(-1, self.k)
                 passed_bit_acc.scatter_reduce_(0, nid_exp, seg_bits, reduce="amax", include_self=True)
 
@@ -323,15 +373,14 @@ class GpuEvalContext:
                         b = ids[:, 1:][diff]
                         lo_ab = torch.minimum(a, b)
                         hi_ab = torch.maximum(a, b)
-                        pair_key_chunks.append(lo_ab * 64 + hi_ab)
+                        keys = lo_ab * 64 + hi_ab
+                        pair_count_acc += torch.bincount(keys, minlength=pair_count_acc.numel())
 
     @staticmethod
-    def _reduce_pair_demand(pair_key_chunks):
-        if not pair_key_chunks:
-            return {}
-        keys = torch.cat(pair_key_chunks).cpu().numpy()
-        uniq, counts = np.unique(keys, return_counts=True)
-        return {(int(u) // 64, int(u) % 64): int(c) for u, c in zip(uniq, counts)}
+    def _reduce_pair_demand(pair_count_acc):
+        counts = pair_count_acc.cpu().numpy()
+        nz = np.nonzero(counts)[0]
+        return {(int(u) // 64, int(u) % 64): int(counts[u]) for u in nz}
 
     # ------------------------------------------------------------------
     # main entry point
@@ -348,8 +397,13 @@ class GpuEvalContext:
         n_nets = self.n_nets
 
         # pin_bm: per-net OR of pin region bits (same semantics as RegionGrid.pin_region_bitmask)
-        pin_bits = self._one_hot_planes(pin_rid)
-        pin_bit_acc = torch.zeros((n_nets, self.k), dtype=torch.int64, device=dev)
+        # R2 remedy (T1 §2.5 item 3): source bit planes + accumulator go int8
+        # together (12M x 32 int64 -> int8 is the ~3.0GB memory the M3 draft's
+        # R2 note calls out at :352/:413); `_pack_bits`'s `bit_planes *
+        # self._pow2_k` auto-promotes int8 x int64 -> int64, so pin_bm itself
+        # (and everything legacy derived from it) is numerically unaffected.
+        pin_bits = self._one_hot_planes(pin_rid, dtype=torch.int8)
+        pin_bit_acc = torch.zeros((n_nets, self.k), dtype=torch.int8, device=dev)
         idx_exp = self.pin2net_t.unsqueeze(1).expand(-1, self.k)
         pin_bit_acc.scatter_reduce_(0, idx_exp, pin_bits, reduce="amax", include_self=True)
         pin_bm = self._pack_bits(pin_bit_acc)
@@ -357,6 +411,62 @@ class GpuEvalContext:
         per_net_lambda = torch.where(self.degrees_t >= 2, self._popcount_k(pin_bm),
                                      torch.zeros_like(pin_bm))
         hard_lambda_sum = int((per_net_lambda - 1).clamp(min=0).sum().item())
+
+        # ---- M3 T1: region-graph home_e + Steiner tree (io_rg/ft_rg) ----
+        # home_e: the region holding the most pins, ties -> smallest region id
+        # (torch.argmax breaks ties to the first/lowest index, matching
+        # np.argmax -- verified empirically, same convention already relied on
+        # for _prim_batch's argmin above). Computed via a per-(net,region) key
+        # bincount rather than a dense (P,K) one-hot + scatter_add_ (which
+        # would need its own paired-dtype accumulator and reintroduce a (P,K)-
+        # or (E,K)-sized int32 tensor -- scatter_add_ has the same
+        # self.dtype==src.dtype requirement as scatter_reduce_, so an int8
+        # source can't feed an overflow-safe wider accumulator that way).
+        home_key = self.pin2net_t * self.k + pin_rid
+        home_counts = torch.bincount(home_key, minlength=n_nets * self.k).view(n_nets, self.k)
+        per_net_home = torch.where(self.degrees_t >= 2, home_counts.argmax(dim=1),
+                                    torch.zeros(n_nets, dtype=torch.int64, device=dev))
+
+        # per_net_steiner (ST_e): Λ<=3 closed form (bulk, vectorized over only
+        # the Λ==2 / Λ==3 subsets -- never a full (n_nets,K) bit-plane tensor);
+        # Λ>=4 (F11: always expanded into an actual G_R subtree) delegated to
+        # region_graph.steiner_tree_stats, exactly as evaluator_ref uses per
+        # net, guaranteeing CPU/GPU agreement by construction. This tier is
+        # rare in practice (<1% of active nets on the M3 evidence, §2.2) so a
+        # Python-side loop over just those nets stays within the T1 runtime
+        # budget; see the T1 report for the measured bigblue4 increment.
+        per_net_steiner = torch.zeros(n_nets, dtype=torch.int32, device=dev)
+
+        lam2 = (per_net_lambda == 2).nonzero(as_tuple=True)[0]
+        if lam2.numel() > 0:
+            bits2 = self._bit_planes(pin_bm[lam2])          # (B2,K) int64 0/1, exactly 2 ones/row
+            _, cols2 = bits2.nonzero(as_tuple=True)
+            cols2 = cols2.view(-1, 2)                        # ascending within each row (verified)
+            per_net_steiner[lam2] = self.D_t[cols2[:, 0], cols2[:, 1]].to(torch.int32)
+
+        lam3 = (per_net_lambda == 3).nonzero(as_tuple=True)[0]
+        if lam3.numel() > 0:
+            bits3 = self._bit_planes(pin_bm[lam3])
+            _, cols3 = bits3.nonzero(as_tuple=True)
+            cols3 = cols3.view(-1, 3)
+            # exact for 3 terminals: min over every candidate branch point v of
+            # D[v,t0]+D[v,t1]+D[v,t2] (see region_graph.py module docstring /
+            # T1 report for the branch-disjointness proof at the optimal v).
+            d3 = self.D_t[:, cols3[:, 0]] + self.D_t[:, cols3[:, 1]] + self.D_t[:, cols3[:, 2]]
+            per_net_steiner[lam3] = d3.min(dim=0).values.to(torch.int32)
+
+        lam_ge4 = (per_net_lambda >= 4).nonzero(as_tuple=True)[0]
+        if lam_ge4.numel() > 0:
+            ge4_bm = pin_bm[lam_ge4].cpu().numpy().tolist()
+            st_ge4 = np.empty(len(ge4_bm), dtype=np.int64)
+            for i, bm in enumerate(ge4_bm):
+                terms = [b for b in range(self.k) if (bm >> b) & 1]
+                st, _ft, _exact = steiner_tree_stats(self._rg_D, self._rg_next_hop, terms)
+                st_ge4[i] = st
+            per_net_steiner[lam_ge4] = torch.from_numpy(st_ge4.astype(np.int32)).to(dev)
+
+        io_rg = int(per_net_steiner.sum().item())
+        ft_rg = io_rg - hard_lambda_sum
 
         # hpwl: only degree>=2 nets contribute (matches evaluate_ref's `if d<=1: continue`)
         neg_inf = torch.finfo(torch.float64).min
@@ -410,16 +520,18 @@ class GpuEvalContext:
             edge_cross = h_cross + v_cross
             per_net_crossings.scatter_add_(0, edge_net_id, edge_cross)
 
-            passed_bit_acc = torch.zeros((n_nets, self.k), dtype=torch.int64, device=dev)
-            pair_key_chunks = []
-            self._process_segments(h_row, h_lo, h_hi, edge_net_id, False, passed_bit_acc, pair_key_chunks)
-            self._process_segments(v_col, v_lo, v_hi, edge_net_id, True, passed_bit_acc, pair_key_chunks)
+            # R2 remedy: passed_bit_acc is the other (E,K) int64 -> int8
+            # accumulator (paired with _process_segments' int8 seg_bits source).
+            passed_bit_acc = torch.zeros((n_nets, self.k), dtype=torch.int8, device=dev)
+            pair_count_acc = torch.zeros(64 * 64, dtype=torch.int64, device=dev)
+            self._process_segments(h_row, h_lo, h_hi, edge_net_id, False, passed_bit_acc, pair_count_acc)
+            self._process_segments(v_col, v_lo, v_hi, edge_net_id, True, passed_bit_acc, pair_count_acc)
 
             passed_bm = self._pack_bits(passed_bit_acc)
             ft_bm = passed_bm & (~pin_bm)
             per_net_ft = self._popcount_k(ft_bm)
 
-            pair_demand = self._reduce_pair_demand(pair_key_chunks)
+            pair_demand = self._reduce_pair_demand(pair_count_acc)
 
         return EvalResult(
             io_count=int(per_net_crossings.sum().item()),
@@ -432,6 +544,10 @@ class GpuEvalContext:
             large_net_lb=large_lb,
             hard_lambda_sum=hard_lambda_sum,
             per_net_lambda=per_net_lambda.to(torch.int32).cpu().numpy(),
+            io_rg=io_rg,
+            ft_rg=ft_rg,
+            per_net_steiner=per_net_steiner.cpu().numpy(),
+            per_net_home=per_net_home.to(torch.uint8).cpu().numpy(),
         )
 
 

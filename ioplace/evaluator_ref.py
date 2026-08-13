@@ -1,6 +1,7 @@
 import numpy as np
 from dataclasses import dataclass, field
 from ioplace.netlist import pin_positions
+from ioplace.region_graph import region_graph as build_region_graph, next_hop_table, steiner_tree_stats
 
 @dataclass
 class EvalResult:
@@ -14,6 +15,14 @@ class EvalResult:
     large_net_lb: int
     hard_lambda_sum: int = 0
     per_net_lambda: np.ndarray = None
+    # M3 T1 (docs/superpowers/specs/2026-08-13-m3-differentiable-ft-design-draft.md
+    # §2/§2.5): region-graph (G_R) Steiner routing, as opposed to the MST-geometry
+    # routing the legacy io_count/ft_count fields above are computed from.
+    # io_rg = Σ_e ST_e ; ft_rg = io_rg - hard_lambda_sum (== Σ_e FT_e via RG).
+    io_rg: int = 0
+    ft_rg: int = 0
+    per_net_steiner: np.ndarray = None   # (E,) int32, ST_e
+    per_net_home: np.ndarray = None      # (E,) uint8, argmax-pin-count region (ties -> smallest id)
 
 def net_mst_edges(px, py):
     d = len(px)
@@ -78,6 +87,12 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256):
     per_net_crossings = np.zeros(n_nets, dtype=np.int32)
     per_net_ft = np.zeros(n_nets, dtype=np.int32)
     per_net_lambda = np.zeros(n_nets, dtype=np.int32)
+    # M3 T1: region-graph (G_R) Steiner routing, computed alongside (but
+    # independently of) the legacy MST-geometry fields above -- see EvalResult.
+    per_net_steiner = np.zeros(n_nets, dtype=np.int32)
+    per_net_home = np.zeros(n_nets, dtype=np.uint8)
+    rg_adj, rg_D, rg_ell = build_region_graph(rg)
+    rg_next_hop = next_hop_table(rg_adj, rg_D)
     pair_demand = {}
     tree_wl = 0.0
     hpwl = 0.0
@@ -91,8 +106,13 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256):
         pin_idx = nl.flat_net2pin[s:e]
         nx_, ny_ = px[pin_idx], py[pin_idx]
         hpwl += (nx_.max() - nx_.min()) + (ny_.max() - ny_.min())
-        pin_regions = set(pin_rid_all[pin_idx].tolist())
+        net_pin_rids = pin_rid_all[pin_idx]
+        pin_regions = set(net_pin_rids.tolist())
         per_net_lambda[net] = len(pin_regions)
+        counts = np.bincount(net_pin_rids.astype(np.int64), minlength=rg.k)
+        per_net_home[net] = np.argmax(counts)  # ties -> first (smallest) index
+        st, _ft_rg, _exact = steiner_tree_stats(rg_D, rg_next_hop, pin_regions)
+        per_net_steiner[net] = st
         if d > max_degree:
             lb = len(pin_regions) - 1
             per_net_crossings[net] = lb
@@ -111,11 +131,16 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256):
             tree_wl += abs(nx_[a] - nx_[b]) + abs(ny_[a] - ny_[b])
         per_net_crossings[net] = ncross
         per_net_ft[net] = len(passed - pin_regions)
+    hard_lambda_sum = int(np.maximum(per_net_lambda - 1, 0).sum())
+    io_rg = int(per_net_steiner.sum())
+    ft_rg = io_rg - hard_lambda_sum
     return EvalResult(
         io_count=int(per_net_crossings.sum()),
         ft_count=int(per_net_ft.sum()),
         tree_wl=float(tree_wl), hpwl=float(hpwl),
         per_net_crossings=per_net_crossings, per_net_ft=per_net_ft,
         boundary_pair_demand=pair_demand, large_net_lb=int(large_lb),
-        hard_lambda_sum=int(np.maximum(per_net_lambda - 1, 0).sum()),
-        per_net_lambda=per_net_lambda)
+        hard_lambda_sum=hard_lambda_sum,
+        per_net_lambda=per_net_lambda,
+        io_rg=io_rg, ft_rg=ft_rg,
+        per_net_steiner=per_net_steiner, per_net_home=per_net_home)
