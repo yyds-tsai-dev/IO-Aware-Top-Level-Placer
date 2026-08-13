@@ -1,7 +1,7 @@
-# M4 設計草案 v2:規模化(1M → 30M)
+# M4 設計草案 v2.1:規模化(1M → 30M)
 
 - 日期:2026-08-13
-- 狀態:**v2 草案**——依 `docs/reviews/2026-08-13-m4-draft-v1-adversarial-codex.md`(16 findings / 8 BLOCKER)逐條修訂 v1(commit `0bd9611`)
+- 狀態:**v2.1 草案**——v2(commit `3c2ad5d`)依 `docs/reviews/2026-08-13-m4-draft-v1-adversarial-codex.md`(16 findings / 8 BLOCKER)修訂 v1(`0bd9611`);本版再依 `docs/reviews/2026-08-13-m4-v2-verify-codex.md`(8 RESOLVED / 8 PARTIALLY,3 新 BLOCKER + 8 MAJOR)做手術式修補,修補點見 §0.2
 - 對應 spec:`docs/superpowers/specs/2026-07-30-io-aware-placer-phase1-design.md` §7(benchmark 計畫)、§8(實驗設計)、§9 M4 列、§10 風險 2、D6(硬體)
 - 相依草案:`docs/superpowers/specs/2026-08-13-m3-differentiable-ft-design-draft.md`(§7 G6 8GB 契約、§7 R2 evaluator 斷點、T1 分工邊界)、`docs/superpowers/specs/2026-08-13-stage2-innovus-calibration-plan.md`(§3.2 環境盤點、S5 = NanGate45 語料接入,**本文與其共用同一個 task,不重複設計**)
 - 繼承資產:`ioplace/ops/io_term.py` chunked-k 契約、`ioplace/diagnostics/spike_10m.py`、`ioplace/evaluator_gpu.py`、`ioplace/drivers/run_placement{,_io}.py`、`ioplace/profile.py`(T1 已落地保守版)
@@ -36,16 +36,36 @@
 
 ---
 
-## 0. 摘要(v2 裁決一覽)
+## 0.2 v2 → v2.1 修補(Codex 驗證回合)
+
+| # | 驗證意見 | **v2.1 修補** | 位置 |
+|---|---|---|---|
+| D1 [BLOCKER] | T9/E2 不可判定:預期的 OOM 與「乾淨跑完但超安全預算」都無法滿足 success-only 的 RESULT GATE | 導入 **`experiment_status` / `workload_status` 分離**與**三態終結規則**(`feasible_l4_contract` / `infeasible_l4_contract` / `invalid_measurement`);parent process 永遠寫出有效診斷 artifact;E2(c) 改要求「有效終態」 | §2.2、§6.3 E2、§7.0、T9 |
+| D2 [BLOCKER] | T6b 消費 T7 的 manifest 卻排在 T7 之前 | count freeze **拆成兩個**:`T6b`(1×2/2×2,接在 T6 後,餵 T8)、**`T7b`**(3×3,接在 T7 後,餵 T9/E5) | §7.1、§7.2 |
+| D3 [BLOCKER,條件] | 1×4 被當成通過的階層結果,但 T6 仍拿合成 2×2 對照真實 cluster(幾何混淆) | §3.2 新增 **1×4 估計協定**(d=1,2 擬合、d=3 hold out 檢定 `λ̂₃ = λ₁·3^(−α)`;零計數與 `α<0` 的處理;保留 per-pair 計數報 anisotropy/overdispersion);T6 加分支:G-D 判 1×4 ⇒ 合成對照改 **1×4** | §3.1a、§3.2、T6 |
+| D4 [MAJOR] | T0b 無法獨立變動 `N_pins`(固定 netlist 下它是常數),且無數值拒絕門檻 | 設計點加 **net-drop 變體**(保留全部 node、隨機刪 25%/50% 的 net ⇒ `N_pins` 獨立於 `N_total` 變動)+ 既有的 filler/bins 掃描;加拒絕門檻 `κ(X_std) ≤ 30` 且每個係數 95% CI 相對半寬 ≤ 25% | T0b |
+| D5 [MAJOR] | host 模型 6 係數 / 3 點不可辨識,且 2×2 同時被當 holdout 與 fitting 點 | 縮成 **3 係數**(截距 + `N_nodes` + `N_raw_pins`,`total_name_bytes` 併入 `N_nodes` 項的註記),fitting 集擴為 {adaptec1, bigblue4, group-BS, 1×2, net-drop 變體} ≥5 點;**2×2 永久排除於 fitting 之外**,只當 holdout | §1.1、§5.1、T6b |
+| D6 [MAJOR] | §2.2 同時說「是上界」與「可能低估」,表格又用它推可行 | 措辭統一為「**分項保守上界**(未含共常駐與 allocator 額外量)⇒ 既非可行性證明亦非不可行證明」;表格判定欄一律改「上界通過 ⇒ **待 T2b 確認**」 | §2.2 |
+| D7 [MAJOR] | T3a 失敗只說「切配方 B」,沒有可執行的替代 task 與驗收 | 新增 **T4B / T6B** 兩個 fallback task(Rent 差額 glue、無 ground truth 下的驗收路徑、報告強制標籤) | §3.4、§7.1、§7.2 |
+| D8 [MAJOR] | E5 的 `AB ≥ 0.6×peak` 是任意二元分類器;`[0.7,1.3]×` 在沒有 H100 殘差時不是 prediction interval | E5 改誠實形式:**記憶體給解析上下界**;**wall-time 只給 point estimate + 逐項假設 + BW/SM/FP64 三情境敏感度,不給統計區間**;刪除 0.6 分類器,`s_p` 逐項標為**假設**;T14 首跑是**假設檢定**,第二次以後才談校準區間 | §6.3 E5、T10、T14 |
+| D9 [MAJOR] | exclusive-GPU 檢查扣掉的 baseline 本身已含外部佔用(套套邏輯) | 改為 **baseline 絕對值 < 0.5 GB** 且 run 期間無其他 compute process;`nvidia-smi --query-compute-apps` 先做**自測**(能否看見自己的 PID),看不見則降級為 `baseline_only` 證據等級並記錄 `exclusivity_evidence` | §6.1、T1b |
+| D10 [MAJOR] | DAG 仍缺 T1→T0b、T1→T8a、T10→T11 | 依賴序改成顯式 **edge list** + 簡化 ASCII,補齊三條邊與 T6→T6b、T7→T7b | §7.2 |
+| D11 [MINOR] | 文末「M3 line 134 仍是舊解法」的註記本身已過期 | 刪除該註記,改記錄「M3 v3 已同步為成對 int8」 | §11 文末 |
+
+**未改動的部分**:Codex 判定 RESOLVED 的 findings 6/7/8/9/10/11/12/13 對應段落一字未動。
+
+---
+
+## 0. 摘要(v2.1 裁決一覽)
 
 | # | 問題 | 裁決(v2) | 信心 |
 |---|---|---|---|
 | Q1 | benchmark 階梯 | **1.3M = ISPD2015 `mgc_superblue12`;3.1M = ISPD2025 `mempool_group`(3,077,669 cells,**不是 spec 寫的 5M**);11.3M = ISPD2025 `mempool_cluster`(11,310,807 cells);6.2M / 12.3M / 27.7M 由同一個 tiler 從 `mempool_group` 合成。** `mempool_cluster` 的 DREAMPlace GP+LG 在 L4 上跑得完(362.4 s / 6,889.6 MiB GPU / 62.6 GB host,**待 T0 重現**)⇒「10M 只能在 H100 跑」的先驗假設被推翻 | 高(三個規模皆實跑,重現待 T0) |
 | Q2 | 30M 測資 | **配方 A′:`mempool_group` 3×3 陣列(27.70M cells + glue)+ 從真實 cluster 量得的跨 group 互連統計,在 Bookshelf 域串流合成。** 校準靶是「2×2 陣列 vs 真實 `mempool_cluster`」——**但這個靶的前提(cluster 由 4 個 group 構成)在 T3a 通過前不成立**;距離核改單參數冪律,參數閉式求解,驗證只用 holdout 指標 | 中(來源實測;階層前提待 T3a;核形狀無法在 2×2 驗證) |
 | Q3 | evaluator 規模斷點 | **M3 draft R2 嚴重低估。** evaluator 現況 ≈ `(0.85 + 0.061·K) GB / M-net`(五點擬合,**待 T0 重現**)⇒ cluster(12.71M nets, K=32)需 35.6 GB。最大單項是 `evaluator_gpu.py:351` 的 `(P,K)` int64 one-hot(11.25 GB)。**分工:M3 T1 做「dtype 成對降級」(source + accumulator,省 ≈15.5 GB,仍 OOM);M4 T2 做結構性 streaming(消滅 `(P,K)` 物化、edge/segment 批次化),T2 是 M4 全部 ≥5M 實驗的硬前置** | 高(斷點成立);中(修後估值待 T2 實測) |
-| Q4 | 10M+ 全流程瓶頸 | **不是 DREAMPlace GP。** 三個候選瓶頸:(i) evaluator 記憶體(Q3,已確立);(ii) IO op 的 K-pass runtime(30M spike 單次 fwd+bwd 26.7 s,**待 T0 重現**);(iii) host RAM(27.7M 推估 95–105 GB,**但這是單點外推,判定改由 §5.1 的三分規則決定,T6b/T8 才定案**) | 中高(i);中(ii);**低→待 holdout**(iii) |
+| Q4 | 10M+ 全流程瓶頸 | **不是 DREAMPlace GP。** 三個候選瓶頸:(i) evaluator 記憶體(Q3,已確立);(ii) IO op 的 K-pass runtime(30M spike 單次 fwd+bwd 26.7 s,**待 T0 重現**);(iii) host RAM(27.7M 推估 95–105 GB,**但這是單點外推,判定改由 §5.1 的三分規則決定,T6b/T7b 才定案**) | 中高(i);中(ii);**低→待 holdout**(iii) |
 | Q5 | 計時與 profile | 6 phase 牆鐘 + per-phase reset 的 GPU 峰值 + `host_rss_hwm_at_phase_end` + `device_used_gb` + per-iteration CUDA-event 直方圖 + op fwd/bwd 分離計時,**零新依賴**;**per-phase 歸因的正確性由 T1b 的 subprocess A/B 與 exclusive-GPU 協定保證,不是由 reset 保證**。exit 改為「L4 可驗證的四條 + 一個登錄制 forecast(E5)+ 一個 H100 驗證 task(T14)」 | 中高 |
-| Q6 | task 分解 | `T0 → T0b → {T1→T1b, T2→T2b, T3→T3a} → T4 → T5 → T6 → T6b → T7 → T9`;實驗線 `T8a → T8b → T8 → T11`;交接線 `T10 → T14`;條件 task T12/T13。**M3-dependent 的只有 `ours@M3` 臂與其報表欄位** | — |
+| Q6 | task 分解 | `T0 → T1 → {T0b, T1b, T8a}`、`T0 → T2 → T2b`、`T0 → T3 → T3a`(gate)`→ T4 → T5 → T6 → T6b`、`T6 → T7 → T7b → T9`;實驗線 `T8a → T8b → T8 → T10 → T11`;交接線 `T10 → T14`;fallback 分支 `T3a(fail) → T4B → T6B`;條件 task T12/T13。**M3-dependent 的只有 `ours@M3` 臂與其報表欄位** | — |
 
 **一句話結論:** v1 的核心觀察(DREAMPlace GP 在 10M 級不是瓶頸,我們自己的 evaluator 與 IO op 才是)**存活**;v1 的推論方式(五點擬合外推、峰值相加判可行、cell-count ratio 當階層證據、10× 容忍帶當預測)**不存活**。v2 把每一個「靠外推得到的裁決」換成「一個能證偽它的實驗 + 一條在證據不足時停下來的規則」。
 
@@ -79,10 +99,15 @@ GP_peak_bytes ≈ 87·N_total + 73·N_pins + 160·n_bins        (N_total = physi
 **host RSS 模型(v2 改多預測子,Codex #3):** v1 的 `1.35–1.42 KB/pin (LEF/DEF) / 0.88 KB/pin (Bookshelf)` 中,Bookshelf 只有 bigblue4 **一個**有效點 ⇒ 不是模型。改為
 
 ```
-host_RSS_read ≈ β0 + β1·N_nodes + β2·N_nets + β3·N_raw_pins + β4·N_dedup_pins + β5·total_name_bytes
+host_RSS_read ≈ β0 + β1·N_nodes + β2·N_raw_pins            (3 個係數)
 ```
 
-在 group(3.1M)/ 1×2(6.2M)/ 2×2(12.3M)三個 Bookshelf 產物 + cluster(LEF/DEF)上量測(T6b);`total_name_bytes` 必須顯式計入,因為 tiler 的 `t{i}_{j}/` 前綴會改變名稱長度(27.7M nodes × ~6 B ≈ 0.17 GB,不大但不可默默省略)。
+**v2.1 修正(Codex D5):v2 的六係數式在只有三個 Bookshelf 點時不可辨識**,且把 2×2 同時當 fitting 點與 holdout。改為:
+
+- **係數縮到 3 個**(截距 + `N_nodes` + `N_raw_pins`)。`N_nets` 與 `N_dedup_pins` 在本語料中與 `N_raw_pins` 高度共線,不獨立入模;`total_name_bytes` 改為**加性修正項**而非回歸係數:tiler 前綴 `t{i}_{j}/` 造成的額外名稱位元組由建構法直接算出(27.7M nodes × ~6 B ≈ 0.17 GB),在預測值上**顯式加回**並在報告揭露。
+- **fitting 集(≥5 點,全部是 Bookshelf 讀取)**:adaptec1、bigblue4、group-BS(3.1M)、1×2(6.2M)、T0b 的 net-drop 變體(同 node 數、不同 pin 數 ⇒ 直接鬆開 `N_nodes`/`N_raw_pins` 的共線)。
+- **2×2(12.3M)永久排除於 fitting 之外,只作 holdout**;`cluster`(LEF/DEF)自成另一個格式,單獨報告不與 Bookshelf 共擬合。
+- 拒絕門檻同 T0b:標準化 design matrix 的 `κ ≤ 30`、每個係數 95% CI 相對半寬 ≤ 25%,否則宣告不可辨識、**禁止任何 host RAM 外推**(§5.1 P3 直接落到「未定」)。
 
 四個必須寫進報告的次級事實(不變):
 
@@ -134,9 +159,9 @@ v1 由這兩點得出「84 B/pin,記憶體純線性於 raw pin 數」。**v2 修
 | 6.2M | group 1×2 | **本專案 tiler** | 6.155M | 7.008M **+ g₂** | 24.05M **+ gp₂** | 3.07 GB(推估) | 19.6 / ~11 / ~2.5 GB | 1.88 GB | ~21 GB(推估) | ✅(T2 後) |
 | **11.3M** | **`mempool_cluster`** | ISPD2025 NanGate45 | 11.311M | 12.713M | 43.948M | 6.73 GB(待重現) | **35.6 / ~20 / ~4.5 GB** | 3.44 GB | 62.59 GB(待重現) | ✅(**T2 後**) |
 | 12.3M | group 2×2(= cluster 的合成對照組) | **本專案 tiler** | 12.311M | 14.016M **+ g₄** | 48.10M **+ gp₄** | 7.3 GB(推估) | 38.8 / ~22 / ~4.9 GB | 3.77 GB | ~43 GB(推估) | ✅(T2 後) |
-| **27.7M** | group 3×3 | **本專案 tiler** | 27.699M | 31.536M **+ g₉** | 108.24M **+ gp₉** | 12.6 GB(**上界,未驗證**) | 87.3 / ~49 / ~10 GB | 8.47 GB | **95–105 GB(單點外推,判定見 §5.1)** | **待 T6b/T8 定案** |
+| **27.7M** | group 3×3 | **本專案 tiler** | 27.699M | 31.536M **+ g₉** | 108.24M **+ gp₉** | 12.6 GB(**上界,未驗證**) | 87.3 / ~49 / ~10 GB | 8.47 GB | **95–105 GB(單點外推,判定見 §5.1)** | **待 T7b/T9 定案** |
 
-- **glue 佔位符**:`g₂/g₄/g₉` = 1×2 / 2×2 / 3×3 的 glue net 數,`gp₂/gp₄/gp₉` = 對應 pin 數。v1 的表把它們當成 0(`3,503,992×9 = 31,535,928`、`12,026,191×9 = 108,235,719` 正好是純複製)⇒ **所有下游記憶體/runtime 帳在 T6b count freeze 之前都是低估**。
+- **glue 佔位符**:`g₂/g₄/g₉` = 1×2 / 2×2 / 3×3 的 glue net 數,`gp₂/gp₄/gp₉` = 對應 pin 數。v1 的表把它們當成 0(`3,503,992×9 = 31,535,928`、`12,026,191×9 = 108,235,719` 正好是純複製)⇒ **所有下游記憶體/runtime 帳在 T6b(≤12.3M)/ T7b(27.7M)count freeze 之前都是低估**。
 - **int32 headroom 警戒線(Codex #4)**:若採 `unique(net·64 + rid)` 這類 composite key 且降為 signed int32,則 `n_nets ≤ floor((2^31−1)/64) = 33,554,431`;3×3 base 已用掉 31,535,928,**只剩 2,018,503(6.40%)給 glue**。⇒ **裁決:composite key 一律保持 int64**(它是逐 chunk 的暫存,代價有界),並在 `GpuEvalContext.__init__` 加 `assert self.n_nets * 64 < 2**63`;個別 index 陣列要降 int32 必須逐一 assert `max_value < 2**31 - 1`。
 - evaluator 欄新增「M3 T1 後」一欄(§4.2 的成對 dtype 降級),用來說明**為什麼 M3 T1 不足以解除 11.3M 的封鎖**。
 
@@ -144,23 +169,36 @@ v1 由這兩點得出「84 B/pin,記憶體純線性於 raw pin 數」。**v2 修
 
 v1 在此把三個 standalone 峰值相加後,一邊用 `sum < 21.7` 宣告 11.3M 可行、一邊用 `sum > 21.7` 宣告 27.7M 被 GPU 擋。**兩個方向都不成立**:
 
-- **相加是很鬆的上界。** 三個峰值出現在不同時點,實際峰值只會更低 ⇒ `sum > capacity` **不能**推出 OOM。
-- **相加也可能低估。** 真實 driver 在 placement 前就同時建好 `GpuEvalContext`(`run_placement_io.py:50`)與 `IoTerm`(`:63`),兩者的靜態 buffer 跨整個 GP 存活(`:93` 才建 placer),再加上 allocator 的 reserved 與碎片 ⇒ `sum < capacity` **不能**推出可行。
+- **精確措辭(v2.1 統一,Codex D6):三個 standalone 峰值的和是「分項保守上界」——它是「三個元件各自峰值之和」的上界,但 *不是* 真實整合執行峰值的上界**,因為它未含 (i) 真實 driver 在 placement 前就同時建好的 `GpuEvalContext`(`run_placement_io.py:50`)與 `IoTerm`(`:63`)這些跨整個 GP 存活的靜態 buffer(`:93` 才建 placer)、(ii) allocator 的 reserved 與碎片、(iii) CUDA context。
+- ⇒ **`sum > capacity` 不能推出 OOM;`sum < capacity` 也不能推出可行。此欄位只用於排序與粗篩,不得單獨進入任何裁決。**
 - **正確帳式:`peak_device ≈ resident(t) + max_p transient_p`**,其中 `resident(t)` 是該時點所有仍存活的靜態 buffer,`transient_p` 是 phase p 的暫存峰值。
 
 | 級 | 保守上界(GP + IoTerm + evaluator,T2 後) | 對 21.7 GiB | **判定** |
 |---|---:|---|---|
-| 3.1M | 1.75 + 0.94 + 1.3 = **4.0 GB** | 餘裕充足 | 上界即已通過 ⇒ 可行 |
-| 6.2M | 3.07 + 1.88 + 2.5 = **7.5 GB** | 餘裕充足 | 上界即已通過 ⇒ 可行 |
-| 11.3M | 6.73 + 3.44 + 4.5 = **14.7 GB** | 上界餘裕 32% | 上界通過 ⇒ 可行(仍須 T2b 記錄實際 resident/transient 分解) |
-| 12.3M | 7.3 + 3.77 + 4.9 = **16.0 GB** | 上界餘裕 26% | 上界通過 ⇒ 可行 |
-| 27.7M | 12.6 + 8.47 + 10 = **31.1 GB** | 上界超出 43% | **未定。上界超標不構成 blocker;由 T2b/T9 的 full-lifetime spike 判定** |
+| 3.1M | 1.75 + 0.94 + 1.3 = **4.0 GB** | 餘裕充足 | 上界通過 ⇒ **待 T2b 確認** |
+| 6.2M | 3.07 + 1.88 + 2.5 = **7.5 GB** | 餘裕充足 | 上界通過 ⇒ **待 T2b 確認** |
+| 11.3M | 6.73 + 3.44 + 4.5 = **14.7 GB** | 上界餘裕 32% | 上界通過 ⇒ **待 T2b 確認** |
+| 12.3M | 7.3 + 3.77 + 4.9 = **16.0 GB** | 上界餘裕 26% | 上界通過 ⇒ **待 T2b 確認** |
+| 27.7M | 12.6 + 8.47 + 10 = **31.1 GB** | 上界超出 43% | 上界超標**不構成 blocker** ⇒ 由 T9 的三態規則判定 |
 
-**判定規則(v2 定案,取代 v1 的相加裁決):**
+**判定規則(v2.1 定案,三態終結規則,Codex D1;取代 v1 的相加裁決與 v2 的「未定」開放態):**
 
-1. **可行**:full-lifetime run(或全元件共常駐的 spike)完成且 `device_used_gb − device_baseline_gb ≤ 0.9 × 21.7 GiB`。
-2. **不可行**:full-lifetime run 實際 OOM,或 T2b 分解顯示 `resident + min_p transient_p > 21.7 GiB`(即連最小 phase 都塞不下)。
-3. **其餘一律「未定」**,不得寫進裁決表;27.7M 目前在此區。
+量測層與工作負載層分離,兩個欄位都必須寫出:
+
+- `experiment_status ∈ {ok, contaminated, instrumentation_error, input_error}` —— **量測本身**是否有效;
+- `workload_status ∈ {completed, oom, crashed}` —— **被量的工作負載**發生了什麼。
+
+**parent process 永遠寫出有效的診斷 artifact**:被量的工作負載跑在 child process,child 即使 OOM/crash,parent 仍記錄 `device_baseline_gb`、child 退出碼、最後一次取樣的 `device_used_gb`、解析帳的 `resident_lower_bound_gb`,並把 artifact 標為 `experiment_status="ok"`。
+
+終態(每個規模恰好落在其一,寫入 `feasibility_verdict`):
+
+| 終態 | 條件 |
+|---|---|
+| `feasible_l4_contract` | `experiment_status=ok` 且 `workload_status=completed` 且 `peak ≤ 19.5 GiB`(= 0.9 × 21.7 GiB 的 L4 契約) |
+| `infeasible_l4_contract` | `experiment_status=ok` 且 **任一**:(a) `workload_status=completed` 但 `peak > 19.5 GiB`;(b) `workload_status=oom` 且在同一契約下**重現兩次**;(c) 解析下界 `resident_lower_bound_gb > 21.7 GiB` |
+| `invalid_measurement` | `experiment_status ≠ ok`;**至多重試兩次**,仍無效 ⇒ 關閉為 `blocked_external` 並觸發具名 fallback(§9 對應 gate) |
+
+⇒ **不存在「永遠未定」**:19.5–21.7 GiB 之間的乾淨完成被明確歸為 `infeasible_l4_contract`(超出安全契約),而非懸置;真正的 OOM 是**合法且可結案**的誠實 FAIL。
 
 ### 2.3 被否掉的選項(不變)
 
@@ -206,7 +244,7 @@ v1 在此把三個 standalone 峰值相加後,一邊用 `sum < 21.7` 宣告 11.3
 **兩個由 T3a 產生的設計約束(v1 沒有):**
 
 - **正規化**:若 G-B 顯示真實 group 比我們的 tile 小 8%,則跨 group 的 net 數不可直接搬用,必須按**每 1M cells** 或**每單位邊界長度**正規化後再乘回 tile 規模,否則 3×3 的 glue 量會系統性偏低。正規化基準寫進 `cluster_stats.json`,並在報告揭露。
-- **排列相依的可識別性**:G-D 若判定是 **2×2**,則只有 d=1、d=√2 兩種距離(見 §3.2 的 DoF 帳);若是 **1×4**,則有 d=1,2,3 三種距離 ⇒ 多出 1 個 residual DoF,核形狀首次可被弱檢驗。**這是 T3a 的附加價值,報告必須說明實際落在哪一種。**
+- **排列相依的可識別性與對照組選擇**:G-D 若判定 **2×2**,只有 d=1、d=√2 兩個距離層級(§3.2 的 DoF 帳),合成對照組為 **2×2 陣列**;若判定 **1×4**,距離層級為 d=1,2,3,可得 1 個 lack-of-fit 殘差,**合成對照組必須改為 1×4 陣列(4 tiles,同為 12.31M cells)**——拿合成 2×2 去對真實 1×4 是**幾何混淆**,明確禁止(Codex D3)。若判定「其他」排列(非 2×2 非 1×4)⇒ 依 G-D 的實際 bbox 幾何列出距離層級,層級數 ≥3 時沿用 1×4 協定(最遠層級 hold out),層級數 = 2 時沿用 2×2 協定並承認 0 lack-of-fit DoF。**T3a 報告必須說明實際落在哪一種,並據此決定 T6 的陣列形狀。**
 
 ### 3.2 合成器規格(`ioplace/bench/`)
 
@@ -236,17 +274,28 @@ v1 在此把三個 standalone 峰值相加後,一邊用 `sum < 21.7` 宣告 11.3
     E[glue nets between tiles u,v] = lambda_0 * phi(dist(u,v); alpha)
 
 參數由閉式 method-of-moments 解出(**沒有 grid search**):
-    alpha   = log(lambda_adj / lambda_diag) / log(sqrt(2))     (2x2 排列)
-    lambda_0 = lambda_adj                                       (phi(1)=1)
+  [2x2 排列]  alpha = log(lambda_adj / lambda_diag) / log(sqrt(2))
+              lambda_0 = lambda_adj                              (phi(1)=1)
+  [1x4 排列]  以 d=1 (3 對) 與 d=2 (2 對) 擬合:
+              alpha = log(lambda_1 / lambda_2) / log(2)
+              lambda_0 = lambda_1
+              d=3 (1 對) **hold out**,檢定 lambda_hat_3 = lambda_1 * 3^(-alpha)
 
 每條 glue net 的 degree 與 pin 分配從 deg_hist / pinshare 抽樣;
 pin 的 tile 內落點從該 tile 內「原本就是跨 group net 的 pin」所在 cell 抽樣(保留 iface_dist)。
 ```
 
-**可識別性帳(必須逐字進報告):**
+**可識別性帳(必須逐字進報告;v2.1 依 Codex B1 精確化措辭):**
 
-- 2×2 陣列只有 d=1(4 對)與 d=√2(2 對)兩種距離;真實 cluster(若 G-D 判定為 2×2)同樣只給 `lambda_adj`、`lambda_diag` **兩個**獨立觀測量。
-- 模型有 `lambda_0`、`alpha` **兩個**參數 ⇒ **恰好識別,0 residual DoF ⇒ 2×2 無法驗證核的形狀,只能複現它自己被餵進去的兩個數**。
+- 2×2 陣列有 **6 個 unordered tile-pair 計數**,但只有 **2 個相異距離層級**(d=1 四對、d=√2 兩對)。把它們併成 `lambda_adj`、`lambda_diag` 之後,得到的是 **兩條 moment 方程**——**不是「兩個獨立觀測量」**:同一條多 group net 會同時貢獻多個 pair 計數,計數之間並不統計獨立。
+- 模型有 `lambda_0`、`alpha` **兩個**參數 ⇒ **恰好識別,對距離響應形狀有 0 lack-of-fit DoF ⇒ 2×2 無法驗證核的形狀,只能複現它自己被餵進去的兩個數**。
+- **1×4 排列(若 G-D 如此判定)**:距離層級為 d ∈ {1,2,3}(3 / 2 / 1 對)。用 d=1,2 擬合、**保留 d=3 作單一 lack-of-fit 殘差**,檢定統計量
+  `z = (lambda_3_obs − lambda_1·3^(−alpha)) / sqrt(lambda_1·3^(−alpha))`(Poisson 尺度),**預先登錄門檻 `|z| ≤ 2`**。
+  這只是**弱**證偽:只有一個 d=3 pair,且計數噪聲模型未經驗證 ⇒ 通過**不**構成「核形狀已驗證」,報告必須這樣寫。
+- **退化情形的處置(預先登錄,禁止臨機決定)**:
+  (a) 任一距離層級的計數為 **0** ⇒ 該層級不可取對數,改記為 `truncated_at_d`,`alpha` 改由「最遠非零層級 + Poisson 上限 3.0(95%)」給出**下界**,並強制採 K3 截斷核為主線;
+  (b) 解出 `alpha < 0`(遠距比近距更密)⇒ 判定**與冪律假設矛盾**,不得使用該核;記為 `kernel_rejected`,主線改採 K3 截斷核,並在報告揭露原始 `lambda` 表;
+  (c) 無論哪種排列,**per-pair 原始計數一律保留並發表**,用以報告 anisotropy(同距離不同方向的離散度)與 overdispersion(`var/mean` 相對 Poisson 的比值);`var/mean > 3` 時,所有以 Poisson 為前提的檢定一律標為不可靠。
 - v1 的 `γ_far` 更糟:它對所有 2×2 觀測量的導數為 0(2×2 不存在 d=2),卻只在被外推的 3×3 才首次生效 ⇒ **完全不可識別**,v2 刪除。
 - ⇒ **3×3 的核形狀是一個宣告的假設,不是校準結果。** 補償措施:T7 必須用三種核各產一次跨 tile net 計數並發表**系統性不確定度帶**:
   - K1 冪律 `d^(-alpha)`(主線),
@@ -289,7 +338,7 @@ pin 的 tile 內落點從該 tile 內「原本就是跨 group net 的 pin」所�
 | `mempool_cluster` ×3 幾何複製 | (a) DEF 域 27 GB、讀回 ~190 GB host;(b) 轉 Bookshelf 後 33.9M cells / 132M pins ⇒ 比 3×3 group 更糟;(c) 失去校準靶 |
 | 把 `spike_10m.py` 的合成拓撲升格為 benchmark | pin→node 是 `rng.integers` 均勻抽樣(`spike_10m.py:57`),無空間/階層 locality ⇒ Rent p→1.0,違反 spec §7 的 `p≈0.6–0.75`;且均勻位置讓 crossing 數暴增(4.8M nets 合成 case `io_count=29.8M` vs 真實 bigblue4 K=16 的 100,333)⇒ 系統性高估 evaluator 成本。保留其**元件級 spike 合成器**的角色(T9) |
 | 配方 C:ArtNet 直接生成 30M | 需 clone GitHub,本機網路不通。future work |
-| 配方 B(純 Rent 差額補 glue) | 保留為 **fallback**:T3a 任一 gate 不過,或 §3.2 的前綴切不出 group 邊界時啟用;掃 `p∈{0.60,0.65,0.70}` 補足 `t·(K·g)^p − K·t·g^p`。有 spec §7 點名的循環論證風險 ⇒ 報告必須明寫「30M 的連通性是擬合出來的」 |
+| 配方 B(純 Rent 差額補 glue) | 保留為 **fallback**,且 v2.1 已寫成**可執行的 task 分支 T4B/T6B**(§7.1,Codex D7):T3a 任一 gate 不過、或 §3.2 的前綴切不出 group 邊界時啟用;`p ∈ {0.60,0.65,0.70}` 三值全產、K3 截斷核、產物帶 `provenance="recipe_B_fitted"`;驗收改 T6B 的自洽性指標(H1/H2 標 `not_applicable`,**不得標綠**)。有 spec §7 點名的循環論證風險 ⇒ 報告與合成表必須逐字印出「30M 的連通性是擬合出來的,不是校準出來的」 |
 | **把 30M(或任何合成級)當品質宣稱的 benchmark** | **明確非目標,且 v2 由 artifact 結構強制**:每筆結果帶 `benchmark_kind`;`quality_real_cases.md` 只收 `superblue12`/`bigblue4`/`mempool_group`/`mempool_cluster`;`scaling_synthetic_cases.md` 的 schema **禁止** `Δio/Δft/Δhpwl/winner/pareto` 欄位;`scripts/m4_report_lint.py` 在 T11 的 pytest 中把違規變成紅燈 |
 
 ---
@@ -322,7 +371,7 @@ M3 draft §7 R2 只點名兩個 `(E,K)` 累加器(6.5 GB),**漏掉最大的 `(P,
 | | **M3 T1(dtype 成對降級)** | **M4 T2(結構性 streaming)** |
 |---|---|---|
 | 範圍 | ① `_one_hot_planes`(`:205-208`)與 `_bit_planes`(`:200-201`)加 `dtype` 參數,**直接產生 int8**;② `pin_bit_acc`(`:352`)、`passed_bit_acc`(`:413`)改 int8 —— ①② **必須成對**,PyTorch 2.8 的 `scatter_reduce_` 要求 `self.dtype == src.dtype`(實測錯誤訊息:`scatter(): Expected self.dtype to be equal to src.dtype`);③ `pair_key_chunks` 改 per-chunk `torch.bincount(key, minlength=K*64)` 累加,刪掉 `:332` 的 `torch.cat(...).cpu().numpy()` | ④ 消滅 `(P,K)` 的**全量物化**(K 分塊,或 `unique(net·64+rid)` 後 `index_add(1<<rid)` 的精確 OR);⑤ **MST edge / segment 的批次化**(以 edge 為單位分批,增量累加 `per_net_crossings`/`passed`/`pair_demand`);⑥ 逐欄位 assert 後的 int32 索引;⑦ 批次大小為建構參數 |
-| 收益 @12.71M | `(P,K)` 11.25→**1.41 GB**、2×`(E,K)` 6.5→**0.81 GB** ⇒ 省 **≈15.5 GB**,evaluator 35.6→**≈20 GB**,外加移除一次 CPU 同步 | 再省 ~15 GB ⇒ **≈4.5 GB(推估,待 T2 實測 + T6b count freeze 重算)** |
+| 收益 @12.71M | `(P,K)` 11.25→**1.41 GB**、2×`(E,K)` 6.5→**0.81 GB** ⇒ 省 **≈15.5 GB**,evaluator 35.6→**≈20 GB**,外加移除一次 CPU 同步 | 再省 ~15 GB ⇒ **≈4.5 GB(推估,待 T2 實測 + T6b/T7b count freeze 重算)** |
 | 風險 | 低,但**不是 v1 說的「極低、只動兩個累加器」**:改動同時觸及 source 與 accumulator;若先產 int64 再 `.to(int8)`,兩份張量短暫共存、峰值不降 ⇒ **必須直接產 int8** | 中(改動 MST/segment 主迴圈) |
 | **關鍵結論** | **M3 T1 做完仍是 ≈20 GB > 21.7 GiB 扣掉 GP/op 後的餘裕 ⇒ 11.3M 依然被擋。T2 仍是 M4 全部 ≥5M 實驗的硬前置。** | |
 
@@ -344,7 +393,7 @@ M3 draft §7 R2 只點名兩個 `(E,K)` 累加器(6.5 GB),**漏掉最大的 `(P,
 
 **證據(`/tmp/probe_v2_treewl2.py`,T0 遷入為 `probe_reduction_order.py`):** 7,654,321 個 heavy-tail float64 相加,batch=3e6 與 8e6 **恰好**與全量相同,batch=1e6 與 999,983 **不同**(rel 1.148e-16)⇒ **「三種 batch 逐位元相同」在 v1 是碰巧會過的驗收,不能寫成契約**;1e-12 相對誤差比 ulp 級漂移(~1e-16)寬 4 個數量級,又比「掉一條 edge」(4×10⁷ 條時約 1e-8)嚴 4 個數量級,有真正的鑑別力。
 
-### 4.3 T2 之後的記憶體推估(**推估,由 T2 驗收 + T6b count freeze 取代**)
+### 4.3 T2 之後的記憶體推估(**推估,由 T2 驗收 + T6b/T7b count freeze 取代**)
 
 `mempool_cluster` 12.71M nets / 43.95M pins / K=32:`(E,K)` int8 ×2 = 0.81 GB;pin 座標 fp64 = 0.70 GB;`(E,)` 欄位 ~10 個 = 0.9 GB;edge 批次緩衝(8M edges)≈ 1.0 GB;grid/Ph/Pv(lattice 512)= 6 MB ⇒ **≈ 4.5 GB**。27.7M 合成 case(31.54M + g₉ nets / 108.24M + gp₉ pins)⇒ **≈ 10 GB(推估,g₉ 未定)**。
 
@@ -380,7 +429,7 @@ M3 draft §7 R2 只點名兩個 `(E,K)` 累加器(6.5 GB),**漏掉最大的 `(P,
 |---|---|---|---|---|---|
 | **P1** evaluator 記憶體 | 35.6 GB @12.71M nets K=32(解析帳 + 五點擬合一致) | **擋**(T2 後解除) | 擋(T2 後 ~10 GB) | 已由 §4.1 的解析帳確立,不依賴外推 |
 | **P2** IO op runtime | 30M spike 26.7 s / fwd+bwd(待 T0 重現);`io_term.py:331` 在 `P′ ≫ chunk_budget` 時 `k_chunk` 恆為 1 ⇒ K 趟掃 pin 是結構成本 | 否(單臂推估 ~2.6 h) | 否(單臂推估 3.3–5.4 h) | 推估值由 §1.3 的**多預測子**模型重算(T0/T9),不再用 84 B/pin 與 181 ns/pin |
-| **P3** host RAM | v1 由 `0.88 KB/pin`(**Bookshelf 僅一點**)外推 27.7M 得 95–105 GB | 否(cluster 實測 62.59 GB < 125 GB) | **未定** | **三分規則**:多預測子模型在 2×2(12.3M)holdout 的 95% PI —— 下界 > 可用 RAM ⇒ 判定「擋」;上界 < 可用 RAM ⇒ 判定「可行」;**其餘為「未定」,只能由實測解決** |
+| **P3** host RAM | v1 由 `0.88 KB/pin`(**Bookshelf 僅一點**)外推 27.7M 得 95–105 GB | 否(cluster 實測 62.59 GB < 125 GB) | **未定,由 T6b/T7b 的 holdout 殘差結案** | **三分規則(v2.1)**:先看 §1.1 的三係數模型是否通過辨識門檻(`κ ≤ 30`、CI 半寬 ≤ 25%);**通過**則以 2×2 holdout 殘差校正後的 95% PI 判定——下界 > 可用 RAM ⇒「擋」、上界 < 可用 RAM ⇒「可行」、跨越 ⇒ 由 T7b 的 27.7M 實測 `PlaceDB.read`(或其 child-process 失敗)直接結案;**未通過辨識門檻則禁止外推**,直接走實測結案路徑 |
 
 **B2 的放大效應(修正後):** 每個 callback 的 op 成本是 `1 + n_nonempty_buckets` 趟 fwd+bwd(現況 8),**外加**一趟 no-grad softmax pass 與 callback 內的 WL backward ⇒ **實際 wall-time 大於 8×**,精確值由 T1 直接量測。11.3M/27.7M 的診斷成本因此至少是 v1 估的 64 s / 157 s 每 callback。**T1 已落地 `--diag-every N` / `--no-diag`。**
 
@@ -424,7 +473,7 @@ M3 draft §7 R2 只點名兩個 `(E,K)` 累加器(6.5 GB),**漏掉最大的 `(P,
 | op 分離計時 | `op_fwd_ms[]`、`op_bwd_ms[]`(profile 模式,每 `--time-every` 次記一次) | 同上,事件包住 `_IoFn.forward/backward` | — |
 | evaluator | `eval_ms[]` | 同上 | — |
 | GPU 記憶體 | 每 phase `peak_alloc_gb` / `peak_reserved_gb`,**phase 開頭 `reset_peak_memory_stats()`** | `max_memory_allocated/reserved` | **只重設 PyTorch allocator 統計**;不處理外部 CUDA 配置、reserved 碎片,也不證明前一 phase 的張量已釋放(§1.4 B1) |
-| 裝置級記憶體 | **`device_used_gb`**(v1 誤稱 `device_peak_used_gb`) | 背景 thread 每 0.5 s 取 `mem_get_info()`,`used = total − free − device_baseline` | **是整張卡的用量,含他人 process** ⇒ 正式 memory run 必須 **exclusive GPU**;0.5 s 取樣**會漏短 transient**(T1b 用人工短峰 probe 量其漏檢率) |
+| 裝置級記憶體 | **`device_used_gb`**(v1 誤稱 `device_peak_used_gb`) | 背景 thread 每 0.5 s 取 `mem_get_info()`,`used = total − free`;另存 `device_baseline_gb` | **是整張卡的用量,含他人 process** ⇒ 正式 memory run 必須 **exclusive GPU**,判準是 **`device_baseline_gb` 的絕對值 < 0.5 GB**(v2 的「`used − baseline < 0.5 GB`」是套套邏輯:baseline 本身就含外部佔用,相減後永遠成立,Codex D9);0.5 s 取樣**會漏短 transient**(T1b 用人工短峰 probe 量其漏檢率) |
 | Host 記憶體 | **`host_rss_hwm_at_phase_end`**(v1 誤稱 `host_peak_rss_gb`) | `resource.getrusage(RUSAGE_SELF).ru_maxrss`,phase 邊界各取一次 | **`ru_maxrss` 是 process-lifetime HWM,不可 reset** ⇒ 序列單調不減,**不是 per-phase peak**;需要 per-phase 歸因時,該 phase 必須跑在 **child process**(T1b) |
 | 規模元資料 | `n_movable/n_physical/n_filler/n_nets/n_pins/K/rtype/lattice/n_bins/k_chunk/n_active/n_dedup_pins/total_name_bytes` | 直接讀 | — |
 | 導出係數 | `bytes_per_pin_gp`、`ns_per_pin_op`、`gb_per_mnet_eval` | 由上面算 | **只是單點比值,不是模型**;模型係數一律在 `model_fit.json`,附 CI 與殘差 |
@@ -453,7 +502,7 @@ spec §9 M4 原文:「10M 全流程;30M 測資製作並跑通;H100 計時;記憶
 | # | 判準 | 在哪驗 | 具體門檻 |
 |---|---|---|---|
 | **E1** 10M 全流程 | **L4** | `mempool_cluster`(11.31M)完成 GP+LG+evaluator+報表,且:`Δhpwl` 相對其自身 flat ≤ +5%;`num_unplaced_cells == 0`;`final_overflow ≤ params.stop_overflow`;`legalization_status == "success"`;GPU `device_used_gb ≤ 20 GB`;單臂 wall-time ≤ 4 h。至少 K ∈ {16,32} 各一組 `flat` 與一組 `ours@M2`。**每格通過 §7.0 RESULT GATE** |
-| **E2** 30M 測資 | **L4** | (a) 27.7M Bookshelf 產出、V0 全綠、manifest sha256 與 **實際 glue 計數** 齊全、H5′ 自檢綠;(b) 12.3M 的 V0/V1 + **H1–H5 holdout 全綠**(且 T3a 五道 gate 已通過);(c) 27.7M 的**共常駐** full-lifetime 元件級 spike 在 L4 完成並記錄 `resident/transient/device_used` 分解 |
+| **E2** 30M 測資 | **L4** | (a) 27.7M Bookshelf 產出、V0 全綠、manifest sha256 與 **實際 glue 計數** 齊全、H5′ 自檢綠;(b) 12.3M 的 V0/V1 + **H1–H5 holdout 全綠**(且 T3a 五道 gate 已通過);(c) 27.7M 的**共常駐** full-lifetime 元件級 spike 產出 **§2.2 三態規則下的有效終態**(`feasible_l4_contract` 或 `infeasible_l4_contract`;`invalid_measurement` 重試耗盡後的 `blocked_external` 亦算「已結案但未完成」,須在報告標明並觸發 fallback),並記錄 `resident/transient/device_used` 分解。**注意:E2(c) 要求的是有效終態,不是 `workload_status=completed`——預期中的 OOM 是合法結案**(Codex D1) |
 | **E3** 全規模對照表 | **L4** | `quality_real_cases.md` 涵蓋 {1.3M, 2.2M, 3.1M, 11.3M} × K{16,32} × {flat, ours@M2};`scaling_synthetic_cases.md` 涵蓋 {6.2M, 12.3M} × K{16,32};每格可追到唯一 `run_id`,report linter 綠 |
 | **E4** 記憶體 profile | **L4** | GP / evaluator / op 三個模型各以 **T0b 的 factorial 設計**重新擬合,`model_fit.json` 記錄 design matrix、condition number、係數 95% CI、LOO 殘差與 6.2M/12.3M **holdout 殘差**;**且 §1.4 的 B1/B2/B3 三個量測問題全部處置並在報告揭露**(B1 附 T1b 的四臂 A/B 結果) |
 | **E5** H100 forecast(**登錄制,非 L4 判定**) | 交接文件 | 見下 |
@@ -462,31 +511,56 @@ spec §9 M4 原文:「10M 全流程;30M 測資製作並跑通;H100 計時;記憶
 
 E5 **不是**「跑得完」的門檻,而是一個**在取得 H100 之前就凍結、之後可被單次實驗證偽的預測**。M4 的 exit 條件是「預測已登錄且其輸入可稽核」;**證偽由 T14 執行**。
 
-```
-模型:   T_H100 = sum_p ( T_L4,p / s_p )        (phase 級 Amdahl 分解)
-phases: read/parse(CPU) | initialize | GP | IO-op fwd+bwd | evaluator | LG   (diagnostics 關閉)
+**v2.1 依 Codex B3/D8 改為「記憶體給界、時間給點估計 + 情境敏感度」,不再宣稱任何統計區間。**
 
-每個 s_p 的來源必須逐項登錄:
-  - read/parse:  s = 1.0(純 CPU、單執行緒 parser;除非目標機 CPU 型號不同,另行宣告)
-  - GP / op / evaluator:
-      在 L4 用 torch.profiler 量該 phase 的 achieved bandwidth
-        AB = (解析計數的 bytes moved) / (kernel time)
-      若 AB >= 0.6 * peak_L4(300 GB/s)  -> 判為頻寬受限, s = BW_H100 / BW_L4
-      否則                                -> 判為計算/atomic/latency 受限,
-                                             s = 明確宣告的 FP64 吞吐比或 SM 數比,並註明理由
+**(i) 記憶體:解析上下界(不是統計區間)**
+
 ```
+lower_bound  = resident_tensors(解析帳,§4.1/§4.3 的形狀 x dtype)
+upper_bound  = lower_bound + max_p transient_p + allocator_reserve + cuda_context
+```
+`transient_p` 用 T9 在 L4 量到的同一組 kernel 的**實際峰值**;`allocator_reserve` 用 L4 實測的 reserved/alloc 比;`cuda_context` 取 H100 的實測常數(T14 首跑補)。**兩個界都必須寫成 GB 數字並可從 `count_freeze.json` 重算。**
+
+**(ii) wall-time:point estimate + 逐項假設 + 三情境敏感度**
+
+```
+T_hat = sum_p ( T_L4,p / s_p )                (phase 級 Amdahl 分解)
+phases: read/parse(CPU) | initialize | GP | IO-op fwd+bwd | evaluator | LG   (diagnostics 關閉)
+```
+
+**每個 `s_p` 都是一個「宣告的假設」,不是量測值**,必須逐項登錄其理由與所用的機器參數:
+
+| phase | 主線假設 `s_p` | 理由(必須登錄) |
+|---|---|---|
+| read/parse | **1.0** | 純 CPU、單執行緒 parser,GPU 換代不影響;目標機 CPU 型號不同時另行宣告 |
+| GP | BW 比 | FFT/density/WL kernel 以資料搬移為主 |
+| IO-op fwd+bwd | BW 比 | gather + atomic 混合,以 pin 掃描的資料搬移為主 |
+| evaluator | BW 比 | lattice walk + scatter |
+| LG / initialize | 1.0 | 多為 CPU 與小 kernel |
+
+**刪除 v2 的 `AB ≥ 0.6 × peak` 二元分類器**(Codex D8:achieved bandwidth 偏低可能來自 latency、occupancy、atomics、cache、launch overhead 或計算,**無法**可靠地在 FP64 比與 SM 比之間做選擇)。取而代之:
+
+**三情境敏感度(全部登錄,不加權、不取區間):**
+
+| 情境 | GPU/op 的 `s_p` | 27.7M 單臂 `T̂` |
+|---|---|---|
+| **S-BW** 記憶體頻寬主導 | `BW_H100 / BW_L4` | `T̂_BW` |
+| **S-SM** 佔用/併發主導 | `SM_H100 / SM_L4` | `T̂_SM` |
+| **S-FP64** FP64 吞吐主導 | `FP64_H100 / FP64_L4` | `T̂_FP64` |
+
+主線 point estimate = **S-BW**(附理由);另外兩個情境的值一併登錄,作為**假設誤選時的落點**,而不是容忍帶。
 
 **登錄內容(T10 凍結,附 sha256):**
 
 | 項 | 內容 |
 |---|---|
 | 硬體 SKU | **H100 SXM5 80GB HBM3**,3.35 TB/s peak,sm_90,CUDA 12.8,persistence mode on,預設時脈(非 MIG、非降頻);若實際機器不同 ⇒ 預測**無效**,須重登錄而非事後放寬 |
-| 預測 1 | 27.7M 單臂 wall-time 的 **point estimate `T̂`**,由上式計算(輸入表逐 phase 列出) |
-| 預測 2 | GPU `device_used_gb` 的 point estimate |
-| 預測 3 | host RSS 的 point estimate(§1.1 多預測子模型) |
-| 判定 | wall-time 落在 **`[0.7, 1.3] × T̂`** 內 ⇒ 模型成立;GPU peak `[0.85, 1.15]×`;host RSS 用模型的 95% PI。**任一項落外 ⇒ 模型被證偽**,必須發表重擬合後的模型與差異歸因。**沒有第二層容忍帶**(v1 的 `[0.3×,3×]` 刪除:它的實際通過帶是 0.15–4.5 h,30 倍寬,無法區分 2× 與 8× 的性能模型) |
+| 預測 1 | wall-time 的 **point estimate `T̂` = `T̂_BW`**,附 `T̂_SM`、`T̂_FP64` 與逐 phase 的 `T_L4,p`、`s_p`、假設理由 |
+| 預測 2 | GPU 記憶體的 **解析下界/上界**(不是點估計) |
+| 預測 3 | host RSS:**僅在 §1.1 的模型通過辨識門檻時**給 95% PI;否則只給解析估計與其假設 |
+| T14 首跑的判定 | **檢定假設,不是檢定區間**:逐 phase 比較實測 `T_H100,p` 與 `T_L4,p / s_p`,報出每個 phase 的實際 `s_p^obs`;主線假設被判為「成立」僅當 **每個 phase 的 `s_p^obs` 與宣告值同序**(相對誤差 ≤ 50%)且總時間落在 `min(T̂_BW,T̂_SM,T̂_FP64)` 與 `max(...)` 之間。記憶體則直接比對是否落在解析界內。**首跑不產生 prediction interval;要有校準區間,至少需要第二次以上的 H100 觀測(記入 future work)。** |
 
-**v1 的 `[0.5 h, 1.5 h]` 數字一併作廢**:它建立在已作廢的「27.7M GP ≈ 890 s」與「頻寬比 × 0.5–0.7」之上。**v2 不在草案階段寫死任何數字**;`T̂` 由 `scripts/m4_forecast.py` 從 T8/T9 的實測 phase 表計算,在 T10 凍結。
+**v1 的 `[0.5 h, 1.5 h]` 與 v2 的 `[0.7,1.3]×`/`[0.85,1.15]×` 一併作廢**:前者建立在已作廢的「27.7M GP ≈ 890 s」與頻寬啟發式上;後者在沒有任何 H100 殘差資料時只是**接受帶**,不是 prediction interval。`T̂` 由 `scripts/m4_forecast.py` 從 T8/T9 的實測 phase 表計算,在 T10 凍結。
 
 ### 6.4 H100 交接契約(T10 的交付物)
 
@@ -511,7 +585,10 @@ docs/handover/h100-30m-runbook.md
 
 任何「產出 JSON 即算過」的驗收一律改為引用本節。實作於 `ioplace/bench/result_gate.py`,並有對應 pytest(對故意損壞的樣本必須全部攔下):
 
-1. **status**:`status == "success"`(失敗 run 必須留檔但不得計入表格);
+1. **status(v2.1 依 Codex D1 拆兩層)**:`experiment_status == "ok"`(量測有效)為所有 artifact 的共同必要條件;`workload_status ∈ {completed, oom, crashed}` 另記。
+   - 進入 **quality/scaling 表格**的 run 必須 `experiment_status=="ok"` **且** `workload_status=="completed"`;
+   - 進入 **可行性判定**(§2.2 / T2b / T9)的 artifact 只需 `experiment_status=="ok"`——`workload_status=="oom"` 是**有資訊量的合法結果**,必須保留並計入;
+   - `experiment_status != "ok"` 的 run 一律留檔、標記,並且**不得**進入任何表格或判定;
 2. **schema**:`PROFILE_SCHEMA_FIELDS` 全數存在且型別正確,`benchmark_kind ∈ {real, synthetic}`;
 3. **finite**:所有數值欄位非 NaN/Inf(可空欄位須明列於 schema);
 4. **provenance**:`run_id`、`repo_commit`、`dp_commit`、`command`、`hostname`、`gpu_name`、`seed`、輸入 `sha256`、`device_baseline_gb` 齊全,且 `repo_commit` 與當前 HEAD 的關係在報告中可解釋;
@@ -523,55 +600,76 @@ docs/handover/h100-30m-runbook.md
 | Task | 類型 | M3-dep? | 內容 | 驗收 |
 |---|---|---|---|---|
 | **T0** 探針遷入 | 純軟體 | 否 | 把 §1/§4.2 的探針遷入 `ioplace/diagnostics/probes_m4/`(`probe_gp_memory.py`、`probe_eval_scaling.py`、`probe_spike_scale.py`、`probe_host_rss.py`、`probe_bookshelf_export.py`、`probe_macro_stats.py`、**`probe_scatter_dtype.py`**、**`probe_reduction_order.py`**),輸出 `results/m4/probes/*.json` | §1 每個數字可追溯且**重現誤差 ≤ 5%**;不符即回頭改本文;每份輸出過 RESULT GATE |
-| **T0b** **模型紀律** | 純軟體+實驗 | 否 | 固定 case(`mempool_group`)factorial 掃描:bins ∈ {1024²,2048²,4096²} × target_density ∈ {0.70,0.835,0.90}(9 runs,GP-only,det=1),**讓 `N_total`/`N_pins`/`n_bins` 去共線**;輸出 design matrix(含單位)、condition number、OLS 係數 + 95% CI、leave-one-case-out 殘差;另建 runtime 模型 `n_iter × per-iteration + fixed`(per-iteration 由 T1 的 CUDA-event 直方圖來) | `results/m4/scaling/model_fit.json` 含上述全部欄位;**condition number 與係數 CI 必須顯示於 M4 報告**;模型在 6.2M/12.3M 的 holdout 檢驗排在 T8/T9(未通過前 §2.1 的推估欄一律標「未驗證」) |
+| **T0b** **模型紀律**(**依賴 T1**) | 純軟體+實驗 | 否 | **三組設計點,合起來才讓三個係數可辨識(v2.1 依 Codex D4 修正:固定 netlist 下 `N_pins` 是常數,v2 的掃描無法識別 pin 係數)**:① `mempool_group` 上 bins ∈ {1024²,2048²,4096²} × target_density ∈ {0.70,0.835,0.90}(9 runs,GP-only,det=1)⇒ 獨立變動 `n_bins` 與 `N_filler`(⇒ `N_total` 在 `N_pins` 固定下變動);② **net-drop 變體**:保留全部 node、以固定 seed 隨機刪 25% / 50% 的 net(Bookshelf 層級操作,`ioplace/bench/` 提供)⇒ **`N_pins` 在 `N_total`、`n_bins` 固定下獨立變動**;③ 既有的五個 case 級點提供跨規模槓桿。輸出 design matrix(含單位)、標準化後的 condition number、OLS 係數 + 95% CI、leave-one-case-out 殘差;另建 runtime 模型 `n_iter × per-iteration + fixed`(per-iteration 由 **T1** 的 CUDA-event 直方圖來) | `results/m4/scaling/model_fit.json` 含上述全部欄位;**數值拒絕門檻(硬性)**:標準化 design matrix 的 `κ(X_std) ≤ 30` **且**每個係數的 95% CI 相對半寬 ≤ 25%,否則 `identifiable=false` ⇒ **模型不得用於任何外推**,§2.1/§5.1 相關欄位一律改「未定」;模型在 6.2M/12.3M 的 holdout 檢驗排在 T8/T9(未通過前 §2.1 的推估欄一律標「未驗證」) |
 | **T1** profile 基建(**已落地保守版**) | 純軟體 | 否 | `ioplace/profile.py`:CUDA-event 計時器、`PhaseTimer`(phase 開頭 `reset_peak_memory_stats`)、`DeviceMemSampler`(`mem_get_info`,0.5 s)、§6.2 JSON schema(含 `benchmark_kind`、provenance 欄位)。driver 端:B2 **只加** `--diag-every N` / `--no-diag`(**不做 reuse**),B3 `--budget-gb`。**欄位語意以 `host_rss_hwm_at_phase_end` / `device_used_gb` 為準,並在 docstring 明記其侷限** | 小 case 上 phase 峰值互不污染;取樣 thread 不改變結果的決定性測試;schema 完整性測試;**文件明記「reset 非充分,per-phase/per-run 歸因由 T1b 定案」** |
-| **T1b** **量測有效性** | 純軟體+實驗 | 否 | (a) 四臂 A/B probe:fresh subprocess / same-process / reset-only / explicit teardown+GC,記錄每臂 run-start/end 的 allocated+reserved,判定 B1 成因;(b) 正式 ablation 改**每臂一個 subprocess**(或以 (a) 證明 teardown 後 baseline 回到 ±2% 容忍);(c) 需獨立歸因的 phase 用 **child process** 取 peak RSS;(d) **exclusive-GPU 協定**:run 前檢查全卡 `used − baseline < 0.5 GB`,否則標 `status="contaminated"`;(e) sampler 精度:人工造 0.05/0.1/0.5 s 短峰,量 0.5 s 取樣的漏檢率並寫進報告;(f) §1.4 B3 的 `budget_source`/`baseline_reserved_gb` 欄位與硬體契約 assert | (a) 的四臂數據齊全且能區分「cumulative HWM」與「retained tensors」;(d) 對污染情境的測試;(e) 漏檢率有數;(f) 傳超過契約的 `--budget-gb` 必須 assert 失敗 |
+| **T1b** **量測有效性** | 純軟體+實驗 | 否 | (a) 四臂 A/B probe:fresh subprocess / same-process / reset-only / explicit teardown+GC,記錄每臂 run-start/end 的 allocated+reserved,判定 B1 成因;(b) 正式 ablation 改**每臂一個 subprocess**(或以 (a) 證明 teardown 後 baseline 回到 ±2% 容忍);(c) 需獨立歸因的 phase 用 **child process** 取 peak RSS;(d) **exclusive-GPU 協定(v2.1 依 Codex D9 改寫)**:run 前量 `device_baseline_gb` 並要求其**絕對值 < 0.5 GB**(v2 的 `used − baseline < 0.5 GB` 是套套邏輯);另外用 `nvidia-smi --query-compute-apps=pid,used_memory` 確認 run 期間無他人 compute process——**先做自測**:我方 workload 執行中若該查詢看不到自己的 PID(§6.1 記錄本機曾回傳空),則該證據不可用,降級記 `exclusivity_evidence="baseline_only"`,並補一條 run 後檢查(`device_used` 回到 baseline ±0.2 GB);任一不滿足 ⇒ `experiment_status="contaminated"`;(e) sampler 精度:人工造 0.05/0.1/0.5 s 短峰,量 0.5 s 取樣的漏檢率並寫進報告;(f) §1.4 B3 的 `budget_source`/`baseline_reserved_gb` 欄位與硬體契約 assert | (a) 的四臂數據齊全且能區分「cumulative HWM」與「retained tensors」;(d) 對污染情境的測試;(e) 漏檢率有數;(f) 傳超過契約的 `--budget-gb` 必須 assert 失敗 |
 | **T2** **evaluator streaming** | 純軟體 | 軟相依 | §4.2 的 ④⑤⑥⑦:消滅 `(P,K)` 全量物化、MST edge/segment 批次化、逐欄位 assert 後的 int32、批次大小為建構參數;**composite key 保持 int64 + `assert n_nets*64 < 2**63`**;加 `assert k <= 32`。若 M3 T1 已 merge 則在其之上做,否則 M4 自己先做 ①②③ | 既有 CPU/GPU 等價測試全綠;**§4.2 的 field-specific 表**(整數 exact / `tree_wl`·`hpwl` rel ≤ 1e-12 / edge 計數 exact);`bigblue4` K=32 峰值降幅 ≥ 60%;**`mempool_group`(3.5M nets)K=32 實跑峰值 ≤ 2 GB**;K ∈ {1,8,32} × multi-chunk × 空 bucket × legacy 欄位 regression |
 | **T2b** **integrated memory gate** | 實驗 | 否 | full-lifetime 記憶體剖析:在 `run_placement_io` 路徑上登記每個常駐 buffer 的 (name, dtype, shape, bytes, create_phase, destroy_phase),輸出每 phase 的 `resident_gb` / `transient_gb` / `device_used_gb`;在 3.1M 與 11.3M 各跑一次 | `results/m4/profile/lifetime_<case>.json`;**§2.2 的可行性三分規則據此判定**,並回頭修正 §2.1/§2.2 的表;過 RESULT GATE |
 | **T3** 語料接入 | 純軟體 | 否 | **= Stage2 S5,共用同一 task。** 產 `benchmarks/ispd25/*.json` config(全 15 LEF、tech 最前)+ per-case `target_density` 反推(M4-L3);補 `superblue12` 實際 pins/nets;順手量 NanGate45 的 Λ 分布(M4-L10) | 三個 NanGate45 case + `superblue12` 各一份 config 與一份 `PlaceDB.read` 統計 JSON |
-| **T3a** **hierarchy gate(blocking)** | 實驗 | 否 | §3.1a 的 G-A…G-E:解析 cluster instance 前綴、逐 group 報 cells/nets/pins/cell-type 直方圖/bbox,與 standalone group 對照;定義鄰接/對角對;量正規化基準 | `results/m4/bench/hierarchy_gate.json`;**五道 gate 全過才准產 `cluster_stats.json`、才准啟動 T4/T6**;任一不過 ⇒ 立即切配方 B 並在報告明寫循環論證風險 |
+| **T3a** **hierarchy gate(blocking)** | 實驗 | 否 | §3.1a 的 G-A…G-E:解析 cluster instance 前綴、逐 group 報 cells/nets/pins/cell-type 直方圖/bbox,與 standalone group 對照;定義距離層級(2×2 / 1×4 / 其他,見 §3.1a);量正規化基準 | `results/m4/bench/hierarchy_gate.json`;**五道 gate 全過才准產 `cluster_stats.json`、才准啟動 T4 的 glue 路徑與 T6**;**G-D 的排列結果直接決定 T6 的陣列形狀**;任一 gate 不過 ⇒ 走 **T4B/T6B** 的 fallback 分支(不是一句「切配方 B」) |
 | **T4** tiler | 純軟體 | 否 | `ioplace/bench/{export_bookshelf,tile_bookshelf,glue_gen}.py`(§3.2) | 玩具 case:2×2 的 node/net/pin 數 = **4×來源 + manifest 記載的 glue 實數**(不得為 0 或未記);座標與 row 無重疊無縫隙;同 seed 逐位元相同;串流峰值 host ≤ 2 GB(以 3.1M 來源實測) |
 | **T5** Rent/驗收器 | 純軟體 | 否 | `ioplace/bench/{rent,verify_bench}.py`:V0/V1 + fit 指標 + **H1–H5 holdout 指標**(§3.3),含 bootstrap CI 與多 seed 聚合 | 已知 Rent 的合成 case(規則 mesh p≈0.5、完全隨機 p≈1.0)量得 p 落在 ±0.05;V0 對故意破壞的檔案全抓得到;**fit 與 holdout 指標在程式介面上分屬兩個函式,holdout 不接受任何參數搜尋介面** |
-| **T6** **tiler 校準** | 實驗 | 否 | 產 2×2(12.31M);以 §3.2 的**閉式 MoM** 解 `(lambda_0, alpha)`(≥5 seeds,報 bootstrap CI);跑 V0/V1 + H1–H5;產出三種核 K1/K2/K3 的 3×3 glue 計數預估帶 | H1–H5 全綠 ⇒ 生成器**通過驗證**;任一不綠 ⇒ **不得重掃**,直接記為「未通過」並切配方 B(報告明寫);`results/m4/bench/verify_group2x2.json` + 種子軌跡 + 核敏感度帶 |
-| **T6b** **count freeze** | 純軟體 | 否 | 由 T4/T6/T7 的 manifest 取**實際** `g₂/g₄/g₉`、`gp₂/gp₄/gp₉`,重算 §2.1 / §4.3 / §8 的**所有** GPU/host/runtime 帳;重擬合 §1.1 的 host 多預測子模型(group / 1×2 / 2×2 三點);檢查所有 int32 assert 的 headroom | `results/m4/scaling/count_freeze.json`;本文 §2.1/§4.3/§8 的表被實數取代;任何 headroom < 20% 的 int32 決策必須回退 int64 |
-| **T7** 30M 生成 | 純軟體 | 否 | 用 T6 定出的 `(lambda_0, alpha)` 產 3×3(27.70M + g₉);跑 V0 + H5′ 自檢;另產 K3 變體(若核敏感度帶 > 20%) | Bookshelf 檔 + manifest(含實際 glue 計數);V0 綠、H5′ 自檢誤差 ≤ 0.1% |
-| **T8a** driver 儀表化 | 純軟體 | 否 | 把 T1 的 profile 記錄接進 `run_placement{,_io}.py`,輸出 §6.2 的 JSON;**新增 E1 需要的欄位**:`num_unplaced_cells`、`final_overflow`、`legalization_status`、`hpwl_gp`、`hpwl_lg`、`stop_overflow_reached`;加 `benchmark_kind` 與全部 provenance | 3.1M case 上產出的 JSON 過 §7.0 RESULT GATE;新欄位有對應單元測試(含「legalization 失敗」的人工情境) |
+| **T6** **tiler 校準** | 實驗 | 否 | **陣列形狀由 T3a 的 G-D 決定(Codex D3)**:G-D = 2×2 ⇒ 產合成 **2×2**(12.31M);G-D = 1×4 ⇒ 產合成 **1×4**(同為 4 tiles / 12.31M),**禁止拿合成 2×2 對照真實 1×4**;以 §3.2 的**閉式 MoM** 解 `(lambda_0, alpha)`(≥5 seeds,報 bootstrap CI),1×4 另跑 d=3 的 hold-out `z` 檢定;逐 pair 原始計數全部保留(anisotropy / overdispersion);跑 V0/V1 + H1–H5;產出三種核 K1/K2/K3 的 3×3 glue 計數預估帶 | H1–H5 全綠(1×4 另加 `|z| ≤ 2`)⇒ 生成器**通過驗證**;任一不綠 ⇒ **不得重掃**,直接記為「未通過」並轉 **T6B**;`results/m4/bench/verify_group<shape>.json` + 種子軌跡 + per-pair 計數 + 核敏感度帶;§3.2 的退化情形 (a)/(b) 觸發時必須寫出 `truncated_at_d` / `kernel_rejected` 並改採 K3 主線 |
+| **T6b** **小陣列 count freeze**(**T6 之後**) | 純軟體 | 否 | **(v2.1 依 Codex D2 拆分,解決 T6b/T7 倒置)** 由 T4/T6 的 manifest 取**實際** `g₂/g₄`、`gp₂/gp₄`(1×2 與 2×2),重算 §2.1 / §4.3 / §8 中 ≤12.3M 的所有 GPU/host/runtime 帳;擬合 §1.1 的 **3 係數** host 模型(fitting 集 = adaptec1 / bigblue4 / group-BS / 1×2 / net-drop 變體,**2×2 只作 holdout,不進 fitting**);檢查 int32 assert headroom | `results/m4/scaling/count_freeze_small.json`;§2.1 的 6.2M/12.3M 列被實數取代;2×2 的 holdout 殘差單獨列出;任何 headroom < 20% 的 int32 決策必須回退 int64 |
+| **T7** 30M 生成 | 純軟體 | 否 | 用 T6 定出的 `(lambda_0, alpha)` 產 3×3(27.70M + g₉);跑 V0 + H5′ 自檢;另產 K3 變體(若核敏感度帶 > 20%,或 §3.2 的退化情形 (a)/(b) 觸發) | Bookshelf 檔 + manifest(含實際 glue 計數);V0 綠、H5′ 自檢誤差 ≤ 0.1% |
+| **T7b** **30M count freeze**(**T7 之後**) | 純軟體 | 否 | 由 T7 的 manifest 取**實際** `g₉`、`gp₉`,重算 §2.1 的 27.7M 列、§4.3 的 30M 估值、§8 的參數化帳與 §6.3 E5 的記憶體解析界;更新 27.7M 的 host RAM 預測(用 T6b 的模型 + 2×2 holdout 殘差) | `results/m4/scaling/count_freeze_30m.json`;**T9 與 E5 的所有數字一律引用本檔,不得再用 glue=0 的 base 值** |
+| **T4B**(fallback,T3a 不過時啟用) | 純軟體 | 否 | 配方 B 的 glue 生成:不使用 cluster 統計,改以 Rent 差額 `t·(m·g)^p − m·t·g^p` 補跨 tile net,`p ∈ {0.60, 0.65, 0.70}` **三個值全部產出**(不挑一個);degree/pinshare 改用**來源 group 自身**的跨 hierarchy net 分布;距離分配強制採 **K3 截斷核**(只連相鄰 tile),因為無資料支撐 long-range | 三個 `p` 各一份 manifest 與 sha256;V0 全綠;**產物一律帶 `provenance="recipe_B_fitted"` 標籤**,`verify_bench.py` 會據此關閉所有對 cluster 的對照指標 |
+| **T6B**(fallback,取代 T6) | 實驗 | 否 | 在無 ground truth 下的可用驗收:H3(全網 degree 分布 vs **來源 group** 的自洽性)、H4(interface-cell 空間分布自洽性)、H5(K-grid λ 口徑落在 `[0.7,1.4]`,對照**來源 group** 而非 cluster)、Rent p 落在 spec §7 的 `[0.55,0.80]`;**H1/H2 不適用**(沒有同尺度真實對照)⇒ 明確記為 `not_applicable`,不得標綠 | 上述指標全綠 ⇒ bench **可用於 scaling,但永久不得用於任何品質宣稱**;報告與 `scaling_synthetic_cases.md` 必須逐字印出「30M 的連通性是擬合出來的,不是校準出來的」;三個 `p` 的結果並列報告,取中位數者為主線 |
+| **T8a** driver 儀表化(**依賴 T1**) | 純軟體 | 否 | 把 T1 的 profile 記錄接進 `run_placement{,_io}.py`,輸出 §6.2 的 JSON;**新增 E1 需要的欄位**:`num_unplaced_cells`、`final_overflow`、`legalization_status`、`hpwl_gp`、`hpwl_lg`、`stop_overflow_reached`;加 `benchmark_kind` 與全部 provenance | 3.1M case 上產出的 JSON 過 §7.0 RESULT GATE;新欄位有對應單元測試(含「legalization 失敗」的人工情境) |
 | **T8b** **per-case ρ\*** 校準 | 實驗 | 否 | 每個 case 用**固定的候選格點**(沿用 M3 T5 的 ρ_max 集合)在 **seed A** 上校準,選取規則**預先登錄**:取「`Δhpwl ≤ +5%` 前提下最大的 ρ」——**以約束選,不以被報告的 Δio 選**(winner-bias 控制);報告用的正式 run 一律跑 **seed B** | `results/m4/calib/rho_<case>.json` 記錄整個格點的結果與選取過程;報告表格引用的 run_id **不得**出現在校準集合中 |
 | **T8** **全流程實驗** | 實驗 | **部分** | E1/E3 的矩陣:真實 case {1.3M, 2.2M, 3.1M, 11.3M} × K{16,32} × {`flat`, `ours@M2`} 進 `quality_real_cases.md`;合成 case {6.2M, 12.3M} × K{16,32} 進 `scaling_synthetic_cases.md`;`ours@M3` 臂**僅在 M3 v2 已 merge 時**追加 | 每格過 RESULT GATE;E1 的六個門檻逐條判定;report linter 綠;**同時作為 T0b 模型的 holdout**:6.2M/12.3M 的實測必須落在模型 95% PI 內,否則觸發 M4-G6 |
-| **T9** 30M 元件級 spike | 實驗 | **部分** | §5.3 第 2 層:27.7M 的 IoTerm(+S4)與 T2 後 evaluator **共常駐、交錯 ≥3 iteration**;`budget_gb=19.5`(L4 契約,不可由 CLI 提高);S4 的 0 / 2 個 `(E,) fp64` 累加器兩種情境都量(§8) | `measured_peak_gb / budget_gb / budget_source / baseline_reserved_gb / resident_gb / max_phase_transient_gb` 齊全;過 RESULT GATE;**27.7M 的 GPU 可行性由此判定,不由 §2.2 的加總判定** |
+| **T9** 30M 元件級 spike(**依賴 T7b**) | 實驗 | **部分** | §5.3 第 2 層:27.7M 的 IoTerm(+S4)與 T2 後 evaluator **共常駐、交錯 ≥3 iteration**;`budget_gb=19.5`(L4 契約,不可由 CLI 提高);S4 的 0 / 2 個 `(E,) fp64` 累加器兩種情境都量(§8);**工作負載跑在 child process,parent 永遠寫出 artifact**(§2.2 三態規則);OOM 需在同一契約下**重現兩次**才可判 `infeasible_l4_contract`;`invalid_measurement` 至多重試兩次 | `experiment_status / workload_status / feasibility_verdict / measured_peak_gb / budget_gb / budget_source / baseline_reserved_gb / resident_gb / resident_lower_bound_gb / max_phase_transient_gb / retry_count` 齊全;過 §7.0 RESULT GATE 的可行性分支;**27.7M 的 GPU 可行性由此三態判定,不由 §2.2 的加總判定,也不會停在「未定」** |
 | **T10** H100 交接包 | 文件+軟體 | 否 | §6.4 的 runbook + `scripts/m4_run.sh` + `scripts/m4_forecast.py` + `scripts/m4_check_prediction.py`;**凍結 `results/m4/forecast/h100_prediction.json`**(含逐 phase 的 `T_L4,p`、`s_p`、判定依據、SKU、sha256) | 在 L4 以 3.1M case 完整演練一次 runbook(除規模外每步都真的跑過);`h100_prediction.json` 的 sha256 記入 M4 報告 |
 | **T11** 報告 + audit | 文件+軟體 | **部分** | `docs/results/m4-scale-up-report.md`:E1–E5 逐條打勾/打叉;三個模型的擬合、CI 與 holdout 殘差;兩份對照表;B1/B2/B3 的揭露與對 M2/M3 舊數字的影響評估;**`scripts/m4_report_lint.py`**(合成 case 不得出現在 quality 表、不得有品質欄位;每格 run_id 唯一且過 RESULT GATE) | 每個數字可追到 `results/m4/**/*.json`;linter 在 pytest 中對故意違規的樣本表格必須報錯;FAIL 照 M1/M2 慣例誠實記錄 |
 | **T12**(條件) | 純軟體 | 否 | numpy-only PlaceDB shim(§5.4)。**觸發:H100 節點 host RAM < 128 GB** | 3.1M case 上 shim 路徑與原生路徑的 GP 結果逐位元相同 |
 | **T13**(條件) | 純軟體 | 否 | IoTerm 的 fused CUDA op。**觸發:T8 的 11.3M 單臂 > 3 h,或 T9 顯示 op 佔總時間 > 85%** | 與 pure-torch 路徑的 fp64 `gradcheck` 一致;`bigblue4` 上 ≥5× 加速 |
 | **T14**(新增)**H100 執行與驗證** | 實驗 | 否 | 在取得 H100 SXM5 80GB 後,依 T10 的 runbook 跑 27.7M 單臂,執行 `m4_check_prediction.py` 對照凍結的預測 | wall-time / GPU peak / host RSS 三項對照 §6.3 E5 的區間;**任一落外 ⇒ 在報告發表重擬合模型與歸因**,不得事後放寬區間。**排在 M4 主線之外(硬體相依),但 E5 若永不驗證必須在報告明寫** |
 
-### 7.2 依賴序(v2 重畫)
+### 7.2 依賴序(v2.1 重畫;以 **edge list 為準**,ASCII 只是輔助)
+
+**Edge list(machine-checkable,executor 以此為準):**
 
 ```
-T0 ─┬─ T0b ──────────────────────────────────────────────┐
-    │                                                     │
-    ├─ T1 ── T1b ──────────────────────┐                  │
-    │                                   │                  │
-    ├─ T2 ── T2b ──────────────────────┤                  │
-    │                                   │                  │
-    └─ T3 ── T3a(gate)─ T4 ─ T5 ─ T6 ─ T6b ─ T7 ─ T9 ──┤
-                                          │               │
-                        T8a ─ T8b ────────┴──── T8 ───────┴─ T11
-                                                   │
-                                                 T10 ─ T14(硬體相依)
-
+T0  -> T1, T2, T3
+T1  -> T0b, T1b, T8a          (T0b 需要 T1 的 CUDA-event per-iteration 計時;T8a 接 T1 的 profile 記錄)
+T2  -> T2b
+T3  -> T3a
+T3a -[pass]-> T4              (glue 路徑;replication/串流骨架不必等 T3a)
+T3a -[fail]-> T4B -> T6B      (fallback 分支,取代 T4 的 glue 路徑與 T6)
+T4  -> T5 -> T6 -> T6b
+T6  -> T7 -> T7b -> T9        (count freeze 拆兩段,解決 T6b/T7 倒置)
+T6B -> T7                     (fallback 下 T7 用 recipe B 的 glue)
+T8a -> T8b -> T8
+T0b, T1b, T2b, T6b -> T8
+T8  -> T10 -> T11             (T10 演練需 T8 的 3.1M 結果;T11 需引用 T10 凍結的預測)
+T9  -> T11
+T10 -> T14                    (硬體相依,排在 M4 主線之外)
 條件:T12(host RAM 情報)/ T13(T8 或 T9 的計時)
 ```
 
-- **T0 最先**(M2/M3 的 finding 遷入慣例);**T0b 緊隨**,因為 §2 的所有推估欄位都靠它決定「能不能寫成數字」。
-- **T3a 是 blocking gate**:不過就沒有 `cluster_stats.json`,T4 的 glue 模型無來源 ⇒ 直接切配方 B。
+```
+T0 ─┬─ T1 ─┬─ T0b ────────────────────────┐
+    │      ├─ T1b ────────────────────────┤
+    │      └─ T8a ─ T8b ──────────────────┤
+    ├─ T2 ─ T2b ──────────────────────────┤
+    │                                     ├─ T8 ─ T10 ─┬─ T11 ─(報告)
+    └─ T3 ─ T3a ─┬[pass]─ T4 ─ T5 ─ T6 ───┤            │
+                 │                  └─ T7 ─ T7b ─ T9 ──┘
+                 │                  └─ T6b ────────────┘(餵 T8)
+                 └[fail]─ T4B ─ T6B ──┘(接回 T7)
+
+T10 ─ T14(硬體相依,M4 主線之外)
+```
+
+- **T0 最先**(M2/M3 的 finding 遷入慣例);**T0b 必須排在 T1 之後**(它的 runtime 模型要用 T1 的 per-iteration 直方圖,v2 漏了這條邊)。
+- **T3a 是 blocking gate**:不過就沒有 `cluster_stats.json` ⇒ 走 **T4B/T6B**(§7.1),不是一句「切配方 B」。T4 的 replication/串流骨架與 T3a 無關,可先做。
 - **T2 是硬前置**:沒有它,11.3M/12.3M 的任何 evaluator 呼叫都 OOM;**T2b 是可行性判定的唯一合法來源**(§2.2)。
-- **T6b(count freeze)必須在 T8/T9 之前**:否則 ≥6M 的所有記憶體/時間帳都建立在 glue = 0 的假設上。
-- **T8 依賴 T4/T6b**(合成 6.2M/12.3M 的產物與計數)、**T8a**(欄位)、**T8b**(ρ\*)、**T2b**(記憶體 gate)。v1 的 DAG 漏了前三條。
-- **T10 的演練必須在 T8 的 3.1M 結果之後**;**T14 排在 T10 之後且硬體相依**。
+- **count freeze 拆兩段**:`T6b`(1×2/2×2,餵 T8)在 T6 後,`T7b`(3×3,餵 T9/E5)在 T7 後 —— v2 的「T6b 在 T7 之前卻消費 T7 的 manifest」已修正。
+- **T8 依賴 T4/T6b**(合成 6.2M/12.3M 的產物與計數)、**T8a**(欄位)、**T8b**(ρ\*)、**T2b**(記憶體 gate)、**T0b**(模型 holdout 判定)。
+- **T10 的演練必須在 T8 的 3.1M 結果之後,且 T10 → T11**(報告要引用 T10 凍結的 `h100_prediction.json` 與其 sha256);**T14 排在 T10 之後且硬體相依**。
 - **臂的定義**:`flat` = 無 IO 項;**`ours@M2`** = M2 已驗證的 IoTerm(product-form soft-λ + margin),per-case ρ\*,**零 M3 相依,是 M4 的主線臂**;**`ours@M3`** = 前者 + M3 的 f_ft/S4 與選定的 `κ_ft`,需要 M3 v2 的 evaluator 欄位(`io_rg`/`ft_rg`/`per_net_steiner`/`per_net_home`)、objective 與 driver 全部 merge。**報告中不得出現無限定詞的「ours」。**
 
-**現在就能開工(零 M3 相依):T0, T0b, T1, T1b, T2, T2b, T3, T3a, T4, T5, T6, T6b, T7, T8a, T8b, T8(flat + ours@M2), T9(情境 A), T10。**
+**現在就能開工(零 M3 相依,依 §7.2 的 edge list 排序):T0, T1, T0b, T1b, T2, T2b, T3, T3a, T4, T5, T6, T6b, T7, T7b, T8a, T8b, T8(flat + ours@M2), T9(情境 A), T10;fallback 分支 T4B/T6B 只在 T3a 失敗時啟用。**
 **擋在 M3 v2 之後:`ours@M3` 臂與其 `io_rg`/`ft_rg` 欄位、T9 的 S4 情境 B、T11 的對應章節。**
 
 ---
@@ -597,11 +695,11 @@ M3 v2 可能把 S4b 換成別的候選,但都是「同一條 chunked backward �
 |---|---|---|---|
 | **M4-G1** T2 沒達標 | `mempool_group` K=32 的 evaluator 峰值 | > 2 GB | T2 未完成,不得進 T8 的 ≥6M 臂;先做 edge 批次化 profiling 找剩餘大戶 |
 | **M4-G2** 11.3M 全流程失敗 | E1 的任一條 | 任一 fail | OOM → 降 K/lattice 並記錄;legalization 失敗 → 調 `target_density`(M4-L3);`Δhpwl` 爆 → 降 `ρ_max`(T8b 的格點內選,**不得**臨時擴充格點) |
-| **M4-G3** 生成器未通過驗證 | §3.3 的 H1–H5 | 任一不綠 | **不得重掃參數**(閉式 MoM 本來就沒有掃描空間)⇒ 記為「生成器未通過」,切配方 B,報告明寫「30M 的連通性是擬合出來的」 |
-| **M4-G3a**(新增)階層前提 | T3a 的 G-A…G-E | 任一不過 | 立即切配方 B;`cluster_stats.json` 不得產出;§3.1 第 3 點在報告中標為已否證 |
+| **M4-G3** 生成器未通過驗證 | §3.3 的 H1–H5 | 任一不綠 | **不得重掃參數**(閉式 MoM 本來就沒有掃描空間)⇒ 記為「生成器未通過」,**轉 T6B**(§7.1),報告明寫「30M 的連通性是擬合出來的」 |
+| **M4-G3a**(新增)階層前提 | T3a 的 G-A…G-E | 任一不過 | 立即走 **T4B/T6B** fallback 分支(§7.1);`cluster_stats.json` 不得產出;§3.1 第 3 點在報告中標為已否證 |
 | **M4-G4** op runtime 失控 | T8 的 11.3M 單臂 wall-time | > 3 h | 觸發 T13。**明確不准**用「降低 GP iteration 數」偽造達標 |
 | **M4-G5** host RAM | 任一 `PlaceDB.read` 的 peak RSS | > 100 GB | 該 case 在本機作廢轉 H100;H100 也不足 ⇒ 觸發 T12。**判定用 §5.1 的三分規則,不用單點外推** |
-| **M4-G6** 模型失效 | T0b 三個模型在 6.2M/12.3M holdout 的殘差 | 超出 95% PI | 模型不可外推 ⇒ **§2.1 的 27.7M 欄位全部改「未定」**,E5 的 point estimate 必須改由更保守的方法產生並在報告說明;**不得事後偷改預測** |
+| **M4-G6** 模型失效 | T0b 的 `identifiable` 旗標,以及三個模型在 6.2M/12.3M holdout 的殘差 | `identifiable=false`,或殘差超出 95% PI | 模型不可外推 ⇒ **§2.1 的 27.7M 欄位全部改「未定」**,E5 的 point estimate 必須改由更保守的方法產生並在報告說明;**不得事後偷改預測** |
 | **M4-G7** B1 的污染範圍 | M2/M3 報告中引用 `peak_mem_mb` 的段落 | 存在即觸發 | 逐條標註「此數字受同 process 前序臂污染,已作廢」,並在 M4 報告給出 T1b 重測值 |
 | **M4-G8**(新增)報表越界 | `scripts/m4_report_lint.py` | 任一違規 | 合成 case 出現在 quality 表、或 synthetic 表出現品質欄位、或 run_id 重複/未過 RESULT GATE ⇒ T11 不得標記完成 |
 
@@ -613,14 +711,14 @@ M3 v2 可能把 S4b 換成別的候選,但都是「同一條 chunked backward �
 | R2 | ISPD2025 是 `place_opt`/`preCts` 的**已擺置** DEF;從其座標起跑等於 warm start,與 ISPD2005 的 random-center init 不同 regime | DEF header(Stage2 §3.2) | T3 必須決定並記錄是否 `random_center_init_flag=1`;兩種都跑一次 sanity |
 | R3 | lattice 解析度在大 die 上的敏感度未量 | `run_placement.py:11` 預設 512 | T8 加一組 lattice ∈ {512,1024,2048} sensitivity(只在 3.1M) |
 | R4 | 合成 case 的 uniform 位置**系統性高估** evaluator 成本 | §1.2 的合成 `io_count=29.8M` vs 真實 bigblue4 K16 的 100,333 | T9 的 spike 必須用 **tiler 產出的真實 `.pl` 起始座標**,不用 uniform random |
-| R5 | 30M 的 pin/net 比是外推 | 推估 | T7 產出後直接數,由 T6b 回填 |
+| R5 | 30M 的 pin/net 比是外推 | 推估 | T7 產出後直接數,由 **T7b** 回填 |
 | R6 | H100 節點的 CUDA arch 需重 build(`sm_90`) | `docs/dev-env.md` 記錄本機只 build `sm_89` | T10 runbook 第一步;T14 執行前檢查 |
 | R7 | `mempool_cluster` 讀取 285 s + 62.6 GB,每次 run 都付一次 | 待重現 | T3 評估「一次讀入、多臂共用同一 process」;**但與 T1b 的「每臂一個 subprocess」衝突** ⇒ 由 T1b 的 A/B 結果仲裁,兩者不可同時成立時以量測正確性優先 |
 | R8(新增) | 距離核形狀在 2×2 不可驗證(§3.2 的 0 DoF) | 結構性 | T7 發表三核敏感度帶;若 G-D 判定 1×4 排列則可獲得 1 個 DoF,報告須說明實際情形 |
 
 ---
 
-## 10. 低信心段落總表(v3 對抗性審查請優先攻擊這裡)
+## 10. 低信心段落總表(下一輪對抗性審查請優先攻擊這裡)
 
 | ID | 段落 | 不確定的是什麼 | 由誰解決 |
 |---|---|---|---|
@@ -629,13 +727,13 @@ M3 v2 可能把 S4b 換成別的候選,但都是「同一條 chunked backward �
 | M4-L3 | §2.4 | NanGate45 的 `target_density` 該取多少 | T3 |
 | M4-L4 | §3.3 | Mt-KaHyPar 在 12.3M/27.7M hypergraph 上的可行性未知 | T5/T6 |
 | M4-L5 | §3.2 | glue 距離核的**形狀**在 2×2 結構上不可驗證(0 residual DoF) | T7 的三核敏感度帶;無法根本解決 |
-| M4-L6 | §4.3 | T2 後的 evaluator 記憶體(4.5 / 10 GB)是推估 | T2 驗收 + T6b |
+| M4-L6 | §4.3 | T2 後的 evaluator 記憶體(4.5 / 10 GB)是推估 | T2 驗收 + T6b/T7b |
 | M4-L7 | §5.2 | 單臂 wall-time 假設 op 在 600 iteration 上啟用;實際啟用點由 `of_on=0.90` 決定,10M 級的 overflow 軌跡未知 | T8 |
 | M4-L8 | §6.3 E5 | 各 phase 的 `s_p` 是由 L4 achieved bandwidth 推的**單機外推**,沒有同型 workload 的 H100 實測 | T14(唯一能解決的方式) |
 | M4-L9 | §3.1 | 「cluster = 4 groups」**已降級為待證假設**,且 3.675 的比值已顯示與 4× 不符 | T3a(blocking) |
 | M4-L10 | §4.4 | Λ∈[4,8] 的 net 在 NanGate45 語料上的比例未量 | T3 |
 | M4-L11 | §1.1 | 三個模型的係數不確定度與外推有效範圍 | T0b + T8/T9 holdout |
-| M4-L12 | §2.1 | 所有合成級的 glue 計數 `g*` 未知 ⇒ 下游帳全為低估 | T6b |
+| M4-L12 | §2.1 | 所有合成級的 glue 計數 `g*` 未知 ⇒ 下游帳全為低估 | T6b(≤12.3M)/ T7b(27.7M) |
 
 ---
 
@@ -667,5 +765,5 @@ M3 v2 可能把 S4b 換成別的候選,但都是「同一條 chunked backward �
 
 - **Stage 2 S5 = M4 T3**,同一個 task、同一份 config 產生器;Stage 2 §4.3 的 L-Q1-b(`mempool_cluster` 可讀性)由 §1.1 回答:可讀,285 s / 62.6 GB(待 T0 重現)。
 - **M3 T1 與 M4 T2** 的分工見 §4.2,**v2 已依 Codex #9 改寫**:M3 T1 = source + accumulator 的**成對** dtype 降級(省 ≈15.5 GB,**仍不足以解封 11.3M**),M4 T2 = 結構性 streaming。兩邊驗收互不重疊,但 M3 T1 的測試必須覆蓋 K ∈ {1,8,32} × multi-chunk × 空 bucket × legacy 欄位 exact regression。
-  **需要 M3 側同步修正的一點:** M3 v3 §2 的 T1 註記(該檔 line 134)仍把「改 packed bitmask 或按 net 分塊」列為 R2 的解法;本文 §4.5 已證明 **packed bitmask + `scatter_reduce(amax)` 對 `passed_bit_acc` 數學上錯誤**(一個 segment 會經過多個 region ⇒ 該列有多個 bit ⇒ `max ≠ OR`),只有 `pin_bit_acc`(每列單一 bit)成立。⇒ M3 T1 應改採 §4.2 的**成對 int8 dtype 降級**,並在 M3 草案中更正該行。
+  **跨文件狀態(v2.1 更新):** M3 v3 的 T1 註記已同步為「source bit planes 與 accumulator **成對** int64→int8」,並禁止對 `passed_bit_acc` 使用 packed-mask `amax`(§4.5 已證明其為錯:一個 segment 會經過多個 region ⇒ 該列多個 bit ⇒ `max ≠ OR`;只有 `pin_bit_acc` 每列單一 bit 才成立)。**兩份草案現已一致,無待辦。**
 - M3 draft §7 G6 的「10M spike 8 GB 契約」在 M4 改為 `--budget-gb` + `budget_source` + 硬體契約 assert(§1.4 B3);**M3 自己的 G6 判準不變**(仍是 10M / 8 GB),M4 只是不再把 30M 的 12.32 GB 誤判成失敗。
