@@ -1,14 +1,14 @@
 # M3 設計草案 v3:可微 feed-through(S4)+ 邊界容量項(S7)
 
 - 日期:2026-08-13
-- 狀態:**v3(2026-08-13,第二輪對抗性審查後修訂)**
+- 狀態:**v3.1(2026-08-13,第二輪對抗性審查 + Codex v3 驗證回饋後的手術式修補)**
   - **Phase A(可立即進 writing-plans / 實作)**:§2 的 routing 模型與 evaluator 擴充(T1)、§4 的 S7 裁決、§5 的 schedule 契約(T3)、§6 的 exit 預註冊、§8 的 T0(探針重發 + **P0b**)。這些章節**與 S4 的形式選擇無關**。
   - **Phase B(封鎖中)**:**S4 的可微形式尚未定案**,§3 只交付「候選集 + P0b 預註冊協定」。T2(S4 op)與 T4–T8 **不得進 writing-plans,直到 P0b 完成且依 §3.4 的判準選出候選**。
 - 對應 spec:`docs/superpowers/specs/2026-07-30-io-aware-placer-phase1-design.md` §2(FT 定義)、§5.3(S4)、§5.4(S7)、§6(evaluator)、§9 M3 列
 - 繼承資產:`docs/superpowers/specs/2026-08-06-m2-differentiable-io-design.md`(v2)的 S1 L1-SDF 軟歸屬、S2 product-form、§2.5 chunked-k 契約、§4.2/§5.2 schedule、§6.2 params-borne patch、§6.4 secant refresh、§7.2 噪聲 regime
 - 前置結論:`docs/results/m2-differentiable-io-report.md`(M2 exit PASS:−18.5% io @ +1.31% hpwl;但 **ft_count 反升 +38.5%(adaptec1)/+17.3%(bigblue4)**)
-- 對抗性審查:第一輪 `docs/reviews/2026-08-13-m3-draft-v1-adversarial-opus.md`(F1–F15)與 `docs/reviews/2026-08-13-m3-draft-v1-adversarial-codex.md`(1–16)→ v2;第二輪 `docs/reviews/2026-08-13-m3-v2-adversarial-codex.md`(1–9,6 BLOCKER + 2 MAJOR + 1 MINOR)→ **本版**
-- **證據狀態**:探針在 `ioplace/diagnostics/probes_m3/`、結果在 `results/m3/probes/`。**v2 宣稱「P0/P1/P4/P6 已 hermetic」是錯的**(路徑硬編碼、env 缺 command/hostname/timestamp、無 `exactness` 旗標),v3 撤回該宣稱,六支探針全部進 T0 的重發清單(§8 T0-b)。v2 §3.3 引用的 ad-hoc 下降實驗**降級為「探索性,不作為裁決依據」**,其角色由 P0b 取代。
+- 對抗性審查:第一輪 `docs/reviews/2026-08-13-m3-draft-v1-adversarial-opus.md`(F1–F15)與 `docs/reviews/2026-08-13-m3-draft-v1-adversarial-codex.md`(1–16)→ v2;第二輪 `docs/reviews/2026-08-13-m3-v2-adversarial-codex.md`(1–9,6 BLOCKER + 2 MAJOR + 1 MINOR)→ v3;驗證 `docs/reviews/2026-08-13-m3-v3-verify-codex.md`(7/9 RESOLVED,F1/F5 PARTIALLY,2 新 BLOCKER + 2 MINOR)→ **本版 v3.1**(見 §0.15)
+- **證據狀態**:探針在 `ioplace/diagnostics/probes_m3/`、結果在 `results/m3/probes/`。**v2 宣稱「P0/P1/P4/P6 已 hermetic」是錯的**(路徑硬編碼、env 缺 command/hostname/timestamp、無 `exactness` 旗標),v3 撤回該宣稱,**八支既有探針全部**進 T0 的重發清單(§8 T0-b)。v2 §3.3 引用的 ad-hoc 下降實驗**降級為「探索性,不作為裁決依據」**,其角色由 P0b 取代。
 
 ---
 
@@ -43,11 +43,22 @@
 | **F2** [BLOCKER] 「絕對值會被除掉」只在 unclamped/uncapped 的瞬時極限成立;`mass_on_ft0` 量的是支撐錯置,直接改變方向 | **成立** | §3.2.1 把宣稱收斂為「**global 乘法尺度**只在 `κ` 未 clamp、步長上限未綁定的**瞬時**極限下抵銷;per-net/bucket 的支撐扭曲不會抵銷」。`mass_on_ft0` 與 bucket 份額**升格為 tier-2 方向安全 gate**(§3.4.4),不再只是「估計量資格」。§5.4/§6.3 新增必記欄位:`f_effective`、`kappa_clamp_active`、`ratio_inst` 與 `ratio_ema`、`applied_force_l1` |
 | **F3** [BLOCKER] S4a 的鏈轉星偏誤有 worked example,且 L12 的 per-Λ `ft_rg` 診斷偵測不到 | **成立** | (a) 候選集新增 **`S4e-union`(邊union soft crossing − 基準)**,在該 worked example 上鏈與星**同值**(§3.3.3 逐項驗算);(b) P0b 新增**拓撲分類**(`chain` / `star` / `true-FT` / `trivial`)與**類別間轉換矩陣**量測;(c) 新增 **G9 鏈轉星 gate**(§7);(d) L12 改寫為「per-topology-class 轉換」而非 per-Λ |
 | **F4** [BLOCKER] callback 契約沒有真正 apply/refresh 新係數;M2 driver 先算 `lambda_io` 再更新 `ratio_ema`,refresh 看到舊係數;`g_ft=0` 時 `κ` clip 到 100 會讓 `Cmax` 憑空懲罰 IO 步 | **成立** | §5.5 改為**原子化 callback 契約**(7 步,版本只遞增一次);明文記載這是**修掉 M2 遺留缺陷**,因此 `f_ft_max=0` 與 M2 不再逐位元相同 ⇒ 用 `--callback-order legacy` 保留逐位元回歸鎖(§5.5 註 2);零梯度分支改 **`g_ft ≤ ε_rel·g_io`(`ε_rel = 1e-3`)⇒ `κ_ft = 0`、`Cmax = 1`**,絕不產生虛構懲罰 |
-| **F5** [BLOCKER] ramp 與其「晚窗口」論述矛盾(在宣稱的 regression 邊界已有 70.5% 力量);C9 的 `of_ft_full = of_on` 除以零;每 50 iter 更新是階梯不是連續 | **成立** | §5.2 的 ramp 改用 **`τ_rel` 的兩點對數插值**(`τ_start = 0.12` 起,`τ_full = 0.05` 滿),依 M2 trajectory 重新校準:it400(τ_rel 0.137)**= 0.000**、it450 = 0.255、it500 = 0.700、it550+ = 1.000;明文寫成 **sample-and-hold(每 50 iter 階梯)**,並說明階梯是 line-search 常數性的**必要條件**而非缺陷;C9 的全程臂改為顯式 `--ft-ramp-mode constant`(無分母) |
+| **F5** [BLOCKER] ramp 與其「晚窗口」論述矛盾(在宣稱的 regression 邊界已有 70.5% 力量);C9 的 `of_ft_full = of_on` 除以零;每 50 iter 更新是階梯不是連續 | **成立** | §5.2 的 ramp 改用 **`τ_rel` 的兩點對數插值**(`τ_start = 0.12` 起,`τ_full = 0.05` 滿),依 M2 trajectory 重新校準:it400(τ_rel 0.1372)**= 0.000**、it450 = **0.2523**、it500 = **0.7082**、it550+ = 1.000;明文寫成 **sample-and-hold(每 50 iter 階梯)**,並說明階梯是 line-search 常數性的**必要條件**而非缺陷;C9 的全程臂改為顯式 `--ft-ramp-mode constant`(無分母) |
 | **F6** [BLOCKER] 兩層判準沒寫進正文、無法否證 S4a;狀態同時說「可進 writing-plans」又說「沒有 P0b 就沒有裁決基礎」 | **成立** | §3.4.3/§3.4.4 把 tier-1 / tier-2 **完整寫進正文**(門檻、適用 regime、不確定度處理、不通過的 fallback 動作);tier-2 具**否決權**(`mass_on_ft0 > 0.50` 於 `f ≥ 0.5·f_max` 的 regime ⇒ 只能進「受限模式」或被拒);頂部狀態改為 **Phase A / Phase B 兩段**,S4 章節明確封鎖 |
 | **F7** [MAJOR] screening seed 1000 又出現在 confirmation 集合裡;mean±range 不是 paired confidence bound | **成立** | §6.2 改:screening = seed 1000;**confirmation = 獨立 seeds {1001, 1002, 1003}**;判定改 **paired difference 的單側 95% 信賴界**(n=3,`t_{0.95,2} = 2.920`),對照組為**同 seed** 的 flat 與 M2-best(flat 的 1001–1003 已存在於 `results/m2/noise/`;M2-best 需補跑 3 顆,計入 T6 預算) |
-| **F8** [MAJOR] 「已 hermetic」的宣稱與檔案不符 | **成立** | **撤回宣稱**。§8 T0-b 的重發清單明確含 **P0、P1、P4、P6 + 舊四支(rg/bb/surrogate/util)= 7 支**;統一 schema(`command`、`python_executable`、`python_version`、`hostname`、`utc_timestamp`、`repo_commit`、`dp_commit`、`input_sha256`、`exactness`)+ 路徑改 repo 相對(由 `__file__` 推導,可用 `--repo-root` 覆寫)+ 原子寫入 + `tests/test_probes_m3_schema.py` |
+| **F8** [MAJOR] 「已 hermetic」的宣稱與檔案不符 | **成立** | **撤回宣稱**。§8 T0-b 的重發清單明確含 **P0、P1、P4、P6 + 舊四支(rg/bb/surrogate/util)= 8 支既有探針**(另新增 P2 一支腳本;P3 是 rg/bb 的欄位擴充,不是新腳本);統一 schema(`command`、`python_executable`、`python_version`、`hostname`、`utc_timestamp`、`repo_commit`、`dp_commit`、`input_sha256`、`exactness`)+ 路徑改 repo 相對(由 `__file__` 推導,可用 `--repo-root` 覆寫)+ 原子寫入 + `tests/test_probes_m3_schema.py` |
 | **F9** [MINOR] 「2–30×」「20–40×」誤述 | **成立** | 兩處**刪除**。v2 §3.3 的 ad-hoc 數字改以逐格原值呈現於 §10.2,並標明「探索性、無信賴區間、不得作為裁決依據」 |
+
+## 0.15 v3 → v3.1 變更(Codex v3 驗證回饋,手術式修補)
+
+| 驗證 finding | 處置 | 修改處 |
+|---|---|---|
+| **[BLOCKER] P0b 未機械凍結**(候選 6 vs 實列 7;狀態 16 vs 實為 20;隨機方向在 IO-anchored 家族下的尺度未定義) | **成立,全部凍結** | 新增 **§3.4.0「凍結的基數」表**(7 候選 + IO-only = 8 臂;**20 個 `(state, τ_rel)` 格**;3 η;3 家族;8 隨機方向;S4e tie-break 與 bigblue4 各為獨立子矩陣);§3.3.5 給出**隨機方向的顯式公式**並證明其 L1 大小等於三個家族的 `IO-only` 參照臂 ⇒ **隨機帶與家族無關,每 `(state, η)` 只產生一次**;§3.4.1(b) 改寫為「4 placement × 2 溫度 = 8 格」;§3.4.7 逐項重算 = **1,684 格** |
+| **[BLOCKER] schedule 係數歧義**(`ρ_io` 列已含 ramp、`λ_io` 又乘一次;七步交易掛在哪個事件未明) | **成立;是記號錯誤不是平方 ramp** | §5.2 的 `ρ_io` 列改為**不含 ramp**(逐字對應 `schedules.py:15-19`),`λ_io` 列明寫 `ramp(iteration) = activation_ramp(...)` 且**全 schedule 只乘一次**;§5.5 新增**節奏表**:`cb()` 每 iteration 只做 `update_continuous`(τ/ρ_io/ramp/λ_io 連續漂移),**七步交易掛在 `iteration % every == 0`(every=50)的 evaluator 分支**(`run_placement_io.py:102` 進入、`:137` 閘門) |
+| **F1 PARTIALLY**(缺 full-objective / Nesterov,自由度未凍) | **成立,WL+density 納入** | §3.4.2 新增**預註冊 scope 表**:WL+density **納入**(新增 **M3 `full_objective` 家族**,靠 T0-a 在 snapshot 順便存下的 `g_wl_density` 向量,免重建 placer);**Nesterov / 多步 / 線搜尋明確排除**並寫明理由與檢疫機制(G3′ / G8);§3.4.3 新增 **T1-P3 full-objective confirmatory gate**(12 snapshot 中 ≥60% 過 T1a 且 0 格違反 T1b/T1c),未過者降為「受限合格」;T0-a 驗收加上 `gamma/density_weight/ratio_ema/g_wl_density` 與梯度一致性測試(相對誤差 < 1e−6) |
+| **F5 PARTIALLY**(ramp 表 0.255/0.700 是 3 位小數 τ_rel 的產物) | **成立** | §5.2 校準表改為 **0.2523 / 0.7082**(由 JSON `overflow` 原值算出),`τ_rel` 欄改顯示 4 位小數,並加「計算口徑」註;§0.1 的 F5 列同步;T3 的 ramp 測試 golden 指定為本表的四位小數值 |
+| **[MINOR] 探針數帳不一致(六/七/八)** | **成立** | 統一為 **8 支既有探針重發**(P0/P1/P4/P6 + rg/bb/surrogate/util)+ **新增 P2 一支腳本**(T0-b 後共 9 支,加 P0b 共 10 支);**P3 是欄位擴充不是新腳本**。修改處:§證據狀態、§0.1 F8 列、§8 T0-b、§10.1 結語 |
+| [MAJOR,已由 3c2ad5d 修掉] packed bitmask 的 `amax` 不是 bitwise OR | 已在 HEAD 修正 | §2.5-3 已是 int64→int8 成對轉換的寫法,**本版不動** |
 
 ## 0.2 v1 → v2 的處置(保留追溯,已結案者不再展開)
 
@@ -237,14 +248,35 @@ L_FT_e    = ReLU( L_cross_e − base_e ) ,  base_e = (λ_e − 1).detach()  或 
 
 #### 3.3.5 對照組
 
-- `IO-only`(κ=0):現任方向(M2)。
-- `RANDOM ×8`:8 個獨立高斯方向(seed 0–7),同步長 ⇒ 每個指標的噪聲帶。
+- `IO-only`(κ=0):現任方向(M2),同時是**所有家族的參照臂**。
+- `RANDOM ×8`:8 個獨立高斯方向,`r ~ N(0, I)` 於 `2·num_movable` 個可動座標,由 `torch.Generator(device="cpu").manual_seed(s)`、`s ∈ {0,…,7}` 產生(CPU 產生器以確保跨 GPU 可重現),位移為
+
+  ```
+  Δpos_rand = − η · L_R · (2·num_movable) · r / ‖r‖₁          # ⇒ ‖Δpos_rand‖₁ = η·L_R·(2·num_movable)
+  ```
+
+  這個 L1 大小**與三個家族中的 `IO-only` 參照臂完全相同**(M1/M3 的所有臂、M2 的 `IO-only` 臂皆為此值),因此**隨機帶與家族無關,每個 `(state, η)` 只需產生一次**(8 個方向共用於三個家族)。**注意**:M2(IO-anchored)家族的候選臂位移比參照臂大(這正是「在 IO 之上再加 FT 力」的語意),故該家族的隨機帶是噪聲的**下界**——這也是 tier-1 判定只用 M1 家族的原因(§3.4.3)。
 
 ### 3.4 **P0b 預註冊協定**(fast-worker 可照做)
 
 > 本節在 P0b 執行前不得修改。任何修改都必須在 git 歷史中先於執行 commit,並在報告中揭露。
 
-#### 3.4.1 輸入:狀態集合(16 個)
+#### 3.4.0 凍結的基數(fast-worker 不得再做任何設計決定)
+
+| 自由度 | 凍結值 | 定義處 |
+|---|---|---|
+| **候選臂** | **7 個候選 + 1 個 `IO-only` 參照 = 8 個方向臂**:`S4a-star`、`S4b-gated-detach_b0.5`、`S4b-gated-detach_b1.0`、`S4b-gated_b0.5`、`S4e-union-detach`、`S4e-union-hardbar`、`S4g-bboxcov`、`IO-only` | §3.3.1–3.3.5 |
+| **狀態格** | **20 個 `(state, τ_rel)` 格** = 12 個 trajectory snapshot(各 1 個原生 τ_rel)+ 4 個最終 placement × 2 個溫度(原生 τ_rel 與強制 `τ_rel = 0.30`) | §3.4.1 |
+| **η** | `{0.005, 0.01, 0.02}`(3) | §3.4.2 |
+| **步長家族** | `M1 merged-L1`(**判定用**)、`M2 io_anchored_l1`(敏感度)、`M3 full_objective`(confirmatory,只在 12 個 snapshot × η=0.01) | §3.4.2 |
+| **隨機方向** | 8 個,**與家族無關**,每個 `(state, η)` 一組 | §3.3.5 |
+| **`f`** | 主矩陣固定 `f = 0.25`;勝出者事後補掃 `f ∈ {0.1, 0.5, 1.0}`(不影響判定) | §3.4.2 |
+| **S4e tie-break 敏感度** | **獨立子矩陣**:只有 `S4e-union-detach` 的 reverse tie-break 版本 × 20 個狀態格 × `η = 0.01` × 家族 `M1` | §3.3.3 |
+| **bigblue4 抽查** | **獨立縮減矩陣**:2 個最終 placement × 8 個方向臂 × `η = 0.01` × 家族 `M1`,加 8 個隨機方向 | §3.4.1(c) |
+
+**任何一格的失敗(OOM/NaN/evaluator 例外)必須寫進 JSON 的 `failed_cells` 並在 summary 計為「未通過」,不得靜默略過。**
+
+#### 3.4.1 輸入:狀態集合(**20 個 `(state, τ_rel)` 格**)
 
 **(a) 真實 trajectory 中段 snapshot(12 個,主力)**
 先由 **T0-a** 為 `ioplace/drivers/run_placement_io.py` 加上 `--snapshot-iters "300,400,450,500,550,600"` 與 `--snapshot-dir`,在指定 iteration 於 callback 內把 `node_x/node_y/iteration/overflow/tau/lambda_io` 存成 `results/m3/snapshots/<tag>_it<NNNN>.npz`;然後 `det=1, seed=1000` 重跑兩個 adaptec1 k16 grid 臂:
@@ -256,28 +288,39 @@ L_FT_e    = ReLU( L_cross_e − base_e ) ,  base_e = (λ_e − 1).detach()  或 
 
 每個 snapshot 的 `τ_rel` 由其記錄的 `overflow` 經 `tau_rel_from_overflow` 導出(`schedules.py:7`),涵蓋 **τ_rel ≈ 0.226 / 0.137 / 0.096 / 0.065 / 0.042 / 0.030**——**這解決了 v2「只在收斂後的最終 placement 上量」的承重牆(舊 L11)**。
 
-**(b) 最終 placement(4 個,泛化)**
-`adaptec1_{A0,A2}_k32_grid`、`adaptec1_{A0,A2}_k16_slicing`(`results/m2/ablation/*.npz`),各以其最終 overflow 導出的 `τ_rel` 計算,另外**強制加測 `τ_rel = 0.30`** 一格以取得 all-τ 證據(F6 指出 v2 的 ad-hoc 探測缺這一塊)。
+**(b) 最終 placement(4 個 placement × 2 個溫度 = **8 個狀態格**,泛化)**
+`adaptec1_{A0,A2}_k32_grid`、`adaptec1_{A0,A2}_k16_slicing`(`results/m2/ablation/*.npz`)。每個 placement 出**兩個**狀態格:(i) 以其最終 `overflow` 導出的原生 `τ_rel`;(ii) **強制 `τ_rel = 0.30`**,以取得 all-τ 證據(F6 指出 v2 的 ad-hoc 探測缺這一塊)。⇒ (a) 的 12 格 + (b) 的 8 格 = **20 個狀態格**。
 
 **(c) 規模抽查**:`bigblue4_{A0,A2}_k16_grid` 最終 placement,只跑 `η = 0.01`、merged-L1 家族。
 
-#### 3.4.2 步長家族與 η(取代 v2 的 RMS 步)
+#### 3.4.2 P0b 的 scope、步長家族與 η
 
-對候選 `c`,合併梯度 `C = I + κ F`,`κ = f·‖I‖₁/‖F‖₁`(P0b 固定 `f = 0.25`,並對勝出者補掃 `f ∈ {0.1, 0.5, 1.0}`)。位移:
+**預註冊的 scope(直接回應 F1 的 PARTIALLY):**
 
-| 家族 | 定義 | 對應的 scheduler 語意 |
+| 面向 | P0b 是否涵蓋 | 說明 / 排除理由 / 檢疫機制 |
 |---|---|---|
-| **M1(主)merged-L1** | `Δpos = −η·L_R·C / (‖C‖₁/(2·num_movable))` ⇒ **平均每座標位移 = η·L_R** | §5.2 的 merged 正規化(總力固定) |
-| **M2(次)IO-anchored-L1** | `Δpos = −α·C`,`α` 由 `‖α·I‖₁ = η·L_R·2·num_movable` 決定(**與候選無關的 α**) | 若改用 IO 錨定正規化(敏感度分析) |
+| L1 正規化的位移 | **是** | 三個家族全部用 L1(修正「probe 用 RMS、scheduler 用 L1」的錯配) |
+| WL + density 力 | **是(M3 家族)** | 由 T0-a 在 snapshot 當下**順便存下** `g_wl_density = ∇(wirelength_op) + density_weight·∇(density_op)` 的座標向量(adaptec1 ≈ 2–4 MB/snapshot),P0b 直接載入,**不需重建 placer** |
+| Nesterov 動量 / 多步收斂 | **否(明確排除)** | 一步擾動注入既有動量緩衝在數學上不良定(動量是整條軌跡的函數,單步改變後續狀態的方式無法從 snapshot 重建);**檢疫機制 = T6 的 G3′ in-loop gate**,它以 `ft_mst` 對照 `f_ft=0` 臂直接檢定多步效果,且 P0b 未通過的候選連 in-loop 都進不去 |
+| 步數 | **1 步** | 同上;殘餘風險登記為 L13 |
+| 線搜尋 / backtracking | **否** | 由 G8 的 backtrack 中位數監控承接 |
 
-`η ∈ {0.005, 0.01, 0.02}`。**兩個家族都用 L1 正規化**(修正 F1 指出的「probe 用 RMS、scheduler 用 L1」錯配)。只移動 `[:num_movable]`;位移後 clamp 進 die。
+對候選 `c`,`I = ∇L_IO`、`F = ∇L_FT`、合併梯度 `C = I + κF`,`κ = f·‖I‖₁/‖F‖₁`(主矩陣固定 `f = 0.25`)。位移(`nm := num_movable`):
+
+| 家族 | 定義 | 對應的 scheduler 語意 | 適用範圍 |
+|---|---|---|---|
+| **M1(主,判定用)`merged_l1`** | `Δpos = −η·L_R·(2·nm)·C/‖C‖₁` ⇒ `‖Δpos‖₁ = η·L_R·(2·nm)`(平均每座標位移 = η·L_R) | §5.2 的 merged 正規化(總力固定) | 20 狀態格 × 8 臂 × 3 η |
+| **M2(敏感度)`io_anchored_l1`** | `Δpos = −α·C`,`α = η·L_R·(2·nm)/‖I‖₁`(**與候選無關**) | 若改用 IO 錨定正規化 | 20 × 8 × 3 |
+| **M3(confirmatory)`full_objective`** | `g_full = g_wl_density + λ_io·C`(`λ_io` 依 §5.2 由 snapshot 記錄的 `of/τ/γ/ratio_ema` 與本次 `κ` 的 `Cmax` 重算);`Δpos = −η·L_R·(2·nm)·g_full/‖g_full‖₁` | **實際施加的完整 objective 方向** | **只在 12 個 trajectory snapshot × η = 0.01 × 8 臂** |
+
+`η ∈ {0.005, 0.01, 0.02}`。只移動 `[:nm]`;位移後 clamp 進 die。
 
 #### 3.4.3 tier-1(方向安全,**必要**):Pareto 向量 + 信賴帶
 
 每格(state × candidate × η × family)輸出向量
 `Δ = (Δft_mst, Δft_rg, Δio_mst, Δio_rg, Δhpwl, Δutil_max_over_mean)`,全部以**計數/絕對值**與**百分比**兩種形式記錄。`ft_mst`/`io_mst` 由 **evaluator_gpu** 算(主判準必須是未動過的尺);`ft_rg`/`io_rg` 由 §2.1 的 RG 路徑算;`util` 用 P6 的 free-area 口徑。
 
-由 `RANDOM ×8` 得每個指標的 `sd_rand`(同 state、同 η、同 family)。**候選 c 在某一格通過 tier-1,當且僅當同時滿足:**
+由 `RANDOM ×8` 得每個指標的 `sd_rand`(同 `state`、同 `η`;**與家族無關**,見 §3.3.5)。**候選 c 在某一格通過 tier-1,當且僅當同時滿足:**
 
 | 條件 | 式子 |
 |---|---|
@@ -287,7 +330,15 @@ L_FT_e    = ReLU( L_cross_e − base_e ) ,  base_e = (λ_e − 1).detach()  或 
 | T1d **密度不退化** | `Δutil(c) ≤ Δutil(IO-only) + 3·sd_rand(Δutil)` |
 | T1e **雙尺一致** | `sign(Δft_rg(c)) = sign(Δft_mst(c))` 且 `sign(Δio_rg(c)) = sign(Δio_mst(c))` |
 
-**候選 c 通過 tier-1(整體)** ⇔ 在 `τ_rel ≤ 0.10` 的格中通過率 **≥ 80%**(家族 M1、全部 η),**且**在 `τ_rel ≥ 0.20` 的格中 **沒有任何一格違反 T1b/T1c/T1d**(高溫區可以無效,但不得有害)。
+**候選 c 通過 tier-1(整體)** ⇔ **同時**滿足下列三條:
+
+| 代號 | 條件 | 家族 / 範圍 |
+|---|---|---|
+| **T1-P1** | 在 `τ_rel ≤ 0.10` 的狀態格中通過率 **≥ 80%** | **家族 M1**、全部 3 個 η |
+| **T1-P2** | 在 `τ_rel ≥ 0.20` 的狀態格中 **沒有任何一格違反 T1b/T1c/T1d**(高溫區可以無效,但不得有害) | **家族 M1**、全部 3 個 η |
+| **T1-P3(full-objective confirmatory)** | 在 **M3 家族**的 12 個 snapshot 中,**≥ 60% 通過 T1a** 且 **0 格違反 T1b/T1c** | 家族 M3、η = 0.01 |
+
+**家族 M2 只報不判**(其候選臂位移大於參照臂,隨機帶只是噪聲下界,見 §3.3.5);M2 的結果寫進 JSON 供 `ranking` 的第 3 順位參考。**T1-P3 未過但 T1-P1/P2 過** ⇒ 降為 §3.4.4 的「受限合格」。
 
 **不確定度處理**:`sd_rand` 由 8 個方向的樣本標準差計算;若某指標的 8 個隨機方向全同號且 `sd_rand = 0`(離散計數可能發生),以 `sd_rand := max(sd_rand, 1 count)` 保底並在 JSON 標記 `sd_floor_applied`。
 
@@ -323,26 +374,42 @@ L_FT_e    = ReLU( L_cross_e − base_e ) ,  base_e = (λ_e − 1).detach()  或 
   "env": {<統一 provenance schema,見 §8 T0-b>},
   "preregistration": {"doc": "docs/superpowers/specs/2026-08-13-m3-differentiable-ft-design-draft.md",
                       "section": "3.4", "doc_sha256": "<執行時的檔案 sha256>"},
-  "config": {"states": [...], "candidates": [...], "etas": [...], "families": ["merged_l1","io_anchored_l1"],
-             "f": 0.25, "n_random": 8, "tier1": {...門檻...}, "tier2": {...門檻...}},
+  "config": {"states": [<20 個 (state, tau_rel) 格>], "candidates": [<7 候選 + IO-only>],
+             "etas": [0.005,0.01,0.02], "families": ["merged_l1","io_anchored_l1","full_objective"],
+             "judging_family": "merged_l1", "confirmatory_family": "full_objective",
+             "f": 0.25, "n_random": 8, "random_family_independent": true,
+             "scope": {"steps": 1, "nesterov": false, "wl_density": "full_objective family only",
+                       "line_search": false},
+             "tier1": {...門檻...}, "tier2": {...門檻...}},
+  "failed_cells": [{"state","candidate","eta","family","reason"}],
   "cells": [{"state","tau_rel","candidate","eta","family",
              "d_ft_mst","d_ft_rg","d_io_mst","d_io_rg","d_hpwl","d_util",
              "d_*_pct", "grad_l1_io","grad_l1_ft","kappa","cos_io_ft",
              "mass_on_ft0","bucket_share_ratio":{"1","2","3","4+"},
              "topology_transitions": [[5x5]],
              "tier1_pass":bool, "tier1_detail":{...}, "sd_floor_applied":bool}],
-  "random_bands": [{"state","tau_rel","eta","family","metric","mean","sd","n":8}],
-  "summary": {"per_candidate": [{"candidate","tier1_pass_rate_lowtau","tier1_violations_hightau",
-                                 "tier2_pass","verdict":"合格|受限合格|淘汰"}],
+  "random_bands": [{"state","tau_rel","eta","metric","mean","sd","n":8,"sd_floor_applied":bool}],
+  "summary": {"per_candidate": [{"candidate","t1_p1_pass_rate_lowtau","t1_p2_violations_hightau",
+                                 "t1_p3_pass_rate_fullobj","tier2_pass",
+                                 "verdict":"合格|受限合格|淘汰"}],
               "ranking": [...按 §3.4.4 的預註冊順序...]} }
 ```
 
-#### 3.4.7 規模與預算
+#### 3.4.7 規模與預算(**依 §3.4.0 的凍結基數逐項相乘**)
 
-狀態 16 + bigblue4 2;候選 6 + IO-only = 7;η 3;家族 2;隨機 8 方向。
-主格數 = `16 × 7 × 3 × 2 = 672`;隨機帶 = `16 × 8 × 3 × 2 = 768`;bigblue4 = `2 × (7+8) × 1 × 1 = 30`。
-每格成本 = 1 次 fwd/bwd(< 0.5 s)+ evaluator(`ft_mst`/`io_mst`)+ RG Steiner + hpwl ≈ 3 s(adaptec1)/ 12 s(bigblue4)。
-⇒ **adaptec1 約 1.2 小時,bigblue4 約 6 分鐘,加 snapshot 重跑 2 臂約 5 分鐘,加載入/編譯開銷 ⇒ 預估 2–3 GPU 小時。**
+| 子矩陣 | 相乘式 | 格數 |
+|---|---|---:|
+| 主矩陣 M1 | 20 狀態格 × 8 臂 × 3 η | **480** |
+| 主矩陣 M2 | 20 × 8 × 3 | **480** |
+| confirmatory M3 | 12 snapshot × 8 臂 × 1 η | **96** |
+| 隨機帶(M1/M2 共用,家族無關) | 20 × 3 η × 8 方向 | **480** |
+| 隨機帶(M3) | 12 × 1 η × 8 方向 | **96** |
+| S4e tie-break 子矩陣 | 20 × 1 臂 × 1 η × 1 家族 | **20** |
+| bigblue4 抽查 | 2 × (8 臂 + 8 隨機) × 1 η × 1 家族 | **32** |
+| **合計** | | **1,684**(adaptec1 1,652 + bigblue4 32) |
+
+每格成本 = 1 次 fwd/bwd(< 0.5 s)+ evaluator(`ft_mst`/`io_mst`)+ RG Steiner + hpwl + util + 拓撲分類 ≈ **3 s(adaptec1)/ 12 s(bigblue4)**;M3 家族每格多一次 `g_wl_density` 載入(可忽略,向量已由 T0-a 存檔)。
+⇒ adaptec1 `1,652 × 3 s ≈ 83 分`;bigblue4 `32 × 12 s ≈ 6.5 分`;snapshot 重跑 2 臂 ≈ 5 分;PlaceDB 載入 / kernel 編譯 / 靜態表建置 ≈ 10 分。**預估 2–3 GPU 小時**(含裕度)。
 
 ### 3.5 不論選誰都成立的工程契約(Phase A 可先凍結)
 
@@ -367,7 +434,7 @@ L_FT_e    = ReLU( L_cross_e − base_e ) ,  base_e = (λ_e − 1).detach()  或 
 - **L4:`β` 窗口** — 只對 S4b 分支有意義。P4 實測 24 格:G1 死區(<0.05)從未觸發,β=2.0 最低 0.152;異常在**上尾**(β=0.25 + 小 τ 到 **2.371**)。P0b 的 β 集合固定 {0.5, 1.0}。
 - **L5:`home_e` 凍結 50 iter 的代價** → **P2(T0)**;S4a/S4e 對 home 誤差的敏感度低於 S4b(係數每差一 hop 只變 1,不是軟 max 比值)。
 - **L6:數值下限** — 對 S4a 不存在;對 S4b 由 §3.3.2 的數值契約管;對 S4e 是 `(E,A)` 的 dtype(fp32 累加需等價測試)。P4 實測 K=16 下 fp32 underflow 計數 **0/24 格**;原則性風險只在 `K ≥ 32` 或 `β < 0.25`。
-- **L13(新):P0b 本身仍是「單步」實驗。** 單步方向良好不蘊含多步收斂良好(路徑相依、Nesterov 動量、與 WL/density 的交互都沒有進去)。緩解:P0b 涵蓋 6 個真實 trajectory 中段點 + 3 個 η + 2 個步長家族;**最終判定仍在 T6 的 in-loop(G3′)**,P0b 只負責「不該進 in-loop 的候選先淘汰」。
+- **L13(新):P0b 本身仍是「單步、無動量」實驗。** 依 §3.4.2 的 scope 表:WL + density 力**已納入**(M3 家族,並作為 T1-P3 的 confirmatory gate),但 **Nesterov 動量、線搜尋與多步路徑相依明確排除**——一步擾動注入既有動量緩衝在數學上不良定。緩解:P0b 涵蓋 12 個真實 trajectory 中段點 × 3 個 η × 3 個步長家族;**最終判定仍在 T6 的 in-loop(G3′)**,P0b 只負責「不該進 in-loop 的候選先淘汰」。**這是 P0b 與 in-loop 之間唯一的殘餘落差,已由 G3′ 承接。**
 
 ---
 
@@ -428,12 +495,12 @@ min  WA-WL + μ·density + λ_io·[ L_IO + κ_ft·L_FT ] + λ_margin·L_margin
 | 量 | 規則 | 與 M2 的差異 |
 |---|---|---|
 | `τ` | `τ_rel(of)` log-linear 0.30 → 0.03(`schedules.py:7-12`) | 不變 |
-| `ρ_io` | `ρ_max·clip((of_on−of)/(of_on−of_full))·ramp` | 不變 |
+| `ρ_io` | `ρ_max·clip((of_on−of)/(of_on−of_full), 0, 1)`(**不含 ramp**,逐字對應 `schedules.py:15-19` 的 `rho_from_overflow`) | 不變 |
 | `ratio_ema` | `‖∇WL‖₁ / ‖∇(L_IO + κ_ft L_FT)‖₁`,每 N=50 iter | **量合併項**。語意 = **iso-total-force**:合併項施加的總梯度範數 ≈ `ρ_io·‖∇WL‖₁`(**僅在 §3.2.1 的條件下**),`f_ft` 只決定 IO/FT 的分配 |
 | **`f_ft`** | **以 `τ_rel` 兩點對數插值**:`f_ft = f_ft_max · clip( ln(τ_start/τ_rel) / ln(τ_start/τ_full), 0, 1 )`,**`τ_start = 0.12`、`τ_full = 0.05`** | 新增,主旋鈕。預設 `f_ft_max` 待 P0b(暫定 0.25),掃描 {0.1, 0.25, 0.5, 1.0};`f_ft_max = 0` 關閉整條 FT 路徑 |
 | `κ_ft` | 每 callback:若 `g_ft ≤ ε_rel·g_io`(`ε_rel = 1e-3`)則 **`κ_ft = 0`**;否則 `κ_ft = clip(f_ft·g_io/g_ft, 0, κ_max=100)` 並記 `kappa_clamp_active` | 新增,**導出量不是旋鈕** |
 | `Cmax` | `1 + κ_ft·(max_h ecc_max[h] − 1)_+`(S4a/S4e 的閉式上界;S4b 需 backward 內順手 reduce)。**`κ_ft = 0` 時 `Cmax = 1`** | 新增 |
-| `λ_io` | `min(ρ_io·ramp·ratio_ema, c_lip·τ²/(γ·Cmax))`,**用同一次 callback 更新後的 `ratio_ema` 與 `Cmax`** | 上限公式改;**計算時機改**(§5.5) |
+| `λ_io` | `min(ρ_io · ramp(iteration) · ratio_ema, c_lip·τ²/(γ·Cmax))`,其中 `ramp(iteration) = activation_ramp(iteration, it_activate, n_ramp)`(`schedules.py:22-25`)。**`ramp` 在整個 schedule 中只乘一次**——Codex v3-verify 指出 v3 初版的 `ρ_io` 列誤含 `ramp` 而此列又乘一次,那是**記號錯誤不是平方 ramp**,已更正 | 上限公式改;**計算時機改**(§5.5) |
 | `home_e` | 每 callback 由 evaluator 重算 | 新增 |
 | `κ_cap` / S7 | **不存在** | v1 的第三個權重取消 |
 | ramp 模式 | `--ft-ramp-mode {window, constant}`;`window` = 上式;`constant` = 自 `of ≤ of_on` 起 `f_ft ≡ f_ft_max` | **修掉 v2 的 `of_ft_full = of_on` 除零**(Codex F5) |
@@ -442,19 +509,21 @@ min  WA-WL + μ·density + λ_io·[ L_IO + κ_ft·L_FT ] + λ_margin·L_margin
 
 | iteration | `τ_rel`(M2 臂) | flat `ft` | M2 `ft` | 差額 | **v2 舊 ramp `f/f_max`** | **v3 新 ramp `f/f_max`** |
 |---:|---:|---:|---:|---:|---:|---:|
-| 300 | 0.226 | 1,391 | 1,383 | −8 | 0.255 | **0.000** |
-| 350 | 0.182 | 1,342 | 1,293 | −49 | 0.451 | **0.000** |
-| 400 | 0.137 | 1,872 | 1,826 | −46 | 0.705 | **0.000** |
-| 450 | 0.096 | 2,412 | 2,668 | **+256** | 1.000 | **0.255** |
-| 500 | 0.065 | 2,461 | 3,135 | **+674** | 1.000 | **0.700** |
-| 550 | 0.042 | 2,529 | 3,427 | **+898** | 1.000 | **1.000** |
-| 600 | 0.030 | 2,526 | 3,531 | **+1,005** | 1.000 | **1.000** |
+| 300 | 0.2260 | 1,391 | 1,383 | −8 | 0.255 | **0.000** |
+| 350 | 0.1819 | 1,342 | 1,293 | −49 | 0.451 | **0.000** |
+| 400 | 0.1372 | 1,872 | 1,826 | −46 | 0.705 | **0.000** |
+| 450 | 0.0962 | 2,412 | 2,668 | **+256** | 1.000 | **0.2523** |
+| 500 | 0.0646 | 2,461 | 3,135 | **+674** | 1.000 | **0.7082** |
+| 550 | 0.0422 | 2,529 | 3,427 | **+898** | 1.000 | **1.000** |
+| 600 | 0.0304 | 2,526 | 3,531 | **+1,005** | 1.000 | **1.000** |
 
-⇒ 新 ramp 在**退化尚未出現的三個 checkpoint 上力量精確為 0**,在退化開始的 it450 才給 25.5%,與論述一致(v2 的舊 ramp 在 it400 已有 70.5%,與其自身論述矛盾)。
+**表的計算口徑(Codex v3-verify MINOR):** `τ_rel` 欄與 `f/f_max` 欄**都由 JSON 的 `overflow` 原值**經 `tau_rel_from_overflow` 與 §5.2 的公式算出(`τ_rel` 欄只是顯示到 4 位小數);v3 初版的 0.255 / 0.700 是先把 `τ_rel` 四捨五入到 3 位小數再代入公式的結果,**已更正為 0.2523 / 0.7082**。T3 的 ramp 端點測試必須用本表的**四位小數值**當 golden。
+
+⇒ 新 ramp 在**退化尚未出現的三個 checkpoint 上力量精確為 0**,在退化開始的 it450 才給 25.2%,與論述一致(v2 的舊 ramp 在 it400 已有 70.5%,與其自身論述矛盾)。
 
 **必須明講的兩個限定(Codex F5):**
 1. **相同 iteration 的快照對照不構成因果證明**——早期的力仍可能造成延遲的拓撲改變。因此 `τ_start/τ_full` 是**可掃描的設計參數**,C9 臂(`window` vs `constant`)就是這個假設的直接檢定。
-2. **施加的力是 sample-and-hold 的階梯**:`κ_ft`(以及 `λ_io`)只在 callback(每 50 iter)更新並在其間凍結。**這不是缺陷而是必要條件**——iteration 內係數必須是常數,否則 line search 會看到跳變的 objective(M2 §6.3 坑 3)。`f_ft(τ_rel)` 在 callback 當下取樣。
+2. **施加的力是 sample-and-hold 的階梯**:`κ_ft`(以及 `ratio_ema`/`Cmax`/`home_e`)只在 **N=50 的 evaluator callback** 更新並在其間凍結;`λ_io` 本身在階梯之間仍隨 `ρ_io(of)`/`τ(of)`/`ramp(iteration)` 連續漂移(見 §5.5 的節奏表)。**這不是缺陷而是必要條件**——iteration 內係數必須是常數,否則 line search 會看到跳變的 objective(M2 §6.3 坑 3)。`f_ft(τ_rel)` 在 callback 當下取樣。
 
 ### 5.3 步長上限(不是 Lipschitz 界)
 
@@ -491,7 +560,16 @@ M2 的 driver 先算 `lambda_io`、再 `update_ratio`、再 refresh(`run_placeme
 - `g_ft = 0` 時 `κ_ft = 0` 且 `Cmax = 1`(**不得**出現 `Cmax = 1 + 100·(ecc−1)`)。
 - 同一 iteration 內呼叫 `obj_fn` 三次,`home_e`/`κ_ft`/`λ_io` 逐位元相同。
 
-**註 1:** `home_e` 與 `κ_ft` 掛在既有的 callback 事件點上,**不新增事件點**。
+**掛在哪個事件上(Codex v3-verify BLOCKER 2):** 現行 driver 的 `cb()` **每個 iteration 都進**(`run_placement_io.py:102`,呼叫 `state.update_continuous`),但**昂貴評估被 `iteration % every == 0`(`every = 50`)閘住**(`run_placement_io.py:137`:evaluator + WL/IO 梯度 + `update_ratio`)。v3.1 明確定義兩種節奏:
+
+| 節奏 | 在哪裡 | 更新什麼 | 是否為離散事件 |
+|---|---|---|---|
+| **每 iteration** | `cb()` 開頭的 `state.update_continuous(iteration, of, L_R, gamma)` | `τ(of)`、`ρ_io(of)`、`ramp(iteration)`,並用**當前保存的** `ratio_ema` / `Cmax` / `κ_ft` 重算 `λ_io` | 否(連續漂移,`obj_version` 不動) |
+| **每 N=50(evaluator 閘門內)** | `iteration % every == 0` 的分支 | **上面的七步交易**:`home_e`、`g_wl/g_io/g_ft`、`κ_ft`、合併範數與 `ratio_ema`、`Cmax`,然後重算 `λ_io`、`obj_version += 1`、refresh | **是,且一次 callback 只算一個事件** |
+
+⇒ `κ_ft`、`Cmax`、`ratio_ema`、`home_e` 是 **sample-and-hold**(每 50 iter 一階);`λ_io` 在階梯之間仍隨 `ρ_io(of)`、`τ(of)`、`ramp(iteration)` **連續漂移**——這是 M2 既有行為,不是本版新增。
+
+**註 1:** `home_e` 與 `κ_ft` 掛在既有的 N=50 evaluator 事件點上,**不新增事件點**。
 **註 2(重要):** 步驟 6 的重排**改變了 M2 的行為**,因此 `f_ft_max = 0` **不再與 M2 逐位元相同**。逐位元回歸鎖改為 `--callback-order legacy`(保留 M2 順序)+ `f_ft_max = 0`;**預設是 `atomic`**,並在 T4 加一個「legacy vs atomic 在 `f_ft_max=0` 下的 hpwl/io/ft 差異」的量測表,寫進 M3 報告(這是一個獨立的、可能有益的修正,不能偷渡)。
 
 ---
@@ -576,8 +654,8 @@ M2 的 driver 先算 `lambda_io`、再 `update_ratio`、再 refresh(`run_placeme
 
 | Task | 類型 | 內容 | 驗收 |
 |---|---|---|---|
-| **T0-a** snapshot 工具 | 純軟體 | `run_placement_io.py` 加 `--snapshot-iters`/`--snapshot-dir`,在 callback 內寫 `results/m3/snapshots/<tag>_it<NNNN>.npz`(`node_x,node_y,iteration,overflow,tau,lambda_io`) | 不影響既有數值:**未指定 snapshot 時與現行 run 逐位元相同**;`flat`/`m2best` 重跑的最終 npz 與 `results/m2/` 既有檔逐位元相同(det=1) |
-| **T0-b** 探針重發 | 純軟體 | **7 支全部**(P0 `probe_ft_surrogate_soft`、P1 `probe_l_convention`、P4 `probe_beta_tau`、P6 `probe_free_area_util`、舊四支中的 `probe_m3_rg`/`probe_m3_bb`/`probe_m3_surrogate`/`probe_m3_util`)改成:路徑由 `__file__` 推導(可 `--repo-root` 覆寫)、原子寫入、**統一 env schema**(`command`、`python_executable`、`python_version`、`hostname`、`utc_timestamp`、`repo_commit`、`dp_commit`、`input_sha256`、`exactness`)。新增 **P2 `probe_home_churn`** 與 **P3**(`demand_per_len` 的 total/max/p90/mean/Gini) | 新增 `tests/test_probes_m3_schema.py` 驗每支 JSON 的 schema 與旗標;`tests/test_probes_m3_regression.py` 用小型合成 case 鎖 `ST_e −(Λ_e−1) = FT_e ≥ 0` 與 `Λ_e−1 ≤ ST_e ≤ io_mst`;**重發後 §2.2/§3.2/§4.1 的每個數字必須不變,不符即更新本文**。註:P1 單次約 **35 分鐘** |
+| **T0-a** snapshot 工具 | 純軟體 | `run_placement_io.py` 加 `--snapshot-iters`/`--snapshot-dir`,在 **N=50 的 evaluator 分支**內寫 `results/m3/snapshots/<tag>_it<NNNN>.npz`,內容:`node_x, node_y, iteration, overflow, tau, gamma, density_weight, ratio_ema, lambda_io`,**外加 `g_wl_density`**(= `∇(wirelength_op) + density_weight·∇(density_op)` 的 `(2·num_nodes,)` fp32 座標向量,adaptec1 ≈ 2–4 MB/snapshot;§3.4.2 的 M3 家族靠它,免去重建 placer) | 不影響既有數值:**未指定 snapshot 時與現行 run 逐位元相同**;`flat`/`m2best` 重跑的最終 npz 與 `results/m2/` 既有檔逐位元相同(det=1);**梯度一致性測試**:任一 snapshot 上 `g_wl_density + λ_io·g_io` 與 `placer.model.obj_and_grad_fn(pos)` 的梯度相對誤差 < 1e−6 |
+| **T0-b** 探針重發 | 純軟體 | **8 支既有探針全部**(P0 `probe_ft_surrogate_soft`、P1 `probe_l_convention`、P4 `probe_beta_tau`、P6 `probe_free_area_util`、`probe_m3_rg`、`probe_m3_bb`、`probe_m3_surrogate`、`probe_m3_util`)改成:路徑由 `__file__` 推導(可 `--repo-root` 覆寫)、原子寫入、**統一 env schema**(`command`、`python_executable`、`python_version`、`hostname`、`utc_timestamp`、`repo_commit`、`dp_commit`、`input_sha256`、`exactness`)。另**新增一支腳本 P2 `probe_home_churn`**(⇒ T0-b 完成後 `probes_m3/` 共 9 支,加上 T0-c 的 P0b 共 10 支);**P3 不是新腳本**,是 `probe_m3_rg`/`probe_m3_bb` 輸出欄位的擴充(`demand_per_len` 的 total/max/p90/mean/Gini) | 新增 `tests/test_probes_m3_schema.py` 驗每支 JSON 的 schema 與旗標;`tests/test_probes_m3_regression.py` 用小型合成 case 鎖 `ST_e −(Λ_e−1) = FT_e ≥ 0` 與 `Λ_e−1 ≤ ST_e ≤ io_mst`;**重發後 §2.2/§3.2/§4.1 的每個數字必須不變,不符即更新本文**。註:P1 單次約 **35 分鐘** |
 | **T1** evaluator RG 擴充 | 純軟體 | `EvalResult` 新增 `io_rg`/`ft_rg`/`per_net_steiner`/`per_net_home`/`per_net_topology_class` 與 **exact/ub 分離**;`region_graph(rg) -> (adj, D, ell, path_mask)` 放 `ioplace/region_graph.py`(**`path_mask` 供 S4e 用,tie 規則見 §3.3.3**);`evaluator_ref` brute-force、`evaluator_gpu` 走 Λ≤3 closed form / 4–8 批次 Dreyfus–Wagner / >8 metric-closure MST **並展開成實際子樹**;順帶修 R2 | 舊欄位逐位元不變;新欄位 CPU/GPU 等價;小 case 對 brute-force Steiner 全對;**`FT = ST + 1 − Λ` 每條 net 精確成立**;聚合值以區間報且 `n_nets_ub` 有值;拓撲分類有單元測試(§1 的五類各一個玩具 case);bigblue4 evaluator runtime 增量 < +30% |
 | **T3** schedules | 純軟體 | `ScheduleState` 新增 `f_ft_max`/`tau_start`/`tau_full`/`ft_ramp_mode`/`kappa_ft`/`kappa_max`/`eps_rel`/`Cmax`/`home_version`;§5.2 的 `τ_rel` 兩點 ramp;§5.5 的原子化更新;`ratio_inst`/`cancellation_ratio` | 純函數測試:ramp 端點(`τ_rel ≥ 0.12 ⇒ 0`、`≤ 0.05 ⇒ 1`)與 §5.2 表的四個中間值;`constant` 模式無分母;`f_ft_max = 0` 關閉;**§5.5 的四個契約測試**;`obj_version` 一次 callback 恰好 +1 |
 | **T11** maze 校驗 | 純軟體 + 實驗 | region-id lattice 上 crossing=1、length=ε 的 Dijkstra,抽 1 萬條 net,量 RG 相對可實現路徑的樂觀誤差 | **M3 報告前無條件完成**;中位偏差 > 20% ⇒ 報告中所有 `ft_rg` 敘述降級為「拓撲下界」。可與 T0/T1/T3 並行 |
@@ -650,7 +728,7 @@ Phase B:  T2 ── T4 ── T5 ── T6 ── T7 ── T8
 | `results/m2/noise/flat_seed100*.json` | — | §6.1 的 σ_seed |
 | `results/m2/sweep/adaptec1_k16_rho0.40_annealed.json`、`results/m2/noise/flat_det1_rep0.json` 的 `trajectory` | — | §5.2 的校準表 |
 
-**全部七支探針都要在 T0-b 重發**(F8);重發後數字若有變動,本文對應段落必須同步更新。
+**全部八支既有探針都要在 T0-b 重發**(F8);重發後數字若有變動,本文對應段落必須同步更新。
 
 ### 10.2 探索性(**不作為裁決依據**,由 P0b 取代)
 
