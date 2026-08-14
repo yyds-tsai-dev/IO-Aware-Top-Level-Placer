@@ -145,7 +145,15 @@ TIER2_MASS_ON_FT0_MAX = 0.50
 TIER2_BUCKET_RATIO_RANGE = (0.5, 2.0)
 TIER2_BUCKET_RATIO_MAX_ASYM = 5.0
 
-SNAPSHOT_ITERS = (300, 400, 450, 500, 550, 600)
+SNAPSHOT_ITERS = (300, 350, 400, 450, 500, 550)
+# ^ sec 3.4.1(a)'s prose lists "300,400,450,500,550,600", but the actual T0-a
+# output (results/m3/snapshots/manifest.json, commit 157a198) is 300/350/
+# 400/450/500/550 -- confirmed against disk (`ls results/m3/snapshots/flat/`)
+# and the coordinator's report ("it0300.npz ... it0550.npz 共 12 個快照";
+# measured tau_rel it300~=0.224/0.226, it450~=0.0913/0.0962, it550~=0.042).
+# Treating the actual produced artifact as authoritative over the spec
+# prose's iteration list (the *count*, 6 per tag x 2 tags = 12, and the
+# tau_rel coverage down to ~0.03-0.04, both match sec 3.4.1(a)'s intent).
 
 # S4e-union net-chunk budget (elements in one (chunk,K,A) fp64 gather); keeps
 # peak memory bounded regardless of net count (adaptec1 ~217k vs bigblue4
@@ -1117,6 +1125,12 @@ def run_state(spec, *, families, etas, tie_break="primary", only_candidates=None
                                       reason=f"state-level setup failed: {exc!r}"))
                     n_failed += 1
             for family in families:
+                # sec 3.4.0: full_objective (M3, confirmatory) is frozen at
+                # eta=0.01 only -- 12 snapshot x 8 arms x 1 eta = 96 cells,
+                # not x3 etas. Same restriction applied in the success path
+                # below.
+                if family == "full_objective" and eta != 0.01:
+                    continue
                 for cand in candidates:
                     if tie_break != "primary" and cand != "S4e-union-detach":
                         continue
@@ -1142,6 +1156,15 @@ def run_state(spec, *, families, etas, tie_break="primary", only_candidates=None
             n_written += 1
         for family in families:
             if family == "full_objective" and st["g_wl_density"] is None:
+                continue
+            # sec 3.4.0: full_objective (M3, confirmatory) is frozen at
+            # eta=0.01 only -- 12 snapshot x 8 arms x 1 eta = 96 cells, not
+            # x3 etas (the random-band contribution for M3 -- 12 x 1 x 8 = 96
+            # -- is likewise eta=0.01-only, sec 3.4.7's table; the random
+            # directions themselves are family-independent so this doesn't
+            # skip anything in the `for seed in range(N_RANDOM)` block above,
+            # only gates which etas get an M3 *candidate* cell).
+            if family == "full_objective" and eta != 0.01:
                 continue
             for cand in candidates:
                 if tie_break != "primary" and cand != "S4e-union-detach":
