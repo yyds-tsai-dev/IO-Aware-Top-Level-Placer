@@ -22,6 +22,44 @@ RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  "diag_every", "no_diag", "trajectory")
 
 
+def _normalize_snapshot_iters(spec):
+    """Accept None, a comma-separated string ("300,350,400"), or any iterable
+    of ints; return a frozenset of ints (or None). String form mirrors the
+    M3 design draft v3.1 T0-a CLI shorthand (`--snapshot-iters
+    "300,350,400,450,500,550"`) so a future CLI wrapper can pass the raw
+    flag value straight through without its own parsing."""
+    if spec is None:
+        return None
+    if isinstance(spec, str):
+        spec = [s for s in spec.split(",") if s.strip()]
+    iters = frozenset(int(s) for s in spec)
+    return iters if iters else None
+
+
+def _raw_wl_density_grad(model, p):
+    """Raw (unpreconditioned) gradient of wirelength + density_weight*density
+    w.r.t. leaf tensor `p`, via the model's own obj_fn -- reusing it (rather
+    than reimplementing the quad-penalty/fence-region composition) avoids
+    drifting out of sync with PlaceObj.obj_fn. Any io-aware extra objective
+    terms (design v2 sec 6.2's params-borne attach_terms) are temporarily
+    detached so only the base DREAMPlace wl+density objective contributes --
+    this is exactly the M3 design draft v3.1 T0-a `g_wl_density` field.
+
+    `p` must be an independent leaf tensor (e.g.
+    pos.detach().clone().requires_grad_(True)), never the live optimizer's
+    own `pos` -- this function's backward() must not perturb pos.grad or any
+    optimizer/Nesterov-secant state, since T0-a's invariant is that adding
+    --snapshot-iters leaves the run bit-identical to a run without it."""
+    saved_terms = model.extra_obj_terms
+    model.extra_obj_terms = []
+    try:
+        obj = model.obj_fn(p)
+        obj.backward()
+        return p.grad.detach().clone()
+    finally:
+        model.extra_obj_terms = saved_terms
+
+
 def run_io(config_json, k, rtype, seed, out_json, *,
            rho_max=0.1, tau_hi=0.30, tau_lo=0.03,
            of_on=0.90, of_end=None, of_full=0.20,
@@ -29,7 +67,8 @@ def run_io(config_json, k, rtype, seed, out_json, *,
            rho_margin=0.0, margin_m=None, margin_tau=None,
            of_margin=0.15, w_mode="unit", every=50,
            dp_seed=None, deterministic=None, check_invariant=False,
-           diag_every=1, no_diag=False):
+           diag_every=1, no_diag=False,
+           snapshot_iters=None, snapshot_dir=None, snapshot_grad_check_cb=None):
     import torch
     t0 = time.time()
     # M4 design draft sec 1.4 B1 (same fix/caveat as run_placement.run_flat):
@@ -105,6 +144,28 @@ def run_io(config_json, k, rtype, seed, out_json, *,
 
     if diag_every < 1:
         raise ValueError(f"diag_every must be >= 1, got {diag_every}")
+
+    # design v3.1 T0-a: snapshots are written from *inside* the same N=50
+    # evaluator-gated branch that already produces the trajectory log
+    # (`iteration % every == 0`, or the final force_eval iteration) -- never
+    # on an independent per-iteration check. A requested iteration that
+    # can't land on that branch would silently produce fewer snapshots than
+    # asked for, so fail fast instead (design v3.1 sec 3.4.0's "any failure
+    # must not be silently skipped" spirit, applied to this precondition).
+    snapshot_iters = _normalize_snapshot_iters(snapshot_iters)
+    if snapshot_iters:
+        if not snapshot_dir:
+            raise ValueError("snapshot_iters given without snapshot_dir")
+        unreachable = sorted(it for it in snapshot_iters
+                             if not (it > 0 and it % every == 0)
+                             and it != total_iterations - 1)
+        if unreachable:
+            raise ValueError(
+                f"snapshot_iters {unreachable} unreachable: must be a positive "
+                f"multiple of every={every} (or the final iteration "
+                f"{total_iterations - 1}) -- snapshots are taken inside the "
+                "same N=every evaluator-gated branch as the trajectory log")
+        os.makedirs(snapshot_dir, exist_ok=True)
 
     trajectory = []
     cb_state = {"num_refreshes": 0, "io_gp": 0, "prev_obj_evals": 0,
@@ -193,6 +254,30 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                     entry["grad_share"] = diag["grad_share"].tolist()
 
             trajectory.append(entry)
+
+            # design v3.1 T0-a: trajectory-snapshot instrumentation for P0b
+            # (sec 3.4.1(a)). Everything below operates on an independent
+            # detached+cloned leaf tensor, never the live `pos`/`pos.grad` --
+            # this is what makes the bit-exact invariant (a run with
+            # --snapshot-iters must match a run without it) hold regardless
+            # of what this block does.
+            if snapshot_iters and iteration in snapshot_iters:
+                p_wld = pos.detach().clone().requires_grad_(True)
+                g_wl_density = _raw_wl_density_grad(placer.model, p_wld)
+                tau_rel = state.tau / L_R
+                np.savez_compressed(
+                    os.path.join(snapshot_dir, f"it{iteration:04d}.npz"),
+                    iteration=iteration, overflow=of, tau=state.tau, tau_rel=tau_rel,
+                    gamma=gamma, density_weight=float(placer.model.density_weight),
+                    ratio_ema=(state.ratio_ema if state.ratio_ema is not None
+                              else float("nan")),
+                    lambda_io=state.lambda_io,
+                    node_x=pos.data[:n_all].detach().cpu().numpy(),
+                    node_y=pos.data[n_all:2 * n_all].detach().cpu().numpy(),
+                    g_wl_density=g_wl_density.cpu().numpy().astype(np.float32))
+                if snapshot_grad_check_cb is not None:
+                    snapshot_grad_check_cb(iteration, pos, placer, io_term, state,
+                                           g_wl_density)
 
         # 順序不可換:先讓新 τ/λ/w 生效,再 refresh。
         if not observer_mode and (discrete or state.needs_refresh()):
