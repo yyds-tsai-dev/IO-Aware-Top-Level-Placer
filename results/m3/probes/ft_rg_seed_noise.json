@@ -1,0 +1,120 @@
+{
+ "probe": "ft_rg_seed_noise",
+ "config": {
+  "config": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/install/test/ispd2005/adaptec1.json",
+  "k": 16,
+  "rtype": "grid",
+  "region_seed": 0,
+  "dp_seeds": [
+   1000,
+   1001,
+   1002,
+   1003,
+   1004
+  ],
+  "det": 1,
+  "source": "results/m2/noise/flat_seed100{0..4}.json.npz (re-evaluated with the current evaluator, no new placement run)"
+ },
+ "env": {
+  "hostname": "NVL5",
+  "python_version": "3.12.13",
+  "python_executable": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/.venv312/bin/python",
+  "torch_version": "2.8.0+cu128",
+  "cuda_version": "12.8",
+  "gpu_name": "NVIDIA L4",
+  "numpy_version": "1.26.4",
+  "repo_commit": "6d46c1e32e1280479d4372e142fa8169ba0f407e",
+  "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
+  "command": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/.venv312/bin/python -m ioplace.diagnostics.probes_m3.probe_ft_rg_seed_noise",
+  "argv": [
+   "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/diagnostics/probes_m3/probe_ft_rg_seed_noise.py"
+  ],
+  "utc_timestamp": "2026-08-14T08:56:59.173882+00:00",
+  "input_sha256": {
+   "results/m2/noise/flat_seed1000.json": "a9a8d8fbd73be28018339328e8126bcea4707f2f19589517979e5f4419de7783",
+   "results/m2/noise/flat_seed1000.json.npz": "bfcedd2036972ac11c76c675252e1b399597790e51c00dc10fb40184890077d0",
+   "results/m2/noise/flat_seed1001.json": "8f2cf163daca69b4307329b7093f91b178d7129df1b6d1e3b30f0fe89126d6dc",
+   "results/m2/noise/flat_seed1001.json.npz": "d24e8a4cd7e7cf9da8b0a6075bb3cc975d402390c7fd77df11680e78552db9bc",
+   "results/m2/noise/flat_seed1002.json": "87413af45d33fe5cba90c751151c59fd670704eddafbdf607360adebcec0692d",
+   "results/m2/noise/flat_seed1002.json.npz": "cf617f2f1db5b18ef3ce5fbccde76dde23e40630b90c071bef68256d8fdc740d",
+   "results/m2/noise/flat_seed1003.json": "515f5967a8eda4cf155445afc1c3115f0440fd04353122a3a782bd8c62193c2a",
+   "results/m2/noise/flat_seed1003.json.npz": "c601aa9c6e54df3f71ca9db233f38bb05a70f3b484986918e557be92e4f88db6",
+   "results/m2/noise/flat_seed1004.json": "32ceb28fa6253644e8b3da1befab119139b662fc5120abdb6fea5f4b14afec5c",
+   "results/m2/noise/flat_seed1004.json.npz": "f58cf3b45ca139b4c28ffa59bb2bb946981255c21fea8a6b595c6e15ccbbab4d"
+  }
+ },
+ "per_seed": [
+  {
+   "dp_seed": 1000,
+   "ft_rg": 2454,
+   "ft_mst": 2545,
+   "io_rg": 26921,
+   "io_mst": 30256,
+   "recorded_ft_mst": 2545,
+   "recorded_io_mst": 30256
+  },
+  {
+   "dp_seed": 1001,
+   "ft_rg": 2477,
+   "ft_mst": 2571,
+   "io_rg": 26479,
+   "io_mst": 29840,
+   "recorded_ft_mst": 2571,
+   "recorded_io_mst": 29840
+  },
+  {
+   "dp_seed": 1002,
+   "ft_rg": 2428,
+   "ft_mst": 2519,
+   "io_rg": 26591,
+   "io_mst": 29973,
+   "recorded_ft_mst": 2519,
+   "recorded_io_mst": 29973
+  },
+  {
+   "dp_seed": 1003,
+   "ft_rg": 2448,
+   "ft_mst": 2532,
+   "io_rg": 26508,
+   "io_mst": 29823,
+   "recorded_ft_mst": 2532,
+   "recorded_io_mst": 29823
+  },
+  {
+   "dp_seed": 1004,
+   "ft_rg": 2439,
+   "ft_mst": 2523,
+   "io_rg": 26541,
+   "io_mst": 30045,
+   "recorded_ft_mst": 2523,
+   "recorded_io_mst": 30045
+  }
+ ],
+ "ft_mst_io_mst_vs_recorded_mismatched_seeds": [],
+ "ft_rg": {
+  "n": 5,
+  "values": [
+   2454,
+   2477,
+   2428,
+   2448,
+   2439
+  ],
+  "mean": 2449.2,
+  "sigma": 18.376615575235828,
+  "three_sigma": 55.12984672570748
+ },
+ "ft_mst": {
+  "n": 5,
+  "values": [
+   2545,
+   2571,
+   2519,
+   2532,
+   2523
+  ],
+  "mean": 2538,
+  "sigma": 20.97617696340303,
+  "three_sigma": 62.92853089020909
+ }
+}
