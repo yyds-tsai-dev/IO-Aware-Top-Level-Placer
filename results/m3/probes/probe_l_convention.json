@@ -1,11 +1,20 @@
 {
  "env": {
+  "hostname": "NVL5",
+  "python_version": "3.12.13",
+  "python_executable": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/.venv312/bin/python",
   "torch_version": "2.8.0+cu128",
   "cuda_version": "12.8",
   "gpu_name": "NVIDIA L4",
   "numpy_version": "1.26.4",
   "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
-  "ioplace_commit": "151e426b17334ece45e7ee329d9b9540808a0c39",
+  "repo_commit": "d1c57eeefdfc221a7d5aeb4ddc8cca417d0dd423",
+  "command": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/.venv312/bin/python -m ioplace.diagnostics.probes_m3.probe_l_convention --assemble",
+  "argv": [
+   "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/diagnostics/probes_m3/probe_l_convention.py",
+   "--assemble"
+  ],
+  "utc_timestamp": "2026-08-14T19:15:29.148732+00:00",
   "input_sha256": {
    "results/m2/ablation/adaptec1_A0_k16_grid.json.npz": "bfcedd2036972ac11c76c675252e1b399597790e51c00dc10fb40184890077d0",
    "results/m2/sweep/adaptec1_k16_rho0.40_annealed.json.npz": "5db8ec77383c5400506a3a31c2010841b7a2ff1826243e079709da260dba27e4",
@@ -15,7 +24,8 @@
    "results/m2/sweep/adaptec1_k16_rho0.40_annealed.json": "9860d4b5a31a5972856ac9cb8a1c1324c0fb6a71ff3fc3dd5a10aeabd404787a",
    "results/m2/ablation/bigblue4_A0_k16_grid.json": "67c0a94f0eea1d518634b36fb8b610e3460fbd28125d4821995d5da1a2139de2",
    "results/m2/ablation/bigblue4_A2_k16_grid.json": "3eea5ea3ecac1095468d7942cabc18ea277a66172265062f2a1bba5e8abe15c7"
-  }
+  },
+  "exactness": "exact (both L-walk conventions are literal geometric walks over the region lattice, not approximations of each other)"
  },
  "convention_h": "horizontal segment first (at y0), then vertical segment (at x1) -- evaluator_ref.py:68-72, the production convention",
  "convention_v": "vertical segment first (at x0), then horizontal segment (at y1) -- reversed, probe-only",

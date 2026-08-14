@@ -17,6 +17,10 @@ hook: if A2's max/mean worsens by more than 10% relative to A0 (same case),
 `l7_triggered` is set (design draft sec 4.1's "no area penalty term" call
 needs re-review).
 
+T0-b (design draft sec 8): reissued hermetic -- `REPO` derived from
+`__file__` (overridable with `--repo-root`), atomic write, `exactness` added
+to the unified `env` provenance schema.
+
 Usage:
     PYTHONPATH=. $PY -m ioplace.diagnostics.probes_m3.probe_free_area_util
 
@@ -25,10 +29,15 @@ redirection): DREAMPlace's PlaceDB loader writes its own INFO/WARNING lines to
 stdout, which would otherwise interleave with (and corrupt) a `> out.json`
 redirect -- see probe_m3_rg.py's same direct-file-write convention.
 """
+import argparse
+import datetime
 import hashlib
 import json
 import os
+import platform
+import socket
 import subprocess
+import sys
 
 import numpy as np
 import torch
@@ -37,7 +46,7 @@ from ioplace.drivers.run_placement import _load_dreamplace, get_regions_for
 from ioplace.netlist import netlist_from_placedb
 from ioplace.region_grid import RegionGrid
 
-REPO = "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DP = "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace"
 
 CASES = [
@@ -92,13 +101,21 @@ def _git_head(path):
 
 def _env_metadata(input_relpaths):
     return {
+        "hostname": socket.gethostname(),
+        "python_version": platform.python_version(),
+        "python_executable": sys.executable,
         "torch_version": torch.__version__,
         "cuda_version": torch.version.cuda,
         "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
         "numpy_version": np.__version__,
         "dp_commit": _git_head(DP),
-        "ioplace_commit": _git_head(REPO),
+        "repo_commit": _git_head(REPO),
+        "command": " ".join([sys.executable, "-m",
+                             "ioplace.diagnostics.probes_m3.probe_free_area_util"] + sys.argv[1:]),
+        "argv": list(sys.argv),
+        "utc_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "input_sha256": {p: _sha256(os.path.join(REPO, p)) for p in input_relpaths},
+        "exactness": "exact (plain rectangle-intersection overlap areas, no approximation)",
     }
 
 
@@ -174,12 +191,25 @@ def run() -> dict:
     }
 
 
+def _atomic_write_json(obj, out_path):
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    tmp = out_path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(obj, f, indent=1)
+    os.replace(tmp, out_path)
+
+
 OUT_RELPATH = "results/m3/probes/probe_free_area_util.json"
 
 if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--repo-root", default=None,
+                    help="override auto-detected repo root (default: derived from __file__)")
+    args = ap.parse_args()
+    if args.repo_root:
+        REPO = os.path.abspath(args.repo_root)
+
     result = run()
     out_path = os.path.join(REPO, OUT_RELPATH)
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with open(out_path, "w") as f:
-        json.dump(result, f, indent=1)
+    _atomic_write_json(result, out_path)
     print(f"[probe_free_area_util] wrote {out_path}")

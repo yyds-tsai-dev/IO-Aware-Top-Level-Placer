@@ -40,6 +40,10 @@ where (Opus F10: epsilon=0, not max(N,eps); exponentials in fp64):
 Eligibility (Opus F1 judgement): ratio_vs_true in [0.7, 1.5] AND mass_on_ft0 <
 0.20 across all 6 placements x 3 tau_rel = 18 cells.
 
+T0-b (design draft sec 8): reissued hermetic -- `REPO` derived from
+`__file__` (overridable with `--repo-root`), atomic write, `exactness` added
+to the unified `env` provenance schema.
+
 Usage:
     PYTHONPATH=. $PY -m ioplace.diagnostics.probes_m3.probe_ft_surrogate_soft
 
@@ -48,6 +52,7 @@ redirection) -- DREAMPlace's PlaceDB loader writes its own INFO/WARNING lines
 to stdout, which would otherwise interleave with (and corrupt) a `> out.json`
 redirect; see probe_m3_rg.py / probe_beta_tau.py's same convention.
 """
+import argparse
 import datetime
 import hashlib
 import json
@@ -68,7 +73,7 @@ from ioplace.region_grid import RegionGrid
 from ioplace.ops.soft_assign import rect_table, region_sdf_l1, softmax_stats, chunk_p_ell
 from ioplace.ops.io_term import build_net_node_csr
 
-REPO = "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DP = "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace"
 CFG = f"{DP}/install/test/ispd2005/adaptec1.json"
 DEV = "cuda"
@@ -222,6 +227,9 @@ def _env_metadata(input_relpaths):
         "argv": list(sys.argv),
         "utc_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "input_sha256": {p: _sha256(os.path.join(REPO, p)) for p in input_relpaths},
+        "exactness": "ft_true (per_net_ft_rg) is exact for Lambda<=3, metric-closure MST upper "
+                    "bound for Lambda>=4 (design draft sec 2.4 L2); the 13 candidate surrogates "
+                    "themselves are differentiable proxies, not routing costs -- exactness N/A",
     }
 
 
@@ -487,12 +495,25 @@ def run():
     }
 
 
+def _atomic_write_json(obj, out_path):
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    tmp = out_path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(obj, f, indent=1)
+    os.replace(tmp, out_path)
+
+
 OUT_RELPATH = "results/m3/probes/probe_ft_surrogate_soft.json"
 
 if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--repo-root", default=None,
+                    help="override auto-detected repo root (default: derived from __file__)")
+    args = ap.parse_args()
+    if args.repo_root:
+        REPO = os.path.abspath(args.repo_root)
+
     result = run()
     out_path = os.path.join(REPO, OUT_RELPATH)
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with open(out_path, "w") as f:
-        json.dump(result, f, indent=1)
+    _atomic_write_json(result, out_path)
     print(f"[probe_ft_surrogate_soft] wrote {out_path}")

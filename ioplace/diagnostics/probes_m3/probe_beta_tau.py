@@ -26,6 +26,10 @@ likewise (movable cells only), their ratio, fp64 N_e min, and the count of
 nets whose N_e would underflow to 0 if a_{e,k} were accumulated in fp32
 instead (L6 evidence). Judgement hook: ratio < 0.05 is the G1 dead-zone.
 
+T0-b (design draft sec 8): reissued hermetic -- `REPO` derived from
+`__file__` (overridable with `--repo-root`), atomic write, `exactness` added
+to the unified `env` provenance schema.
+
 Usage:
     PYTHONPATH=. $PY -m ioplace.diagnostics.probes_m3.probe_beta_tau
 
@@ -34,10 +38,15 @@ redirection): DREAMPlace's PlaceDB loader writes its own INFO/WARNING lines to
 stdout, which would otherwise interleave with (and corrupt) a `> out.json`
 redirect -- see probe_m3_rg.py's same direct-file-write convention.
 """
+import argparse
+import datetime
 import hashlib
 import json
 import os
+import platform
+import socket
 import subprocess
+import sys
 
 import numpy as np
 import torch
@@ -48,7 +57,7 @@ from ioplace.region_grid import RegionGrid
 from ioplace.ops.soft_assign import rect_table, region_sdf_l1, softmax_stats, chunk_p_ell
 from ioplace.ops.io_term import build_net_node_csr
 
-REPO = "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DP = "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace"
 CFG = f"{DP}/install/test/ispd2005/adaptec1.json"
 DEV = "cuda"
@@ -100,13 +109,22 @@ def _git_head(path):
 
 def _env_metadata(input_relpaths):
     return {
+        "hostname": socket.gethostname(),
+        "python_version": platform.python_version(),
+        "python_executable": sys.executable,
         "torch_version": torch.__version__,
         "cuda_version": torch.version.cuda,
         "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
         "numpy_version": np.__version__,
         "dp_commit": _git_head(DP),
-        "ioplace_commit": _git_head(REPO),
+        "repo_commit": _git_head(REPO),
+        "command": " ".join([sys.executable, "-m", "ioplace.diagnostics.probes_m3.probe_beta_tau"]
+                            + sys.argv[1:]),
+        "argv": list(sys.argv),
+        "utc_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "input_sha256": {p: _sha256(os.path.join(REPO, p)) for p in input_relpaths},
+        "exactness": "exact forward evaluation of the S1/S2 soft-assign surrogate at each "
+                    "(beta, tau_rel) grid cell -- not a routing-cost approximation",
     }
 
 
@@ -244,12 +262,25 @@ def run() -> dict:
     }
 
 
+def _atomic_write_json(obj, out_path):
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    tmp = out_path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(obj, f, indent=1)
+    os.replace(tmp, out_path)
+
+
 OUT_RELPATH = "results/m3/probes/probe_beta_tau.json"
 
 if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--repo-root", default=None,
+                    help="override auto-detected repo root (default: derived from __file__)")
+    args = ap.parse_args()
+    if args.repo_root:
+        REPO = os.path.abspath(args.repo_root)
+
     result = run()
     out_path = os.path.join(REPO, OUT_RELPATH)
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with open(out_path, "w") as f:
-        json.dump(result, f, indent=1)
+    _atomic_write_json(result, out_path)
     print(f"[probe_beta_tau] wrote {out_path}")
