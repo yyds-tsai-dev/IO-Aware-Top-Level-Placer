@@ -178,6 +178,11 @@ def main():
                          "pre-B2 behavior)")
     ap.add_argument("--no-diag", action="store_true",
                     help="never run io_term.diagnostics() (overrides --diag-every)")
+    # M3 Phase B (docs/results/2026-08-14-m3-s4-adjudication.md sec C item 2):
+    # dynamic per-net ft_rg reweight, same M1 formula family as --alpha-io
+    # (w = 1 + alpha*min(signal, cap)) with the signal switched to ft_rg.
+    ap.add_argument("--ft-reweight", default="off", choices=["off", "on"])
+    ap.add_argument("--alpha-ft", type=float, default=0.5)
     args = ap.parse_args()
     if args.mode == "flat":
         run_flat(args.config, args.k, args.rtype, args.seed, args.out,
@@ -196,7 +201,8 @@ def main():
               alpha_io=args.alpha_io, rho_margin=args.rho_margin, w_mode=args.w_mode,
               ignore_net_degree=args.d_max, every=args.every,
               dp_seed=args.dp_seed, deterministic=args.deterministic,
-              diag_every=args.diag_every, no_diag=args.no_diag)
+              diag_every=args.diag_every, no_diag=args.no_diag,
+              ft_reweight=args.ft_reweight, alpha_ft=args.alpha_ft)
 
 if __name__ == "__main__":
     main()

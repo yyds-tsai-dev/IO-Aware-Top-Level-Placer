@@ -11,15 +11,17 @@ from ioplace.ops.io_term import build_net_node_csr, IoTerm
 from ioplace.schedules import ScheduleState
 from ioplace.dp_hook import (attach_terms, detach_terms, assert_optimizer_lock,
                              refresh_nesterov_secant, install_version_invariant)
+from ioplace.reweight import update_net_weights
 
 RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  "io_count", "io_gp", "ft_count", "hard_lambda_sum", "tree_wl", "hpwl",
+                 "io_rg", "ft_rg",
                  "lg_loss", "runtime_s", "peak_mem_mb", "peak_mem_mb_reset_semantics",
                  "rho_max", "tau_hi", "tau_lo",
                  "of_on", "of_end", "alpha_io", "w_mode", "d_max", "rho_margin",
                  "margin_m", "lambda_io_final", "spearman_rho", "num_callbacks",
                  "num_refreshes", "backtrack_median", "observer_mode",
-                 "diag_every", "no_diag", "trajectory")
+                 "diag_every", "no_diag", "ft_reweight", "alpha_ft", "trajectory")
 
 
 def _normalize_snapshot_iters(spec):
@@ -68,6 +70,7 @@ def run_io(config_json, k, rtype, seed, out_json, *,
            of_margin=0.15, w_mode="unit", every=50,
            dp_seed=None, deterministic=None, check_invariant=False,
            diag_every=1, no_diag=False,
+           ft_reweight="off", alpha_ft=0.5,
            snapshot_iters=None, snapshot_dir=None, snapshot_grad_check_cb=None):
     import torch
     t0 = time.time()
@@ -144,6 +147,17 @@ def run_io(config_json, k, rtype, seed, out_json, *,
 
     if diag_every < 1:
         raise ValueError(f"diag_every must be >= 1, got {diag_every}")
+    if ft_reweight not in ("off", "on"):
+        raise ValueError(f"ft_reweight must be 'off' or 'on', got {ft_reweight!r}")
+    if ft_reweight == "on" and alpha_io > 0:
+        # M3 Phase B (adjudication doc sec C item 2): the ft_rg-signalled
+        # reweight below and the pre-existing alpha_io (IO-crossings)
+        # reweight both write io_term.w from a *different* per-net signal --
+        # running both at once is not defined by the M1 formula family
+        # reused here (which writes one w = 1 + alpha*min(signal, cap) per
+        # net, not a sum of two). Pick one signal per run.
+        raise ValueError("ft_reweight='on' and alpha_io>0 are mutually "
+                         "exclusive (both write io_term.w)")
 
     # design v3.1 T0-a: snapshots are written from *inside* the same N=50
     # evaluator-gated branch that already produces the trajectory log
@@ -228,6 +242,32 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                     new_w = 1.0 + alpha_io * np.minimum(c_e, cap)
                     io_term.w.copy_(torch.as_tensor(new_w, dtype=io_term.w.dtype,
                                                      device=io_term.w.device))
+                    state.obj_version += 1
+
+                # M3 Phase B (adjudication doc
+                # docs/results/2026-08-14-m3-s4-adjudication.md sec C item 2,
+                # the preregistered fallback route: "M1 式離散 reweight",
+                # same w = 1 + alpha*min(signal, cap) family as alpha_io
+                # above -- ioplace/reweight.py's update_net_weights, reused
+                # directly, not reimplemented) -- but the per-net signal is
+                # ft_rg instead of IO crossings: FT_rg_e = ST_e -
+                # max(Lambda_e - 1, 0), the per-net analogue of the scalar
+                # ft_rg = io_rg - hard_lambda_sum EvalResult already returns
+                # (evaluator_gpu.py:594; per-net form already used by
+                # probe_p0b.py's compute_before/process_random_direction).
+                # ST_e >= Lambda_e - 1 always (a Steiner tree spanning
+                # Lambda_e terminals needs >= Lambda_e-1 unit-weight region-
+                # graph hops), so FT_rg_e >= 0 -- same non-negative-count
+                # precondition update_net_weights' min(., cap) form assumes
+                # for per_net_crossings. This is a coefficient update only
+                # (no new gradient path, no new persistent state): it writes
+                # the same io_term.w buffer the IO term's forward already
+                # reads every iteration.
+                if ft_reweight == "on":
+                    lam_e = res.per_net_lambda[csr.net_ids].astype(np.float64)
+                    st_e = res.per_net_steiner[csr.net_ids].astype(np.float64)
+                    ft_rg_e = st_e - np.maximum(lam_e - 1.0, 0.0)
+                    update_net_weights(io_term.w, ft_rg_e, alpha=alpha_ft, cap=cap)
                     state.obj_version += 1
 
                 # M4 design draft sec 1.4 B2: diagnostics() runs one full
@@ -315,6 +355,10 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         "io_count": metrics["io_count"], "io_gp": cb_state["io_gp"],
         "ft_count": metrics["ft_count"], "hard_lambda_sum": res.hard_lambda_sum,
         "tree_wl": metrics["tree_wl"], "hpwl": metrics["hpwl"],
+        # T1 region-graph fields (evaluator_gpu.py, commit 0a2e32c) off the
+        # same final-position `res` evaluate() call already used for
+        # spearman_rho above -- no extra evaluator pass.
+        "io_rg": res.io_rg, "ft_rg": res.ft_rg,
         "lg_loss": metrics["io_count"] - cb_state["io_gp"],
         "runtime_s": time.time() - t0,
         "peak_mem_mb": torch.cuda.max_memory_allocated() / 2**20
@@ -330,6 +374,7 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         "num_refreshes": cb_state["num_refreshes"],
         "backtrack_median": backtrack_median, "observer_mode": observer_mode,
         "diag_every": diag_every, "no_diag": no_diag,
+        "ft_reweight": ft_reweight, "alpha_ft": alpha_ft,
         "trajectory": trajectory,
     }
     os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)
