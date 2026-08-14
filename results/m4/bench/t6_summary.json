@@ -1,0 +1,138 @@
+{
+ "kernel_sensitivity_glue_counts": {
+  "0": {
+   "1x2": {
+    "n1_per_pair": {
+     "(0, 0)|(0, 1)": 4387.31377772961
+    },
+    "n1_total_expected": 4387.31377772961,
+    "n2_total_expected": 13161.941333188828
+   },
+   "2x2": {
+    "n1_per_pair": {
+     "(0, 0)|(0, 1)": 4387.31377772961,
+     "(0, 0)|(1, 0)": 4387.31377772961,
+     "(0, 0)|(1, 1)": 4387.31377772961,
+     "(0, 1)|(1, 0)": 4387.31377772961,
+     "(0, 1)|(1, 1)": 4387.31377772961,
+     "(1, 0)|(1, 1)": 4387.31377772961
+    },
+    "n1_total_expected": 26323.882666377656,
+    "n2_total_expected": 26323.882666377656
+   },
+   "alpha": 0.0,
+   "lambda_0_tile": 4387.31377772961
+  },
+  "0.102_mainline": {
+   "1x2": {
+    "n1_per_pair": {
+     "(0, 0)|(0, 1)": 4387.31377772961
+    },
+    "n1_total_expected": 4387.31377772961,
+    "n2_total_expected": 13161.941333188828
+   },
+   "2x2": {
+    "n1_per_pair": {
+     "(0, 0)|(0, 1)": 4387.31377772961,
+     "(0, 0)|(1, 0)": 4387.31377772961,
+     "(0, 0)|(1, 1)": 4234.479731805451,
+     "(0, 1)|(1, 0)": 4234.479731805451,
+     "(0, 1)|(1, 1)": 4387.31377772961,
+     "(1, 0)|(1, 1)": 4387.31377772961
+    },
+    "n1_total_expected": 26018.21457452934,
+    "n2_total_expected": 26323.882665218065
+   },
+   "alpha": 0.10230633302323285,
+   "lambda_0_tile": 4387.31377772961
+  },
+  "1.0": {
+   "1x2": {
+    "n1_per_pair": {
+     "(0, 0)|(0, 1)": 4387.31377772961
+    },
+    "n1_total_expected": 4387.31377772961,
+    "n2_total_expected": 13161.941333188828
+   },
+   "2x2": {
+    "n1_per_pair": {
+     "(0, 0)|(0, 1)": 4387.31377772961,
+     "(0, 0)|(1, 0)": 4387.31377772961,
+     "(0, 0)|(1, 1)": 3102.299323425776,
+     "(0, 1)|(1, 0)": 3102.299323425776,
+     "(0, 1)|(1, 1)": 4387.31377772961,
+     "(1, 0)|(1, 1)": 4387.31377772961
+    },
+    "n1_total_expected": 23753.85375776999,
+    "n2_total_expected": 26323.882668191643
+   },
+   "alpha": 1.0,
+   "lambda_0_tile": 4387.31377772961
+  },
+  "1.915_optimistic_end": {
+   "1x2": {
+    "n1_per_pair": {
+     "(0, 0)|(0, 1)": 4387.31377772961
+    },
+    "n1_total_expected": 4387.31377772961,
+    "n2_total_expected": 13161.941333188828
+   },
+   "2x2": {
+    "n1_per_pair": {
+     "(0, 0)|(0, 1)": 4387.31377772961,
+     "(0, 0)|(1, 0)": 4387.31377772961,
+     "(0, 0)|(1, 1)": 2259.240553830787,
+     "(0, 1)|(1, 0)": 2259.240553830787,
+     "(0, 1)|(1, 1)": 4387.31377772961,
+     "(1, 0)|(1, 1)": 4387.31377772961
+    },
+    "n1_total_expected": 22067.736218580012,
+    "n2_total_expected": 26323.882669909726
+   },
+   "alpha": 1.915,
+   "lambda_0_tile": 4387.31377772961
+  }
+ },
+ "known_simplifications": [
+  "glue nets are degree-2-only (real cross-group nets: 96.2% degree-2, 3.8% touch 3-4 groups -- not reproduced)",
+  "candidate interface-cell sampling is uniform random per tile, not boundary-biased or calibrated against a real iface_dist extraction from the cluster",
+  "H4 is therefore a self-consistency check (does actual glue-endpoint sampling match the uniform-random construction it was built to be), not a validation against real physical interface-cell placement"
+ ],
+ "mtkahypar_feasibility": {
+  "cap_applied_both_sides": true,
+  "max_net_degree": 100,
+  "mempool_cluster_12.7M_scale": "feasible WITH max_net_degree=100 cap: level-1 bisection 59.0s (vs >24min stuck/unresolved without the cap, due to 2 pathological global nets with 986,903 combined pins); full recursive bisection completed",
+  "mempool_group_3.5M_scale": "feasible: full recursive bisection to 3 levels in 42.7s, peak RSS 3.33GB (no net-degree cap needed)"
+ },
+ "n1_gates": {
+  "H1_rent_shape": "fail",
+  "H2_cut_histogram": "ok",
+  "H3_degree_ks": "ok",
+  "H4_self_consistency": "ok",
+  "H6_rent_invariance": "fail"
+ },
+ "n1_verdict": "FAIL",
+ "n2_gates": {
+  "H1_rent_shape": "fail",
+  "H2_cut_histogram": "ok",
+  "H3_degree_ks": "ok",
+  "H4_self_consistency": "ok",
+  "H6_rent_invariance": "fail"
+ },
+ "n2_verdict": "FAIL",
+ "rent_p": {
+  "1x1_source": 0.4747492621188062,
+  "1x2_n1": 0.49110713791267374,
+  "1x2_n2": 0.5304291288343453,
+  "2x2_n1": 0.5323419231577977,
+  "2x2_n2": 0.5262620430080364,
+  "real_cluster": 0.5221238882469156,
+  "real_cluster_ci": [
+   0.5001453406768185,
+   0.5458806066876787
+  ]
+ },
+ "selected_normalization": null,
+ "shape": "2x2",
+ "t7_gate": "FAIL"
+}

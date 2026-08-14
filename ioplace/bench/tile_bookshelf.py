@@ -230,21 +230,62 @@ def _write_row(fout, row):
 
 def assert_rows_no_overlap_no_gap(tagged_rows):
     """tagged_rows: iterable of (tile_col_i, Row). Rows sharing the same
-    tile column (same x-translation, hence the same x-band) must stack in
-    y with no overlap and no gap -- sec 3.2's "fully abutted, no channel"
-    rule, checked on the assembled *output* rather than merely assumed of
-    the source."""
+    tile column (same x-translation) *and* the same x-extent must never
+    physically overlap in y -- sec 3.2's "fully abutted, no channel" rule,
+    checked on the assembled *output* rather than merely assumed of the
+    source. Despite the function's name (kept for now to minimize caller
+    churn -- see second bugfix below), it no longer requires "no gap"; see
+    that note for why.
+
+    **M4 T6 bugfix 1 (2026-08-15, discovered tiling `mempool_group`):** a
+    macro-obstructed source row is written as *multiple* `CoreRow` records
+    at the same `y` with different (non-overlapping) `x0`/`num_sites` --
+    completely ordinary DEF/Bookshelf row fragmentation (`mempool_group`'s
+    SRAM banks cut many rows this way; confirmed on-disk: `y=10080` alone
+    has 3 separate `CoreRow` records with distinct x-extents). Grouping
+    only by tile column `i` (as this used to) silently assumes exactly one
+    `CoreRow` per `y` -- with real fragmentation, every tile-row's worth of
+    fragments across every `j` was being sorted together purely by `y`,
+    which are not a single covering sequence at all, and the assertion
+    failed on essentially the first non-toy input it was ever run against
+    (`adaptec1` and the prior `mempool_tile_wrap` test fixture apparently
+    have no row fragmentation, so this was never exercised for real).
+    Fixed by also grouping on the row's own x-extent (`x0`, `x0 +
+    num_sites*sitewidth`) -- unaffected by a row's `i`-tile-column
+    translation not being unique to it, since `x0` itself already carries
+    that translation (`dx = i*W`), so two rows from different `i` cannot
+    collide onto the same key by coincidence at real coordinate scales.
+
+    **M4 T6 bugfix 2 / spec reinterpretation (same discovery pass):** bugfix
+    1 alone still fails on `mempool_group` -- this time with a *real*, large
+    gap (`row ends at y=68880, next row starts at y=6752480`) at an x-band
+    that runs under a large macro (SRAM bank): there are legitimately no
+    placement rows over a macro's footprint, in *any* macro-containing
+    design, because a macro is a fixed node occupying that area, not
+    something standard-cell rows are meant to cover. The design draft's
+    literal "no overlap and no gap" (sec 3.2) is achievable only for a
+    macro-free floorplan; every ISPD2025 benchmark this bench targets
+    (`mempool_group`/`mempool_cluster`, both containing `fakeram45_*` SRAM
+    macros) has macros, so the literal rule is unsatisfiable by
+    construction, not a bug to fix in the tiler's arithmetic. The
+    correctness-relevant half of "fully abutted, no channel" is that
+    tiling never makes rows *overlap* (which would mean two tiles'
+    standard-cell rows physically collide -- a real translation bug); a
+    *gap* under a macro is simply the correct representation of where a
+    macro already sits and carries no such risk. This function now checks
+    only for overlap (`end_a > b.y`), not gap (`end_a != b.y`)."""
     by_col = defaultdict(list)
     for i, r in tagged_rows:
-        by_col[i].append(r)
-    for i, rs in by_col.items():
+        key = (i, r.x0, r.x0 + r.num_sites * r.sitewidth)
+        by_col[key].append(r)
+    for key, rs in by_col.items():
         rs = sorted(rs, key=lambda r: r.y)
         for a, b in zip(rs, rs[1:]):
             end_a = a.y + a.height
-            if end_a != b.y:
+            if end_a > b.y:
                 raise AssertionError(
-                    f"tile column {i}: row gap/overlap -- row ends at y={end_a}, "
-                    f"next row starts at y={b.y} (diff={b.y - end_a})")
+                    f"tile column/x-band {key}: row overlap -- row ends at y={end_a}, "
+                    f"next row starts at y={b.y} (overlap={end_a - b.y})")
 
 
 def _copy_wts_header(path, fout):

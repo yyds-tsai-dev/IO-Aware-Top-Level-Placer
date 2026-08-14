@@ -4,4 +4,11 @@ results/**/*.pl
 results/**/*.def
 results/**/*.log
 results/**/*.npz
+results/**/*.nodes
+results/**/*.nets
+results/**/*.scl
+results/**/*.shapes
+results/**/*.route
+results/**/*.aux
+results/**/*.wts
 .superpowers/

@@ -1,0 +1,154 @@
+{
+ "assignment": {
+  "gen_groups[0].i_group": "RL",
+  "gen_groups[1].i_group": "LU",
+  "gen_groups[2].i_group": "LL",
+  "gen_groups[3].i_group": "RU"
+ },
+ "bootstrap_rescan": {
+  "def_path": "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/visible/mempool_cluster/mempool_cluster.def",
+  "n_informative_nets": 21988,
+  "scan_s": 38.7647967338562,
+  "self_check_mismatches_vs_probe": {},
+  "self_check_pair_counts": {
+   "0|1": 4002,
+   "0|2": 4227,
+   "0|3": 4034,
+   "1|2": 4566,
+   "1|3": 3794,
+   "2|3": 4019
+  }
+ },
+ "cross_pin_total": 1313534,
+ "degree_histogram": {
+  "deg_hist_all": {
+   "100000": 2,
+   "1024": 1024,
+   "16": 291509,
+   "256": 6180,
+   "32": 203919,
+   "64": 110566,
+   "8": 12099600
+  },
+  "deg_hist_cross": {
+   "100000": 2,
+   "16": 44,
+   "256": 634,
+   "32": 217,
+   "64": 1812,
+   "8": 19690
+  }
+ },
+ "lambda_0_tile": {
+  "avg_cluster_group_cells": 2824617.0,
+  "cell_ratio": 1.0897013648222043,
+  "note": "lambda_0 * (standalone_cells/avg_cluster_group_cells)^rent_p_used -- Rent-consistent scale conversion from the real (smaller) cluster group size to the actual (larger) mempool_group Bookshelf tile size tile_bookshelf.py replicates; reproduces the adjudication doc's lambda_0 x (3.0780/2.8246)^0.633 = 4387",
+  "rent_p_per_group": [
+   0.632378213039405,
+   0.6324109556650894,
+   0.6352431277847762,
+   0.6304552526655884
+  ],
+  "rent_p_used": 0.6326218872887147,
+  "standalone_group_cells": 3077989,
+  "value": 4387.31377772961
+ },
+ "lambda_adj": 4155.25,
+ "lambda_diag": 4010.5,
+ "mom": {
+  "alpha": 0.10230633302323285,
+  "detail": {
+   "lambda_adj": 4155.25,
+   "lambda_diag": 4010.5
+  },
+  "lambda_0": 4155.25,
+  "status": "ok"
+ },
+ "net_level_bootstrap": {
+  "alpha_ci": {
+   "hi": 0.17266245055566817,
+   "lo": 0.030942307901142153,
+   "mean": 0.10223214101873389,
+   "n": 1198
+  },
+  "lambda_0_ci": {
+   "hi": 4230.0,
+   "lo": 4083.75,
+   "mean": 4154.334933222037,
+   "n": 1198
+  },
+  "lambda_adj_ci": {
+   "hi": 4230.0,
+   "lo": 4083.75,
+   "mean": 4154.334933222037,
+   "n": 1198
+  },
+  "lambda_diag_ci": {
+   "hi": 4096.5375,
+   "lo": 3921.925,
+   "mean": 4009.8309682804675,
+   "n": 1198
+  },
+  "n_bootstrap_requested": 1200,
+  "n_bootstrap_used": 1198,
+  "seed": 0
+ },
+ "ngroups_hist": {
+  "2": 21552,
+  "3": 517,
+  "4": 329,
+  "6": 1
+ },
+ "overdispersion_threshold": 3.0,
+ "overdispersion_unreliable": true,
+ "overdispersion_var_over_mean": 16.90518626734843,
+ "pair_kind": {
+  "0|1": "diagonal",
+  "0|2": "adjacent",
+  "0|3": "adjacent",
+  "1|2": "adjacent",
+  "1|3": "adjacent",
+  "2|3": "diagonal"
+ },
+ "pinshare_top25": {
+  "2:(16, 16)": 22,
+  "2:(16, 8)": 77,
+  "2:(256, 8)": 92,
+  "2:(32, 16)": 154,
+  "2:(32, 32)": 188,
+  "2:(32, 8)": 169,
+  "2:(64, 16)": 293,
+  "2:(64, 32)": 243,
+  "2:(64, 64)": 9,
+  "2:(64, 8)": 857,
+  "2:(8, 8)": 19446,
+  "3:(16, 8, 8)": 10,
+  "3:(32, 16, 16)": 21,
+  "3:(32, 16, 8)": 56,
+  "3:(32, 32, 16)": 22,
+  "3:(32, 32, 8)": 56,
+  "3:(32, 8, 8)": 37,
+  "3:(64, 16, 16)": 11,
+  "3:(64, 16, 8)": 65,
+  "3:(64, 32, 16)": 14,
+  "3:(64, 32, 8)": 65,
+  "3:(64, 8, 8)": 131,
+  "4:(32, 16, 16, 8)": 7,
+  "4:(32, 16, 8, 8)": 8,
+  "4:(8, 8, 8, 8)": 274
+ },
+ "provenance": {
+  "cluster_def_sha256": "e4a51ba37e9554b660441452ac5d88b624ab39181ea9cfbc7ed7501aeca374d5",
+  "cross_group_stats_sha256": "39d6dc878955bf514204d8709d658023c6cf54844f6a6ae9b0601a5fcb8a5407",
+  "hierarchy_gate_sha256": "80dad037da6329ba0cd216cdf585613c333a96eb49f5b0d015fd8ac0625e42d4",
+  "repo_commit": "4064db8b643333a9fe14457df64dec51c8e0f840"
+ },
+ "six_pair_raw_counts": {
+  "0|1": 4002,
+  "0|2": 4227,
+  "0|3": 4034,
+  "1|2": 4566,
+  "1|3": 3794,
+  "2|3": 4019
+ }
+}

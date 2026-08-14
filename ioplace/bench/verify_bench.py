@@ -215,9 +215,21 @@ def check_h2_cut_histogram(synthetic_levels=None, real_levels=None, rel_tol=0.25
             "per_level_rel_err": per_level, "rel_tol": rel_tol}
 
 
-def check_h3_degree_ks(synthetic_degrees=None, real_degrees=None, ks_threshold=0.05):
+def check_h3_degree_ks(synthetic_degrees=None, real_degrees=None, ks_threshold=0.05,
+                        bucket_rel_tol=None):
     """H3: KS statistic between the full net-degree distributions <=
-    ks_threshold. Framework; "not_run" without both degree arrays."""
+    ks_threshold. Framework; "not_run" without both degree arrays.
+
+    `bucket_rel_tol` (2026-08-14 T6 adjudication doc sec 1 "H3 degree KS
+    存活 + 加 tail 揭露"; T6 body table: "用 io_term.DEG_BUCKET_EDGES 同一套
+    切法,逐桶相對誤差 <= 20%"): if given, also buckets both degree arrays
+    with `io_term.DEG_BUCKET_EDGES`/`DEG_BUCKET_LABELS` (the same edges the
+    IO surrogate itself buckets net degree into) and checks each bucket's
+    relative frequency error, plus discloses each side's max degree (a
+    single overall KS can hide a thin, high-degree tail that a per-bucket
+    check makes visible). `status` is "ok" only if the KS check *and* every
+    bucket both pass -- the KS-only call (bucket_rel_tol=None) keeps its
+    original behavior/signature for existing callers."""
     if synthetic_degrees is None or real_degrees is None:
         return _not_run_holdout("H3_degree_ks", "synthetic_degrees and real_degrees (full net-degree arrays)")
     import numpy as np
@@ -227,8 +239,35 @@ def check_h3_degree_ks(synthetic_degrees=None, real_degrees=None, ks_threshold=0
     cdf_a = np.searchsorted(a, grid, side="right") / len(a)
     cdf_b = np.searchsorted(b, grid, side="right") / len(b)
     ks = float(np.max(np.abs(cdf_a - cdf_b)))
-    return {"status": "ok" if ks <= ks_threshold else "fail", "metric": "H3_degree_ks",
-            "ks": ks, "threshold": ks_threshold}
+    result = {"status": "ok" if ks <= ks_threshold else "fail", "metric": "H3_degree_ks",
+              "ks": ks, "threshold": ks_threshold}
+    if bucket_rel_tol is None:
+        return result
+
+    from ioplace.ops.io_term import DEG_BUCKET_EDGES, DEG_BUCKET_LABELS
+    edges = np.array(DEG_BUCKET_EDGES[1:])
+    labels = list(DEG_BUCKET_LABELS) + [f">={DEG_BUCKET_EDGES[-1]}"]
+
+    def _bucket_hist(degs):
+        idx = np.clip(np.searchsorted(edges, degs, side="right"), 0, len(labels) - 1)
+        counts = np.bincount(idx, minlength=len(labels))
+        return counts / counts.sum() if counts.sum() else counts.astype(np.float64)
+
+    frac_a, frac_b = _bucket_hist(a), _bucket_hist(b)
+    per_bucket = {}
+    buckets_ok = True
+    for i, label in enumerate(labels):
+        rel = abs(frac_a[i] - frac_b[i]) / frac_b[i] if frac_b[i] else (float("inf") if frac_a[i] else 0.0)
+        ok = rel <= bucket_rel_tol
+        buckets_ok = buckets_ok and ok
+        per_bucket[label] = {"synthetic_frac": float(frac_a[i]), "real_frac": float(frac_b[i]),
+                              "rel_err": float(rel), "ok": ok}
+    result["per_bucket"] = per_bucket
+    result["bucket_rel_tol"] = bucket_rel_tol
+    result["max_degree_synthetic"] = float(a[-1]) if len(a) else None
+    result["max_degree_real"] = float(b[-1]) if len(b) else None
+    result["status"] = "ok" if (ks <= ks_threshold and buckets_ok) else "fail"
+    return result
 
 
 def check_h4_interface_dist_ks(synthetic_dist=None, real_dist=None, ks_threshold=0.10):

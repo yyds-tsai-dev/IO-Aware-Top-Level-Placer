@@ -183,9 +183,16 @@ def test_fixed_macro_and_io_pin_status_preserved_under_translation(tmp_path):
     assert pl_lines["t0_1/p0"] == "t0_1/p0 10 14 : N /FIXED_NI"
 
 
-def test_row_overlap_or_gap_is_caught(tmp_path):
-    """A source with a deliberate row gap must make tile() raise, not
-    silently produce an array that violates the sec 3.2 abutment rule."""
+def test_row_overlap_is_caught(tmp_path):
+    """A source with a deliberate row overlap must make tile() raise, not
+    silently produce an array whose rows physically collide.
+
+    (2026-08-15 M4 T6 bugfix 2: `assert_rows_no_overlap_no_gap` no longer
+    rejects *gaps* -- a macro-obstructed real design legitimately has rows
+    that don't cover its macros' footprints, so "no gap" is unsatisfiable
+    for any macro-containing benchmark and isn't a construction defect; see
+    that function's docstring. Only overlaps -- rows physically colliding,
+    which *would* indicate a real translation bug -- are still checked.)"""
     src = str(tmp_path / "src" / "bad")
     os.makedirs(os.path.dirname(src), exist_ok=True)
     with open(src + ".nodes", "w") as f:
@@ -198,17 +205,44 @@ def test_row_overlap_or_gap_is_caught(tmp_path):
         f.write(_TOY_WTS)
     with open(src + ".aux", "w") as f:
         f.write(_TOY_AUX.replace("toy.", "bad."))
-    # second row starts at y=3 instead of y=2 -> a 1-unit gap
-    bad_scl = _TOY_SCL.replace("Coordinate : 2", "Coordinate : 3")
+    # second row starts at y=1 instead of y=2, while the first row (height 2)
+    # still ends at y=2 -> a 1-unit overlap
+    bad_scl = _TOY_SCL.replace("Coordinate : 2", "Coordinate : 1")
     with open(src + ".scl", "w") as f:
         f.write(bad_scl)
 
     dst = str(tmp_path / "out" / "arr")
     try:
         tb.tile(src, dst, R=1, C=2, seed=0)
-        assert False, "expected AssertionError for a row gap"
+        assert False, "expected AssertionError for a row overlap"
     except AssertionError as e:
-        assert "gap" in str(e) or "overlap" in str(e)
+        assert "overlap" in str(e)
+
+
+def test_row_gap_is_allowed(tmp_path):
+    """A source with a row gap (e.g. under a macro) must tile() cleanly --
+    2026-08-15 M4 T6 bugfix 2: gaps are a legitimate feature of macro-
+    containing floorplans, not a construction defect (see
+    `assert_rows_no_overlap_no_gap`'s docstring)."""
+    src = str(tmp_path / "src" / "gappy")
+    os.makedirs(os.path.dirname(src), exist_ok=True)
+    with open(src + ".nodes", "w") as f:
+        f.write(_TOY_NODES)
+    with open(src + ".pl", "w") as f:
+        f.write(_TOY_PL)
+    with open(src + ".nets", "w") as f:
+        f.write(_TOY_NETS)
+    with open(src + ".wts", "w") as f:
+        f.write(_TOY_WTS)
+    with open(src + ".aux", "w") as f:
+        f.write(_TOY_AUX.replace("toy.", "gappy."))
+    # second row starts at y=3 instead of y=2 -> a 1-unit gap (e.g. a macro)
+    gappy_scl = _TOY_SCL.replace("Coordinate : 2", "Coordinate : 3")
+    with open(src + ".scl", "w") as f:
+        f.write(gappy_scl)
+
+    dst = str(tmp_path / "out" / "arr")
+    tb.tile(src, dst, R=1, C=2, seed=0)  # must not raise
 
 
 def test_same_seed_is_bit_for_bit_reproducible(tmp_path):

@@ -38,6 +38,8 @@ from dataclasses import dataclass
 import hashlib
 import json
 import math
+import os
+import shutil
 
 import numpy as np
 
@@ -157,6 +159,63 @@ def expected_glue_total(lambda_0, alpha, R, C):
 
 
 # ---------------------------------------------------------------------------
+# N2 normalization (2026-08-14 T6 adjudication doc sec 2d): fixed per-tile
+# terminal budget, redistributed by phi(d), instead of N1's raw per-pair
+# lambda_0*phi(d) (sec 2d: N1 "會讓每 tile 端子隨 m 成長、違反 Rent" as the
+# array grows -- a tile's total glue-terminal count sums over every other
+# tile in the array, so it scales with the number of tiles under N1 but is
+# held fixed at `budget_pairs * lambda_0` under N2).
+# ---------------------------------------------------------------------------
+
+def n2_pair_counts(lambda_0, alpha, R, C, budget_pairs=3.0):
+    """N2 expected glue-net count per unordered tile pair: every tile gets
+    the *same fixed* budget `B = budget_pairs * lambda_0` (sec 2d's "B=3
+    lambda_0", anchored to the 2x2 arrangement's 3-neighbors-per-tile, used
+    as a constant reference budget for every array shape -- not
+    re-derived from each shape's own neighbor count, which is the whole
+    point: N1 and N2 are meant to disagree more as shapes get more/fewer
+    neighbors than 2x2's 3), split among that tile's neighbors
+    proportional to `phi(dist, alpha)`:
+
+        c(u,v) = B * phi(dist(u,v), alpha) / Z_u,   Z_u = sum_{w!=u} phi(dist(u,w), alpha)
+
+    Only defined here for arrangements where every tile has the *same*
+    neighbor-distance multiset, so `Z_u` doesn't depend on `u` and `c(u,v)`
+    computed from either endpoint's budget agrees (unambiguous). True of
+    every shape M4 T6 uses (1xC/Rx1, 2x2); a general asymmetric R*C array
+    (e.g. 3x3, where corner and center tiles have different neighbor-
+    distance multisets) needs a different rule this function does not
+    implement -- `NotImplementedError` rather than silently picking one."""
+    dists = tile_pair_distances(R, C)
+    weights = {pair: phi(d, alpha) for pair, d in dists.items()}
+    z = {}
+    for (a, b), w in weights.items():
+        z[a] = z.get(a, 0.0) + w
+        z[b] = z.get(b, 0.0) + w
+    distinct_z = {round(v, 9) for v in z.values()}
+    if len(distinct_z) != 1:
+        raise NotImplementedError(
+            f"n2_pair_counts only supports arrangements where every tile has an identical "
+            f"neighbor-distance multiset (T6 scope: 1xC/Rx1 and 2x2); R={R} C={C} has "
+            f"{len(distinct_z)} distinct per-tile normalizers")
+    z_u = next(iter(distinct_z))
+    budget = budget_pairs * lambda_0
+    return {pair: budget * w / z_u for pair, w in weights.items()}
+
+
+def sample_glue_net_count_from_expected(rng, expected_per_pair, mode="poisson"):
+    """Same sampling step as `sample_glue_net_count`, generalized to accept
+    a precomputed `{(tile_a,tile_b): expected_count}` map -- N1 keeps using
+    `sample_glue_net_count` (its expected counts are `lambda_0*phi(d)`
+    directly); N2 goes through `n2_pair_counts` then this."""
+    if mode not in ("poisson", "expected"):
+        raise ValueError(f"unknown mode {mode!r}")
+    if mode == "poisson":
+        return {pair: int(rng.poisson(lam)) for pair, lam in expected_per_pair.items()}
+    return {pair: int(round(lam)) for pair, lam in expected_per_pair.items()}
+
+
+# ---------------------------------------------------------------------------
 # Sampling actual glue nets (mechanism only -- deg_hist/pinshare/iface_dist
 # are toy/synthetic in this task's tests, real ones are T3a/T6 products)
 # ---------------------------------------------------------------------------
@@ -224,41 +283,47 @@ def append_glue_nets(dst_prefix, glue_nets, lambda_0, alpha, kernel="power_law",
     `<dst_prefix>.manifest.json`'s "glue" section with the *actual* counts
     (never left at 0/unset once this is called). Returns (n_nets, n_pins).
 
-    This rewrites `.nets` in full (read all lines, append, rewrite) rather
-    than streaming -- unlike `tile_bookshelf.tile`, this module is not
-    required to be O(1)-memory (sec 3.2 attributes the streaming budget to
-    the tiler specifically); at the toy/mechanism scale this task tests,
-    the file fits trivially in memory.
+    **M4 T6 scale fix (2026-08-15):** this used to `readlines()`/
+    `writelines()` the whole `.nets` file ("at the toy/mechanism scale this
+    task tests, the file fits trivially in memory" -- true then, not at
+    T6's actual scale: a 2x2 array's `.nets` is multiple GB, and holding it
+    as a list of ~10^7-10^8 Python `str` objects multiplies its on-disk
+    footprint several-fold in RAM). Streams instead: the header is fixed as
+    it's copied (`NumNets`/`NumPins` lines rewritten in place, everything
+    else passed through line by line), the unchanged body is moved with
+    `shutil.copyfileobj` (no per-line Python object churn), and the new
+    glue-net blocks are appended last -- peak memory is O(1) in file size,
+    same shape as `export_bookshelf.py`'s `_fix_nets_file`.
     """
     nets_path = dst_prefix + ".nets"
-    with open(nets_path) as f:
-        lines = f.readlines()
+    tmp_path = nets_path + ".tmp"
+    n_pins_added = sum(len(net["pins"]) for net in glue_nets)
 
-    header_idx = next(i for i, l in enumerate(lines) if l.strip().startswith("NumNets"))
-    pins_idx = next(i for i, l in enumerate(lines) if l.strip().startswith("NumPins"))
-    n_nets_old = int(lines[header_idx].split(":")[1])
-    n_pins_old = int(lines[pins_idx].split(":")[1])
+    with open(nets_path, "r") as fin, open(tmp_path, "w") as fout:
+        n_nets_old = n_pins_old = None
+        while n_pins_old is None:
+            line = fin.readline()
+            s = line.strip()
+            if s.startswith("NumNets"):
+                n_nets_old = int(s.split(":")[1])
+                continue  # rewritten below, once n_nets_old+len(glue_nets) is known
+            if s.startswith("NumPins"):
+                n_pins_old = int(s.split(":")[1])
+                fout.write(f"NumNets : {n_nets_old + len(glue_nets)}\n")
+                fout.write(f"NumPins : {n_pins_old + n_pins_added}\n")
+                continue
+            fout.write(line)
+        shutil.copyfileobj(fin, fout)
 
-    new_blocks = []
-    n_pins_added = 0
-    for k, net in enumerate(glue_nets):
-        pins = net["pins"]
-        name = f"{net_name_prefix}{k}"
-        new_blocks.append(f"NetDegree : {len(pins)} {name}\n")
-        for tile, node in pins:
-            i, j = tile
-            new_blocks.append(f"    t{i}_{j}/{node} I : 0 0\n")
-            n_pins_added += 1
-        new_blocks.append("")
+        for k, net in enumerate(glue_nets):
+            pins = net["pins"]
+            name = f"{net_name_prefix}{k}"
+            fout.write(f"NetDegree : {len(pins)} {name}\n")
+            for tile, node in pins:
+                i, j = tile
+                fout.write(f"    t{i}_{j}/{node} I : 0 0\n")
 
-    n_nets_new = n_nets_old + len(glue_nets)
-    n_pins_new = n_pins_old + n_pins_added
-    lines[header_idx] = f"NumNets : {n_nets_new}\n"
-    lines[pins_idx] = f"NumPins : {n_pins_new}\n"
-    lines.extend(l + "\n" if l and not l.endswith("\n") else l for l in new_blocks if l)
-
-    with open(nets_path, "w") as f:
-        f.writelines(lines)
+    os.replace(tmp_path, nets_path)
 
     manifest_path = dst_prefix + ".manifest.json"
     with open(manifest_path) as f:
