@@ -1,0 +1,53 @@
+{
+ "area_util": 0.6391691848641423,
+ "case": "mempool_cluster",
+ "config": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_cluster.json",
+ "configured_target_density": 0.835,
+ "die": [
+  0.0,
+  0.0,
+  35094.0,
+  35095.789473684206
+ ],
+ "env": {
+  "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
+  "ioplace_commit": "da818f4590a6dfdcc2de4f412032d10560587166"
+ },
+ "free_area": 890591219.7894735,
+ "init_s": 0.6491882801055908,
+ "num_filler": 3889360,
+ "num_movable": 11310807,
+ "num_nets": 12712800,
+ "num_nodes": 11315544,
+ "num_pins": 43947793,
+ "num_terminal_NIs": 3441,
+ "num_terminals": 1296,
+ "peak_rss_gb": 62.75294876098633,
+ "read_s": 345.4236710071564,
+ "row_height": 7.368421052631579,
+ "rss_after_init_gb": 62.75294876098633,
+ "rss_after_read_gb": 62.75197219848633,
+ "sha256": {
+  "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_cluster.json": "2a494a75ef91433df4d5b9bc3c3e9529572697ecbbc7faa881a8b1aa0af30720",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/NangateOpenCellLibrary.macro.mod.lef": "ae48ca01bc12b9f0c44717b7275ba8884f1760bf562f5a42e3ca39906ddc9e54",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/NangateOpenCellLibrary.tech.lef": "834a79295054cd4209178d1bade67c353863c47bb4b3c22ee38b862b7cec37f2",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_128x116.lef": "f1bb5571f970fc352978d85c97391e056569cf56dad8e13ed0d0963c429ccba9",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_128x256.lef": "482ee50f1f7fa60876c4011ef157c8c4e67f31e66cf3c53220f7641644132de4",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_128x32.lef": "f6befdc4c36550ca4fb493a7e59c338b4ffd85b23e3c0958b213c5e48028abcc",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_256x16.lef": "9765349e8d204e1a2ef868740bcfc780162fe0a8f06ebfad0de22b6b3ebc7f34",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_256x32.lef": "f74c5f9064e19ba690a4391b0c2c78cc44353f7f19224a805efc1e0a245c3507",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_256x48.lef": "33c94de65b831c3c0daa45b54ef21e25771b67cbd38fa3affc298231a0b5553b",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_256x64.lef": "22e8746150d8d844368fda198d57324301acff79ed7cfca227cf3aa8fe1dfa58",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_32x32.lef": "a2c2f874aeb44b07feb3ace88475aecb665db5f5a872142bc20e5693cdd3855b",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_512x64.lef": "b3641c9991701cc9faa63bfd4b947a15ff3e3a85c67e27db23476a7d9754ede8",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_64x124.lef": "4440d92d842454a4b5710717cac4c410e4cf7af290dedf4891c5ea0bb11a3928",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_64x256.lef": "8b85775e97fd9a426f9521ed8f80f0a5ce6119a4926726499c89dc24a95d7508",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_64x62.lef": "b609ce40bb76d7ed0e02afb0e07e16e85e15bbdf0b3657557c3eed8db79c97bf",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_64x64.lef": "33db0d8a9f0c1d61bb2b1cef924b44685cacf4f9f98f4daef70d0ccbc827f86e",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/visible/mempool_cluster/mempool_cluster.def": "e4a51ba37e9554b660441452ac5d88b624ab39181ea9cfbc7ed7501aeca374d5"
+ },
+ "site_width": 1.0,
+ "suggested_target_density": 0.6491691848641423,
+ "total_fixed_area": 341060416.0,
+ "total_movable_area": 569238464.0
+}

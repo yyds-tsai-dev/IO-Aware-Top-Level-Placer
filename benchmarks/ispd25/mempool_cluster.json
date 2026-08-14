@@ -1,0 +1,51 @@
+{
+ "lef_input": [
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/NangateOpenCellLibrary.tech.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/NangateOpenCellLibrary.macro.mod.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_128x116.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_128x256.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_128x32.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_256x16.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_256x32.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_256x48.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_256x64.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_32x32.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_512x64.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_64x124.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_64x256.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_64x62.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/NanGate45/lef/fakeram45_64x64.lef"
+ ],
+ "def_input": "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/visible/mempool_cluster/mempool_cluster.def",
+ "gpu": 1,
+ "num_bins_x": 4096,
+ "num_bins_y": 4096,
+ "global_place_stages": [
+  {
+   "num_bins_x": 4096,
+   "num_bins_y": 4096,
+   "iteration": 1000,
+   "learning_rate": 0.01,
+   "wirelength": "weighted_average",
+   "optimizer": "nesterov"
+  }
+ ],
+ "target_density": 0.649,
+ "density_weight": 8e-05,
+ "gamma": 4.0,
+ "random_seed": 1000,
+ "deterministic_flag": 1,
+ "ignore_net_degree": 100,
+ "enable_fillers": 1,
+ "gp_noise_ratio": 0.025,
+ "global_place_flag": 1,
+ "legalize_flag": 1,
+ "detailed_place_flag": 0,
+ "stop_overflow": 0.07,
+ "dtype": "float32",
+ "plot_flag": 0,
+ "random_center_init_flag": 1,
+ "sort_nets_by_degree": 0,
+ "num_threads": 16,
+ "sol_file_format": "DEF"
+}

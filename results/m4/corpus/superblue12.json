@@ -1,0 +1,40 @@
+{
+ "area_util": 0.4485197495349117,
+ "case": "superblue12",
+ "config": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd2015_superblue12_m4.json",
+ "configured_target_density": 0.65,
+ "die": [
+  0.0,
+  0.0,
+  14172.0,
+  20646.0
+ ],
+ "env": {
+  "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
+  "ioplace_commit": "da818f4590a6dfdcc2de4f412032d10560587166"
+ },
+ "free_area": 224847624.0,
+ "init_s": 0.0633387565612793,
+ "num_filler": 640066,
+ "num_movable": 1286948,
+ "num_nets": 1293413,
+ "num_nodes": 1292945,
+ "num_pins": 4772990,
+ "num_terminal_NIs": 5908,
+ "num_terminals": 89,
+ "peak_rss_gb": 4.965339660644531,
+ "read_s": 21.395886182785034,
+ "row_height": 9.0,
+ "rss_after_init_gb": 4.965339660644531,
+ "rss_after_read_gb": 4.927742004394531,
+ "sha256": {
+  "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/benchmarks/ispd2015/mgc_superblue12/cells.lef": "7b73e19944e9a64b420d139c2faedb351706ceeee7e14c48077b8384945d0245",
+  "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/benchmarks/ispd2015/mgc_superblue12/floorplan.def": "5a4d27c0e144d69fb8f8cac26120f117bf718542cdcc4d449a27c912fc81b18b",
+  "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/benchmarks/ispd2015/mgc_superblue12/tech.lef": "db11fe742dc7a6c76b149d65e52a863fa3c7af6f04c72d4302d9f611025222b9",
+  "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd2015_superblue12_m4.json": "db4e1f7d895815309e587490a41d731c4d8eff8434c989c796351a1fcd01c54a"
+ },
+ "site_width": 1.0,
+ "suggested_target_density": 0.4585197495349117,
+ "total_fixed_area": 67747488.0,
+ "total_movable_area": 100848600.0
+}
