@@ -1,0 +1,134 @@
+{
+ "cross_pin_total": 1313534,
+ "def_path": "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/visible/mempool_cluster/mempool_cluster.def",
+ "deg_hist_all": {
+  "100000": 2,
+  "1024": 1024,
+  "16": 291509,
+  "256": 6180,
+  "32": 203919,
+  "64": 110566,
+  "8": 12099600
+ },
+ "deg_hist_cross": {
+  "100000": 2,
+  "16": 44,
+  "256": 634,
+  "32": 217,
+  "64": 1812,
+  "8": 19690
+ },
+ "env": {
+  "command": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/diagnostics/probes_m4/probe_cross_group_stats.py",
+  "hostname": "NVL5",
+  "input_sha256": {
+   "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/visible/mempool_cluster/mempool_cluster.def": "e4a51ba37e9554b660441452ac5d88b624ab39181ea9cfbc7ed7501aeca374d5"
+  },
+  "python_executable": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/.venv312/bin/python",
+  "python_version": "3.12.13",
+  "repo_commit": "d1c57eeefdfc221a7d5aeb4ddc8cca417d0dd423",
+  "utc_timestamp": "2026-08-14T19:13:07.387740+00:00"
+ },
+ "n_bogus_noslash_tokens": 0,
+ "n_flat_top_insts": 11364,
+ "n_nets": 12712800,
+ "n_nets_with_plus": 983412,
+ "n_wildcard_tuples": 0,
+ "nets_by_groupset": {
+  "0g_top0": 220,
+  "0g_top1": 8192,
+  "1g_top0": 12679316,
+  "1g_top1": 2673,
+  "2g_top0": 19404,
+  "2g_top1": 2148,
+  "3g_top1": 517,
+  "4g_top0": 19,
+  "4g_top1": 310,
+  "6g_top1": 1
+ },
+ "ngroups_hist": {
+  "2": 21552,
+  "3": 517,
+  "4": 329,
+  "6": 1
+ },
+ "per_group_crossing": {
+  "gen_groups\\[0\\].i_group": 11971,
+  "gen_groups\\[1\\].i_group": 12013,
+  "gen_groups\\[2\\].i_group": 12585,
+  "gen_groups\\[3\\].i_group": 11653,
+  "i_dma_req_register": 21,
+  "i_idma_distributed_midend": 407
+ },
+ "per_group_internal": {
+  "gen_groups\\[0\\].i_group": 3155196,
+  "gen_groups\\[1\\].i_group": 3169311,
+  "gen_groups\\[2\\].i_group": 3188899,
+  "gen_groups\\[3\\].i_group": 3163417,
+  "i_dma_req_register": 785,
+  "i_idma_distributed_midend": 1708
+ },
+ "per_group_pins": {
+  "__TOP__": 24276,
+  "gen_groups\\[0\\].i_group": 10945889,
+  "gen_groups\\[1\\].i_group": 10979309,
+  "gen_groups\\[2\\].i_group": 11021339,
+  "gen_groups\\[3\\].i_group": 10965300,
+  "i_dma_req_register": 2257,
+  "i_idma_distributed_midend": 5982
+ },
+ "per_group_touch": {
+  "__TOP__": 13841,
+  "gen_groups\\[0\\].i_group": 3167167,
+  "gen_groups\\[1\\].i_group": 3181324,
+  "gen_groups\\[2\\].i_group": 3201484,
+  "gen_groups\\[3\\].i_group": 3175070,
+  "i_dma_req_register": 806,
+  "i_idma_distributed_midend": 2115
+ },
+ "pinshare_top25": {
+  "2:(16, 16)": 22,
+  "2:(16, 8)": 77,
+  "2:(256, 8)": 92,
+  "2:(32, 16)": 154,
+  "2:(32, 32)": 188,
+  "2:(32, 8)": 169,
+  "2:(64, 16)": 293,
+  "2:(64, 32)": 243,
+  "2:(64, 64)": 9,
+  "2:(64, 8)": 857,
+  "2:(8, 8)": 19446,
+  "3:(16, 8, 8)": 10,
+  "3:(32, 16, 16)": 21,
+  "3:(32, 16, 8)": 56,
+  "3:(32, 32, 16)": 22,
+  "3:(32, 32, 8)": 56,
+  "3:(32, 8, 8)": 37,
+  "3:(64, 16, 16)": 11,
+  "3:(64, 16, 8)": 65,
+  "3:(64, 32, 16)": 14,
+  "3:(64, 32, 8)": 65,
+  "3:(64, 8, 8)": 131,
+  "4:(32, 16, 16, 8)": 7,
+  "4:(32, 16, 8, 8)": 8,
+  "4:(8, 8, 8, 8)": 274
+ },
+ "scan_s": 69.31063294410706,
+ "six_group_pair_net_counts": {
+  "gen_groups\\[0\\].i_group|gen_groups\\[1\\].i_group": 4002,
+  "gen_groups\\[0\\].i_group|gen_groups\\[2\\].i_group": 4227,
+  "gen_groups\\[0\\].i_group|gen_groups\\[3\\].i_group": 4034,
+  "gen_groups\\[0\\].i_group|i_dma_req_register": 2,
+  "gen_groups\\[0\\].i_group|i_idma_distributed_midend": 101,
+  "gen_groups\\[1\\].i_group|gen_groups\\[2\\].i_group": 4566,
+  "gen_groups\\[1\\].i_group|gen_groups\\[3\\].i_group": 3794,
+  "gen_groups\\[1\\].i_group|i_dma_req_register": 7,
+  "gen_groups\\[1\\].i_group|i_idma_distributed_midend": 109,
+  "gen_groups\\[2\\].i_group|gen_groups\\[3\\].i_group": 4019,
+  "gen_groups\\[2\\].i_group|i_dma_req_register": 16,
+  "gen_groups\\[2\\].i_group|i_idma_distributed_midend": 107,
+  "gen_groups\\[3\\].i_group|i_dma_req_register": 6,
+  "gen_groups\\[3\\].i_group|i_idma_distributed_midend": 101,
+  "i_dma_req_register|i_idma_distributed_midend": 1
+ }
+}

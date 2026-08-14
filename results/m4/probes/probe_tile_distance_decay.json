@@ -1,0 +1,286 @@
+{
+ "blocks_per_net_hist_cross_only": {
+  "0": 397,
+  "10": 3,
+  "12": 1,
+  "17": 1,
+  "2": 29284,
+  "3": 4405,
+  "4": 1697,
+  "41": 1,
+  "5": 612,
+  "6": 105,
+  "7": 41,
+  "8": 19,
+  "9": 5
+ },
+ "closest_12_pairs": [
+  [
+   0.1193,
+   864
+  ],
+  [
+   0.1199,
+   665
+  ],
+  [
+   0.1284,
+   270
+  ],
+  [
+   0.1339,
+   60
+  ],
+  [
+   0.1495,
+   558
+  ],
+  [
+   0.1631,
+   203
+  ],
+  [
+   0.1662,
+   323
+  ],
+  [
+   0.1686,
+   493
+  ],
+  [
+   0.1782,
+   602
+  ],
+  [
+   0.1872,
+   496
+  ],
+  [
+   0.2323,
+   339
+  ],
+  [
+   0.2388,
+   193
+  ]
+ ],
+ "count_max": 864,
+ "count_mean": 92.16666666666667,
+ "count_min": 4,
+ "deg_hist_cross": {
+  "1": 397,
+  "100000": 2,
+  "16": 634,
+  "2": 23276,
+  "256": 405,
+  "3": 3589,
+  "32": 343,
+  "4": 2993,
+  "5": 2326,
+  "6": 677,
+  "64": 1433,
+  "7": 250,
+  "8": 246
+ },
+ "distance_range": [
+  0.1193393074370509,
+  1.087630127022019
+ ],
+ "env": {
+  "command": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/diagnostics/probes_m4/probe_tile_distance_decay.py",
+  "hostname": "NVL5",
+  "input_sha256": {
+   "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/visible/mempool_group/mempool_group.def": "e5266220eda7591c614ff17c815cb0f9e962256c676f0663fe8dd80928fa8d5b"
+  },
+  "python_executable": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/.venv312/bin/python",
+  "python_version": "3.12.13",
+  "repo_commit": "d1c57eeefdfc221a7d5aeb4ddc8cca417d0dd423",
+  "utc_timestamp": "2026-08-14T19:14:12.364077+00:00"
+ },
+ "farthest_12_pairs": [
+  [
+   0.9132,
+   14
+  ],
+  [
+   0.9142,
+   8
+  ],
+  [
+   0.9213,
+   8
+  ],
+  [
+   0.923,
+   4
+  ],
+  [
+   0.9426,
+   14
+  ],
+  [
+   0.9445,
+   39
+  ],
+  [
+   0.9496,
+   7
+  ],
+  [
+   0.9502,
+   24
+  ],
+  [
+   0.9593,
+   29
+  ],
+  [
+   1.0021,
+   17
+  ],
+  [
+   1.0116,
+   18
+  ],
+  [
+   1.0876,
+   10
+  ]
+ ],
+ "group_def": "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/visible/mempool_group/mempool_group.def",
+ "n_nets": 3503992,
+ "n_tile_pairs": 120,
+ "per_tile": {
+  "gen_tiles\\[0\\].i_tile": {
+   "cross": 1900,
+   "internal": 184341,
+   "touch": 186241
+  },
+  "gen_tiles\\[10\\].i_tile": {
+   "cross": 2151,
+   "internal": 183907,
+   "touch": 186058
+  },
+  "gen_tiles\\[11\\].i_tile": {
+   "cross": 2224,
+   "internal": 180129,
+   "touch": 182353
+  },
+  "gen_tiles\\[12\\].i_tile": {
+   "cross": 2224,
+   "internal": 183872,
+   "touch": 186096
+  },
+  "gen_tiles\\[13\\].i_tile": {
+   "cross": 2245,
+   "internal": 182153,
+   "touch": 184398
+  },
+  "gen_tiles\\[14\\].i_tile": {
+   "cross": 1967,
+   "internal": 182302,
+   "touch": 184269
+  },
+  "gen_tiles\\[15\\].i_tile": {
+   "cross": 2066,
+   "internal": 181093,
+   "touch": 183159
+  },
+  "gen_tiles\\[1\\].i_tile": {
+   "cross": 2118,
+   "internal": 184824,
+   "touch": 186942
+  },
+  "gen_tiles\\[2\\].i_tile": {
+   "cross": 2222,
+   "internal": 181094,
+   "touch": 183316
+  },
+  "gen_tiles\\[3\\].i_tile": {
+   "cross": 2262,
+   "internal": 188069,
+   "touch": 190331
+  },
+  "gen_tiles\\[4\\].i_tile": {
+   "cross": 2291,
+   "internal": 183258,
+   "touch": 185549
+  },
+  "gen_tiles\\[5\\].i_tile": {
+   "cross": 2285,
+   "internal": 185730,
+   "touch": 188015
+  },
+  "gen_tiles\\[6\\].i_tile": {
+   "cross": 1958,
+   "internal": 180597,
+   "touch": 182555
+  },
+  "gen_tiles\\[7\\].i_tile": {
+   "cross": 2186,
+   "internal": 180118,
+   "touch": 182304
+  },
+  "gen_tiles\\[8\\].i_tile": {
+   "cross": 2261,
+   "internal": 181256,
+   "touch": 183517
+  },
+  "gen_tiles\\[9\\].i_tile": {
+   "cross": 2140,
+   "internal": 184496,
+   "touch": 186636
+  }
+ },
+ "power_law_fit": {
+  "alpha": 1.9152778102387478,
+  "corr_log_d_log_lambda": -0.7853286262233959,
+  "lambda0": 10.056808454284273,
+  "log_slope": -1.9152778102387478,
+  "n_nonzero_pairs": 120
+ },
+ "scan_s": 17.853922843933105,
+ "top_non_tile_blocks_by_cross_incidence": [
+  [
+   "__TOP__",
+   20641,
+   10205
+  ],
+  [
+   "i_axi_interco",
+   9891,
+   234900
+  ],
+  [
+   "i_local_interco",
+   3291,
+   28216
+  ],
+  [
+   "gen_dmas\\[3\\].i_dma_axi_xbar",
+   3038,
+   7108
+  ],
+  [
+   "gen_dmas\\[1\\].i_dma_axi_xbar",
+   2869,
+   6804
+  ],
+  [
+   "gen_dmas\\[2\\].i_dma_axi_xbar",
+   2693,
+   6849
+  ],
+  [
+   "gen_dmas\\[0\\].i_dma_axi_xbar",
+   2304,
+   6794
+  ],
+  [
+   "gen_remote_interco\\[2\\].i_remote_interco",
+   1907,
+   34623
+  ]
+ ],
+ "total_tile_pair_net_incidences": 11060
+}
