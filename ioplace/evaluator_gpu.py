@@ -13,7 +13,34 @@ float64 GPU (torch/CUDA) give bit-identical results for them. Only the final tre
 reduction is sum-order-sensitive (GPU reduction order != Python loop accumulation
 order), which is exactly why the equivalence test compares tree_wl with
 pytest.approx(rel=1e-5) while everything else (crossings, ft, pair_demand -- all
-derived from integer grid-index comparisons) must match exactly.
+derived from integer grid-index comparisons) must match exactly. tree_wl/hpwl carry a
+*second*, independent tolerance contract vs. evaluator_gpu itself across different
+construction parameters (edge_batch_size/mst_chunk_budget/seg_chunk_budget): rel<=1e-12,
+not bit-exact -- float64 addition is not associative, so a different batch size can
+land on a different (still correctly-rounded) reduction order/result; see
+docs/superpowers/specs/2026-08-13-m4-scale-up-design-draft.md §4.2 for the empirical
+evidence this bound is based on. Every *integer* field (crossings/ft/lambda/pair_demand/
+steiner/home, and MST/segment edge counts) is required to be bit-exact across those same
+construction parameters -- integer accumulation is exact and order-independent by
+construction here (plain addition / amax-OR / index_add_ of disjoint bits), so this is
+not a looser empirical bound like tree_wl/hpwl's, it is a correctness invariant.
+
+M4 T2 (structural streaming, see spec §4.2 items 3-7) eliminated two tensors that used
+to scale with pin/edge count rather than net count: the (P,K) one-hot `pin_bits` used to
+derive pin_bm (replaced by a `torch.unique` over a packed (net_id,region_id) composite
+key + `index_add_` of single-bit values -- exact OR because the keys are already deduped
+before being summed) and the dense (n_nets,K) `home_counts` used for the home-region
+argmax (replaced by an injective count/region score encoding reduced with the same
+`scatter_reduce_(amax)` pattern already used elsewhere in this file, off the same unique
+pass). The per-edge geometry/crossing/FT/pair-demand pipeline in `evaluate()` is now
+batched over `edge_batch_size` MST edges at a time (a construction parameter, independent
+from `mst_chunk_budget`/`seg_chunk_budget`), bounding those tensors' peak size instead of
+letting them scale with the full MST edge count. Every index tensor (pin2node/pin2net,
+MST edge arrays, lattice coordinates) is int32, asserted against its index space's bound
+in `__init__`; the one composite key in this file that packs two index spaces into one
+integer (net_id*64+region_id, both here and in `_process_segments`' boundary-pair-demand
+key) stays int64 (with its own headroom assert), since collapsing it to int32 would make
+distinct (net,region) pairs collide.
 
 Algorithm (see docs/superpowers/plans/2026-07-31-m0-m1-foundations-and-evaluator.md,
 Task 11):
@@ -64,7 +91,36 @@ def _pow2_bounds(n):
 
 
 class GpuEvalContext:
-    def __init__(self, nl, rg, device="cuda", max_degree=256):
+    def __init__(self, nl, rg, device="cuda", max_degree=256,
+                 mst_chunk_budget=8_000_000, seg_chunk_budget=8_000_000,
+                 edge_batch_size=1_000_000):
+        """
+        mst_chunk_budget / seg_chunk_budget / edge_batch_size (M4 T2 §4.2 item 7:
+        "batch size as a construction parameter"): all three bound the peak size
+        of an intermediate tensor that would otherwise scale with the *number of
+        edges* (MST edges ~= total pins) rather than a fixed budget --
+        mst_chunk_budget caps the (b,d,d) Prim distance tensor per degree-bucket
+        chunk (unchanged from M3), seg_chunk_budget caps the (numSelected,L)
+        padded-gather tensor in _process_segments (unchanged from M3, and only
+        binding when it's *smaller* than edge_batch_size -- each call already
+        receives at most edge_batch_size segments), and edge_batch_size (new in
+        T2) caps how many MST edges are pulled through the per-edge geometry/
+        crossing/FT/pair-demand pipeline in evaluate() at once -- see the
+        batching loop there.
+
+        edge_batch_size's default is 1,000,000, *not* 8,000,000 like the other
+        two -- matching mst_chunk_budget/seg_chunk_budget's pre-existing 8M
+        value turned out to not actually bound anything for real multi-million-
+        net cases (mempool_group's ~8.1M MST edges, bigblue4's ~6.4M): 8M is
+        close enough to those edge counts that batching barely engages,
+        measured peak_alloc 4.42GB/4.45GB respectively -- short of both this
+        file's T2 acceptance targets (bigblue4 >=60% reduction, mempool_group
+        <=2GB). 1,000,000 clears both out of the box (measured 1.26GB/1.83GB)
+        without a caller having to know to override it. All three remain
+        overridable constructor parameters for the T2 batch-invariance tests
+        (edge_batch_size in {1_000_000, 8_000_000, "all edges in one batch"})
+        and for callers with a different memory/kernel-launch-overhead tradeoff.
+        """
         self.nl, self.rg = nl, rg
         self.device = torch.device(device)
         self.max_degree = max_degree
@@ -85,9 +141,16 @@ class GpuEvalContext:
         assert self.k <= 32, f"GpuEvalContext bitmask vectorization requires rg.k <= 32, got rg.k={self.k}"
 
         # ---- static region-grid tensors: grid + Ph/Pv crossing prefix sums ----
-        grid_np = rg.grid.astype(np.int64)
+        # M4 T2 item 5: grid_t holds raw region ids (0..K-1, K<=32) and Ph/Pv hold
+        # prefix-sum *counts* bounded by max(nx,ny) -- both are plain small values
+        # (never bit-shifted into a packed mask, unlike the "vals"/"seg_bm"
+        # bitmask tensors in _process_segments below, which must stay int64 --
+        # see the comment there), so int32 is safe and halves this tensor's
+        # footprint. assert the lattice fits comfortably before downcasting.
+        ny, nx = rg.grid.shape
+        assert max(nx, ny) < 2**31 - 1, f"region grid {nx}x{ny} exceeds int32 index range"
+        grid_np = rg.grid.astype(np.int32)
         self.grid_t = torch.from_numpy(grid_np).to(self.device)
-        ny, nx = grid_np.shape
         self.nx, self.ny = nx, ny
         xl, yl, xh, yh = rg.die
         self.xl, self.yl = float(xl), float(yl)
@@ -116,13 +179,13 @@ class GpuEvalContext:
         self._cell_h_t = torch.tensor(self.cell_h, dtype=torch.float64, device=self.device)
         assert self._cell_w_t.device == self.grid_t.device and self._cell_h_t.device == self.grid_t.device
 
-        hdiff = (self.grid_t[:, :-1] != self.grid_t[:, 1:]).to(torch.int64)
-        Ph = torch.zeros((ny, nx), dtype=torch.int64, device=self.device)
+        hdiff = (self.grid_t[:, :-1] != self.grid_t[:, 1:]).to(torch.int32)
+        Ph = torch.zeros((ny, nx), dtype=torch.int32, device=self.device)
         Ph[:, 1:] = torch.cumsum(hdiff, dim=1)
         self.Ph = Ph
 
-        vdiff = (self.grid_t[:-1, :] != self.grid_t[1:, :]).to(torch.int64)
-        Pv = torch.zeros((ny, nx), dtype=torch.int64, device=self.device)
+        vdiff = (self.grid_t[:-1, :] != self.grid_t[1:, :]).to(torch.int32)
+        Pv = torch.zeros((ny, nx), dtype=torch.int32, device=self.device)
         Pv[1:, :] = torch.cumsum(vdiff, dim=0)
         self.Pv = Pv
 
@@ -146,18 +209,35 @@ class GpuEvalContext:
         self.D_t = torch.from_numpy(self._rg_D).to(self.device)
 
         # ---- static pin/net topology tensors ----
-        self.pin2node_t = torch.from_numpy(nl.pin2node.astype(np.int64)).to(self.device)
-        self.pin2net_t = torch.from_numpy(nl.pin2net.astype(np.int64)).to(self.device)
+        # M4 T2 item 5: pin2node/pin2net (and every derived MST-edge/index
+        # tensor below) are pure *indices* into node/net/pin arrays, not
+        # bit-shifted into a packed mask -- so int32 is safe once the index
+        # space itself is asserted to fit. Composite *keys* that combine two
+        # index spaces into one integer (e.g. net_id*64+region_id below) are
+        # the opposite case and must stay int64 (spec §4.2/F4).
+        n_physical = nl.num_physical
+        n_pins_total = len(nl.pin2node)
+        assert n_physical < 2**31 - 1, f"num_physical={n_physical} exceeds int32 index range"
+        assert n_pins_total < 2**31 - 1, f"total pins={n_pins_total} exceeds int32 index range"
+        self.pin2node_t = torch.from_numpy(nl.pin2node.astype(np.int32)).to(self.device)
+        self.pin2net_t = torch.from_numpy(nl.pin2net.astype(np.int32)).to(self.device)
         self.pin_offset_x_t = torch.from_numpy(nl.pin_offset_x.astype(np.float64)).to(self.device)
         self.pin_offset_y_t = torch.from_numpy(nl.pin_offset_y.astype(np.float64)).to(self.device)
 
         self.n_nets = nl.num_nets
+        # M4 T2 (spec §4.2 F4 / §2.1): composite (net_id, region_id) keys used
+        # below (evaluate()'s net_region_key) and elsewhere (pair-demand's
+        # lo_ab*64+hi_ab) pack a "*64" index space alongside n_nets into a
+        # single int64 -- assert the headroom once here rather than silently
+        # risking overflow as n_nets grows with glue nets at 30M scale.
+        assert self.n_nets * 64 < 2**63, f"n_nets={self.n_nets} leaves no int64 headroom for *64 composite keys"
+        assert self.n_nets < 2**31 - 1, f"n_nets={self.n_nets} exceeds int32 index range"
         degrees = nl.net_degrees
         self.degrees_t = torch.from_numpy(degrees.astype(np.int64)).to(self.device)
 
         start = nl.flat_net2pin_start
         flat = nl.flat_net2pin
-        self._buckets = []  # [(d, net_ids (B,) long, pin_idx_mat (B,d) long)] all on device
+        self._buckets = []  # [(d, net_ids (B,) int32, pin_idx_mat (B,d) int32)] all on device
         for d in range(2, max_degree + 1):
             net_ids = np.nonzero(degrees == d)[0]
             if len(net_ids) == 0:
@@ -165,37 +245,41 @@ class GpuEvalContext:
             s = start[net_ids].astype(np.int64)
             offsets = np.arange(d, dtype=np.int64)
             idx_mat = s[:, None] + offsets[None, :]
-            pin_idx_mat = flat[idx_mat].astype(np.int64)
+            pin_idx_mat = flat[idx_mat].astype(np.int32)
             self._buckets.append((
                 d,
-                torch.from_numpy(net_ids.astype(np.int64)).to(self.device),
+                torch.from_numpy(net_ids.astype(np.int32)).to(self.device),
                 torch.from_numpy(pin_idx_mat).to(self.device),
             ))
 
         large_net_ids = np.nonzero(degrees > max_degree)[0]
-        self.large_net_ids_t = torch.from_numpy(large_net_ids.astype(np.int64)).to(self.device)
+        self.large_net_ids_t = torch.from_numpy(large_net_ids.astype(np.int32)).to(self.device)
 
         # memory budget: cap a chunk's (b,d,d) distance tensor at this many elements
-        self._mst_chunk_budget = 8_000_000
+        self._mst_chunk_budget = mst_chunk_budget
 
         # memory budget: cap a chunk's (numSelected, L) padded-gather tensor (used
-        # by _process_segments) at this many elements. Per chunk, up to ~3 int64
-        # tensors of this shape are concurrently alive during the bitmask-reduction
+        # by _process_segments) at this many elements. Per chunk, up to ~3 tensors
+        # of this shape are concurrently alive during the bitmask-reduction
         # pass (cand/ids/vals), plus -- in the boundary-pair-demand pass that
-        # follows, while cand/ids are still resident -- up to ~4 more int64 tensors
+        # follows, while cand/ids are still resident -- up to ~4 more tensors
         # sized by the (bool) diff mask's nonzero count (a/b/lo_ab/hi_ab), bounded by
         # the same numSelected*L in the pathological worst case where every adjacent
         # cell differs (real region grids -- contiguous rectangular partitions --
         # see far fewer boundary transitions per segment in practice, so this is a
-        # deliberately conservative bound). Reusing _mst_chunk_budget's value here
-        # (same 8-byte dtype, same "cap the dominant tensor's element count" idea)
-        # keeps a single mental model for both chunk budgets in this file, and
-        # empirically (2M cells/nets, K=16, lattice=512 synthetic case) this value
-        # keeps this function's own contribution to peak GPU memory to ~1.8GB on top
-        # of the ~2.9GB pre-existing baseline (pin one-hot bitmask + MST, unrelated
-        # to this fix) that evaluate() already uses before _process_segments ever
-        # runs -- total measured peak 4.62GB, vs. 15.00GB unchunked before this fix.
-        self._seg_chunk_budget = self._mst_chunk_budget
+        # deliberately conservative bound). Independently configurable from
+        # mst_chunk_budget as of M4 T2 item 7 (both still default to the same
+        # 8,000,000 value as before T2, so behaviour is unchanged from pre-T2
+        # unless a caller overrides one; edge_batch_size below is the one that
+        # changed default -- see its __init__ docstring entry).
+        self._seg_chunk_budget = seg_chunk_budget
+
+        # M4 T2 item 4/7: caps how many MST edges evaluate()'s per-edge
+        # geometry/crossing/FT/pair-demand loop processes at once -- see the
+        # batching loop there. A construction parameter (not derived from the
+        # other two budgets) so it can be dialled independently for the T2
+        # batch-invariance tests.
+        self._edge_batch_size = edge_batch_size
 
     # ------------------------------------------------------------------
     # geometry helpers
@@ -204,8 +288,16 @@ class GpuEvalContext:
         # divide by the cached 0-dim tensors, not self.cell_w/cell_h (python floats)
         # -- see the comment where they're constructed in __init__ for why this
         # matters (C1: CUDA reciprocal-multiply off-by-one at lattice boundaries).
-        ix = ((x - self.xl) / self._cell_w_t).to(torch.int64).clamp_(0, self.nx - 1)
-        iy = ((y - self.yl) / self._cell_h_t).to(torch.int64).clamp_(0, self.ny - 1)
+        # M4 T2 item 5: truncate to int32, not int64 -- lattice indices are
+        # bounded by self.nx/self.ny (asserted < 2**31-1 in __init__) and this
+        # is a plain grid-coordinate value, never bit-shifted into a packed
+        # mask, so int32 is safe and halves every downstream (M,)-shaped index
+        # tensor derived from pin/edge positions (ax/ay/bx/by, h_row/h_lo/h_hi,
+        # v_col/v_lo/v_hi in evaluate()). The float64 division itself (the part
+        # that must match numpy bit-for-bit) is unaffected -- only the final
+        # truncation's *storage* width changes, not the truncated value.
+        ix = ((x - self.xl) / self._cell_w_t).to(torch.int32).clamp_(0, self.nx - 1)
+        iy = ((y - self.yl) / self._cell_h_t).to(torch.int32).clamp_(0, self.ny - 1)
         return ix, iy
 
     def _pin_positions(self, node_x, node_y):
@@ -245,7 +337,34 @@ class GpuEvalContext:
         return (ids.unsqueeze(-1) == self._bit_range).to(dtype or torch.int64)
 
     def _popcount_k(self, bm):
-        return self._bit_planes(bm).sum(dim=-1)
+        """(...,) int64 packed bitmask -> (...,) int64 popcount.
+
+        M4 T2 item 3: this used to be `self._bit_planes(bm).sum(dim=-1)` --
+        but _bit_planes' `bitwise_and(bitwise_right_shift(...), 1)` promotes
+        to int64 *before* any dtype narrowing (type promotion follows the
+        widest input, and self._bit_range is int64), so passing
+        dtype=torch.int8 to _bit_planes only narrows the *final* stored
+        tensor, not the (...,K) int64 intermediate the bitwise ops themselves
+        allocate at peak -- for pin_bm/ft_bm (called here on the full
+        (n_nets,) array) that peak intermediate is exactly the (n_nets,K)
+        int64 tensor T2 set out to eliminate, just relocated from
+        `_one_hot_planes` into `_popcount_k`. This SWAR (SIMD-within-a-
+        register) bit-counting recurrence instead computes the popcount with
+        O(log K) elementwise (...,)-shaped int64 ops -- never a (...,K)
+        tensor -- exploiting that every packed bitmask in this file (pin_bm/
+        passed_bm/ft_bm) only ever has bits [0,K) set, K<=32 (asserted in
+        __init__), well inside int64's 64-bit word; verified bit-exact
+        against the old _bit_planes().sum(dim=-1) implementation, including
+        at the K=32 bit-31 boundary, before landing this.
+        """
+        v = bm
+        v = v - ((v >> 1) & 0x5555555555555555)
+        v = (v & 0x3333333333333333) + ((v >> 2) & 0x3333333333333333)
+        v = (v + (v >> 4)) & 0x0f0f0f0f0f0f0f0f
+        v = v + (v >> 8)
+        v = v + (v >> 16)
+        v = v + (v >> 32)
+        return v & 0x7f
 
     def _pack_bits(self, bit_planes):
         """(...,K) 0/1 int64 bit planes -> (...,) int64 bitmask."""
@@ -282,6 +401,16 @@ class GpuEvalContext:
         return a_edges, b_edges
 
     def _batch_mst(self, px, py):
+        """Returns (edge_net_id, edge_pin_a, edge_pin_b), all (M,) int32 -- pure
+        indices into the net/pin arrays (bounded by n_nets / total pins, both
+        asserted < 2**31-1 in __init__), never bit-shifted into a packed mask,
+        so int32 halves this M-sized allocation vs. the pre-T2 int64 version
+        (M4 T2 item 5). pa/pb inherit int32 from pin_idx_mat (the gather
+        *source*); a_local/b_local (the gather *index*, from _prim_batch) stay
+        int64 internally -- gather's index dtype is independent of its source's,
+        and a_local/b_local are only ever (b,d)-shaped with d<=max_degree, not
+        M-shaped, so there's no memory upside to touching them.
+        """
         dev = self.device
         net_ids_list, pin_a_list, pin_b_list = [], [], []
         for d, net_ids, pin_idx_mat in self._buckets:
@@ -299,7 +428,7 @@ class GpuEvalContext:
                 pin_a_list.append(pa.reshape(-1))
                 pin_b_list.append(pb.reshape(-1))
         if not net_ids_list:
-            empty = torch.empty(0, dtype=torch.int64, device=dev)
+            empty = torch.empty(0, dtype=torch.int32, device=dev)
             return empty, empty, empty
         return torch.cat(net_ids_list), torch.cat(pin_a_list), torch.cat(pin_b_list)
 
@@ -319,7 +448,10 @@ class GpuEvalContext:
             l0_all = lo[sel]
             h0_all = hi[sel]
             nid_all = net_id[sel]
-            offsets = torch.arange(L, device=dev)
+            # M4 T2 item 5: int32 -- lo/hi are already int32 grid coordinates
+            # (see _to_idx), so l0+offsets stays int32 (no auto-promotion to
+            # int64) instead of the pre-T2 default int64 arange.
+            offsets = torch.arange(L, device=dev, dtype=torch.int32)
 
             # chunk this bucket's B selected segments so no single (chunk, L)
             # padded-gather tensor exceeds _seg_chunk_budget elements -- same
@@ -348,8 +480,19 @@ class GpuEvalContext:
                 else:
                     ids = self.grid_t[f.unsqueeze(1).expand(-1, L), cand]
 
-                # visited-region bitmask per segment: O(log L) pairwise-OR halving reduce
-                vals = torch.bitwise_left_shift(torch.ones_like(ids), ids)
+                # visited-region bitmask per segment: O(log L) pairwise-OR halving reduce.
+                # M4 T2 dtype hazard: `ids` (region ids, 0..K-1) is int32 (from
+                # grid_t, item 5), but the *shifted* value 1<<ids is a packed
+                # bitmask that can set bit 31 when K=32 -- in *signed* int32 that
+                # is INT32_MIN, and a later arithmetic (sign-extending) right
+                # shift on it would corrupt bit extraction in _bit_planes. The
+                # base of the shift must stay int64 (63 usable positive bits);
+                # only the shift-*amount* (ids) may be the narrower int32 --
+                # verified empirically (torch 2.8.0+cu128/L4) that
+                # bitwise_left_shift accepts a mismatched int64-base/int32-amount
+                # pair and a bare torch.ones_like(ids) here would silently regress
+                # to the unsafe int32 base.
+                vals = torch.bitwise_left_shift(torch.ones_like(ids, dtype=torch.int64), ids)
                 length = L
                 while length > 1:
                     half = length // 2
@@ -396,36 +539,69 @@ class GpuEvalContext:
 
         n_nets = self.n_nets
 
-        # pin_bm: per-net OR of pin region bits (same semantics as RegionGrid.pin_region_bitmask)
-        # R2 remedy (T1 §2.5 item 3): source bit planes + accumulator go int8
-        # together (12M x 32 int64 -> int8 is the ~3.0GB memory the M3 draft's
-        # R2 note calls out at :352/:413); `_pack_bits`'s `bit_planes *
-        # self._pow2_k` auto-promotes int8 x int64 -> int64, so pin_bm itself
-        # (and everything legacy derived from it) is numerically unaffected.
-        pin_bits = self._one_hot_planes(pin_rid, dtype=torch.int8)
-        pin_bit_acc = torch.zeros((n_nets, self.k), dtype=torch.int8, device=dev)
-        idx_exp = self.pin2net_t.unsqueeze(1).expand(-1, self.k)
-        pin_bit_acc.scatter_reduce_(0, idx_exp, pin_bits, reduce="amax", include_self=True)
-        pin_bm = self._pack_bits(pin_bit_acc)
+        # ---- pin_bm (per-net OR of pin region bits) + home_e, M4 T2 item 3 ----
+        # M3 T1 got pin_bm's *accumulator* down to int8 but still materialized
+        # a (P,K) *source* tensor (`pin_bits`) to feed it -- 11.25GB->1.41GB
+        # @12.71M nets/K=32, still the single largest tensor in this file (spec
+        # §4.1/§4.2). T2 eliminates the (P,K) tensor entirely (and, as a bonus,
+        # the dense (n_nets,K) `home_counts` this file used to build separately
+        # for the home-region argmax) via the "unique(net*64+rid) then exact OR"
+        # option spec §4.2 item 4 calls out: net_region_key packs (net_id,
+        # region_id) into one int64 per pin (a *composite key*, so it stays
+        # int64 per §4.2/F4 regardless of pin2net_t/pin_rid's own int32 dtype);
+        # torch.unique dedupes it to one row per *distinct* (net,region) pair
+        # actually touched -- U rows, U <= min(P, n_nets*K) and in practice far
+        # below n_nets*K for real netlists -- without ever holding a P- or
+        # (n_nets,K)-sized 2-D tensor.
+        #
+        # pin_bm: since the keys are already deduped, index_add_'ing 1<<region
+        # (one term per unique (net,region) row) into a zeroed (n_nets,) int64
+        # accumulator sums each net's *distinct* touched-region bits exactly
+        # once -- for disjoint bit positions, sum == OR (integer addition is
+        # exact and order-independent, so this is bit-exact by construction,
+        # not just "very likely correct"). Verified against a dense-tensor
+        # reference for both pin_bm and home below before landing this.
+        #
+        # home_e: the region holding the most pins, ties -> smallest region id
+        # (torch.argmax breaks ties to the first/lowest index, matching
+        # np.argmax -- the same convention the pre-T2 `home_counts.argmax(dim=1)`
+        # relied on). `score = count*64 - region` is injective across every
+        # (count, region) combination that can occur (region in [0,64), so
+        # consecutive counts' score ranges [c*64-63, c*64] never overlap) --
+        # scatter_reduce_(amax) finds each net's best score in one (n_nets,)
+        # pass, and because the encoding is injective, exactly one unique row
+        # per net-with->=1-touched-region achieves it, so the direct assignment
+        # below (not a scatter) is race-free.
+        net_region_key = self.pin2net_t.to(torch.int64) * 64 + pin_rid.to(torch.int64)
+        del pin_ix, pin_iy, pin_rid  # only needed to build net_region_key above
+        uniq_keys, uniq_counts = torch.unique(net_region_key, return_counts=True)
+        del net_region_key
+        uniq_net = uniq_keys // 64
+        uniq_region = uniq_keys % 64
+
+        pin_bm = torch.zeros(n_nets, dtype=torch.int64, device=dev)
+        pin_bm.index_add_(0, uniq_net, torch.bitwise_left_shift(torch.ones_like(uniq_region), uniq_region))
+
+        home_score = uniq_counts.to(torch.int64) * 64 - uniq_region
+        best_home_score = torch.full((n_nets,), -1, dtype=torch.int64, device=dev)
+        best_home_score.scatter_reduce_(0, uniq_net, home_score, reduce="amax", include_self=True)
+        is_home_best = home_score == best_home_score[uniq_net]
+        per_net_home = torch.zeros(n_nets, dtype=torch.int64, device=dev)
+        per_net_home[uniq_net[is_home_best]] = uniq_region[is_home_best]
+        per_net_home = torch.where(self.degrees_t >= 2, per_net_home,
+                                    torch.zeros(n_nets, dtype=torch.int64, device=dev))
+        # M4 T2: CPython function frames aren't block-scoped -- these locals
+        # would otherwise stay referenced (and their GPU memory held) for the
+        # rest of evaluate() even though nothing after this point uses them;
+        # explicit del lets the caching allocator reclaim them before the
+        # heavier phases below (per_net_lambda's popcount, the edge-batching
+        # loop) run. Verified via a peak-memory diagnostic that this is not
+        # cosmetic -- omitting it measurably raised mempool_group's peak.
+        del uniq_keys, uniq_counts, uniq_net, uniq_region, home_score, best_home_score, is_home_best
 
         per_net_lambda = torch.where(self.degrees_t >= 2, self._popcount_k(pin_bm),
                                      torch.zeros_like(pin_bm))
         hard_lambda_sum = int((per_net_lambda - 1).clamp(min=0).sum().item())
-
-        # ---- M3 T1: region-graph home_e + Steiner tree (io_rg/ft_rg) ----
-        # home_e: the region holding the most pins, ties -> smallest region id
-        # (torch.argmax breaks ties to the first/lowest index, matching
-        # np.argmax -- verified empirically, same convention already relied on
-        # for _prim_batch's argmin above). Computed via a per-(net,region) key
-        # bincount rather than a dense (P,K) one-hot + scatter_add_ (which
-        # would need its own paired-dtype accumulator and reintroduce a (P,K)-
-        # or (E,K)-sized int32 tensor -- scatter_add_ has the same
-        # self.dtype==src.dtype requirement as scatter_reduce_, so an int8
-        # source can't feed an overflow-safe wider accumulator that way).
-        home_key = self.pin2net_t * self.k + pin_rid
-        home_counts = torch.bincount(home_key, minlength=n_nets * self.k).view(n_nets, self.k)
-        per_net_home = torch.where(self.degrees_t >= 2, home_counts.argmax(dim=1),
-                                    torch.zeros(n_nets, dtype=torch.int64, device=dev))
 
         # per_net_steiner (ST_e): Λ<=3 closed form (bulk, vectorized over only
         # the Λ==2 / Λ==3 subsets -- never a full (n_nets,K) bit-plane tensor);
@@ -483,6 +659,7 @@ class GpuEvalContext:
         has2 = self.degrees_t >= 2
         hpwl_term = torch.where(has2, hpwl_term, torch.zeros_like(hpwl_term))
         hpwl = float(hpwl_term.sum().item())
+        del max_x, min_x, max_y, min_y, hpwl_term, has2  # M4 T2: see the del comment above
 
         # large nets (degree > max_degree): presence lower bound, no MST/tree_wl/pairs
         per_net_crossings = torch.zeros(n_nets, dtype=torch.int64, device=dev)
@@ -496,42 +673,83 @@ class GpuEvalContext:
 
         per_net_ft = torch.zeros(n_nets, dtype=torch.int64, device=dev)
         pair_demand = {}
-        tree_wl = 0.0
+        # tree_wl as a device-side 0-dim accumulator (M4 T2 item 4): each
+        # batch's partial float64 sum is added in-place on the GPU, with a
+        # single .item() sync at the very end (matching the "sync once, not
+        # per chunk" pattern _reduce_pair_demand already uses below) --
+        # cheaper than a per-batch host round trip and, per spec §4.2's
+        # empirical evidence (heavy-tail float64 reduction, batch=1e6/3e6/8e6/
+        # full all agreeing to within ~1e-16 relative), does not change this
+        # field's accuracy contract (rel<=1e-12 across batch sizes, not
+        # bit-exact -- float64 addition is not associative, so a different
+        # batch size *can* land on a different but equally valid rounding).
+        tree_wl_t = torch.zeros((), dtype=torch.float64, device=dev)
 
-        if edge_net_id.numel() > 0:
-            xa, ya = px[edge_pin_a], py[edge_pin_a]
-            xb, yb = px[edge_pin_b], py[edge_pin_b]
-            tree_wl = float((torch.abs(xa - xb) + torch.abs(ya - yb)).sum().item())
-
-            ax, ay = self._to_idx(xa, ya)
-            bx, by = self._to_idx(xb, yb)
-
-            # horizontal segment (at ay, matching edge_regions_and_crossings' (x0,y0)->(x1,y0) leg)
-            h_row = ay
-            h_lo = torch.minimum(ax, bx)
-            h_hi = torch.maximum(ax, bx)
-            # vertical segment (at bx, matching the (x1,y0)->(x1,y1) leg)
-            v_col = bx
-            v_lo = torch.minimum(ay, by)
-            v_hi = torch.maximum(ay, by)
-
-            h_cross = self.Ph[h_row, h_hi] - self.Ph[h_row, h_lo]
-            v_cross = self.Pv[v_hi, v_col] - self.Pv[v_lo, v_col]
-            edge_cross = h_cross + v_cross
-            per_net_crossings.scatter_add_(0, edge_net_id, edge_cross)
-
-            # R2 remedy: passed_bit_acc is the other (E,K) int64 -> int8
-            # accumulator (paired with _process_segments' int8 seg_bits source).
+        M = edge_net_id.numel()
+        if M > 0:
+            # M4 T2 items 4/7: the MST edge arrays (edge_net_id/edge_pin_a/
+            # edge_pin_b, M ~= total pins) are already streamed out of
+            # _batch_mst at a bounded per-degree-bucket chunk size, but the
+            # *downstream* per-edge pipeline below (geometry gather -> lattice
+            # index -> Ph/Pv crossing lookup -> _process_segments) used to run
+            # on the full (M,) arrays in one shot -- that's every "MST edge
+            # array" / "edge endpoint coordinates" / "segment description" row
+            # in spec §4.1's tensor budget at full M size simultaneously.
+            # Batching over edge_batch_size here bounds those same rows to a
+            # fixed size (a construction parameter, defaulting to 1,000,000 --
+            # see the __init__ docstring for why not 8,000,000) regardless of
+            # M, and per_net_crossings/passed_bit_acc/
+            # pair_count_acc/tree_wl_t are all incrementally accumulated
+            # in-place across batches -- order-independent for the integer
+            # accumulators (exact addition/amax-OR) and within the ~1e-16
+            # float64-reduction-order slack documented above for tree_wl.
             passed_bit_acc = torch.zeros((n_nets, self.k), dtype=torch.int8, device=dev)
             pair_count_acc = torch.zeros(64 * 64, dtype=torch.int64, device=dev)
-            self._process_segments(h_row, h_lo, h_hi, edge_net_id, False, passed_bit_acc, pair_count_acc)
-            self._process_segments(v_col, v_lo, v_hi, edge_net_id, True, passed_bit_acc, pair_count_acc)
+            batch = self._edge_batch_size
+            for start in range(0, M, batch):
+                end = min(M, start + batch)
+                b_net_id = edge_net_id[start:end]
+                b_pin_a = edge_pin_a[start:end]
+                b_pin_b = edge_pin_b[start:end]
+
+                xa, ya = px[b_pin_a], py[b_pin_a]
+                xb, yb = px[b_pin_b], py[b_pin_b]
+                tree_wl_t += (torch.abs(xa - xb) + torch.abs(ya - yb)).sum()
+
+                ax, ay = self._to_idx(xa, ya)
+                bx, by = self._to_idx(xb, yb)
+
+                # horizontal segment (at ay, matching edge_regions_and_crossings' (x0,y0)->(x1,y0) leg)
+                h_row = ay
+                h_lo = torch.minimum(ax, bx)
+                h_hi = torch.maximum(ax, bx)
+                # vertical segment (at bx, matching the (x1,y0)->(x1,y1) leg)
+                v_col = bx
+                v_lo = torch.minimum(ay, by)
+                v_hi = torch.maximum(ay, by)
+
+                h_cross = self.Ph[h_row, h_hi] - self.Ph[h_row, h_lo]
+                v_cross = self.Pv[v_hi, v_col] - self.Pv[v_lo, v_col]
+                # per_net_crossings stays int64 (unlike the index tensors
+                # above, this is an accumulated *count*, not a bounded index --
+                # widen the int32 Ph/Pv difference before scatter_add_, which
+                # requires self.dtype == src.dtype).
+                edge_cross = (h_cross + v_cross).to(torch.int64)
+                per_net_crossings.scatter_add_(0, b_net_id, edge_cross)
+
+                # R2 remedy (unchanged from M3 T1): passed_bit_acc is the other
+                # (E,K) int64 -> int8 accumulator (paired with
+                # _process_segments' int8 seg_bits source).
+                self._process_segments(h_row, h_lo, h_hi, b_net_id, False, passed_bit_acc, pair_count_acc)
+                self._process_segments(v_col, v_lo, v_hi, b_net_id, True, passed_bit_acc, pair_count_acc)
 
             passed_bm = self._pack_bits(passed_bit_acc)
             ft_bm = passed_bm & (~pin_bm)
             per_net_ft = self._popcount_k(ft_bm)
 
             pair_demand = self._reduce_pair_demand(pair_count_acc)
+
+        tree_wl = float(tree_wl_t.item())
 
         return EvalResult(
             io_count=int(per_net_crossings.sum().item()),
