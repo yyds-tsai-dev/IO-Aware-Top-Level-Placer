@@ -1,12 +1,18 @@
-import argparse, json, os, time
+import argparse, json, os, time, uuid
 import numpy as np
 from ioplace.dreamplace_env import setup_dreamplace
 from ioplace.regions import make_grid_regions, make_slicing_regions
 from ioplace.region_grid import RegionGrid
 from ioplace.netlist import netlist_from_placedb
 from ioplace.evaluator_ref import evaluate
+from ioplace.profile import PhaseTimer, DeviceMemSampler, host_rss_gb, env_metadata
 
 GRID_SHAPES = {4: (2, 2), 8: (4, 2), 16: (4, 4), 32: (8, 4)}
+
+# M4 T8a (design draft sec 7.0 RESULT GATE / T8a row): bumped when the
+# driver JSON's field set changes. 1 = pre-T8a (no phase timing / E1 /
+# provenance fields); 2 = this task's addition.
+RESULT_SCHEMA_VERSION = 2
 
 def get_regions_for(die, k, rtype, seed, lattice=512):
     if rtype == "grid":
@@ -111,39 +117,177 @@ def _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed):
                 "tree_wl": res.tree_wl, "hpwl": res.hpwl,
                 "large_net_lb": res.large_net_lb}
 
+
+def _repo_root():
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _dp_root():
+    from ioplace.dreamplace_env import DEFAULT_ROOT
+    return os.environ.get("DREAMPLACE_ROOT", DEFAULT_ROOT)
+
+
+def _t8a_provenance(config_json):
+    """M4 T8a (design draft sec 7.0 RESULT GATE, narrowed to this task's
+    field list): run_id / status / schema_version / repo_commit /
+    input_sha256, built from `profile.env_metadata()` ("接上
+    ioplace/profile.py"). `status` is only ever "ok" here -- this driver
+    only reaches its final json.dump() on a clean return (an exception
+    propagates with no file written at all), so there is no path that could
+    write a misleading "ok". The fuller experiment_status/workload_status
+    split (design draft sec 2.2/7.0, for tasks like T2b/T9 that must record
+    OOM/crash as a *legitimate* terminal state) is out of T8a's scope."""
+    env = env_metadata(_repo_root(), _dp_root(), input_paths=(config_json,))
+    return {"run_id": str(uuid.uuid4()), "status": "ok",
+            "schema_version": RESULT_SCHEMA_VERSION,
+            "repo_commit": env["ioplace_commit"], "input_sha256": env["input_sha256"],
+            "env": env}
+
+
+def _phase_summary(timer, sampler):
+    """M4 T8a: assembles the read/gp/lg/eval phase-timing/memory fields
+    (design draft sec 6.1) from a `profile.PhaseTimer` + `profile.DeviceMemSampler`
+    that covered the whole run.
+
+    `peak_mem_mb` is recomputed here as the max *phase* `peak_alloc_gb`
+    rather than a single end-of-run `torch.cuda.max_memory_allocated()`
+    call: each phase's own `reset_peak_memory_stats()` (sec 1.4 B1's fix,
+    now applied per-phase instead of once at run start) means the global
+    allocator counter holds only the *last* phase's peak by the time the run
+    finishes -- a single end-of-run read would silently under-report
+    peak_mem_mb without changing its name or documented "this run's overall
+    GPU peak, MB" semantics. Taking the max across every recorded phase
+    reconstructs the true run-wide peak instead, since every GPU-allocating
+    step of the run happens inside some phase's window."""
+    phases = timer.phases
+    peak_alloc_gb = max((p.get("peak_alloc_gb", 0.0) for p in phases.values()), default=0.0)
+    host_peaks = [p.get("host_rss_hwm_at_phase_end", 0.0) for p in phases.values()] + [host_rss_gb()]
+    return {
+        "phases": phases,
+        "t_read": phases.get("read", {}).get("t_s", 0.0),
+        "t_gp": phases.get("gp", {}).get("t_s", 0.0),
+        "t_lg": phases.get("lg", {}).get("t_s", 0.0),
+        "t_eval": phases.get("eval", {}).get("t_s", 0.0),
+        "device_used_gb": sampler.device_used_gb,
+        "host_peak_rss_gb": max(host_peaks),
+        "peak_mem_mb": peak_alloc_gb * 1024.0,
+    }
+
+
+def _legalization_fields(legal, num_unplaced, legalize_flag):
+    """M4 T8a: maps a raw `legality_check_op()` bool + unplaced-cell count
+    into the E1 JSON fields. Pure/synchronous so the "legalization failed"
+    branch (design draft T8a's required 人工情境 test) is directly
+    exercisable without needing a DREAMPlace run that actually produces an
+    illegal placement."""
+    if not legalize_flag:
+        return {"legalization_status": "skipped", "num_unplaced_cells": None}
+    return {"legalization_status": "success" if legal else "failed",
+            "num_unplaced_cells": int(num_unplaced)}
+
+
+def _legalization_diagnostics(placer, placedb, params, node_x, node_y):
+    """M4 T8a: `legality_check_op` is already built and already called
+    internally by `op_collections.legalize_op` (BasicPlace.py's
+    `build_legalization_op`) -- but only to `logging.error()` on failure,
+    the bool itself never reaches the caller. This calls the same,
+    already-public op again (read-only, on the final full `pos` tensor) to
+    surface it.
+
+    `num_unplaced_cells` has no DREAMPlace-native definition
+    (`legality_check_cpp` reports one aggregate legal/illegal bool for the
+    whole design, not a per-cell breakdown, and there is no C++ op this
+    driver is allowed to add) -- defined here as the count of movable cells
+    whose final position is non-finite or outside the die box: cells GP/LG
+    failed to leave in *any* valid location. This is a strict subset of what
+    a full overlap-aware legality check would flag, but computable without a
+    new op."""
+    if not params.legalize_flag:
+        return _legalization_fields(None, 0, params.legalize_flag)
+    legal = bool(placer.op_collections.legality_check_op(placer.pos[0]))
+    n_mov = placedb.num_movable_nodes
+    xl, yl, xh, yh = float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh)
+    x, y = node_x[:n_mov], node_y[:n_mov]
+    invalid = ~np.isfinite(x) | ~np.isfinite(y) | (x < xl) | (x > xh) | (y < yl) | (y > yh)
+    return _legalization_fields(legal, int(np.count_nonzero(invalid)), params.legalize_flag)
+
+
 def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, deterministic=None):
     import torch
     t0 = time.time()
-    # M4 design draft sec 1.4 B1: pre-fix, peak_mem_mb was the *process*
-    # cumulative allocator high-water mark, not this run's own peak (no
-    # reset here meant a second run_flat() call in the same process, e.g.
-    # run_ablation_m2.py's multi-arm loop, inherited every earlier arm's
-    # peak too). Necessary but NOT sufficient for per-run isolation: this
-    # only zeroes the allocator's peak-tracking *counters* -- any tensor
-    # still resident from an earlier call in this process is untouched. A
-    # correct per-arm ablation still wants each arm in its own subprocess.
-    if torch.cuda.is_available():
-        torch.cuda.reset_peak_memory_stats()
-    params, placedb = _load_dreamplace(config_json)
-    if dp_seed is not None:
-        params.random_seed = dp_seed
-    if deterministic is not None:
-        params.deterministic_flag = deterministic
-    placedb.initialize(params)
-    placer, _ = _place(params, placedb)
-    node_x, node_y = extract_final_positions(placer, placedb)
-    _, metrics = _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed)
+    timer = PhaseTimer()
+    sampler = DeviceMemSampler()
+    sampler.start()
+
+    # M4 T8a: "read" phase = load config + read + initialize placedb (sec
+    # 1.4 B1's per-run reset, now folded into PhaseTimer's per-phase reset --
+    # see _phase_summary's docstring for why peak_mem_mb is recomputed
+    # rather than read once at the end).
+    with timer.phase("read"):
+        params, placedb = _load_dreamplace(config_json)
+        if dp_seed is not None:
+            params.random_seed = dp_seed
+        if deterministic is not None:
+            params.deterministic_flag = deterministic
+        placedb.initialize(params)
+
+    # NonLinearPlace is a bare top-level module inside $DREAMPLACE_ROOT/install
+    # (see Global Constraints), only importable once _load_dreamplace (above)
+    # has called setup_dreamplace() and pushed install/ onto sys.path.
+    import NonLinearPlace
+
+    # "gp" phase: opened manually (not `with`) because it must close mid-call,
+    # at the exact point NonLinearPlace.__call__ invokes legalize_op -- see
+    # the op_collections.legalize_op monkeypatch below, the only place
+    # available from the driver side to observe the GP/LG boundary without
+    # touching DREAMPlace source (op_collections.legalize_op is a plain
+    # mutable PlaceOpCollection field, BasicPlace.py:237, already the same
+    # kind of extension point run_placement_io.py's attach_terms/
+    # iteration_callback use).
+    gp_phase = timer.phase("gp")
+    gp_phase.__enter__()
+    # Same init_pos determinism guard as _place() (see that function's
+    # comment): BasicPlace draws centre-noise/filler init from numpy's
+    # global RNG, seeded only by Placer.py's flow which we bypass here.
+    np.random.seed(params.random_seed)
+    placer = NonLinearPlace.NonLinearPlace(params, placedb, None)
+
+    orig_legalize = placer.op_collections.legalize_op
+    def _timed_legalize(pos):
+        gp_phase.__exit__(None, None, None)
+        with timer.phase("lg"):
+            out = orig_legalize(pos)
+        return out
+    placer.op_collections.legalize_op = _timed_legalize
+
+    lr = params.global_place_stages[0]["learning_rate"]
+    placer(params, placedb, lr)
+    if "gp" not in timer.phases:
+        # params.legalize_flag was off -- _timed_legalize (and so gp_phase's
+        # own close) never fired.
+        gp_phase.__exit__(None, None, None)
+
+    final_overflow = float(placer.model.overflow.max())
+
+    with timer.phase("eval"):
+        node_x, node_y = extract_final_positions(placer, placedb)
+        legal_fields = _legalization_diagnostics(placer, placedb, params, node_x, node_y)
+        _, metrics = _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed)
+
+    sampler.stop()
+
     result = {"mode": "flat", "config": config_json, "k": k, "rtype": rtype,
               "seed": seed, "dp_seed": int(params.random_seed),
               "det": int(params.deterministic_flag), "runtime_s": time.time() - t0,
-              "peak_mem_mb": torch.cuda.max_memory_allocated() / 2**20
-              if torch.cuda.is_available() else 0.0,
               # sec 1.4 B1: marks this JSON as post-fix (per-run reset at
               # measurement start) so it can be told apart from pre-fix
               # results whose peak_mem_mb was the process cumulative HWM
               # (sec 1.4 B1 gate M4-G7 -- those must be flagged as stale,
               # not silently compared against this field).
-              "peak_mem_mb_reset_semantics": True, **metrics}
+              "peak_mem_mb_reset_semantics": True,
+              "final_overflow": final_overflow,
+              **legal_fields, **metrics,
+              **_phase_summary(timer, sampler), **_t8a_provenance(config_json)}
     os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)
     with open(out_json, "w") as f:
         json.dump(result, f, indent=1)

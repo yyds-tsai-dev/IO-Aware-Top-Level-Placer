@@ -2,12 +2,14 @@ import json, os, time
 import numpy as np
 import scipy.stats
 from ioplace.drivers.run_placement import (_load_dreamplace, extract_final_positions,
-    _evaluate_and_pack, get_regions_for)
+    _evaluate_and_pack, get_regions_for, _legalization_diagnostics, _phase_summary,
+    _t8a_provenance)
 from ioplace.netlist import netlist_from_placedb
 from ioplace.region_grid import RegionGrid
 from ioplace.evaluator_gpu import GpuEvalContext
 from ioplace.ops.soft_assign import rect_table
 from ioplace.ops.io_term import build_net_node_csr, IoTerm
+from ioplace.profile import PhaseTimer, DeviceMemSampler
 from ioplace.schedules import ScheduleState
 from ioplace.dp_hook import (attach_terms, detach_terms, assert_optimizer_lock,
                              refresh_nesterov_secant, install_version_invariant)
@@ -21,7 +23,12 @@ RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  "of_on", "of_end", "alpha_io", "w_mode", "d_max", "rho_margin",
                  "margin_m", "lambda_io_final", "spearman_rho", "num_callbacks",
                  "num_refreshes", "backtrack_median", "observer_mode",
-                 "diag_every", "no_diag", "ft_reweight", "alpha_ft", "trajectory")
+                 "diag_every", "no_diag", "ft_reweight", "alpha_ft", "trajectory",
+                 # M4 T8a (design draft T8a row / sec 6.3 E1 / sec 7.0 RESULT GATE):
+                 "num_unplaced_cells", "final_overflow", "legalization_status",
+                 "run_id", "status", "schema_version", "repo_commit", "input_sha256",
+                 "env", "phases", "t_read", "t_gp", "t_lg", "t_eval",
+                 "device_used_gb", "host_peak_rss_gb")
 
 
 def _normalize_snapshot_iters(spec):
@@ -74,17 +81,22 @@ def run_io(config_json, k, rtype, seed, out_json, *,
            snapshot_iters=None, snapshot_dir=None, snapshot_grad_check_cb=None):
     import torch
     t0 = time.time()
-    # M4 design draft sec 1.4 B1 (same fix/caveat as run_placement.run_flat):
-    # necessary but not sufficient for per-run isolation -- see that
-    # function's comment for what this does and does not clear.
-    if torch.cuda.is_available():
-        torch.cuda.reset_peak_memory_stats()
-    params, placedb = _load_dreamplace(config_json)
-    if dp_seed is not None:
-        params.random_seed = dp_seed
-    if deterministic is not None:
-        params.deterministic_flag = deterministic
-    placedb.initialize(params)
+    # M4 T8a: replaces the old single reset_peak_memory_stats() call (sec
+    # 1.4 B1's fix) with PhaseTimer's per-phase reset -- see
+    # run_placement._phase_summary's docstring for why peak_mem_mb is
+    # recomputed from the per-phase peaks rather than a single end-of-run
+    # read.
+    timer = PhaseTimer()
+    sampler = DeviceMemSampler()
+    sampler.start()
+
+    with timer.phase("read"):
+        params, placedb = _load_dreamplace(config_json)
+        if dp_seed is not None:
+            params.random_seed = dp_seed
+        if deterministic is not None:
+            params.deterministic_flag = deterministic
+        placedb.initialize(params)
     # design v2 sec 3.2.4: use_bb is only resolved to a concrete 0/1 by
     # PlaceDB.py:837, which runs inside initialize() -- must check after.
     assert_optimizer_lock(params)
@@ -92,6 +104,14 @@ def run_io(config_json, k, rtype, seed, out_json, *,
     # (see Global Constraints), only importable once _load_dreamplace has
     # called setup_dreamplace() and pushed install/ onto sys.path.
     import NonLinearPlace
+
+    # M4 T8a: "gp" phase opened manually (not `with`) -- it must close
+    # mid-call, at the exact point NonLinearPlace.__call__ invokes
+    # legalize_op (see the op_collections.legalize_op monkeypatch below,
+    # inserted once `placer` exists). Everything from here through
+    # `placer(params, placedb, lr)`'s GP loop happens inside this window.
+    gp_phase = timer.phase("gp")
+    gp_phase.__enter__()
 
     nl = netlist_from_placedb(placedb)           # initialize 後(scale 後)座標系
     die = (float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh))
@@ -141,6 +161,18 @@ def run_io(config_json, k, rtype, seed, out_json, *,
     # only by Placer.py's flow which we bypass here.
     np.random.seed(params.random_seed)
     placer = NonLinearPlace.NonLinearPlace(params, placedb, None)
+
+    # M4 T8a: same op_collections.legalize_op timing wrap as
+    # run_placement.run_flat -- see that function's comment for why this is
+    # the only non-invasive way (no DREAMPlace source touched) to observe
+    # the GP/LG boundary.
+    orig_legalize = placer.op_collections.legalize_op
+    def _timed_legalize(pos):
+        gp_phase.__exit__(None, None, None)
+        with timer.phase("lg"):
+            out = orig_legalize(pos)
+        return out
+    placer.op_collections.legalize_op = _timed_legalize
 
     n_all, n_phys = placedb.num_nodes, placedb.num_physical_nodes
     total_iterations = params.global_place_stages[0]["iteration"]
@@ -332,19 +364,28 @@ def run_io(config_json, k, rtype, seed, out_json, *,
     placer.iteration_callback = cb
     lr = params.global_place_stages[0]["learning_rate"]
     placer(params, placedb, lr)
+    if "gp" not in timer.phases:
+        # params.legalize_flag was off -- _timed_legalize (and so gp_phase's
+        # own close) never fired.
+        gp_phase.__exit__(None, None, None)
     lambda_io_final = state.lambda_io
+    final_overflow = float(placer.model.overflow.max())
 
-    node_x, node_y = extract_final_positions(placer, placedb)
-    _, metrics = _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed)
-    res = ctx.evaluate(node_x, node_y)
-    m = res.per_net_crossings > 0
-    if np.count_nonzero(m) >= 2:
-        spearman_rho = float(scipy.stats.spearmanr(
-            res.per_net_crossings[m], (res.per_net_lambda - 1)[m]).correlation)
-    else:
-        spearman_rho = float("nan")
+    with timer.phase("eval"):
+        node_x, node_y = extract_final_positions(placer, placedb)
+        legal_fields = _legalization_diagnostics(placer, placedb, params, node_x, node_y)
+        _, metrics = _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed)
+        res = ctx.evaluate(node_x, node_y)
+        m = res.per_net_crossings > 0
+        if np.count_nonzero(m) >= 2:
+            spearman_rho = float(scipy.stats.spearmanr(
+                res.per_net_crossings[m], (res.per_net_lambda - 1)[m]).correlation)
+        else:
+            spearman_rho = float("nan")
 
-    detach_terms(params)
+        detach_terms(params)
+
+    sampler.stop()
 
     backtrack_median = float(np.median(cb_state["obj_evals_per_iter"])) \
         if cb_state["obj_evals_per_iter"] else 0.0
@@ -361,10 +402,10 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         "io_rg": res.io_rg, "ft_rg": res.ft_rg,
         "lg_loss": metrics["io_count"] - cb_state["io_gp"],
         "runtime_s": time.time() - t0,
-        "peak_mem_mb": torch.cuda.max_memory_allocated() / 2**20
-        if torch.cuda.is_available() else 0.0,
         # sec 1.4 B1: see run_flat's matching field for what this does/does
         # not guarantee (per-run reset, not full process isolation).
+        # peak_mem_mb itself is now supplied by _phase_summary() below (see
+        # run_placement._phase_summary's docstring for why).
         "peak_mem_mb_reset_semantics": True,
         "rho_max": rho_max, "tau_hi": tau_hi, "tau_lo": tau_lo,
         "of_on": of_on, "of_end": of_end, "alpha_io": alpha_io,
@@ -376,6 +417,9 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         "diag_every": diag_every, "no_diag": no_diag,
         "ft_reweight": ft_reweight, "alpha_ft": alpha_ft,
         "trajectory": trajectory,
+        "final_overflow": final_overflow,
+        **legal_fields,
+        **_phase_summary(timer, sampler), **_t8a_provenance(config_json),
     }
     os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)
     with open(out_json, "w") as f:
