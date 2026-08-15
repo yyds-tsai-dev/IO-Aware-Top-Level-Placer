@@ -3,7 +3,7 @@ import numpy as np
 import scipy.stats
 from ioplace.drivers.run_placement import (_load_dreamplace, extract_final_positions,
     _evaluate_and_pack, get_regions_for, _legalization_diagnostics, _phase_summary,
-    _t8a_provenance)
+    _t8a_provenance, _stop_overflow_reached, _gp_iteration_budget, _effective_scale_fields)
 from ioplace.netlist import netlist_from_placedb
 from ioplace.region_grid import RegionGrid
 from ioplace.evaluator_gpu import GpuEvalContext
@@ -29,7 +29,13 @@ RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  "num_unplaced_cells", "final_overflow", "legalization_status",
                  "run_id", "status", "schema_version", "repo_commit", "input_sha256",
                  "env", "phases", "t_read", "t_gp", "t_lg", "t_eval",
-                 "device_used_gb", "host_peak_rss_gb")
+                 "device_used_gb", "host_peak_rss_gb",
+                 # Overflow-diagnosis follow-up (schema_version 3): E1/RESULT
+                 # GATE gaps closed after the T8a overflow-diagnosis adjudication.
+                 "stop_overflow_reached", "gp_iteration_budget", "gp_iterations_run",
+                 "hpwl_gp", "hpwl_lg", "effective_target_density",
+                 "num_filler_nodes", "num_bins_x", "num_bins_y",
+                 "command", "hostname", "benchmark_kind", "device_baseline_gb")
 
 
 def _normalize_snapshot_iters(spec):
@@ -80,8 +86,19 @@ def run_io(config_json, k, rtype, seed, out_json, *,
            diag_every=1, no_diag=False,
            ft_reweight="off", alpha_ft=0.5,
            snapshot_iters=None, snapshot_dir=None, snapshot_grad_check_cb=None,
-           emit_def=None):
+           emit_def=None,
+           benchmark_kind="real"):
     import torch
+    # Overflow-diagnosis follow-up: device_baseline_gb -- see
+    # run_placement.run_flat's matching comment for why this must be the
+    # first CUDA call in the function, before PhaseTimer/DeviceMemSampler
+    # or _load_dreamplace touch CUDA themselves.
+    if torch.cuda.is_available():
+        free0, total0 = torch.cuda.mem_get_info()
+        device_baseline_gb = (total0 - free0) / 2**30
+    else:
+        device_baseline_gb = 0.0
+
     t0 = time.time()
     # M4 T8a: replaces the old single reset_peak_memory_stats() call (sec
     # 1.4 B1's fix) with PhaseTimer's per-phase reset -- see
@@ -99,6 +116,9 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         if deterministic is not None:
             params.deterministic_flag = deterministic
         placedb.initialize(params)
+        # Overflow-diagnosis follow-up: see run_placement._effective_scale_fields's
+        # docstring for why this must be read after initialize().
+        scale_fields = _effective_scale_fields(params, placedb)
     # design v2 sec 3.2.4: use_bb is only resolved to a concrete 0/1 by
     # PlaceDB.py:837, which runs inside initialize() -- must check after.
     assert_optimizer_lock(params)
@@ -167,17 +187,26 @@ def run_io(config_json, k, rtype, seed, out_json, *,
     # M4 T8a: same op_collections.legalize_op timing wrap as
     # run_placement.run_flat -- see that function's comment for why this is
     # the only non-invasive way (no DREAMPlace source touched) to observe
-    # the GP/LG boundary.
+    # the GP/LG boundary. Overflow-diagnosis follow-up: also grabs
+    # hpwl_gp/hpwl_lg the same way run_flat's wrapper does (see that
+    # wrapper's comment for why the torch.no_grad() is needed -- `pos` is
+    # the live optimizer's requires_grad=True leaf tensor).
     orig_legalize = placer.op_collections.legalize_op
+    hpwl_holder = {}
     def _timed_legalize(pos):
         gp_phase.__exit__(None, None, None)
+        with torch.no_grad():
+            hpwl_holder["hpwl_gp"] = float(placer.op_collections.hpwl_op(pos))
         with timer.phase("lg"):
             out = orig_legalize(pos)
+        with torch.no_grad():
+            hpwl_holder["hpwl_lg"] = float(placer.op_collections.hpwl_op(out))
         return out
     placer.op_collections.legalize_op = _timed_legalize
 
     n_all, n_phys = placedb.num_nodes, placedb.num_physical_nodes
     total_iterations = params.global_place_stages[0]["iteration"]
+    gp_iteration_budget = _gp_iteration_budget(params)
 
     if diag_every < 1:
         raise ValueError(f"diag_every must be >= 1, got {diag_every}")
@@ -218,9 +247,18 @@ def run_io(config_json, k, rtype, seed, out_json, *,
     trajectory = []
     cb_state = {"num_refreshes": 0, "io_gp": 0, "prev_obj_evals": 0,
                "obj_evals_per_iter": [], "installed_invariant": False,
-               "diag_occurrences": 0}
+               "diag_occurrences": 0, "last_iteration": -1}
 
     def cb(iteration, pos):
+        # Overflow-diagnosis follow-up: gp_iterations_run source for run_io
+        # (unlike run_flat, run_io never captures NonLinearPlace.__call__'s
+        # own metrics return value -- see run_placement._last_metric_iteration's
+        # docstring for that path). Tracked on every callback, not just the
+        # `every`-gated block below, since iteration_callback fires every GP
+        # iteration (NonLinearPlace.py:521) and a run stopped early by
+        # Lgamma_stop_criterion must still report the iteration it actually
+        # stopped at.
+        cb_state["last_iteration"] = iteration
         of = float(placer.model.overflow.max())
         gamma = float(placer.model.gamma)
         discrete = state.update_continuous(iteration, of, L_R, gamma)
@@ -372,6 +410,8 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         gp_phase.__exit__(None, None, None)
     lambda_io_final = state.lambda_io
     final_overflow = float(placer.model.overflow.max())
+    stop_overflow_reached = _stop_overflow_reached(final_overflow, params.stop_overflow)
+    gp_iterations_run = cb_state["last_iteration"] + 1
 
     with timer.phase("eval"):
         node_x, node_y = extract_final_positions(placer, placedb)
@@ -428,8 +468,15 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         "ft_reweight": ft_reweight, "alpha_ft": alpha_ft,
         "trajectory": trajectory,
         "final_overflow": final_overflow,
+        "stop_overflow_reached": stop_overflow_reached,
+        "gp_iteration_budget": gp_iteration_budget,
+        "gp_iterations_run": gp_iterations_run,
+        "hpwl_gp": hpwl_holder.get("hpwl_gp"), "hpwl_lg": hpwl_holder.get("hpwl_lg"),
+        **scale_fields,
         **legal_fields,
-        **_phase_summary(timer, sampler), **_t8a_provenance(config_json),
+        **_phase_summary(timer, sampler),
+        **_t8a_provenance(config_json, benchmark_kind=benchmark_kind,
+                          device_baseline_gb=device_baseline_gb),
     }
     os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)
     with open(out_json, "w") as f:

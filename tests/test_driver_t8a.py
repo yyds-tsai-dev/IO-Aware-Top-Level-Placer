@@ -27,11 +27,22 @@ Five things this file locks down:
      (tests/test_driver_io.py) are exercised by their own existing tests,
      not duplicated here -- this file only adds new assertions on top of
      what those already cover.
+  6. Overflow-diagnosis follow-up (schema_version 3): `stop_overflow_reached`/
+     `gp_iteration_budget`/`_effective_scale_fields`/`_last_metric_iteration`
+     are pure/mock-testable (SimpleNamespace params/placedb, no DREAMPlace/
+     CUDA needed -- same rationale as `_legalization_fields`); `_t8a_provenance`'s
+     new command/hostname/benchmark_kind/device_baseline_gb fields are checked
+     directly (needs only a config path, not a real run); hpwl_gp/hpwl_lg and
+     the RESULT GATE fields' presence on a real run are checked by extending
+     the existing simple.json flat/io tests (point 2 above).
 """
 import json
 import os
+import socket
 import subprocess
+import sys
 import uuid as uuid_mod
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -39,7 +50,8 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from ioplace.drivers.run_placement import (RESULT_SCHEMA_VERSION,
-    _legalization_fields, run_flat)
+    _legalization_fields, _stop_overflow_reached, _gp_iteration_budget,
+    _effective_scale_fields, _last_metric_iteration, _t8a_provenance, run_flat)
 from ioplace.drivers.run_placement_io import RESULT_FIELDS, run_io
 
 DP = os.environ.get("DREAMPLACE_ROOT", "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace")
@@ -77,6 +89,68 @@ def test_legalization_fields_skipped_when_legalize_flag_off():
         "legalization_status": "skipped", "num_unplaced_cells": None}
 
 
+# -- 6. overflow-diagnosis follow-up: pure/mock-level unit tests -----------
+
+def test_stop_overflow_reached_true_when_final_overflow_at_or_below_target():
+    assert _stop_overflow_reached(0.07, 0.07) is True   # equal counts as reached
+    assert _stop_overflow_reached(0.05, 0.07) is True
+
+
+def test_stop_overflow_reached_false_when_final_overflow_above_target():
+    assert _stop_overflow_reached(0.10, 0.07) is False
+
+
+def test_gp_iteration_budget_reads_config_value():
+    """No real config/PlaceDB needed -- global_place_stages[0]["iteration"]
+    is read straight off `params`, so a SimpleNamespace mock exercises the
+    exact same read `run_flat`/`run_io` do."""
+    params = SimpleNamespace(global_place_stages=[
+        {"iteration": 300, "learning_rate": 0.01}])
+    assert _gp_iteration_budget(params) == 300
+
+
+def test_effective_scale_fields_reads_placedb_and_params():
+    params = SimpleNamespace(target_density=0.85)
+    placedb = SimpleNamespace(num_filler_nodes=123, num_bins_x=512, num_bins_y=512)
+    assert _effective_scale_fields(params, placedb) == {
+        "effective_target_density": 0.85, "num_filler_nodes": 123,
+        "num_bins_x": 512, "num_bins_y": 512}
+
+
+def test_last_metric_iteration_flat_leaf():
+    """The GP+LG protocol shape (legalize_flag=1): NonLinearPlace.py appends
+    a *flat* EvalMetrics-like object to all_metrics right after
+    legalization -- metrics[-1] is that object directly."""
+    metrics = [[[SimpleNamespace(iteration=5)]], SimpleNamespace(iteration=300)]
+    assert _last_metric_iteration(metrics) == 300
+
+
+def test_last_metric_iteration_nested_leaf():
+    """The GP-loop-only shape (no flat post-legalization append): descend
+    into the Lgamma/Llambda/Lsub nesting to the last-recorded metric."""
+    metrics = [[[SimpleNamespace(iteration=1)], [SimpleNamespace(iteration=2),
+               SimpleNamespace(iteration=299)]]]
+    assert _last_metric_iteration(metrics) == 299
+
+
+def test_t8a_provenance_includes_result_gate_fields():
+    """command/hostname/benchmark_kind/device_baseline_gb -- needs only a
+    config path (for input_sha256/env_metadata), no real DREAMPlace run."""
+    prov = _t8a_provenance(SIMPLE, benchmark_kind="synthetic", device_baseline_gb=1.5)
+    assert prov["command"] == " ".join(sys.argv)
+    assert prov["hostname"] == socket.gethostname()
+    assert prov["benchmark_kind"] == "synthetic"
+    assert prov["device_baseline_gb"] == 1.5
+
+
+def test_result_fields_declare_the_overflow_diagnosis_columns():
+    for f in ("stop_overflow_reached", "gp_iteration_budget", "gp_iterations_run",
+             "hpwl_gp", "hpwl_lg", "effective_target_density", "num_filler_nodes",
+             "num_bins_x", "num_bins_y",
+             "command", "hostname", "benchmark_kind", "device_baseline_gb"):
+        assert f in RESULT_FIELDS, f
+
+
 # -- 2/3/4/5. real runs -----------------------------------------------------
 
 def _assert_phase_shape(phases):
@@ -95,6 +169,23 @@ def _assert_result_gate_provenance(res, config_json):
     assert res["repo_commit"] == _git_head()
     assert config_json in res["input_sha256"]
     assert len(res["input_sha256"][config_json]) == 64  # sha256 hex digest
+    # Overflow-diagnosis follow-up: the remaining RESULT GATE fields.
+    assert res["command"] == " ".join(sys.argv)
+    assert res["hostname"] == socket.gethostname()
+    assert res["benchmark_kind"] == "real"              # default, not overridden below
+    assert res["device_baseline_gb"] >= 0.0
+
+
+def _assert_overflow_diagnosis_fields(res):
+    """Overflow-diagnosis follow-up (schema_version 3): the E1-gate/scale
+    fields a real GP+LG run on simple.json should produce sane values for."""
+    assert isinstance(res["stop_overflow_reached"], bool)
+    assert res["gp_iteration_budget"] > 0
+    assert 0 <= res["gp_iterations_run"] <= res["gp_iteration_budget"]
+    assert res["hpwl_gp"] > 0.0 and res["hpwl_lg"] > 0.0
+    assert 0.0 < res["effective_target_density"] <= 1.0
+    assert res["num_filler_nodes"] >= 0
+    assert res["num_bins_x"] > 0 and res["num_bins_y"] > 0
 
 
 @pytest.mark.slow
@@ -112,6 +203,7 @@ def test_flat_t8a_fields_on_simple(tmp_path):
     assert res["host_peak_rss_gb"] > 0.0
 
     _assert_result_gate_provenance(res, SIMPLE)
+    _assert_overflow_diagnosis_fields(res)
 
     # existing fields/semantics untouched
     assert res["peak_mem_mb_reset_semantics"] is True
@@ -121,7 +213,11 @@ def test_flat_t8a_fields_on_simple(tmp_path):
     on_disk = json.load(open(out))
     for f in ("num_unplaced_cells", "final_overflow", "legalization_status",
              "run_id", "status", "schema_version", "repo_commit",
-             "input_sha256", "phases"):
+             "input_sha256", "phases",
+             "stop_overflow_reached", "gp_iteration_budget", "gp_iterations_run",
+             "hpwl_gp", "hpwl_lg", "effective_target_density",
+             "num_filler_nodes", "num_bins_x", "num_bins_y",
+             "command", "hostname", "benchmark_kind", "device_baseline_gb"):
         assert f in on_disk
 
 
@@ -136,6 +232,7 @@ def test_io_t8a_fields_on_simple(tmp_path):
 
     _assert_phase_shape(res["phases"])
     _assert_result_gate_provenance(res, SIMPLE)
+    _assert_overflow_diagnosis_fields(res)
 
     assert res["peak_mem_mb_reset_semantics"] is True
     assert res["mode"] == "io"
@@ -143,7 +240,11 @@ def test_io_t8a_fields_on_simple(tmp_path):
     on_disk = json.load(open(out))
     for f in ("num_unplaced_cells", "final_overflow", "legalization_status",
              "run_id", "status", "schema_version", "repo_commit",
-             "input_sha256", "phases"):
+             "input_sha256", "phases",
+             "stop_overflow_reached", "gp_iteration_budget", "gp_iterations_run",
+             "hpwl_gp", "hpwl_lg", "effective_target_density",
+             "num_filler_nodes", "num_bins_x", "num_bins_y",
+             "command", "hostname", "benchmark_kind", "device_baseline_gb"):
         assert f in on_disk
 
 

@@ -105,6 +105,17 @@ def run(config_json) -> dict:
                               if torch.cuda.is_available() else 0.0),
             gp_peak_reserved_mb=(torch.cuda.max_memory_reserved() / 2**20
                                  if torch.cuda.is_available() else 0.0),
+            # Overflow-diagnosis follow-up: final_overflow -- float() on a
+            # 0-dim tensor already calls .item() implicitly, same pattern
+            # ioplace/drivers/run_placement.py's run_flat/run_io use.
+            # gp_iterations -- metrics is _place()'s `placer(params, placedb,
+            # lr)` return value; under this repo's GP+LG protocol
+            # (legalize_flag=1) NonLinearPlace.py:891-892 appends a *flat*
+            # EvalMetrics object to it right after legalization, so
+            # metrics[-1] is that object directly (verified against
+            # $DP/install/dreamplace/NonLinearPlace.py's metrics structure).
+            final_overflow=float(placer.model.overflow.max()),
+            gp_iterations=int(metrics[-1].iteration),
             rss_end_gb=_rss_gb(), ok=True,
         )
     except RuntimeError as e:
