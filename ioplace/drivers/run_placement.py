@@ -223,8 +223,14 @@ def _phase_summary(timer, sampler):
     GPU peak, MB" semantics. Taking the max across every recorded phase
     reconstructs the true run-wide peak instead, since every GPU-allocating
     step of the run happens inside some phase's window."""
+    # M4 T2b: `PhaseTimer(reset_peak=False)` phases (a `LifetimeRecorder`
+    # is active and owns GPU-peak accounting instead -- see profile.py's
+    # `_Phase.__exit__`) write `peak_alloc_gb=None`, not `0.0` -- filtered
+    # out of the max() below rather than treated as a genuine zero-peak
+    # phase (which would silently drag peak_mem_mb down).
     phases = timer.phases
-    peak_alloc_gb = max((p.get("peak_alloc_gb", 0.0) for p in phases.values()), default=0.0)
+    peak_alloc_gb = max((p["peak_alloc_gb"] for p in phases.values()
+                        if p.get("peak_alloc_gb") is not None), default=0.0)
     host_peaks = [p.get("host_rss_hwm_at_phase_end", 0.0) for p in phases.values()] + [host_rss_gb()]
     return {
         "phases": phases,

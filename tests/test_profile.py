@@ -133,6 +133,91 @@ def test_host_rss_gb_is_positive():
     assert host_rss_gb() > 0.0
 
 
+def test_phase_timer_reset_peak_false_skips_reset_and_marks_disabled():
+    """M4 T2b: `PhaseTimer(reset_peak=False)` -- for driver runs where a
+    `profile_lifetime.LifetimeRecorder` owns GPU-peak accounting instead
+    (see profile.py's PhaseTimer/_Phase docstrings). peak_alloc_gb/
+    peak_reserved_gb are explicitly None (not 0.0 -- "not measured here",
+    not "measured, found empty"), and peak_semantics names why."""
+    timer = PhaseTimer(reset_peak=False)
+    with timer.phase("a"):
+        torch.empty(1_000_000, dtype=torch.uint8, device="cuda")
+    phase = timer.phases["a"]
+    assert phase["peak_alloc_gb"] is None
+    assert phase["peak_reserved_gb"] is None
+    assert phase["peak_semantics"] == "disabled_owned_by_lifetime_recorder"
+    assert phase["t_s"] >= 0.0
+    assert phase["host_rss_hwm_at_phase_end"] > 0.0
+
+
+def test_phase_timer_reset_peak_true_is_unchanged_default():
+    """reset_peak defaults to True -- pre-T2b behavior (no peak_semantics
+    key, peak_alloc_gb is a real reading) is untouched."""
+    timer = PhaseTimer()
+    with timer.phase("a"):
+        torch.empty(1_000_000, dtype=torch.uint8, device="cuda")
+    phase = timer.phases["a"]
+    assert phase["peak_alloc_gb"] is not None and phase["peak_alloc_gb"] >= 0.0
+    assert "peak_semantics" not in phase
+
+
+def test_device_mem_sampler_reset_hwm_zeroes_and_resamples():
+    """M4 T2b (`profile_lifetime.LifetimeRecorder.phase_begin`): the
+    sampler-thread analogue of reset_peak_memory_stats() -- a later
+    phase's device_used_gb must not inherit an earlier phase's HWM."""
+    sampler = DeviceMemSampler(interval_s=0.5)
+    sampler.start()
+    try:
+        big = torch.empty(300_000_000, dtype=torch.uint8, device="cuda")  # ~300MB
+        hwm_before_reset = sampler.device_used_gb
+        del big
+        torch.cuda.empty_cache()
+        sampler.reset_hwm()
+        hwm_after_reset = sampler.device_used_gb
+        assert hwm_after_reset < hwm_before_reset
+    finally:
+        sampler.stop()
+
+
+def test_phase_summary_skips_none_peak_alloc_gb():
+    """M4 T2b: `run_placement._phase_summary`'s max() must skip phases
+    with peak_alloc_gb=None (a PhaseTimer(reset_peak=False) phase) rather
+    than treating None as a genuine 0.0 peak, which would silently drag
+    peak_mem_mb down when a LifetimeRecorder is active."""
+    from ioplace.drivers.run_placement import _phase_summary
+
+    class FakeTimer:
+        phases = {
+            "read": {"t_s": 1.0, "peak_alloc_gb": None, "peak_reserved_gb": None,
+                     "peak_semantics": "disabled_owned_by_lifetime_recorder",
+                     "host_rss_hwm_at_phase_end": 1.0},
+            "gp": {"t_s": 2.0, "peak_alloc_gb": 3.5, "peak_reserved_gb": 4.0,
+                  "host_rss_hwm_at_phase_end": 2.0},
+        }
+
+    class FakeSampler:
+        device_used_gb = 5.0
+
+    summary = _phase_summary(FakeTimer(), FakeSampler())
+    assert summary["peak_mem_mb"] == pytest.approx(3.5 * 1024.0)
+
+
+def test_phase_summary_all_none_peaks_defaults_to_zero():
+    from ioplace.drivers.run_placement import _phase_summary
+
+    class FakeTimer:
+        phases = {
+            "read": {"t_s": 1.0, "peak_alloc_gb": None, "peak_reserved_gb": None,
+                     "host_rss_hwm_at_phase_end": 1.0},
+        }
+
+    class FakeSampler:
+        device_used_gb = 0.0
+
+    summary = _phase_summary(FakeTimer(), FakeSampler())
+    assert summary["peak_mem_mb"] == 0.0
+
+
 def test_profile_schema_has_all_fields():
     timer = PhaseTimer()
     with timer.phase("read"):

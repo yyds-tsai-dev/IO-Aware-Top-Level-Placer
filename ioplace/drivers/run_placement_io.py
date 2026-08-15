@@ -10,6 +10,7 @@ from ioplace.evaluator_gpu import GpuEvalContext
 from ioplace.ops.soft_assign import rect_table
 from ioplace.ops.io_term import build_net_node_csr, IoTerm
 from ioplace.profile import PhaseTimer, DeviceMemSampler
+from ioplace.profile_lifetime import LifetimeRecorder
 from ioplace.schedules import ScheduleState
 from ioplace.dp_hook import (attach_terms, detach_terms, assert_optimizer_lock,
                              refresh_nesterov_secant, install_version_invariant)
@@ -35,7 +36,9 @@ RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  "stop_overflow_reached", "gp_iteration_budget", "gp_iterations_run",
                  "hpwl_gp", "hpwl_lg", "effective_target_density",
                  "num_filler_nodes", "num_bins_x", "num_bins_y",
-                 "command", "hostname", "benchmark_kind", "device_baseline_gb")
+                 "command", "hostname", "benchmark_kind", "device_baseline_gb",
+                 # M4 T2b (probe_lifetime_gate.py's artifact postcondition):
+                 "n_callbacks_with_active", "n_evals_while_active")
 
 
 def _normalize_snapshot_iters(spec):
@@ -87,7 +90,8 @@ def run_io(config_json, k, rtype, seed, out_json, *,
            ft_reweight="off", alpha_ft=0.5,
            snapshot_iters=None, snapshot_dir=None, snapshot_grad_check_cb=None,
            emit_def=None,
-           benchmark_kind="real"):
+           benchmark_kind="real",
+           lifetime_out=None):
     import torch
     # Overflow-diagnosis follow-up: device_baseline_gb -- see
     # run_placement.run_flat's matching comment for why this must be the
@@ -100,15 +104,31 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         device_baseline_gb = 0.0
 
     t0 = time.time()
+    # M4 T2b (design draft sec 2.2/7.1 T2b): when lifetime_out is given, a
+    # LifetimeRecorder takes over full-lifetime buffer tracking + per-phase
+    # GPU-peak accounting (sec 2.2's corrected peak ~= resident + max
+    # transient formula) for this run -- PhaseTimer(reset_peak=False) below
+    # makes the ordinary phase timer skip its own reset_peak_memory_stats()
+    # calls so the two trackers never fight over the same process-wide CUDA
+    # counter (see profile.py's PhaseTimer/_Phase docstrings). Every rec.*
+    # call in this function is behind `if rec is not None:` -- with
+    # lifetime_out=None (every existing caller), rec is None, this whole
+    # block is a no-op, and the rest of this function's control flow,
+    # tensor ops, and RNG draws are byte-for-byte what they were before T2b.
+    rec = LifetimeRecorder() if lifetime_out is not None else None
+    if rec is not None:
+        rec.mark("cuda_baseline", scan=False)   # no roots registered yet
     # M4 T8a: replaces the old single reset_peak_memory_stats() call (sec
     # 1.4 B1's fix) with PhaseTimer's per-phase reset -- see
     # run_placement._phase_summary's docstring for why peak_mem_mb is
     # recomputed from the per-phase peaks rather than a single end-of-run
     # read.
-    timer = PhaseTimer()
+    timer = PhaseTimer(reset_peak=(rec is None))
     sampler = DeviceMemSampler()
     sampler.start()
 
+    if rec is not None:
+        rec.phase_begin("read")
     with timer.phase("read"):
         params, placedb = _load_dreamplace(config_json)
         if dp_seed is not None:
@@ -119,6 +139,8 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         # Overflow-diagnosis follow-up: see run_placement._effective_scale_fields's
         # docstring for why this must be read after initialize().
         scale_fields = _effective_scale_fields(params, placedb)
+    if rec is not None:
+        rec.phase_end("read")
     # design v2 sec 3.2.4: use_bb is only resolved to a concrete 0/1 by
     # PlaceDB.py:837, which runs inside initialize() -- must check after.
     assert_optimizer_lock(params)
@@ -136,10 +158,16 @@ def run_io(config_json, k, rtype, seed, out_json, *,
     gp_phase.__enter__()
 
     nl = netlist_from_placedb(placedb)           # initialize 後(scale 後)座標系
+    if rec is not None:
+        rec.mark("netlist_built", scan=False)    # still no roots registered
+        rec.phase_begin("initialize")
     die = (float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh))
     rs = get_regions_for(die, k, rtype, seed)
     rg = RegionGrid(rs)
     ctx = GpuEvalContext(nl, rg, device="cuda")
+    if rec is not None:
+        rec.add_root("eval_ctx", ctx)
+        rec.phase_end("initialize")
 
     if of_end is None:
         of_end = float(params.stop_overflow)
@@ -150,11 +178,16 @@ def run_io(config_json, k, rtype, seed, out_json, *,
     if margin_tau is None:
         margin_tau = margin_m / 2.0
 
+    if rec is not None:
+        rec.phase_begin("io_term_build")
     rects, r2k = rect_table(rs)
     csr = build_net_node_csr(nl, ignore_net_degree)
     io_term = IoTerm(csr=csr, rects=rects, rect2region=r2k, K=k,
                      num_movable=nl.num_movable, num_physical=nl.num_physical,
                      num_nodes=placedb.num_nodes, device="cuda", w_mode=w_mode)
+    if rec is not None:
+        rec.add_root("io_term", io_term)
+        rec.phase_end("io_term_build")
 
     L_R = ((die[2] - die[0]) * (die[3] - die[1]) / k) ** 0.5
 
@@ -181,8 +214,14 @@ def run_io(config_json, k, rtype, seed, out_json, *,
     # Same init_pos determinism guard as run_placement._place() / run_reweight:
     # BasicPlace draws centre-noise/filler init from numpy's global RNG, seeded
     # only by Placer.py's flow which we bypass here.
+    if rec is not None:
+        rec.phase_begin("placer_build")
     np.random.seed(params.random_seed)
     placer = NonLinearPlace.NonLinearPlace(params, placedb, None)
+    if rec is not None:
+        rec.add_root("placer", placer)
+        rec.phase_end("placer_build")
+        rec.phase_begin("gp")
 
     # M4 T8a: same op_collections.legalize_op timing wrap as
     # run_placement.run_flat -- see that function's comment for why this is
@@ -247,7 +286,14 @@ def run_io(config_json, k, rtype, seed, out_json, *,
     trajectory = []
     cb_state = {"num_refreshes": 0, "io_gp": 0, "prev_obj_evals": 0,
                "obj_evals_per_iter": [], "installed_invariant": False,
-               "diag_occurrences": 0, "last_iteration": -1}
+               "diag_occurrences": 0, "last_iteration": -1,
+               # M4 T2b (probe_lifetime_gate.py's artifact postcondition):
+               # counts, not booleans -- "the IO term was actually active
+               # (state.active, i.e. past the of_on overflow threshold) for
+               # >=3 callbacks/evaluator calls", the guard against a
+               # lifetime probe that measured memory before the op it's
+               # trying to characterize ever turned on.
+               "n_callbacks_with_active": 0, "n_evals_while_active": 0}
 
     def cb(iteration, pos):
         # Overflow-diagnosis follow-up: gp_iterations_run source for run_io
@@ -262,6 +308,8 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         of = float(placer.model.overflow.max())
         gamma = float(placer.model.gamma)
         discrete = state.update_continuous(iteration, of, L_R, gamma)
+        if not observer_mode and state.active:
+            cb_state["n_callbacks_with_active"] += 1
 
         # Per-iteration line-search cost (design v2 sec 9.1 F3: the *median
         # per scheduled iteration* obj_eval_count increment, threshold >= 5).
@@ -281,9 +329,22 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         # evaluator calls below instead).
         force_eval = (iteration == total_iterations - 1)
         if (iteration > 0 and iteration % every == 0) or force_eval:
+            # M4 T2b: fine-grained buffer-lifetime checkpoints within the
+            # single long-open "gp" phase -- only at the (small) set of
+            # scan_iters iterations (default {0,1,2,-1}), not every
+            # `every`-gated callback, since a full resident scan at 30M
+            # scale is not free. Guarded by `rec is not None` exactly like
+            # every other T2b call site.
+            do_scan = rec is not None and rec.wants_iter(iteration, force_eval)
+            if do_scan:
+                rec.mark(f"gp_iter_{iteration}")
             node_x = pos.data[:n_phys]
             node_y = pos.data[n_all:n_all + n_phys]
             res = ctx.evaluate(node_x, node_y)
+            if do_scan:
+                rec.mark(f"after_ctx_evaluate_{iteration}")
+            if not observer_mode and state.active:
+                cb_state["n_evals_while_active"] += 1
             cb_state["io_gp"] = res.io_count
 
             entry = {"iteration": iteration, "overflow": of, "tau": state.tau,
@@ -305,6 +366,8 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                 g_wl_l1 = float(pos.grad.abs().sum())
                 pos.grad.zero_()
                 g_io_l1 = io_term.io_grad_l1(pos.detach(), state.tau)
+                if do_scan:
+                    rec.mark(f"after_wl_io_grad_{iteration}")
                 state.update_ratio(g_wl_l1, g_io_l1)
                 entry["grad_l1_io"] = g_io_l1
                 entry["grad_l1_wl"] = g_wl_l1
@@ -361,6 +424,8 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                 cb_state["diag_occurrences"] += 1
                 if do_diag:
                     diag = io_term.diagnostics(pos, 0.05 * L_R)
+                    if do_scan:
+                        rec.mark(f"after_diagnostics_{iteration}")
                     entry["soft_lambda_ref_tau"] = diag["soft_lambda_sum"]
                     entry["frac_soft"] = diag["frac_soft"]
                     entry["grad_share"] = diag["grad_share"].tolist()
@@ -408,11 +473,22 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         # params.legalize_flag was off -- _timed_legalize (and so gp_phase's
         # own close) never fired.
         gp_phase.__exit__(None, None, None)
+    if rec is not None:
+        # LifetimeRecorder's own "gp" phase spans the whole placer(...) call
+        # (including any mid-call legalize sub-call) -- unlike PhaseTimer's
+        # "gp"/"lg" split (which _timed_legalize closes/reopens mid-call to
+        # observe the GP/LG wall-clock boundary), the recorder has no need
+        # to split them: it isn't measuring wall time, and its fine-grained
+        # per-iteration signal comes from the scan_iters mark() checkpoints
+        # inside cb(), not from a phase boundary.
+        rec.phase_end("gp")
     lambda_io_final = state.lambda_io
     final_overflow = float(placer.model.overflow.max())
     stop_overflow_reached = _stop_overflow_reached(final_overflow, params.stop_overflow)
     gp_iterations_run = cb_state["last_iteration"] + 1
 
+    if rec is not None:
+        rec.phase_begin("eval")
     with timer.phase("eval"):
         node_x, node_y = extract_final_positions(placer, placedb)
         legal_fields = _legalization_diagnostics(placer, placedb, params, node_x, node_y)
@@ -434,8 +510,18 @@ def run_io(config_json, k, rtype, seed, out_json, *,
             export_def(placedb, params, node_x, node_y, emit_def, rs)
 
         detach_terms(params)
+        if rec is not None:
+            rec.mark("teardown")
 
+    if rec is not None:
+        rec.phase_end("eval")
     sampler.stop()
+    if rec is not None:
+        rec.stop()
+        lifetime_record = rec.to_record()
+        os.makedirs(os.path.dirname(lifetime_out) or ".", exist_ok=True)
+        with open(lifetime_out, "w") as f:
+            json.dump(lifetime_record, f, indent=1)
 
     backtrack_median = float(np.median(cb_state["obj_evals_per_iter"])) \
         if cb_state["obj_evals_per_iter"] else 0.0
@@ -472,6 +558,13 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         "gp_iteration_budget": gp_iteration_budget,
         "gp_iterations_run": gp_iterations_run,
         "hpwl_gp": hpwl_holder.get("hpwl_gp"), "hpwl_lg": hpwl_holder.get("hpwl_lg"),
+        # M4 T2b: probe_lifetime_gate.py's artifact postcondition inputs
+        # (n_callbacks_with_active >= 3 and n_evals_while_active >= 3) --
+        # populated unconditionally (not just when lifetime_out is given),
+        # since they're cheap booleans-turned-counters already tracked in
+        # cb_state regardless of whether a LifetimeRecorder is attached.
+        "n_callbacks_with_active": cb_state["n_callbacks_with_active"],
+        "n_evals_while_active": cb_state["n_evals_while_active"],
         **scale_fields,
         **legal_fields,
         **_phase_summary(timer, sampler),

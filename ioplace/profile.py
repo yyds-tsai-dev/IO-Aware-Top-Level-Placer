@@ -172,6 +172,17 @@ class DeviceMemSampler:
         with self._lock:
             return self._used_bytes_hwm / 2**30
 
+    def reset_hwm(self):
+        """M4 T2b (`profile_lifetime.LifetimeRecorder.phase_begin`):
+        zeroes the running high-water mark and immediately resamples --
+        the sampler-thread analogue of `torch.cuda.reset_peak_memory_stats()`,
+        so a `LifetimeRecorder` phase's `device_used_peak_gb` reflects only
+        that phase's own window, not whatever an earlier phase already
+        pushed the HWM to."""
+        with self._lock:
+            self._used_bytes_hwm = 0
+        self._sample_once()
+
     def __enter__(self):
         return self.start()
 
@@ -204,8 +215,17 @@ class PhaseTimer:
         RSS *as of* this phase's end, not this phase's own contribution.
     """
 
-    def __init__(self):
+    def __init__(self, reset_peak=True):
+        """`reset_peak=False` (M4 T2b): skip this timer's own
+        `reset_peak_memory_stats()`/peak reads entirely -- for driver runs
+        where a `profile_lifetime.LifetimeRecorder` is active and has
+        taken over GPU-peak accounting via its own `phase_begin`/
+        `phase_end` (sec 2.2). Two trackers both calling
+        `reset_peak_memory_stats()` on the same process-wide CUDA counter
+        would each silently clobber the other's window; `reset_peak=False`
+        makes `PhaseTimer` step aside instead."""
         self.phases = {}
+        self.reset_peak = reset_peak
 
     def phase(self, name):
         return _Phase(self, name)
@@ -218,7 +238,7 @@ class _Phase:
         self._t0 = None
 
     def __enter__(self):
-        if torch.cuda.is_available():
+        if self._timer.reset_peak and torch.cuda.is_available():
             # Necessary but not sufficient (see PhaseTimer docstring): this
             # zeroes the allocator's peak-tracking counters, not any tensor
             # still resident from a previous phase in the same process.
@@ -230,6 +250,22 @@ class _Phase:
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         dt = time.perf_counter() - self._t0
+        if not self._timer.reset_peak:
+            # M4 T2b: this timer isn't reading/resetting the allocator's
+            # peak counters at all here -- a LifetimeRecorder owns that
+            # window instead (see PhaseTimer.__init__'s docstring).
+            # peak_alloc_gb/peak_reserved_gb are explicitly None (not 0.0,
+            # which would misreport as "measured and found empty") so a
+            # consumer can tell "not measured here" apart from "measured,
+            # zero" -- see run_placement._phase_summary's None-skipping fix.
+            self._timer.phases[self._name] = {
+                "t_s": dt,
+                "peak_alloc_gb": None,
+                "peak_reserved_gb": None,
+                "peak_semantics": "disabled_owned_by_lifetime_recorder",
+                "host_rss_hwm_at_phase_end": host_rss_gb(),
+            }
+            return False
         peak_alloc_gb = (torch.cuda.max_memory_allocated() / 2**30
                          if torch.cuda.is_available() else 0.0)
         peak_reserved_gb = (torch.cuda.max_memory_reserved() / 2**30
