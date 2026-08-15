@@ -1,4 +1,4 @@
-import argparse, json, os, time, uuid
+import argparse, json, os, socket, sys, time, uuid
 import numpy as np
 from ioplace.dreamplace_env import setup_dreamplace
 from ioplace.regions import make_grid_regions, make_slicing_regions
@@ -11,8 +11,12 @@ GRID_SHAPES = {4: (2, 2), 8: (4, 2), 16: (4, 4), 32: (8, 4)}
 
 # M4 T8a (design draft sec 7.0 RESULT GATE / T8a row): bumped when the
 # driver JSON's field set changes. 1 = pre-T8a (no phase timing / E1 /
-# provenance fields); 2 = this task's addition.
-RESULT_SCHEMA_VERSION = 2
+# provenance fields); 2 = T8a's own addition; 3 = overflow-diagnosis
+# follow-up: stop_overflow_reached/gp_iteration_budget/gp_iterations_run/
+# hpwl_gp/hpwl_lg/effective_target_density/num_filler_nodes/num_bins_x/
+# num_bins_y, plus the RESULT GATE provenance gaps (command/hostname/
+# benchmark_kind/device_baseline_gb).
+RESULT_SCHEMA_VERSION = 3
 
 def get_regions_for(die, k, rtype, seed, lattice=512):
     if rtype == "grid":
@@ -127,7 +131,7 @@ def _dp_root():
     return os.environ.get("DREAMPLACE_ROOT", DEFAULT_ROOT)
 
 
-def _t8a_provenance(config_json):
+def _t8a_provenance(config_json, *, benchmark_kind="real", device_baseline_gb=0.0):
     """M4 T8a (design draft sec 7.0 RESULT GATE, narrowed to this task's
     field list): run_id / status / schema_version / repo_commit /
     input_sha256, built from `profile.env_metadata()` ("接上
@@ -136,12 +140,72 @@ def _t8a_provenance(config_json):
     propagates with no file written at all), so there is no path that could
     write a misleading "ok". The fuller experiment_status/workload_status
     split (design draft sec 2.2/7.0, for tasks like T2b/T9 that must record
-    OOM/crash as a *legitimate* terminal state) is out of T8a's scope."""
+    OOM/crash as a *legitimate* terminal state) is out of T8a's scope.
+
+    Overflow-diagnosis follow-up: the remaining RESULT GATE fields
+    (command/hostname/benchmark_kind/device_baseline_gb) folded into the
+    same provenance dict -- `command`/`hostname` are pulled straight off
+    the process (sys.argv, socket.gethostname()); `benchmark_kind` and
+    `device_baseline_gb` are supplied by the caller since they need
+    context this function doesn't have (a CLI flag, and a pre-run
+    mem_get_info() reading taken before this function is even entered)."""
     env = env_metadata(_repo_root(), _dp_root(), input_paths=(config_json,))
     return {"run_id": str(uuid.uuid4()), "status": "ok",
             "schema_version": RESULT_SCHEMA_VERSION,
             "repo_commit": env["ioplace_commit"], "input_sha256": env["input_sha256"],
-            "env": env}
+            "env": env,
+            "command": " ".join(sys.argv), "hostname": socket.gethostname(),
+            "benchmark_kind": benchmark_kind, "device_baseline_gb": device_baseline_gb}
+
+
+def _last_metric_iteration(metrics):
+    """`NonLinearPlace.__call__`'s return value (`all_metrics`) is the same
+    list object its internals call `Lgamma_metrics` -- nested
+    Lgamma/Llambda/Lsub sub-lists while the GP loop itself is running
+    (`all_metrics[-1]` is a list of lists), but a *flat* `EvalMetrics`
+    object once legalization runs (source: $DP/install/dreamplace/
+    NonLinearPlace.py:891-892, appended directly to `all_metrics` right
+    before its own `iteration += 1`) -- same shape if detailed placement
+    ran (:933-934), which our driver never enables (`_load_dreamplace`
+    forces `detailed_place_flag = 0`). Descending into `metrics[-1]` until
+    a non-list leaf is reached covers both shapes: under this repo's GP+LG
+    protocol (`legalize_flag=1`) the leaf is that post-legalization
+    EvalMetrics, whose `.iteration` is exactly the GP loop's final
+    iteration count (LG's own `iteration += 1` happens *after* this object
+    is constructed); if legalize_flag were ever 0 it falls back to the GP
+    loop's own last-recorded metric instead."""
+    m = metrics[-1]
+    while isinstance(m, list):
+        m = m[-1]
+    return int(m.iteration)
+
+
+def _stop_overflow_reached(final_overflow, stop_overflow):
+    """Overflow-diagnosis follow-up: pure comparison, split out from
+    run_flat/run_io's result assembly so it's directly unit-testable (both
+    branches) without a real DREAMPlace run -- same rationale as
+    `_legalization_fields` above."""
+    return bool(final_overflow <= float(stop_overflow))
+
+
+def _gp_iteration_budget(params):
+    """Overflow-diagnosis follow-up: the configured GP iteration budget
+    (`global_place_stages[0]["iteration"]`), split out for the same
+    mock-params testability reason as `_stop_overflow_reached`."""
+    return int(params.global_place_stages[0]["iteration"])
+
+
+def _effective_scale_fields(params, placedb):
+    """Overflow-diagnosis follow-up: `effective_target_density`/
+    `num_filler_nodes`/`num_bins_x`/`num_bins_y` (design draft's RESULT
+    GATE 缺項), split out for mock-placedb/params testability. Must only be
+    called *after* `placedb.initialize(params)` -- PlaceDB.py:842-846 may
+    rewrite `params.target_density` (clamps it up to cell_utilization if the
+    configured value is smaller), so reading it any earlier would risk the
+    pre-clamp value."""
+    return {"effective_target_density": float(params.target_density),
+            "num_filler_nodes": int(placedb.num_filler_nodes),
+            "num_bins_x": int(placedb.num_bins_x), "num_bins_y": int(placedb.num_bins_y)}
 
 
 def _phase_summary(timer, sampler):
@@ -212,8 +276,22 @@ def _legalization_diagnostics(placer, placedb, params, node_x, node_y):
     return _legalization_fields(legal, int(np.count_nonzero(invalid)), params.legalize_flag)
 
 
-def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, deterministic=None):
+def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, deterministic=None,
+            benchmark_kind="real"):
     import torch
+    # Overflow-diagnosis follow-up: device_baseline_gb -- whole-device usage
+    # already present before this run touches CUDA at all (run start, prior
+    # to any CUDA configuration), so a downstream reader can tell "high
+    # device_used_gb because of us" apart from "high because something else
+    # already had the device". Must be the very first CUDA call in this
+    # function, before PhaseTimer/DeviceMemSampler (both of which touch
+    # CUDA themselves) or _load_dreamplace.
+    if torch.cuda.is_available():
+        free0, total0 = torch.cuda.mem_get_info()
+        device_baseline_gb = (total0 - free0) / 2**30
+    else:
+        device_baseline_gb = 0.0
+
     t0 = time.time()
     timer = PhaseTimer()
     sampler = DeviceMemSampler()
@@ -230,6 +308,9 @@ def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, determinist
         if deterministic is not None:
             params.deterministic_flag = deterministic
         placedb.initialize(params)
+        # Overflow-diagnosis follow-up: must be read after initialize() --
+        # see _effective_scale_fields's docstring for why.
+        scale_fields = _effective_scale_fields(params, placedb)
 
     # NonLinearPlace is a bare top-level module inside $DREAMPLACE_ROOT/install
     # (see Global Constraints), only importable once _load_dreamplace (above)
@@ -252,22 +333,42 @@ def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, determinist
     np.random.seed(params.random_seed)
     placer = NonLinearPlace.NonLinearPlace(params, placedb, None)
 
+    # Overflow-diagnosis follow-up: hpwl_gp/hpwl_lg -- hpwl_op(pos) called on
+    # the exact same full pos tensor NonLinearPlace itself passes into
+    # legalize_op, once right before (still GP's output) and once on the
+    # legalized result it returns; stashed in a dict rather than a bare
+    # nonlocal since it must survive both the closure and the case where
+    # legalize_flag is off (never populated -> stays absent, matching
+    # _legalization_fields's None-when-skipped convention below). `pos` is
+    # the live optimizer's own requires_grad=True leaf tensor, so hpwl_op(pos)
+    # would otherwise build (and leak, via hpwl_holder's retained reference)
+    # a full autograd graph for a value we only read -- wrapped in
+    # torch.no_grad() to match how DREAMPlace's own EvalMetrics.evaluate()
+    # ($DP/install/dreamplace/EvalMetrics.py:109) calls this same op.
     orig_legalize = placer.op_collections.legalize_op
+    hpwl_holder = {}
     def _timed_legalize(pos):
         gp_phase.__exit__(None, None, None)
+        with torch.no_grad():
+            hpwl_holder["hpwl_gp"] = float(placer.op_collections.hpwl_op(pos))
         with timer.phase("lg"):
             out = orig_legalize(pos)
+        with torch.no_grad():
+            hpwl_holder["hpwl_lg"] = float(placer.op_collections.hpwl_op(out))
         return out
     placer.op_collections.legalize_op = _timed_legalize
 
+    gp_iteration_budget = _gp_iteration_budget(params)
     lr = params.global_place_stages[0]["learning_rate"]
-    placer(params, placedb, lr)
+    dp_metrics = placer(params, placedb, lr)
     if "gp" not in timer.phases:
         # params.legalize_flag was off -- _timed_legalize (and so gp_phase's
         # own close) never fired.
         gp_phase.__exit__(None, None, None)
 
     final_overflow = float(placer.model.overflow.max())
+    stop_overflow_reached = _stop_overflow_reached(final_overflow, params.stop_overflow)
+    gp_iterations_run = _last_metric_iteration(dp_metrics)
 
     with timer.phase("eval"):
         node_x, node_y = extract_final_positions(placer, placedb)
@@ -286,8 +387,15 @@ def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, determinist
               # not silently compared against this field).
               "peak_mem_mb_reset_semantics": True,
               "final_overflow": final_overflow,
+              "stop_overflow_reached": stop_overflow_reached,
+              "gp_iteration_budget": gp_iteration_budget,
+              "gp_iterations_run": gp_iterations_run,
+              "hpwl_gp": hpwl_holder.get("hpwl_gp"), "hpwl_lg": hpwl_holder.get("hpwl_lg"),
+              **scale_fields,
               **legal_fields, **metrics,
-              **_phase_summary(timer, sampler), **_t8a_provenance(config_json)}
+              **_phase_summary(timer, sampler),
+              **_t8a_provenance(config_json, benchmark_kind=benchmark_kind,
+                                device_baseline_gb=device_baseline_gb)}
     os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)
     with open(out_json, "w") as f:
         json.dump(result, f, indent=1)
@@ -327,10 +435,15 @@ def main():
     # (w = 1 + alpha*min(signal, cap)) with the signal switched to ft_rg.
     ap.add_argument("--ft-reweight", default="off", choices=["off", "on"])
     ap.add_argument("--alpha-ft", type=float, default=0.5)
+    # Overflow-diagnosis follow-up (RESULT GATE): records whether a run is
+    # a real benchmark (ISPD/mempool-style) or a synthetic/tiler-generated
+    # one -- only meaningful for "flat"/"io" (T8a's field-addition scope).
+    ap.add_argument("--benchmark-kind", default="real", choices=["real", "synthetic"])
     args = ap.parse_args()
     if args.mode == "flat":
         run_flat(args.config, args.k, args.rtype, args.seed, args.out,
-                 dp_seed=args.dp_seed, deterministic=args.deterministic)
+                 dp_seed=args.dp_seed, deterministic=args.deterministic,
+                 benchmark_kind=args.benchmark_kind)
     elif args.mode == "two_stage":
         from ioplace.drivers.run_placement_two_stage import run_two_stage  # Task 9
         run_two_stage(args.config, args.k, args.rtype, args.seed, args.out)
@@ -346,7 +459,8 @@ def main():
               ignore_net_degree=args.d_max, every=args.every,
               dp_seed=args.dp_seed, deterministic=args.deterministic,
               diag_every=args.diag_every, no_diag=args.no_diag,
-              ft_reweight=args.ft_reweight, alpha_ft=args.alpha_ft)
+              ft_reweight=args.ft_reweight, alpha_ft=args.alpha_ft,
+              benchmark_kind=args.benchmark_kind)
 
 if __name__ == "__main__":
     main()
