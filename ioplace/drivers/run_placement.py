@@ -327,6 +327,14 @@ def main():
     # (w = 1 + alpha*min(signal, cap)) with the signal switched to ft_rg.
     ap.add_argument("--ft-reweight", default="off", choices=["off", "on"])
     ap.add_argument("--alpha-ft", type=float, default=0.5)
+    # Stage 2 S1 (spec sec 5.1/10): opt-in sidecar DEF export
+    # (out.def/regions.json/netmap.json/coord.json) of the final GP+LG
+    # placement, mode="io" only. Default None/off leaves existing behavior
+    # unchanged.
+    ap.add_argument("--emit-def", default=None,
+                    help="if set, write out.def/regions.json/netmap.json/"
+                         "coord.json (Stage 2 S1) into this directory after "
+                         "GP+LG (mode=io only)")
     args = ap.parse_args()
     if args.mode == "flat":
         run_flat(args.config, args.k, args.rtype, args.seed, args.out,
@@ -346,7 +354,8 @@ def main():
               ignore_net_degree=args.d_max, every=args.every,
               dp_seed=args.dp_seed, deterministic=args.deterministic,
               diag_every=args.diag_every, no_diag=args.no_diag,
-              ft_reweight=args.ft_reweight, alpha_ft=args.alpha_ft)
+              ft_reweight=args.ft_reweight, alpha_ft=args.alpha_ft,
+              emit_def=args.emit_def)
 
 if __name__ == "__main__":
     main()

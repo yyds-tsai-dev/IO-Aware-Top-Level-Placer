@@ -14,6 +14,7 @@ from ioplace.schedules import ScheduleState
 from ioplace.dp_hook import (attach_terms, detach_terms, assert_optimizer_lock,
                              refresh_nesterov_secant, install_version_invariant)
 from ioplace.reweight import update_net_weights
+from ioplace.export.def_export import export_def
 
 RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  "io_count", "io_gp", "ft_count", "hard_lambda_sum", "tree_wl", "hpwl",
@@ -78,7 +79,8 @@ def run_io(config_json, k, rtype, seed, out_json, *,
            dp_seed=None, deterministic=None, check_invariant=False,
            diag_every=1, no_diag=False,
            ft_reweight="off", alpha_ft=0.5,
-           snapshot_iters=None, snapshot_dir=None, snapshot_grad_check_cb=None):
+           snapshot_iters=None, snapshot_dir=None, snapshot_grad_check_cb=None,
+           emit_def=None):
     import torch
     t0 = time.time()
     # M4 T8a: replaces the old single reset_peak_memory_stats() call (sec
@@ -382,6 +384,14 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                 res.per_net_crossings[m], (res.per_net_lambda - 1)[m]).correlation)
         else:
             spearman_rho = float("nan")
+
+        # Stage 2 S1 (spec sec 5.1/10): sidecar DEF export of the final GP+LG
+        # placement, off by default (emit_def=None) -- same opt-in shape as
+        # snapshot_iters/snapshot_dir above. `rs` is the RegionSet already
+        # built for this run (get_regions_for above); export_def threads it
+        # through untouched into regions.json.
+        if emit_def is not None:
+            export_def(placedb, params, node_x, node_y, emit_def, rs)
 
         detach_terms(params)
 
