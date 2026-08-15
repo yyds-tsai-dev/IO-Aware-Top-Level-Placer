@@ -1,0 +1,385 @@
+{
+ "a4_verification": {
+  "1x2_n2_correct_formula_poisson_draw": {
+   "appendix_value": 0.00342,
+   "description": "1x2_n2's own correct N2 reference total vs its actual materialized (single Poisson draw) glue-net count -- same comparison as B-5c's z, expressed as a relative error; not the N1-formula bug.",
+   "rel_err": 0.003423405838890425,
+   "z": 0.39275196123505735
+  },
+  "2x2_n1_correct_formula": {
+   "appendix_value": 0.000607,
+   "description": "Same function applied to the genuinely-N1 2x2_n1 array -- the formula is correct here, but it's still a single Poisson draw vs its own expectation at a 1e-3 bar.",
+   "rel_err": 0.0006067067140769506,
+   "status": "ok",
+   "z": 0.09786277953140189
+  },
+  "2x2_n2_buggy_n1_formula": {
+   "appendix_value": 0.0124,
+   "description": "H5' via check_h5prime_self_consistency (N1 formula applied unconditionally) against the N2-normalized 2x2_n2 array -- the original T6 bug, kept byte-for-byte per Appendix A.2/A.4.",
+   "rel_err": 0.012406132809230273,
+   "status": "fail"
+  }
+ },
+ "a5_per_pair_signs": {
+  "1x2_n1": {
+   "goodness_of_fit": {
+    "chi2_p_value": 0.6981686162473059,
+    "chi2_stat": 0.15038405000185012,
+    "df": 1
+   },
+   "min_expected": 42,
+   "n_negative": 0,
+   "n_pairs_filtered_ge_min_expected": 1,
+   "n_pairs_total": 1,
+   "n_positive": 1,
+   "n_tied": 0,
+   "sign_test_p_value": 1.0
+  },
+  "1x2_n2": {
+   "goodness_of_fit": {
+    "chi2_p_value": 0.6945026886170693,
+    "chi2_stat": 0.15425410305398396,
+    "df": 1
+   },
+   "min_expected": 42,
+   "n_negative": 0,
+   "n_pairs_filtered_ge_min_expected": 1,
+   "n_pairs_total": 1,
+   "n_positive": 1,
+   "n_tied": 0,
+   "sign_test_p_value": 1.0
+  },
+  "2x2_n1": {
+   "goodness_of_fit": {
+    "chi2_p_value": 0.17793265731042762,
+    "chi2_stat": 8.923389482736898,
+    "df": 6
+   },
+   "min_expected": 42,
+   "n_negative": 1,
+   "n_pairs_filtered_ge_min_expected": 6,
+   "n_pairs_total": 6,
+   "n_positive": 5,
+   "n_tied": 0,
+   "sign_test_p_value": 0.21875
+  },
+  "2x2_n2": {
+   "goodness_of_fit": {
+    "chi2_p_value": 0.17971403087194548,
+    "chi2_stat": 8.892511041727486,
+    "df": 6
+   },
+   "min_expected": 42,
+   "n_negative": 1,
+   "n_pairs_filtered_ge_min_expected": 6,
+   "n_pairs_total": 6,
+   "n_positive": 5,
+   "n_tied": 0,
+   "sign_test_p_value": 0.21875
+  },
+  "3x3_n2": {
+   "goodness_of_fit": {
+    "chi2_p_value": 0.5536827575089076,
+    "chi2_stat": 34.214807288301664,
+    "df": 36
+   },
+   "min_expected": 42,
+   "n_negative": 15,
+   "n_pairs_filtered_ge_min_expected": 36,
+   "n_pairs_total": 36,
+   "n_positive": 21,
+   "n_tied": 0,
+   "sign_test_p_value": 0.4050322461407632
+  }
+ },
+ "arrays": {
+  "1x2_n1": {
+   "b5a_recipe_arithmetic": {
+    "metric": "B5a_recipe_arithmetic",
+    "normalization": "n1",
+    "ref_total": 4387.31377772961,
+    "rel_err": 7.151932720254616e-05,
+    "rounded_total": 4387,
+    "status": "ok",
+    "tol": 0.001,
+    "unrounded_total": 4387.31377772961
+   },
+   "b5b_manifest_fidelity": {
+    "expected_n_pins": 8826,
+    "glue_n_nets": 4413,
+    "glue_n_pins": 8826,
+    "metric": "B5b_manifest_fidelity",
+    "nets_match": true,
+    "pins_match": true,
+    "status": "ok",
+    "sum_sampled_pair_counts": 4413
+   },
+   "b5c_sampling_noise": {
+    "actual": 4413,
+    "expected_total": 4387.31377772961,
+    "metric": "B5c_sampling_noise",
+    "note": "disclosure only, does not gate status (Appendix A.3)",
+    "rel_err": 0.005854658128346288,
+    "status": "reported",
+    "z": 0.38779382408936075
+   },
+   "formula": "sum_lambda0_phi",
+   "normalization": "n1",
+   "shape": "1x2"
+  },
+  "1x2_n2": {
+   "b5a_recipe_arithmetic": {
+    "metric": "B5a_recipe_arithmetic",
+    "normalization": "n2",
+    "ref_total": 13161.941333188828,
+    "rel_err": 4.4573068430208015e-06,
+    "rounded_total": 13162,
+    "status": "ok",
+    "tol": 0.001,
+    "unrounded_total": 13161.941333188828
+   },
+   "b5b_manifest_fidelity": {
+    "expected_n_pins": 26414,
+    "glue_n_nets": 13207,
+    "glue_n_pins": 26414,
+    "metric": "B5b_manifest_fidelity",
+    "nets_match": true,
+    "pins_match": true,
+    "status": "ok",
+    "sum_sampled_pair_counts": 13207
+   },
+   "b5c_sampling_noise": {
+    "actual": 13207,
+    "expected_total": 13161.941333188828,
+    "metric": "B5c_sampling_noise",
+    "note": "disclosure only, does not gate status (Appendix A.3)",
+    "rel_err": 0.003423405838890425,
+    "status": "reported",
+    "z": 0.39275196123505735
+   },
+   "formula": "sinkhorn",
+   "normalization": "n2",
+   "shape": "1x2"
+  },
+  "2x2_n1": {
+   "b5a_recipe_arithmetic": {
+    "metric": "B5a_recipe_arithmetic",
+    "normalization": "n1",
+    "ref_total": 26018.21457452934,
+    "rel_err": 8.511631430337452e-05,
+    "rounded_total": 26016,
+    "status": "ok",
+    "tol": 0.001,
+    "unrounded_total": 26018.21457452934
+   },
+   "b5b_manifest_fidelity": {
+    "expected_n_pins": 52068,
+    "glue_n_nets": 26034,
+    "glue_n_pins": 52068,
+    "metric": "B5b_manifest_fidelity",
+    "nets_match": true,
+    "pins_match": true,
+    "status": "ok",
+    "sum_sampled_pair_counts": 26034
+   },
+   "b5c_sampling_noise": {
+    "actual": 26034,
+    "expected_total": 26018.21457452934,
+    "metric": "B5c_sampling_noise",
+    "note": "disclosure only, does not gate status (Appendix A.3)",
+    "rel_err": 0.0006067067140769506,
+    "status": "reported",
+    "z": 0.09786277953140189
+   },
+   "formula": "sum_lambda0_phi",
+   "normalization": "n1",
+   "shape": "2x2"
+  },
+  "2x2_n2": {
+   "b5a_recipe_arithmetic": {
+    "metric": "B5a_recipe_arithmetic",
+    "normalization": "n2",
+    "ref_total": 26323.882666377656,
+    "rel_err": 4.4573068430208015e-06,
+    "rounded_total": 26324,
+    "status": "ok",
+    "tol": 0.001,
+    "unrounded_total": 26323.882665218065
+   },
+   "b5b_manifest_fidelity": {
+    "expected_n_pins": 52682,
+    "glue_n_nets": 26341,
+    "glue_n_pins": 52682,
+    "metric": "B5b_manifest_fidelity",
+    "nets_match": true,
+    "pins_match": true,
+    "status": "ok",
+    "sum_sampled_pair_counts": 26341
+   },
+   "b5c_sampling_noise": {
+    "actual": 26341,
+    "expected_total": 26323.882665218065,
+    "metric": "B5c_sampling_noise",
+    "note": "disclosure only, does not gate status (Appendix A.3)",
+    "rel_err": 0.0006502587403093151,
+    "status": "reported",
+    "z": 0.10550211634253515
+   },
+   "formula": "sinkhorn",
+   "normalization": "n2",
+   "shape": "2x2"
+  },
+  "2x2_noglue": {
+   "reason": "no-glue B-1 control array -- no glue recipe to arithmetic-check (Appendix A.3's B-5 scope is the glue recipe arithmetic only)",
+   "status": "not_applicable"
+  },
+  "3x3_n2": {
+   "b5a_recipe_arithmetic": {
+    "metric": "B5a_recipe_arithmetic",
+    "normalization": "n2",
+    "ref_total": 59228.73599934972,
+    "rel_err": 1.242638961147286e-05,
+    "rounded_total": 59228,
+    "status": "ok",
+    "tol": 0.001,
+    "unrounded_total": 59228.73601249903
+   },
+   "b5b_manifest_fidelity": {
+    "expected_n_pins": 118720,
+    "glue_n_nets": 59360,
+    "glue_n_pins": 118720,
+    "metric": "B5b_manifest_fidelity",
+    "nets_match": true,
+    "pins_match": true,
+    "status": "ok",
+    "sum_sampled_pair_counts": 59360
+   },
+   "b5c_sampling_noise": {
+    "actual": 59360,
+    "expected_total": 59228.73601249903,
+    "metric": "B5c_sampling_noise",
+    "note": "disclosure only, does not gate status (Appendix A.3)",
+    "rel_err": 0.0022162213198888684,
+    "status": "reported",
+    "z": 0.5393607768769209
+   },
+   "formula": "sinkhorn",
+   "kernel_sensitivity": {
+    "budget_check": {
+     "K1_alpha0_flat": {
+      "actual": 0.00014749596124791353,
+      "hit": true,
+      "order_of_magnitude_miss": false,
+      "preregistered": 0.000148
+     },
+     "K1_alpha1915_optimistic": {
+      "actual": 1.242638961147286e-05,
+      "hit": true,
+      "order_of_magnitude_miss": false,
+      "preregistered": 1.24e-05
+     },
+     "K3_truncated": {
+      "actual": 7.99611754296932e-05,
+      "hit": true,
+      "order_of_magnitude_miss": false,
+      "preregistered": 8e-05
+     },
+     "mainline_upper_bound": {
+      "actual": 1.242638961147286e-05,
+      "hit": true,
+      "order_of_magnitude_miss": false,
+      "preregistered": 0.0003
+     }
+    },
+    "mainline": {
+     "alpha": 0.10230633302323285,
+     "kernel": "power_law",
+     "metric": "B5a_recipe_arithmetic",
+     "normalization": "n2",
+     "ref_total": 59228.73599934972,
+     "rel_err": 1.242638961147286e-05,
+     "rounded_total": 59228,
+     "sinkhorn_diagnostics": {
+      "n2_iters": 16,
+      "n2_max_rel_dev": 8.116876303349682e-10
+     },
+     "status": "ok",
+     "tol": 0.001,
+     "unrounded_total": 59228.73601249903,
+     "variant": "K1_main (mainline, matches the built 3x3_n2 array's own recipe)"
+    },
+    "variants": {
+     "K1_alpha0_flat": {
+      "alpha": 0.0,
+      "kernel": "power_law",
+      "metric": "B5a_recipe_arithmetic",
+      "normalization": "n2",
+      "ref_total": 59228.73599934972,
+      "rel_err": 0.00014749596124791353,
+      "rounded_total": 59220,
+      "sinkhorn_diagnostics": {
+       "n2_iters": 16,
+       "n2_max_rel_dev": 8.328724144493333e-10
+      },
+      "status": "ok",
+      "tol": 0.001,
+      "unrounded_total": 59228.73601075965
+     },
+     "K1_alpha1915_optimistic": {
+      "alpha": 1.915,
+      "kernel": "power_law",
+      "metric": "B5a_recipe_arithmetic",
+      "normalization": "n2",
+      "ref_total": 59228.73599934972,
+      "rel_err": 1.242638961147286e-05,
+      "rounded_total": 59228,
+      "sinkhorn_diagnostics": {
+       "n2_iters": 15,
+       "n2_max_rel_dev": 1.1887995906848879e-10
+      },
+      "status": "ok",
+      "tol": 0.001,
+      "unrounded_total": 59228.73599734992
+     },
+     "K3_truncated": {
+      "alpha": 0.10230633302323285,
+      "kernel": "truncated",
+      "metric": "B5a_recipe_arithmetic",
+      "normalization": "n2",
+      "ref_total": 59228.73599934972,
+      "rel_err": 7.99611754296932e-05,
+      "rounded_total": 59224,
+      "sinkhorn_diagnostics": {
+       "n2_iters": 56,
+       "n2_max_rel_dev": 7.941036652570685e-10
+      },
+      "status": "ok",
+      "tol": 0.001,
+      "unrounded_total": 59228.736001095225
+     }
+    }
+   },
+   "normalization": "n2",
+   "shape": "3x3"
+  },
+  "3x3_noglue": {
+   "reason": "no-glue B-1 control array -- no glue recipe to arithmetic-check (Appendix A.3's B-5 scope is the glue recipe arithmetic only)",
+   "status": "not_applicable"
+  }
+ },
+ "provenance": {
+  "arrays_root": "results/m4/bench/arrays",
+  "basis_doc": "docs/results/2026-08-15-m4-t6-holdout-adjudication.md Appendix A (A.3 recompute split, A.4 event reproduction, A.5 per-pair disclosure)",
+  "glue_arrays": [
+   "1x2_n1",
+   "1x2_n2",
+   "2x2_n1",
+   "2x2_n2",
+   "3x3_n2"
+  ],
+  "noglue_arrays": [
+   "2x2_noglue",
+   "3x3_noglue"
+  ]
+ }
+}

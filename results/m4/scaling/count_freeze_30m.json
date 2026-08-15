@@ -76,7 +76,9 @@
     "headroom_pct": 8512223515592.584,
     "warning_headroom_lt_20pct": false
    }
-  }
+  },
+  "action_required": false,
+  "reason": "The composite key (net_id*64+region_id) has always been int64, not int32 -- evaluator_gpu.py's __init__ already asserts n_nets*64 < 2**63 and documents the choice (int32 index tensors vs. the composite *key*, which must stay int64 to avoid collisions). The 6.2% figure under composite_key_net_times_64_plus_rid.int32 is a counterfactual (\"if int32 had been chosen instead\") that only confirms the pre-registered int64 decision was correct -- it does not describe the code path actually in use, and is not a live headroom risk. Every field's *actual* (int32-index, not composite-key) headroom at 27.7M is comfortably > 20% (n_nets 67x, n_pins 18.8x, see the nets/pins blocks above). 2026-08-15 T6 holdout adjudication doc Appendix A.6: \"composite key \u5f9e\u4f86\u5c31\u662f int64...6.2% \u662f\u300c\u82e5\u7576\u521d\u9078 int32\u300d\u7684\u53cd\u4e8b\u5be6\u503c,\u78ba\u8a8d\u9810\u8a3b\u518a\u6c7a\u5b9a\u6b63\u78ba\" -- action_required=false recorded here so T9/E5 readers do not misread warning_headroom_lt_20pct=true as an outstanding to-do."
  },
  "provenance": {
   "basis_doc": "docs/results/2026-08-15-m4-t6-holdout-adjudication.md sec 5.3/sec 6.1",

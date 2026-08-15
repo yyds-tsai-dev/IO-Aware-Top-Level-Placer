@@ -266,66 +266,85 @@ def check_b4(arrays_root=DEFAULT_ARRAYS_ROOT, source_prefix=DEFAULT_SOURCE_PREFI
 
 
 # ---------------------------------------------------------------------------
-# B-5
+# B-5 (2026-08-15 T6 holdout adjudication doc Appendix A.3: B-5a/B-5b/B-5c
+# three-way split, replacing the single `check_h5prime_self_consistency`
+# call this used to make -- see that function's and `verify_bench.
+# check_b5a_recipe_arithmetic`'s docstrings for why)
 # ---------------------------------------------------------------------------
 
+def _b5_leg_status(b5a_status, b5b_status=None):
+    """B-5a gates decisively; B-5b (only meaningful for a materialized
+    array -- variants have no actual sampled net count) gates exactly;
+    B-5c never gates (Appendix A.3: "只入輸出不入 status", not passed here
+    at all). `normalization_mismatch` propagates as its own status rather
+    than collapsing into "fail" -- it means the *inputs* were built with
+    the wrong formula, not that this leg's own recipe arithmetic is
+    broken (see `check_b5a_recipe_arithmetic`'s docstring)."""
+    if b5a_status == "normalization_mismatch":
+        return "normalization_mismatch"
+    if b5b_status is None:
+        return b5a_status
+    return "ok" if (b5a_status == "ok" and b5b_status == "ok") else "fail"
+
+
 def check_b5(arrays_root=DEFAULT_ARRAYS_ROOT, lambda_0_tile=None, alpha_main=_MAIN_ALPHA,
-             r=3, c=3, budget_pairs=BUDGET_PAIRS):
-    """H5' arithmetic self-check (`verify_bench.check_h5prime_self_
-    consistency`, unmodified) on the built 3x3_n2 array ("3×3" leg) plus
+             r=3, c=3, budget_pairs=BUDGET_PAIRS, supersede_with=None):
+    """B-5' arithmetic self-check (Appendix A.3's B-5a/B-5b/B-5c split) on
+    the built 3x3_n2 array ("main" leg -- all three sub-checks apply) plus
     the three non-main kernel/alpha variants from sec 5.3's kernel-
     sensitivity table that exist only as `n2_pair_counts_sinkhorn` recipes,
-    not materialized arrays ("三個變體" leg, sec 4.1 B-5 row) -- their
-    "actual" is the deterministic N2/Sinkhorn total for that kernel
-    (`mode="expected"`: sum of rounded per-pair counts, no Poisson draw),
-    fed through the same frozen self-check function via a synthetic
-    manifest dict.
+    not materialized arrays ("三個變體" leg, sec 4.1 B-5 row) -- only B-5a
+    applies to those (no actual sampled net count exists to run B-5b/B-5c
+    against; each variant's `pair_counts` *is* B-5a's `expected_pair_
+    counts`, recomputed fresh here, same as before this split).
 
-    Note (disclosed in each variant's result, not silently glossed over):
-    `check_h5prime_self_consistency`'s own "expected" formula
-    (`glue_gen.expected_glue_total`, `sum(lambda_0*phi(d,alpha))` over tile
-    pairs) is the *N1* total, unchanged since before N2's Sinkhorn
-    generalization existed -- it does not compute N2's `m*B/2` identity
-    (that is what B-6 checks instead, independently). This function calls
-    it exactly as already frozen for T6's 2x2 (which already recorded a
-    "fail" for 2x2_n2 with this same formula mismatch, `results/m4/bench/
-    verify_group2x2_n2.json`'s `H5prime_self_consistency`); any fail here
-    is that same known formula category, not a new construction bug,
-    reported plainly per this task's "照實報,不准調門檻" instruction."""
+    `supersede_with` (Appendix A.3: "重算不是第二次機會...原 fail 值逐字保留
+    在 superseded_by_recompute 欄"): if given, the caller's *previous*
+    `checks.B5_h5prime_arithmetic_self_check` block (the pre-recompute
+    single-check result, e.g. `{"status": "fail", "rel_err": 0.6076, ...}`)
+    is nested verbatim under the returned dict's `superseded_by_recompute`
+    key -- this recompute does not erase the record of what the old
+    (buggy-formula) check reported, it only stops gating on it."""
     prefix = os.path.join(arrays_root, "3x3_n2", "3x3_n2")
     with open(prefix + ".manifest.json") as f:
         manifest = json.load(f)
     if lambda_0_tile is None:
         lambda_0_tile = manifest["glue"]["lambda_0"]
 
-    main_leg = vb.check_h5prime_self_consistency(manifest)
-    main_leg["variant"] = "3x3_n2 (K1 main, built array, alpha=%r)" % manifest["glue"]["alpha"]
+    main_b5a = vb.check_b5a_recipe_arithmetic(
+        expected_pair_counts=manifest["t6"]["expected_pair_counts"], normalization="n2",
+        R=r, C=c, lambda_0=lambda_0_tile, alpha=alpha_main, budget_pairs=budget_pairs)
+    main_b5b = vb.check_b5b_manifest_fidelity(manifest)
+    main_b5c = vb.check_b5c_sampling_noise(manifest)
+    main_leg = {
+        "status": _b5_leg_status(main_b5a["status"], main_b5b["status"]),
+        "variant": "3x3_n2 (K1 main, built array, alpha=%r)" % alpha_main,
+        "B5a_recipe_arithmetic": main_b5a, "B5b_manifest_fidelity": main_b5b,
+        "B5c_sampling_noise": main_b5c,
+    }
 
     variant_results = {}
     for v in _KERNEL_VARIANTS_NON_MAIN:
         pair_counts, diag = glue_gen.n2_pair_counts_sinkhorn(
             lambda_0_tile, v["alpha"], r, c, budget_pairs=budget_pairs, kernel=v["kernel"])
-        actual_total = sum(round(cnt) for cnt in pair_counts.values())
-        synthetic_manifest = {
-            "R": r, "C": c,
-            "base": {"source_n_nets": manifest["base"]["source_n_nets"]},
-            "glue": {"n_nets": actual_total, "lambda_0": lambda_0_tile, "alpha": v["alpha"]},
+        b5a = vb.check_b5a_recipe_arithmetic(
+            expected_pair_counts=pair_counts, normalization="n2", R=r, C=c,
+            lambda_0=lambda_0_tile, alpha=v["alpha"], budget_pairs=budget_pairs)
+        variant_results[v["name"]] = {
+            "status": _b5_leg_status(b5a["status"]), "variant": v["name"], "kernel": v["kernel"],
+            "sinkhorn_diagnostics": diag, "B5a_recipe_arithmetic": b5a,
+            "note": "recipe-only (Appendix A.3/5.3), not a materialized array -- only B-5a "
+                    "applies (no actual sampled net count exists for B-5b/B-5c to compare "
+                    "against)",
         }
-        res = vb.check_h5prime_self_consistency(synthetic_manifest)
-        res["variant"] = v["name"]
-        res["kernel"] = v["kernel"]
-        res["sinkhorn_diagnostics"] = diag
-        res["note"] = ("actual = deterministic N2/Sinkhorn total for this kernel/alpha "
-                        "(mode=\"expected\": sum of rounded per-pair n2_pair_counts_sinkhorn "
-                        "counts), recipe-only (sec 5.3), not a materialized array; see this "
-                        "function's docstring for why a mismatch here is the known N1-formula "
-                        "category, not a new bug")
-        variant_results[v["name"]] = res
 
     all_status = [main_leg["status"]] + [r["status"] for r in variant_results.values()]
     overall = "ok" if all(s == "ok" for s in all_status) else "fail"
-    return {"status": overall, "metric": "B5_h5prime_arithmetic_self_check",
-            "main_3x3_n2": main_leg, "variants": variant_results}
+    result = {"status": overall, "metric": "B5_h5prime_arithmetic_self_check",
+              "main_3x3_n2": main_leg, "variants": variant_results}
+    if supersede_with is not None:
+        result["superseded_by_recompute"] = supersede_with
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -417,7 +436,7 @@ def _fixed_status_entries():
 
 
 def assemble(arrays_root=DEFAULT_ARRAYS_ROOT, source_prefix=DEFAULT_SOURCE_PREFIX,
-             degrees_dir=DEFAULT_DEGREES_DIR, seed=0):
+             degrees_dir=DEFAULT_DEGREES_DIR, seed=0, supersede_b5_with=None):
     prefix_n2 = os.path.join(arrays_root, "3x3_n2", "3x3_n2")
     with open(prefix_n2 + ".manifest.json") as f:
         manifest_n2 = json.load(f)
@@ -438,7 +457,8 @@ def assemble(arrays_root=DEFAULT_ARRAYS_ROOT, source_prefix=DEFAULT_SOURCE_PREFI
     b4 = check_b4(arrays_root=arrays_root, source_prefix=source_prefix, seed=seed,
                    glue_local_names=glue_local_names)
 
-    b5 = check_b5(arrays_root=arrays_root, lambda_0_tile=lambda_0_tile, alpha_main=alpha_main)
+    b5 = check_b5(arrays_root=arrays_root, lambda_0_tile=lambda_0_tile, alpha_main=alpha_main,
+                   supersede_with=supersede_b5_with)
     b6 = check_b6(lambda_0_tile, alpha_main=alpha_main)
 
     checks = {"B0_v0_structural": b0, "B3_h3prime_degree_ks": b3,
@@ -470,6 +490,42 @@ def assemble(arrays_root=DEFAULT_ARRAYS_ROOT, source_prefix=DEFAULT_SOURCE_PREFI
     }
 
 
+def patch_b5(existing, arrays_root=DEFAULT_ARRAYS_ROOT):
+    """Recomputes *only* B-5 (Appendix A.3's B-5a/B-5b/B-5c split) against
+    an already-assembled `existing` result dict (e.g. a prior `assemble()`
+    output loaded from `verify_group3x3_t6b.json`) and splices it back in,
+    recomputing `gating_check_status`/`scaling_usable` accordingly --
+    B-0/B-3/B-4/B-6 are copied through unchanged.
+
+    This is the "重算" entry point the 2026-08-15 adjudication Appendix
+    A.3's B-5 recompute actually needs to run through: B-0/B-3/B-4 each
+    stream the 3x3 array's multi-GB `.nets` file (`assemble()`'s ~5 min
+    combined B-0+B-3/B-4 scan cost), which this task's scope explicitly
+    excludes ("不掃大檔") -- B-5's own inputs are all manifest-JSON-level
+    (`t6.expected_pair_counts`/`t6.sampled_pair_counts`, already on disk;
+    the three kernel variants are pure in-memory Sinkhorn recomputes), so
+    re-running the whole `assemble()` pipeline to get a new B-5 is
+    unnecessary I/O this function avoids."""
+    prefix_n2 = os.path.join(arrays_root, "3x3_n2", "3x3_n2")
+    with open(prefix_n2 + ".manifest.json") as f:
+        manifest_n2 = json.load(f)
+    lambda_0_tile = manifest_n2["glue"]["lambda_0"]
+    alpha_main = manifest_n2["glue"]["alpha"]
+
+    old_b5 = existing["checks"]["B5_h5prime_arithmetic_self_check"]
+    new_b5 = check_b5(arrays_root=arrays_root, lambda_0_tile=lambda_0_tile, alpha_main=alpha_main,
+                       supersede_with=old_b5)
+
+    out = dict(existing)
+    out["checks"] = dict(existing["checks"])
+    out["checks"]["B5_h5prime_arithmetic_self_check"] = new_b5
+    gate_statuses = dict(existing["gating_check_status"])
+    gate_statuses["B5_h5prime_arithmetic_self_check"] = new_b5["status"]
+    out["gating_check_status"] = gate_statuses
+    out["scaling_usable"] = all(v == "ok" for v in gate_statuses.values())
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--arrays-root", default=DEFAULT_ARRAYS_ROOT)
@@ -477,10 +533,40 @@ def main(argv=None):
     ap.add_argument("--degrees-dir", default=DEFAULT_DEGREES_DIR)
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--supersede-b5-from", default=None,
+                     help="path to a previous verify_group3x3_t6b.json (2026-08-15 adjudication "
+                          "Appendix A.3: '重算不是第二次機會...原 fail 值逐字保留在 "
+                          "superseded_by_recompute 欄') -- its checks.B5_h5prime_arithmetic_self_"
+                          "check block is nested verbatim into the new B-5 result's "
+                          "superseded_by_recompute key, not overwritten")
+    ap.add_argument("--patch-b5-only", default=None, metavar="EXISTING_JSON",
+                     help="skip the full B-0/B-3/B-4/B-6 rebuild (which streams the 3x3 array's "
+                          "multi-GB .nets file) and only recompute B-5 against EXISTING_JSON's "
+                          "already-assembled checks (see patch_b5's docstring); EXISTING_JSON's "
+                          "own current B5_h5prime_arithmetic_self_check block becomes the new "
+                          "result's superseded_by_recompute")
     args = ap.parse_args(argv)
 
+    if args.patch_b5_only:
+        with open(args.patch_b5_only) as f:
+            existing = json.load(f)
+        out = patch_b5(existing, arrays_root=args.arrays_root)
+        os.makedirs(os.path.dirname(args.out), exist_ok=True)
+        with open(args.out, "w") as f:
+            json.dump(out, f, indent=1, sort_keys=True, default=_json_default)
+        print(f"[assemble_t6b] patched B-5 only, wrote {args.out}")
+        print(f"[assemble_t6b] gating_check_status={out['gating_check_status']} "
+              f"scaling_usable={out['scaling_usable']}")
+        return out
+
+    supersede_b5_with = None
+    if args.supersede_b5_from:
+        with open(args.supersede_b5_from) as f:
+            supersede_b5_with = json.load(f)["checks"]["B5_h5prime_arithmetic_self_check"]
+
     out = assemble(arrays_root=args.arrays_root, source_prefix=args.source_prefix,
-                    degrees_dir=args.degrees_dir, seed=args.seed)
+                    degrees_dir=args.degrees_dir, seed=args.seed,
+                    supersede_b5_with=supersede_b5_with)
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as f:
         json.dump(out, f, indent=1, sort_keys=True, default=_json_default)

@@ -428,6 +428,92 @@ def test_h5prime_fails_when_manifest_glue_count_disagrees_with_its_own_formula(t
     assert res["status"] == "fail"
 
 
+# ---------------------------------------------------------------------------
+# B-5a/B-5b/B-5c (2026-08-15 T6 holdout adjudication doc Appendix A.3's
+# three-way split of check_h5prime_self_consistency)
+# ---------------------------------------------------------------------------
+
+def test_b5a_recipe_arithmetic_passes_for_a_correctly_built_n2_recipe():
+    lambda_0, alpha, R, C = 1000.0, 0.5, 2, 2
+    pair_counts, _diag = glue_gen.n2_pair_counts_sinkhorn(lambda_0, alpha, R, C, budget_pairs=3.0)
+    res = vb.check_b5a_recipe_arithmetic(expected_pair_counts=pair_counts, normalization="n2",
+                                          R=R, C=C, lambda_0=lambda_0, alpha=alpha)
+    assert res["status"] == "ok", res
+    assert res["rel_err"] <= 1e-3
+    assert res["ref_total"] == pytest.approx(3.0 * lambda_0 * R * C / 2.0)
+
+
+def test_b5a_recipe_arithmetic_passes_for_a_correctly_built_n1_recipe():
+    lambda_0, alpha, R, C = 1000.0, 0.5, 2, 2
+    dists = glue_gen.tile_pair_distances(R, C)
+    pair_counts = {pair: lambda_0 * glue_gen.phi(d, alpha) for pair, d in dists.items()}
+    res = vb.check_b5a_recipe_arithmetic(expected_pair_counts=pair_counts, normalization="n1",
+                                          R=R, C=C, lambda_0=lambda_0, alpha=alpha)
+    assert res["status"] == "ok", res
+    assert res["rel_err"] <= 1e-3
+    assert res["ref_total"] == pytest.approx(glue_gen.expected_glue_total(lambda_0, alpha, R, C))
+
+
+def test_b5a_recipe_arithmetic_detects_normalization_mismatch():
+    """Appendix A.3's mandated guard: N1's formula fed in for a
+    declared-N2 array (the original H5' bug, Appendix A.2) must be
+    reported as `normalization_mismatch`, not a generic numeric fail."""
+    lambda_0, alpha, R, C = 1000.0, 0.5, 3, 3
+    dists = glue_gen.tile_pair_distances(R, C)
+    n1_pair_counts = {pair: lambda_0 * glue_gen.phi(d, alpha) for pair, d in dists.items()}
+    res = vb.check_b5a_recipe_arithmetic(expected_pair_counts=n1_pair_counts, normalization="n2",
+                                          R=R, C=C, lambda_0=lambda_0, alpha=alpha)
+    assert res["status"] == "normalization_mismatch", res
+    assert res["other_normalization"] == "n1"
+    assert res["rel_err_vs_other_normalization"] <= 1e-3
+
+
+def test_b5a_recipe_arithmetic_fails_on_a_genuine_construction_defect():
+    """A pair_counts dict that matches *neither* normalization's closed
+    form (not just the other one) must fail plainly, not be misreported
+    as a normalization mix-up."""
+    lambda_0, alpha, R, C = 1000.0, 0.5, 2, 2
+    pair_counts, _diag = glue_gen.n2_pair_counts_sinkhorn(lambda_0, alpha, R, C, budget_pairs=3.0)
+    broken = {k: v * 1.5 for k, v in pair_counts.items()}  # +50%, matches nothing
+    res = vb.check_b5a_recipe_arithmetic(expected_pair_counts=broken, normalization="n2",
+                                          R=R, C=C, lambda_0=lambda_0, alpha=alpha)
+    assert res["status"] == "fail", res
+
+
+def test_b5b_manifest_fidelity_passes_when_bookkeeping_matches():
+    manifest = {"glue": {"n_nets": 7, "n_pins": 14},
+                "t6": {"sampled_pair_counts": {"(0, 0)|(0, 1)": 3, "(0, 0)|(1, 0)": 4}}}
+    res = vb.check_b5b_manifest_fidelity(manifest)
+    assert res["status"] == "ok", res
+    assert res["nets_match"] and res["pins_match"]
+
+
+def test_b5b_manifest_fidelity_fails_when_n_nets_disagrees_with_sampled_pair_counts():
+    manifest = {"glue": {"n_nets": 8, "n_pins": 14},
+                "t6": {"sampled_pair_counts": {"(0, 0)|(0, 1)": 3, "(0, 0)|(1, 0)": 4}}}
+    res = vb.check_b5b_manifest_fidelity(manifest)
+    assert res["status"] == "fail"
+    assert res["nets_match"] is False
+
+
+def test_b5b_manifest_fidelity_fails_when_n_pins_is_not_twice_n_nets():
+    manifest = {"glue": {"n_nets": 7, "n_pins": 13},
+                "t6": {"sampled_pair_counts": {"(0, 0)|(0, 1)": 3, "(0, 0)|(1, 0)": 4}}}
+    res = vb.check_b5b_manifest_fidelity(manifest)
+    assert res["status"] == "fail"
+    assert res["pins_match"] is False
+
+
+def test_b5c_sampling_noise_reports_z_but_never_gates():
+    manifest = {"glue": {"n_nets": 200},
+                "t6": {"expected_pair_counts": {"(0, 0)|(0, 1)": 100.0}}}
+    res = vb.check_b5c_sampling_noise(manifest)
+    # z is huge (100 vs expected 100 => actual is 10 sigma away) -- still
+    # must not gate: "只入輸出不入 status".
+    assert res["status"] == "reported"
+    assert res["z"] == pytest.approx((200 - 100.0) / (100.0 ** 0.5))
+
+
 def test_b1_rent_invariance_did_passes_when_glue_increment_matches_across_shapes():
     """Adjudication sec 4.1/4.3's pre-registered prediction: N2's glue
     increment should be essentially shape-invariant once each array's own

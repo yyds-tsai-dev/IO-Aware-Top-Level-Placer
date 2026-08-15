@@ -132,29 +132,74 @@ def test_check_b3_and_b4_share_one_scan_and_have_expected_schema(tiny_3x3):
 # ---------------------------------------------------------------------------
 
 def test_check_b5_main_leg_uses_the_real_manifest_and_variants_are_recipe_only(tmp_path):
+    """2026-08-15 Appendix A.3's B-5a/B-5b/B-5c split: the main leg's
+    `expected_pair_counts` must come from the manifest's own `t6` section
+    (built via N2's Sinkhorn recipe, "該欄位已是正確值" -- not the retired
+    N1-only `check_h5prime_self_consistency`), and B-5b/B-5c only make
+    sense for it (an actual sampled net count exists); variants stay
+    B-5a-only, recipe-only."""
     arrays_root = str(tmp_path / "arrays")
     prefix = os.path.join(arrays_root, "3x3_n2", "3x3_n2")
     os.makedirs(os.path.dirname(prefix), exist_ok=True)
-    lambda_0_tile, alpha = 10.0, 0.2
-    expected = glue_gen.expected_glue_total(lambda_0_tile, alpha, 3, 3)
+    lambda_0_tile, alpha, R, C = 5000.0, 0.2, 3, 3  # large enough that per-pair rounding error stays << tol
+    pair_counts, sinkhorn_diag = glue_gen.n2_pair_counts_sinkhorn(lambda_0_tile, alpha, R, C,
+                                                                    budget_pairs=at6b.BUDGET_PAIRS)
+    sampled_pair_counts = {f"{a}|{b}": round(v) for (a, b), v in pair_counts.items()}
+    n_nets = sum(sampled_pair_counts.values())
     manifest = {
-        "R": 3, "C": 3,
+        "R": R, "C": C,
         "base": {"source_n_nets": 100},
-        "glue": {"n_nets": round(expected), "n_pins": round(expected) * 2,
-                  "lambda_0": lambda_0_tile, "alpha": alpha},
+        "glue": {"n_nets": n_nets, "n_pins": n_nets * 2, "lambda_0": lambda_0_tile, "alpha": alpha},
+        "t6": {"normalization": "n2", "lambda_0_tile": lambda_0_tile, "alpha": alpha,
+               "expected_pair_counts": {f"{a}|{b}": v for (a, b), v in pair_counts.items()},
+               "sampled_pair_counts": sampled_pair_counts},
     }
     with open(prefix + ".manifest.json", "w") as f:
         json.dump(manifest, f)
 
-    res = at6b.check_b5(arrays_root=arrays_root, lambda_0_tile=lambda_0_tile, alpha_main=alpha)
+    old_b5 = {"status": "fail", "rel_err": 0.6076, "note": "pre-recompute, N1-formula-mismatched"}
+    res = at6b.check_b5(arrays_root=arrays_root, lambda_0_tile=lambda_0_tile, alpha_main=alpha,
+                         r=R, c=C, supersede_with=old_b5)
     assert res["metric"] == "B5_h5prime_arithmetic_self_check"
-    # main leg's actual == round(expected) by construction -> should pass H5' exactly
-    assert res["main_3x3_n2"]["status"] == "ok"
+    # main leg's sampled_pair_counts == round(expected) by construction ->
+    # B-5a/B-5b should both pass decisively.
+    assert res["main_3x3_n2"]["status"] == "ok", res["main_3x3_n2"]
+    assert res["main_3x3_n2"]["B5a_recipe_arithmetic"]["status"] == "ok"
+    assert res["main_3x3_n2"]["B5b_manifest_fidelity"]["status"] == "ok"
+    assert res["main_3x3_n2"]["B5c_sampling_noise"]["status"] == "reported"
     assert set(res["variants"]) == {"K3_truncated", "K1_alpha0_flat", "K1_alpha1915_optimistic"}
     for name, v in res["variants"].items():
         assert v["variant"] == name
+        assert v["status"] == "ok"
         assert "sinkhorn_diagnostics" in v
         assert "note" in v
+        assert v["B5a_recipe_arithmetic"]["status"] == "ok"
+    # superseded_by_recompute carries the pre-recompute value verbatim,
+    # untouched by the new numbers.
+    assert res["superseded_by_recompute"] == old_b5
+
+
+def test_check_b5_without_supersede_with_omits_the_key(tmp_path):
+    arrays_root = str(tmp_path / "arrays")
+    prefix = os.path.join(arrays_root, "3x3_n2", "3x3_n2")
+    os.makedirs(os.path.dirname(prefix), exist_ok=True)
+    lambda_0_tile, alpha, R, C = 5000.0, 0.2, 3, 3  # large enough that per-pair rounding error stays << tol
+    pair_counts, _diag = glue_gen.n2_pair_counts_sinkhorn(lambda_0_tile, alpha, R, C,
+                                                            budget_pairs=at6b.BUDGET_PAIRS)
+    sampled_pair_counts = {f"{a}|{b}": round(v) for (a, b), v in pair_counts.items()}
+    n_nets = sum(sampled_pair_counts.values())
+    manifest = {
+        "R": R, "C": C, "base": {"source_n_nets": 100},
+        "glue": {"n_nets": n_nets, "n_pins": n_nets * 2, "lambda_0": lambda_0_tile, "alpha": alpha},
+        "t6": {"normalization": "n2", "lambda_0_tile": lambda_0_tile, "alpha": alpha,
+               "expected_pair_counts": {f"{a}|{b}": v for (a, b), v in pair_counts.items()},
+               "sampled_pair_counts": sampled_pair_counts},
+    }
+    with open(prefix + ".manifest.json", "w") as f:
+        json.dump(manifest, f)
+
+    res = at6b.check_b5(arrays_root=arrays_root, lambda_0_tile=lambda_0_tile, alpha_main=alpha, r=R, c=C)
+    assert "superseded_by_recompute" not in res
 
 
 # ---------------------------------------------------------------------------
@@ -244,3 +289,40 @@ def test_assemble_end_to_end_schema_on_the_toy_3x3_fixture(tiny_3x3):
                                                  "B6_glue_budget_identity"}
     assert out["scaling_usable"] == all(v == "ok" for v in out["gating_check_status"].values())
     assert out["quality_claims_prohibited"] is True
+
+
+# ---------------------------------------------------------------------------
+# patch_b5 -- B-5-only recompute against an already-assembled result,
+# without re-streaming the 3x3 array's multi-GB .nets file (2026-08-15
+# adjudication Appendix A.3's actual recompute path)
+# ---------------------------------------------------------------------------
+
+def test_patch_b5_only_touches_b5_and_carries_the_old_value_forward(tiny_3x3):
+    degrees_dir = os.path.join(os.path.dirname(tiny_3x3["arrays_root"]), "degrees")
+    existing = at6b.assemble(arrays_root=tiny_3x3["arrays_root"],
+                              source_prefix=tiny_3x3["source_prefix"], degrees_dir=degrees_dir)
+    # simulate the pre-recompute buggy-formula B-5 result this task starts from
+    existing["checks"]["B5_h5prime_arithmetic_self_check"] = {
+        "status": "fail", "metric": "B5_h5prime_arithmetic_self_check", "rel_err": 0.6076}
+
+    patched = at6b.patch_b5(existing, arrays_root=tiny_3x3["arrays_root"])
+
+    # every other check is passed through byte-for-byte, unchanged
+    for k in ("B0_v0_structural", "B3_h3prime_degree_ks", "B4_h4prime_interface_self_consistency",
+              "B6_glue_budget_identity"):
+        assert patched["checks"][k] == existing["checks"][k]
+
+    new_b5 = patched["checks"]["B5_h5prime_arithmetic_self_check"]
+    # this is genuinely the new B-5a/B-5b/B-5c split (not a passthrough of
+    # the old single-check result) -- tiny_3x3's toy-scale lambda_0=5.0
+    # doesn't guarantee B-5a passes (rounding error dominates a total this
+    # small; the dedicated B-5a pass/fail tests in test_bench_verify.py use
+    # a large-enough lambda_0 for that), so this only checks the recompute
+    # actually ran and was spliced in consistently, not its pass/fail.
+    assert "main_3x3_n2" in new_b5 and "variants" in new_b5
+    assert new_b5["superseded_by_recompute"] == {
+        "status": "fail", "metric": "B5_h5prime_arithmetic_self_check", "rel_err": 0.6076}
+    assert patched["gating_check_status"]["B5_h5prime_arithmetic_self_check"] == new_b5["status"]
+    # the other gates are untouched, but scaling_usable is recomputed fresh
+    # from all of them (B-5's status can flip it either way)
+    assert patched["scaling_usable"] == all(v == "ok" for v in patched["gating_check_status"].values())

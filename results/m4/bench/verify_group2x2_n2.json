@@ -1444,6 +1444,10 @@
   "V1_dreamplace_readable": {
    "reason": "DREAMPlace's own PlaceDB.read_pl uses a hardcoded \\w+ node-name regex that cannot match this project's hierarchical (./[]/-containing) instance names -- confirmed on mempool_group itself, independent of any T6-specific construction; see rent.py module docstring's M4 T6 finding. Diagnostic-only per adjudication doc sec 4 (does not gate T6/T7).",
    "status": "infrastructure_blocked"
+  },
+  "h5prime_annotation": {
+   "text": "T6 \u7684 2\u00d72 N2 \u9663\u5217\u7684 H5\u2032 \u81ea commit 1b3671c \u8d77\u5373\u8a18\u70ba fail(rel_err = 1.24e-2),\u4f4d\u65bc\u8a3a\u65b7\u4e0d\u5224\u5b9a\u5340\u584a\u800c\u672a\u88ab\u5bdf\u89ba;\u5176\u6210\u56e0\u8207 T6B \u7684 B-5 \u76f8\u540c\u2014\u2014check_h5prime_self_consistency \u7684\u671f\u671b\u503c\u516c\u5f0f\u5beb\u65bc N2 \u6b63\u898f\u5316\u5b58\u5728\u4e4b\u524d,\u5c0d N2 \u9663\u5217\u5957\u7528\u4e86 N1 \u7684 \u03a3\u03bb\u2080\u03c6(d)\u30022\u00d72 N1 \u90a3\u683c\u7684 ok(rel_err = 6.07e-4)\u516c\u5f0f\u6b63\u78ba,\u4f46\u5b83\u662f\u55ae\u4e00 Poisson \u62bd\u6a23\u7684\u5be6\u73fe\u503c\u8207\u5176\u671f\u671b\u503c\u7684\u6bd4\u8f03,z = +0.098\u03c3;\u4f9d\u8a72\u6aa2\u67e5\u51fd\u5f0f\u81ea\u8eab\u7684\u6587\u4ef6,\u55ae\u4e00 Poisson \u7a2e\u5b50\u672c\u5c31\u4e0d\u61c9\u88ab 1e-3 \u5bb9\u5dee\u5224\u5b9a\u3002\u540c\u6a23\u7684\u8a08\u7b97\u82e5\u7576\u521d\u65bd\u65bc 1\u00d72 N2 \u9663\u5217\u6703\u5f97\u5230 rel_err = 3.42e-3,\u540c\u6a23\u4e0d\u904e\u3002",
+   "source": "verbatim from docs/results/2026-08-15-m4-t6-holdout-adjudication.md Appendix A.4 (2026-08-15 T6 holdout supplementary adjudication); does not change H5prime_self_consistency's own status/rel_err/expected/actual above -- diagnostic-only annotation, T6's already-evaluated diagnostics are frozen (sec 4.0)"
   }
  },
  "fit_metrics": {

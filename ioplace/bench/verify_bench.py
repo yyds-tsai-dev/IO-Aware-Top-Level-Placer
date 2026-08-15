@@ -471,7 +471,22 @@ def check_h5prime_self_consistency(manifest, tol=1e-3):
     output, or aggregated `mode="poisson"` counts over enough seeds that
     sampling noise has mostly averaged out. A single `mode="poisson"`
     seed's raw count is *not* expected to pass this at the 0.1% level by
-    construction (Poisson relative fluctuation ~ 1/sqrt(lambda))."""
+    construction (Poisson relative fluctuation ~ 1/sqrt(lambda)).
+
+    **Known formula-category bug, disclosed not fixed here (2026-08-15 T6
+    holdout adjudication doc Appendix A.2/A.4):** `expected_glue_total` is
+    always the *N1* closed form `sum(lambda_0*phi(d))`, regardless of the
+    manifest's own `normalization`; called against an N2-normalized
+    manifest this compares the wrong quantity (T6's `verify_group2x2_n2.
+    json` H5' `fail`, rel_err=1.24e-2, is exactly this -- see that file's
+    `h5prime_annotation` field for the verbatim correction text). This
+    function is kept byte-for-byte unchanged because T6's already-evaluated
+    diagnostics are frozen (not re-run, sec 4.0's "已評過的指標不得重評" --
+    this check was never gating for T6 either way, `diagnostics_not_gating`
+    only). T6B's B-5 row does **not** call this function any more --
+    `check_b5a_recipe_arithmetic`/`check_b5b_manifest_fidelity`/
+    `check_b5c_sampling_noise` below replace it there (Appendix A.3's
+    three-way split)."""
     from ioplace.bench import glue_gen
     glue = manifest.get("glue") or {}
     if not glue or not glue.get("n_nets") or glue.get("lambda_0") is None or glue.get("alpha") is None:
@@ -485,6 +500,131 @@ def check_h5prime_self_consistency(manifest, tol=1e-3):
     share = expected / (m * n_tile + expected) if (m * n_tile + expected) > 0 else 0.0
     return {"status": "ok" if rel_err <= tol else "fail", "expected": expected, "actual": actual,
             "rel_err": rel_err, "tol": tol, "implied_cross_tile_share": share}
+
+
+# ---------------------------------------------------------------------------
+# B-5a/B-5b/B-5c (2026-08-15 T6 holdout adjudication doc Appendix A.3):
+# `check_h5prime_self_consistency` above conflated two independent problems
+# (Appendix A.2's "比錯了量,兩層"): (1) it always used N1's formula even
+# against N2-normalized manifests, and (2) it compared a single Poisson-
+# sampled realization to a formula's *expectation* at a 0.1% tolerance no
+# amount of correct-formula bookkeeping can generally meet (Poisson relative
+# fluctuation ~ 1/sqrt(lambda)). Appendix A.1's three-condition rule allows
+# fixing (1) (a pre-registered docstring already excluded (2)'s use case,
+# sec 8-4/A.2's "第 (2) 條:依據早於量測") without it counting as an
+# after-the-fact threshold relaxation -- but the fix does not re-glue those
+# two problems back together: B-5a is the decisive (Poisson-noise-free)
+# recipe-arithmetic check, B-5b is exact manifest bookkeeping, and B-5c
+# reports the actual-vs-expected sampling noise as a disclosed z-score,
+# never gating.
+# ---------------------------------------------------------------------------
+
+def check_b5a_recipe_arithmetic(expected_pair_counts, normalization, R, C, lambda_0, alpha,
+                                 budget_pairs=3.0, tol=1e-3):
+    """B-5a (Appendix A.3 table): decisive, Poisson-noise-free rounding
+    self-check of the glue recipe -- `|sum(round(c(u,v))) - ref_total| /
+    ref_total <= tol`, where `c(u,v)` is `expected_pair_counts` (manifest's
+    own `t6.expected_pair_counts`, "該欄位已是正確值" -- already computed by
+    that array's own normalization's construction formula at build time,
+    `build_t6_arrays._expected_pair_counts`'s dispatch) and `ref_total` is
+    the *independently recomputed* closed-form total for the declared
+    `normalization`:
+
+        n2: budget_pairs * lambda_0 * R * C / 2   (Appendix A.3/5.3's "N2
+            之下核的選擇完全不改變 glue 總數" identity -- every kernel/alpha
+            sums to the same m*B/2, so this needs no per-pair recompute)
+        n1: glue_gen.expected_glue_total(lambda_0, alpha, R, C)           (the
+            same Sum(lambda_0*phi(d)) `expected_pair_counts` should already
+            sum to, if it was built with N1's formula)
+
+    Never touches the array's *actual* materialized/Poisson-sampled net
+    count -- that comparison is what made the old `check_h5prime_self_
+    consistency` non-decisive (B-5c below reports it separately, as a
+    disclosed z-score, not gated at a 1e-3 bar Poisson noise cannot
+    generally meet).
+
+    Guard (Appendix A.3's "必加防呆,對 N2 陣列若誤用 N1 公式要能偵測為
+    normalization_mismatch"): if `rel_err` against the declared
+    normalization's own `ref_total` fails, but `expected_pair_counts`'
+    *unrounded* total instead agrees with the *other* normalization's
+    `ref_total` to within `tol`, that is diagnostic of exactly the original
+    H5' bug (the values were built with the wrong formula), not a genuine
+    rounding/construction defect -- reported as `status="normalization_
+    mismatch"` instead of a numeric "fail" so the two are not confused."""
+    from ioplace.bench import glue_gen
+    if normalization not in ("n1", "n2"):
+        raise ValueError(f"unknown normalization {normalization!r}; must be 'n1' or 'n2'")
+
+    unrounded_total = sum(expected_pair_counts.values())
+    rounded_total = sum(round(v) for v in expected_pair_counts.values())
+    n2_ref_total = budget_pairs * lambda_0 * R * C / 2.0
+    n1_ref_total = glue_gen.expected_glue_total(lambda_0, alpha, R, C)
+    ref_total = n2_ref_total if normalization == "n2" else n1_ref_total
+    other_normalization = "n1" if normalization == "n2" else "n2"
+    other_ref_total = n1_ref_total if normalization == "n2" else n2_ref_total
+
+    rel_err = abs(rounded_total - ref_total) / ref_total if ref_total else float("inf")
+    rel_err_other = (abs(unrounded_total - other_ref_total) / other_ref_total
+                      if other_ref_total else float("inf"))
+
+    if rel_err > tol and rel_err_other <= tol:
+        return {"status": "normalization_mismatch", "metric": "B5a_recipe_arithmetic",
+                "normalization": normalization, "rounded_total": rounded_total,
+                "unrounded_total": unrounded_total, "ref_total": ref_total, "rel_err": rel_err,
+                "other_normalization": other_normalization, "other_ref_total": other_ref_total,
+                "rel_err_vs_other_normalization": rel_err_other, "tol": tol,
+                "reason": f"expected_pair_counts matches {other_normalization}'s closed-form "
+                          f"total, not the declared {normalization}'s -- the supplied values "
+                          f"were very likely computed with the wrong formula (2026-08-15 "
+                          f"adjudication Appendix A.2's original H5' bug), not a genuine "
+                          f"rounding/construction defect"}
+    return {"status": "ok" if rel_err <= tol else "fail", "metric": "B5a_recipe_arithmetic",
+            "normalization": normalization, "rounded_total": rounded_total,
+            "unrounded_total": unrounded_total, "ref_total": ref_total, "rel_err": rel_err, "tol": tol}
+
+
+def check_b5b_manifest_fidelity(manifest):
+    """B-5b (Appendix A.3 table): exact bookkeeping identity between a
+    built array's `glue` section and its own `t6.sampled_pair_counts` --
+    `glue.n_nets == sum(sampled_pair_counts.values())` and `glue.n_pins ==
+    2 * glue.n_nets` (every glue net is degree-2, sec 3.2/`build_t6_arrays`'
+    known simplification). Exact equality, no tolerance -- this is a
+    bookkeeping check (did `append_glue_nets` record what was actually
+    sampled), not a statistical one."""
+    glue = manifest.get("glue") or {}
+    t6 = manifest.get("t6") or {}
+    sampled_pair_counts = t6.get("sampled_pair_counts") or {}
+    sum_sampled = sum(sampled_pair_counts.values())
+    n_nets, n_pins = glue.get("n_nets"), glue.get("n_pins")
+    nets_match = (n_nets == sum_sampled)
+    pins_match = (n_pins == 2 * n_nets) if n_nets is not None else False
+    ok = bool(sampled_pair_counts) and nets_match and pins_match
+    return {"status": "ok" if ok else "fail", "metric": "B5b_manifest_fidelity",
+            "glue_n_nets": n_nets, "sum_sampled_pair_counts": sum_sampled, "nets_match": nets_match,
+            "glue_n_pins": n_pins, "expected_n_pins": (2 * n_nets) if n_nets is not None else None,
+            "pins_match": pins_match}
+
+
+def check_b5c_sampling_noise(manifest, expected_pair_counts=None):
+    """B-5c (Appendix A.3 table): reports the Poisson sampling-noise
+    z-score of the array's *actual* materialized glue-net count against
+    the (unrounded) expected total -- `z = (actual - sum(expected_pair_
+    counts)) / sqrt(sum(expected_pair_counts))`. Disclosure only: `status`
+    never gates on `z` (Appendix A.3: "只入輸出不入 status") -- a single
+    `mode="poisson"` seed's count is expected to differ from its own
+    expectation by O(1) standard deviations, that is not evidence of a
+    construction defect by itself."""
+    import math
+    glue = manifest.get("glue") or {}
+    t6 = manifest.get("t6") or {}
+    if expected_pair_counts is None:
+        expected_pair_counts = t6.get("expected_pair_counts") or {}
+    total_expected = sum(expected_pair_counts.values())
+    actual = glue.get("n_nets")
+    z = ((actual - total_expected) / math.sqrt(total_expected))
+    return {"status": "reported", "metric": "B5c_sampling_noise", "actual": actual,
+            "expected_total": total_expected, "z": z,
+            "note": "disclosure only, does not gate status (Appendix A.3)"}
 
 
 def check_b1_rent_invariance_did(p_3x3_glue, p_3x3_noglue, p_2x2_glue, p_2x2_noglue):
