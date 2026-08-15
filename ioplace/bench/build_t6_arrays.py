@@ -104,7 +104,7 @@ def _movable_node_names(nodes_path):
     return names
 
 
-def _expected_pair_counts(norm, lambda_0_tile, alpha, R, C):
+def _expected_pair_counts(norm, lambda_0_tile, alpha, R, C, kernel="power_law"):
     """Returns (expected_pair_counts, sinkhorn_diagnostics_or_None).
 
     **2026-08-15 T6 holdout adjudication sec 5.2/8-3:** the n2 branch now
@@ -116,10 +116,15 @@ def _expected_pair_counts(norm, lambda_0_tile, alpha, R, C):
     `test_n2_sinkhorn_matches_closed_form_bit_for_bit_on_uniform_shapes`) --
     those manifests' expected-pair-count values are unchanged."""
     if norm == "n1":
+        # Kernel variants (2026-08-15 adjudication sec 5.3) are an N2-only
+        # deliverable; N1 was rejected for 3x3 and its closed form here is
+        # written for the power-law phi only.
+        assert kernel == "power_law", "n1 supports only the power_law kernel"
         dists = glue_gen.tile_pair_distances(R, C)
         return {pair: lambda_0_tile * glue_gen.phi(d, alpha) for pair, d in dists.items()}, None
     if norm == "n2":
-        return glue_gen.n2_pair_counts_sinkhorn(lambda_0_tile, alpha, R, C, budget_pairs=3.0)
+        return glue_gen.n2_pair_counts_sinkhorn(lambda_0_tile, alpha, R, C,
+                                                 budget_pairs=3.0, kernel=kernel)
     raise ValueError(f"unknown normalization {norm!r}")
 
 
@@ -167,8 +172,14 @@ def _recipe_sha256(counts_per_pair, glue_nets):
     return hashlib.sha256(payload).hexdigest()
 
 
+# Adjudication sec 5.3's kernel-variant naming: the mainline power_law K1
+# keeps the bare "<shape>_<norm>" name every downstream consumer already
+# uses; non-mainline full-array variants get an explicit suffix.
+KERNEL_TAGS = {"power_law": "", "exp": "_k2", "truncated": "_k3"}
+
+
 def build_shape(source_prefix, lambda_0_tile, alpha, shape_name, R, C, out_dir, seed,
-                 extra_seeds, candidate_names):
+                 extra_seeds, candidate_names, kernel="power_law", norms=NORMALIZATIONS):
     t0 = time.time()
     base_prefix = os.path.join(out_dir, "_base", shape_name, shape_name)
     os.makedirs(os.path.dirname(base_prefix), exist_ok=True)
@@ -176,15 +187,17 @@ def build_shape(source_prefix, lambda_0_tile, alpha, shape_name, R, C, out_dir, 
     t_tile = time.time() - t0
 
     result = {}
-    for norm in NORMALIZATIONS:
-        expected, sinkhorn_diag = _expected_pair_counts(norm, lambda_0_tile, alpha, R, C)
-        dst_prefix = os.path.join(out_dir, f"{shape_name}_{norm}", f"{shape_name}_{norm}")
+    for norm in norms:
+        expected, sinkhorn_diag = _expected_pair_counts(norm, lambda_0_tile, alpha, R, C,
+                                                         kernel=kernel)
+        case = f"{shape_name}_{norm}{KERNEL_TAGS[kernel]}"
+        dst_prefix = os.path.join(out_dir, case, case)
         _copy_base(base_prefix, dst_prefix)
 
         counts_per_pair, glue_nets = _sample_glue_recipe(seed, expected, candidate_names)
         t1 = time.time()
         n_glue_nets, n_glue_pins = glue_gen.append_glue_nets(
-            dst_prefix, glue_nets, lambda_0_tile, alpha, kernel="power_law", seed=seed)
+            dst_prefix, glue_nets, lambda_0_tile, alpha, kernel=kernel, seed=seed)
         t_glue = time.time() - t1
 
         seed_trajectory = {seed: _recipe_sha256(counts_per_pair, glue_nets)}
@@ -195,7 +208,8 @@ def build_shape(source_prefix, lambda_0_tile, alpha, shape_name, R, C, out_dir, 
         with open(dst_prefix + ".manifest.json") as f:
             manifest = json.load(f)
         manifest["t6"] = {
-            "shape": shape_name, "normalization": norm, "primary_seed": seed,
+            "shape": shape_name, "normalization": norm, "kernel": kernel,
+            "primary_seed": seed,
             "lambda_0_tile": lambda_0_tile, "alpha": alpha,
             "expected_pair_counts": {f"{a}|{b}": v for (a, b), v in expected.items()},
             "sampled_pair_counts": {f"{a}|{b}": v for (a, b), v in counts_per_pair.items()},
@@ -255,6 +269,16 @@ def main(argv=None):
                      help="additional seeds for the reproduction trajectory (recipe sha256 "
                           "recorded; see module docstring's efficiency note)")
     ap.add_argument("--shapes", nargs="*", default=list(SHAPES))
+    # Adjudication sec 5.3 kernel variants: K3 (truncated) ships as a full
+    # array ("locality lower bound", unconditional per the adjudication); K2
+    # (exp) exists for recipe/pair-table sensitivity only but is accepted
+    # here for completeness. Non-mainline kernels are N2-only.
+    ap.add_argument("--kernel", default="power_law",
+                     choices=sorted(KERNEL_TAGS),
+                     help="glue distance kernel; non-power_law implies --norms n2")
+    ap.add_argument("--norms", nargs="*", default=None,
+                     choices=list(NORMALIZATIONS),
+                     help="normalizations to build (default: both for power_law, n2 otherwise)")
     ap.add_argument("--no-glue", action="store_true",
                      help="build the zero-glue control array(s) instead of the normal N1/N2 "
                           "arrays (adjudication sec 4.1/4.3/8-3's B-1 DiD baseline): base tiling "
@@ -283,15 +307,22 @@ def main(argv=None):
 
     candidate_names = _movable_node_names(args.source + ".nodes")
 
+    norms = tuple(args.norms) if args.norms else (
+        NORMALIZATIONS if args.kernel == "power_law" else ("n2",))
+    if args.kernel != "power_law":
+        assert norms == ("n2",), "non-power_law kernels are an N2-only deliverable"
+
     results = {}
     for shape_name in args.shapes:
         R, C = SHAPES[shape_name]
         results[shape_name] = build_shape(args.source, lambda_0_tile, alpha, shape_name, R, C,
                                            args.out_dir, args.seed, args.extra_seeds,
-                                           candidate_names)
+                                           candidate_names, kernel=args.kernel, norms=norms)
         print(f"[build_t6_arrays] {shape_name} done", flush=True)
 
-    out_path = os.path.join(args.out_dir, "build_summary.json")
+    out_path = os.path.join(args.out_dir,
+                            f"build_summary{KERNEL_TAGS[args.kernel]}.json"
+                            if args.kernel != "power_law" else "build_summary.json")
     with open(out_path, "w") as f:
         json.dump(results, f, indent=1, sort_keys=True)
     print(f"[build_t6_arrays] wrote {out_path}")
