@@ -1,0 +1,62 @@
+{
+ "case": "bb4",
+ "flat": {
+  "final_overflow": 0.06370985507965088,
+  "gp_iterations_run": 846,
+  "hpwl": 748520918.0,
+  "io_count": 100333,
+  "run_id": "3728496e-7de1-4682-a01d-412401b17166"
+ },
+ "grid": {
+  "0.05": {
+   "d_hpwl_pct": 0.19135831284811203,
+   "d_io_pct": -10.659503852172266,
+   "final_overflow": 0.06579531729221344,
+   "gp_iterations_run": 843,
+   "hpwl": 749953275.0,
+   "io_count": 89638,
+   "run_id": "89df200b-e07f-4f7d-800b-d71d29f2a95f",
+   "stop_overflow_reached": true
+  },
+  "0.10": {
+   "d_hpwl_pct": 1.214866783455743,
+   "d_io_pct": -21.99176741450968,
+   "final_overflow": 0.06968265771865845,
+   "gp_iterations_run": 839,
+   "hpwl": 757614450.0,
+   "io_count": 78268,
+   "run_id": "7aff161c-3268-42b5-8cbe-191f57205c13",
+   "stop_overflow_reached": true
+  },
+  "0.15": {
+   "d_hpwl_pct": 3.2524175897513126,
+   "d_io_pct": -33.997787368064344,
+   "final_overflow": 0.06964737176895142,
+   "gp_iterations_run": 927,
+   "hpwl": 772865944.0,
+   "io_count": 66222,
+   "run_id": "5917bf9a-14da-481b-ad16-530eb5112d5b",
+   "stop_overflow_reached": true
+  },
+  "0.20": {
+   "d_hpwl_pct": 4.615887969078774,
+   "d_io_pct": -35.31440303788385,
+   "final_overflow": 0.0692232996225357,
+   "gp_iterations_run": 944,
+   "hpwl": 783071805.0,
+   "io_count": 64901,
+   "run_id": "0d7dd6f7-1eb2-4b01-9e2c-971fa1f1c06c",
+   "stop_overflow_reached": true
+  }
+ },
+ "iteration_budget": 2000,
+ "k": 16,
+ "note": "grid boundary: rho*=0.20 is the largest preregistered candidate; M4-G2 forbids ad-hoc grid extension",
+ "repo_commit": "b458bdca6e2e0c5f7f60bee7a084872b5e126693",
+ "rho_star": "0.20",
+ "rtype": "grid",
+ "seed_A": 1000,
+ "seed_B": 1001,
+ "selection_rule": "preregistered selection (M4 spec 7.1 T8b): largest rho with d_hpwl <= +5% vs flat on seed A(=1000); report runs use seed B(=1001); Delta io is NOT used for selection (winner-bias control)",
+ "superseded_iter1000_grid": "results/m4/t8b/superseded_iter1000/"
+}
