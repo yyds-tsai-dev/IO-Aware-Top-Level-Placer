@@ -99,6 +99,13 @@ def run(config_json) -> dict:
         placer, metrics = _place(params, placedb)
         if torch.cuda.is_available():
             torch.cuda.synchronize()
+        # metrics[-1] is a flat EvalMetrics only when legalize_flag=1 appends
+        # one (NonLinearPlace.py:891-892); GP-only configs (legalize_flag=0,
+        # e.g. the overflow-diagnosis probe) leave the nested per-stage list
+        # structure, so unwrap trailing lists until we reach the object.
+        _last_metric = metrics[-1]
+        while isinstance(_last_metric, (list, tuple)):
+            _last_metric = _last_metric[-1]
         out.update(
             gp_s=time.time() - t2,
             gp_peak_alloc_mb=(torch.cuda.max_memory_allocated() / 2**20
@@ -115,7 +122,7 @@ def run(config_json) -> dict:
             # metrics[-1] is that object directly (verified against
             # $DP/install/dreamplace/NonLinearPlace.py's metrics structure).
             final_overflow=float(placer.model.overflow.max()),
-            gp_iterations=int(metrics[-1].iteration),
+            gp_iterations=int(_last_metric.iteration),
             rss_end_gb=_rss_gb(), ok=True,
         )
     except RuntimeError as e:
