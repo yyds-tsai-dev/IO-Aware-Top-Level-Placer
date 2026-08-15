@@ -1,0 +1,35 @@
+{
+    "aux_input": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/netdrop/mempool_group__drop0.50__seed0.aux",
+    "density_weight": 8e-05,
+    "detailed_place_flag": 0,
+    "deterministic_flag": 1,
+    "dtype": "float32",
+    "enable_fillers": 1,
+    "gamma": 4.0,
+    "gift_init_flag": 0,
+    "global_place_flag": 1,
+    "global_place_stages": [
+        {
+            "iteration": 2000,
+            "learning_rate": 0.01,
+            "num_bins_x": 2048,
+            "num_bins_y": 2048,
+            "optimizer": "nesterov",
+            "wirelength": "weighted_average"
+        }
+    ],
+    "gp_noise_ratio": 0.025,
+    "gpu": 1,
+    "ignore_net_degree": 100,
+    "legalize_flag": 0,
+    "num_bins_x": 2048,
+    "num_bins_y": 2048,
+    "num_threads": 16,
+    "plot_flag": 0,
+    "random_center_init_flag": 1,
+    "random_seed": 1000,
+    "scale_factor": 1.0,
+    "sort_nets_by_degree": 0,
+    "stop_overflow": 0.07,
+    "target_density": 0.714
+}
