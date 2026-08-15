@@ -109,7 +109,7 @@ def test_config_bins_match_tiler_replication_factor(case):
     stage = stages[0]
     assert stage["num_bins_x"] == expected_x
     assert stage["num_bins_y"] == expected_y
-    assert stage["iteration"] == 1000
+    assert stage["iteration"] == 2000
 
 
 @pytest.mark.parametrize("case", CASES)
