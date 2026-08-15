@@ -1,0 +1,35 @@
+{
+ "config": "/tmp/claude-1100/-nashome-NVL4-vdalab-yyds-dev-IO-Aware-Top-Level-Placer/5db7f998-074e-4244-9357-1b9efe026d71/scratchpad/mempool_cluster_probe2500.json",
+ "rss_start_gb": 0.4772453308105469,
+ "read_s": 327.5493800640106,
+ "rss_after_read_gb": 62.58876419067383,
+ "init_s": 0.5910091400146484,
+ "num_physical": 11315544,
+ "num_movable": 11310807,
+ "num_terminals": 1296,
+ "num_terminal_NIs": 3441,
+ "num_nets": 12712800,
+ "num_pins": 43947793,
+ "num_filler": 195247,
+ "num_bins_x": 4096,
+ "num_bins_y": 4096,
+ "rss_after_init_gb": 62.58925247192383,
+ "gp_s": 329.99344539642334,
+ "gp_peak_alloc_mb": 6359.81396484375,
+ "gp_peak_reserved_mb": 6982.0,
+ "final_overflow": 0.06976862251758575,
+ "gp_iterations": 1251,
+ "rss_end_gb": 63.09267044067383,
+ "ok": true,
+ "env": {
+  "torch_version": "2.8.0+cu128",
+  "cuda_version": "12.8",
+  "gpu_name": "NVIDIA L4",
+  "numpy_version": "1.26.4",
+  "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
+  "ioplace_commit": "7a80803ea049054edc0197b484f67a6096cd6e61",
+  "input_sha256": {
+   "/tmp/claude-1100/-nashome-NVL4-vdalab-yyds-dev-IO-Aware-Top-Level-Placer/5db7f998-074e-4244-9357-1b9efe026d71/scratchpad/mempool_cluster_probe2500.json": "8ba30ad8bb57e0978d8b367999af4ff15fe10b910326a209c76872bd1d423fc3"
+  }
+ }
+}
