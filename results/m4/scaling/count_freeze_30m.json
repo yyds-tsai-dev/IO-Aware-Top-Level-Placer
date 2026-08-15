@@ -1,0 +1,101 @@
+{
+ "base_n_nets": 31535892,
+ "base_n_nodes": 27804699,
+ "base_n_pins": 108235719,
+ "citation_declaration": "T9 \u8207 E5 \u7684\u6240\u6709\u6578\u5b57\u4e00\u5f8b\u5f15\u7528\u672c\u6a94 (count_freeze_30m.json)",
+ "g9": 59360,
+ "g9_expected_pre_measurement": 59228.73601249903,
+ "g9_expected_pre_measurement_note": "adjudication doc sec 5.3: \"\u671f\u671b glue = 59,228.74 nets -> 118,457 pins\" -- superseded here by the actual manifest count (sec 6.1's table row: \"59,229(\u671f\u671b,T7b \u56de\u586b\u5be6\u6578)\")",
+ "glue_share_nets": 0.0018787633027899256,
+ "glue_share_pins": 0.0010956634642351848,
+ "gp9": 118720,
+ "int_headroom": {
+  "composite_key_net_times_64_plus_rid": {
+   "int32": {
+    "capacity": 33554431,
+    "capacity_label": "floor((2**31-1)/64)",
+    "count": 31595252,
+    "field": "n_nets (composite key capacity)",
+    "fits": true,
+    "headroom_frac": 0.062008652439296895,
+    "headroom_pct": 6.200865243929689,
+    "warning_headroom_lt_20pct": true
+   },
+   "int64": {
+    "capacity": 144115188075855871,
+    "capacity_label": "floor((2**63-1)/64)",
+    "count": 31595252,
+    "field": "n_nets (composite key capacity)",
+    "fits": true,
+    "headroom_frac": 4561292565.232923,
+    "headroom_pct": 456129256523.29224,
+    "warning_headroom_lt_20pct": false
+   }
+  },
+  "formula": "design draft sec 2.1 Codex #4: composite key = net_id*64+rid; n_nets <= floor((2**31-1)/64) = 33,554,431 for a signed int32 composite key; headroom_frac = (capacity - count) / count (relative to the count already committed, matching sec 2.1's own worked 6.40% example)",
+  "nets": {
+   "int32": {
+    "capacity": 2147483647,
+    "capacity_label": "2**31-1",
+    "count": 31595252,
+    "field": "n_nets",
+    "fits": true,
+    "headroom_frac": 66.96855575008549,
+    "headroom_pct": 6696.855575008549,
+    "warning_headroom_lt_20pct": false
+   },
+   "int64": {
+    "capacity": 9223372036854775807,
+    "capacity_label": "2**63-1",
+    "count": 31595252,
+    "field": "n_nets",
+    "fits": true,
+    "headroom_frac": 291922724237.90704,
+    "headroom_pct": 29192272423790.703,
+    "warning_headroom_lt_20pct": false
+   }
+  },
+  "pins": {
+   "int32": {
+    "capacity": 2147483647,
+    "capacity_label": "2**31-1",
+    "count": 108354439,
+    "field": "n_pins",
+    "fits": true,
+    "headroom_frac": 18.81906479161412,
+    "headroom_pct": 1881.906479161412,
+    "warning_headroom_lt_20pct": false
+   },
+   "int64": {
+    "capacity": 9223372036854775807,
+    "capacity_label": "2**63-1",
+    "count": 108354439,
+    "field": "n_pins",
+    "fits": true,
+    "headroom_frac": 85122235155.92584,
+    "headroom_pct": 8512223515592.584,
+    "warning_headroom_lt_20pct": false
+   }
+  }
+ },
+ "provenance": {
+  "basis_doc": "docs/results/2026-08-15-m4-t6-holdout-adjudication.md sec 5.3/sec 6.1",
+  "benchmark_kind": "synthetic",
+  "generator_verified": false,
+  "glue_provenance": "recipe_A_prime_uncertified",
+  "n2_rule": "sinkhorn",
+  "normalization": "n2",
+  "quality_claims_prohibited": true,
+  "spec_doc": "docs/superpowers/specs/2026-08-13-m4-scale-up-design-draft.md sec 2.1/sec 8",
+  "t6_fail_mechanism": [
+   "H1_band_estimator_mismatch",
+   "H6_1x1_leg_zero_glue_baseline"
+  ],
+  "t6_verdict": "FAIL"
+ },
+ "scope": "27.7M (3x3)",
+ "source_manifest": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/arrays/3x3_n2/3x3_n2.manifest.json",
+ "task": "T7b",
+ "total_n_nets": 31595252,
+ "total_n_pins": 108354439
+}
