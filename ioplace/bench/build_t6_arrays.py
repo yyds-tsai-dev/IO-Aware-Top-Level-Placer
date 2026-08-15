@@ -4,6 +4,12 @@ holdout gates need -- {1x2, 2x2} x {N1, N2} -- from the `mempool_group`
 Bookshelf export (`export_bookshelf.py`) and the calibrated statistics in
 `results/m4/bench/cluster_stats.json`.
 
+**T6B (2026-08-15 holdout adjudication `docs/results/2026-08-15-m4-t6-
+holdout-adjudication.md` sec 4/8-3):** this module also builds the 3x3
+array T6B's B-0..B-6 checks run against (`SHAPES["3x3"]`, N2 only -- N1 is
+`not_run` there per sec 3), and, via `--no-glue`/`build_shape_no_glue`, the
+zero-glue control arrays B-1's Rent-invariance DiD needs.
+
 Parameters (adjudication sec 4): `alpha=0.1023` (dimensionless, unaffected
 by tile-size rescaling); generation uses `lambda_0_tile` (not the raw
 `lambda_0=4155.2`) as the kernel's `lambda_0` -- `cluster_stats.json`'s
@@ -16,9 +22,12 @@ size).
 
 N1 vs N2 (sec 2d): N1 is `glue_gen.sample_glue_net_count` unmodified (per-
 pair `lambda_0*phi(d,alpha)`, independent of array size). N2 is
-`glue_gen.n2_pair_counts` (fixed per-tile terminal budget `B=3*lambda_0`,
-redistributed by `phi(d)` -- only defined here for `1xC`/`Rx1`/`2x2`, which
-is all this builder ever calls it on).
+`glue_gen.n2_pair_counts_sinkhorn` (fixed per-tile terminal budget
+`B=3*lambda_0`, redistributed by `phi(d)` via symmetric Sinkhorn scaling --
+2026-08-15 sec 5.2/8-2: generalizes `n2_pair_counts`, which only supported
+`1xC`/`Rx1`/`2x2`, to arbitrary shapes including 3x3's non-uniform corner/
+edge/center neighbor multisets; bit-for-bit identical to the old closed
+form on every shape this builder already used it on).
 
 **Known simplification (documented, not hidden):** every generated glue net
 is a degree-2 bipartite tile-pair net (`glue_gen.sample_glue_nets`'s only
@@ -70,7 +79,7 @@ import numpy as np
 
 from ioplace.bench import glue_gen, tile_bookshelf as tb
 
-SHAPES = {"1x2": (1, 2), "2x2": (2, 2)}
+SHAPES = {"1x2": (1, 2), "2x2": (2, 2), "3x3": (3, 3)}
 NORMALIZATIONS = ("n1", "n2")
 
 
@@ -96,11 +105,21 @@ def _movable_node_names(nodes_path):
 
 
 def _expected_pair_counts(norm, lambda_0_tile, alpha, R, C):
+    """Returns (expected_pair_counts, sinkhorn_diagnostics_or_None).
+
+    **2026-08-15 T6 holdout adjudication sec 5.2/8-3:** the n2 branch now
+    calls `glue_gen.n2_pair_counts_sinkhorn` (the general-shape solver)
+    instead of `glue_gen.n2_pair_counts` (which raises `NotImplementedError`
+    on 3x3's non-uniform corner/edge/center neighbor multisets). On the
+    1x2/2x2 shapes this builder already produced, the two are bit-for-bit
+    equivalent (`test_bench_glue_gen.py`'s
+    `test_n2_sinkhorn_matches_closed_form_bit_for_bit_on_uniform_shapes`) --
+    those manifests' expected-pair-count values are unchanged."""
     if norm == "n1":
         dists = glue_gen.tile_pair_distances(R, C)
-        return {pair: lambda_0_tile * glue_gen.phi(d, alpha) for pair, d in dists.items()}
+        return {pair: lambda_0_tile * glue_gen.phi(d, alpha) for pair, d in dists.items()}, None
     if norm == "n2":
-        return glue_gen.n2_pair_counts(lambda_0_tile, alpha, R, C, budget_pairs=3.0)
+        return glue_gen.n2_pair_counts_sinkhorn(lambda_0_tile, alpha, R, C, budget_pairs=3.0)
     raise ValueError(f"unknown normalization {norm!r}")
 
 
@@ -158,7 +177,7 @@ def build_shape(source_prefix, lambda_0_tile, alpha, shape_name, R, C, out_dir, 
 
     result = {}
     for norm in NORMALIZATIONS:
-        expected = _expected_pair_counts(norm, lambda_0_tile, alpha, R, C)
+        expected, sinkhorn_diag = _expected_pair_counts(norm, lambda_0_tile, alpha, R, C)
         dst_prefix = os.path.join(out_dir, f"{shape_name}_{norm}", f"{shape_name}_{norm}")
         _copy_base(base_prefix, dst_prefix)
 
@@ -191,6 +210,10 @@ def build_shape(source_prefix, lambda_0_tile, alpha, shape_name, R, C, out_dir, 
                                      "iface_dist-calibrated) candidate interface-cell sampling "
                                      "-- see module docstring",
         }
+        if sinkhorn_diag is not None:
+            manifest["t6"]["n2_rule"] = "sinkhorn"
+            manifest["t6"]["n2_iters"] = sinkhorn_diag["n2_iters"]
+            manifest["t6"]["n2_max_rel_dev"] = sinkhorn_diag["n2_max_rel_dev"]
         output_sha256 = {suf: tb.sha256_file(f"{dst_prefix}.{suf}") for suf in tb.CORE_SUFFIXES}
         manifest["output_sha256"] = output_sha256
         with open(dst_prefix + ".manifest.json", "w") as f:
@@ -198,6 +221,28 @@ def build_shape(source_prefix, lambda_0_tile, alpha, shape_name, R, C, out_dir, 
         result[norm] = manifest
 
     return result
+
+
+def build_shape_no_glue(source_prefix, shape_name, R, C, out_dir, seed):
+    """B-1's zero-glue control array (2026-08-15 T6 holdout adjudication
+    sec 4.1/4.3/8-3): the base tiling only, glue step skipped entirely.
+    Isolates a combinatorial artifact of an odd shape like 3x3 (9 tiles
+    can't be halved into an integer tile count, so recursive bisection
+    systematically inflates low-level terminal counts near the fit window
+    independent of glue) from the *glue* contribution to Rent's p, via a
+    difference-in-differences against the glued array
+    (`verify_bench.check_b1_rent_invariance_did`). One array per shape
+    (not per normalization -- there is no glue to normalize)."""
+    t0 = time.time()
+    dst_prefix = os.path.join(out_dir, f"{shape_name}_noglue", f"{shape_name}_noglue")
+    manifest = tb.tile(source_prefix, dst_prefix, R, C, seed)
+    manifest["glue"] = None
+    manifest["no_glue"] = True
+    manifest["t6"] = {"shape": shape_name, "normalization": None, "primary_seed": seed,
+                       "no_glue": True, "t_tile_s": time.time() - t0}
+    with open(dst_prefix + ".manifest.json", "w") as f:
+        json.dump(manifest, f, indent=1, sort_keys=True)
+    return manifest
 
 
 def main(argv=None):
@@ -210,7 +255,26 @@ def main(argv=None):
                      help="additional seeds for the reproduction trajectory (recipe sha256 "
                           "recorded; see module docstring's efficiency note)")
     ap.add_argument("--shapes", nargs="*", default=list(SHAPES))
+    ap.add_argument("--no-glue", action="store_true",
+                     help="build the zero-glue control array(s) instead of the normal N1/N2 "
+                          "arrays (adjudication sec 4.1/4.3/8-3's B-1 DiD baseline): base tiling "
+                          "only, glue step skipped, manifest records glue=null/no_glue=true. "
+                          "Mutually exclusive with the normal build -- run this as a separate "
+                          "invocation, one array per shape (no N1/N2 split).")
     args = ap.parse_args(argv)
+
+    if args.no_glue:
+        results = {}
+        for shape_name in args.shapes:
+            R, C = SHAPES[shape_name]
+            results[shape_name] = build_shape_no_glue(args.source, shape_name, R, C,
+                                                        args.out_dir, args.seed)
+            print(f"[build_t6_arrays] {shape_name}-noglue done", flush=True)
+        out_path = os.path.join(args.out_dir, "build_summary_noglue.json")
+        with open(out_path, "w") as f:
+            json.dump(results, f, indent=1, sort_keys=True)
+        print(f"[build_t6_arrays] wrote {out_path}")
+        return results
 
     with open(args.cluster_stats) as f:
         cs = json.load(f)

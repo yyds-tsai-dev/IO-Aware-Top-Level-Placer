@@ -120,6 +120,73 @@ def test_append_glue_nets_rejects_higher_than_degree_2_hist():
         glue_gen.sample_glue_nets(rng, {}, {}, deg_hist=(3,))
 
 
+@pytest.mark.parametrize("R,C", [(1, 2), (2, 2)])
+def test_n2_sinkhorn_matches_closed_form_bit_for_bit_on_uniform_shapes(R, C):
+    """Adjudication doc sec 5.2's decisive property for choosing Sinkhorn:
+    on every shape `n2_pair_counts` already supports (uniform per-tile
+    neighbor-distance multiset -> all Z_u equal -> all a_u equal), the
+    general Sinkhorn solver must reproduce the exact same closed-form
+    answer, so the existing 1x2/2x2 T6 arrays are unaffected by this
+    generalization."""
+    lambda_0, alpha = 4387.31377772961, 0.10230633302323285
+    legacy = glue_gen.n2_pair_counts(lambda_0, alpha, R, C, budget_pairs=3.0)
+    sinkhorn, diag = glue_gen.n2_pair_counts_sinkhorn(lambda_0, alpha, R, C, budget_pairs=3.0)
+    assert set(sinkhorn) == set(legacy)
+    for pair in legacy:
+        assert sinkhorn[pair] == pytest.approx(legacy[pair], rel=1e-6)
+    assert diag["n2_iters"] >= 1
+    assert diag["n2_max_rel_dev"] < 1e-9
+
+
+def test_n2_sinkhorn_3x3_every_tile_terminal_budget_within_tol():
+    """3x3 has 3 distinct neighbor-distance multisets (corner/edge/center)
+    -- `n2_pair_counts` raises `NotImplementedError` for it; the Sinkhorn
+    generalization must still hold *every* tile's summed glue-terminal
+    count to within 1e-9 relative of B (adjudication sec 4.1 B-6)."""
+    lambda_0, alpha = 4387.31377772961, 0.10230633302323285
+    budget_pairs = 3.0
+    B = budget_pairs * lambda_0
+    counts, diag = glue_gen.n2_pair_counts_sinkhorn(lambda_0, alpha, 3, 3, budget_pairs=budget_pairs)
+    per_tile = {}
+    for (ta, tb), c in counts.items():
+        per_tile[ta] = per_tile.get(ta, 0.0) + c
+        per_tile[tb] = per_tile.get(tb, 0.0) + c
+    assert len(per_tile) == 9
+    for u, total in per_tile.items():
+        assert abs(total - B) / B < 1e-9, (u, total, B)
+    # cross-check against the returned diagnostic itself
+    assert diag["n2_max_rel_dev"] < 1e-9
+
+
+@pytest.mark.parametrize("kernel,alpha", [
+    ("power_law", 0.0),
+    ("power_law", 0.10230633302323285),
+    ("power_law", 1.915),
+    ("exp", 0.08558),
+    ("truncated", 0.10230633302323285),
+])
+def test_n2_sinkhorn_3x3_total_is_m_b_over_2_for_every_kernel(kernel, alpha):
+    """Adjudication sec 5.3's structural finding: under N2, the kernel
+    shape only *redistributes* glue nets (each tile is pinned to the same
+    B by the Sinkhorn constraint), it never changes the array total -- so
+    K1/K2/K3 (and K1 at every alpha) all land on the same
+    `m * budget_pairs * lambda_0 / 2` = 59,228.74 for the 3x3 T7 array."""
+    lambda_0 = 4387.31377772961
+    budget_pairs = 3.0
+    B = budget_pairs * lambda_0
+    counts, diag = glue_gen.n2_pair_counts_sinkhorn(lambda_0, alpha, 3, 3, budget_pairs=budget_pairs,
+                                                      kernel=kernel)
+    total = sum(counts.values())
+    assert total == pytest.approx(9 * B / 2, rel=1e-6)
+    assert total == pytest.approx(59228.74, abs=1.0)
+    assert diag["n2_iters"] <= 100
+
+
+def test_n2_sinkhorn_rejects_unknown_kernel():
+    with pytest.raises(ValueError):
+        glue_gen.n2_pair_counts_sinkhorn(1.0, 0.5, 3, 3, kernel="bogus")
+
+
 def test_2x2_total_counts_equal_4x_source_plus_actual_nonzero_glue(tmp_path):
     """The T4 acceptance criterion (design draft sec 7.1): a 2x2 toy array's
     node/net/pin counts = 4x source + the manifest's *actual* (non-zero,

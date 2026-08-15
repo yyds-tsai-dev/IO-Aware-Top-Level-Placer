@@ -203,6 +203,120 @@ def n2_pair_counts(lambda_0, alpha, R, C, budget_pairs=3.0):
     return {pair: budget * w / z_u for pair, w in weights.items()}
 
 
+# ---------------------------------------------------------------------------
+# N2 generalized to asymmetric arrangements (2026-08-15 T6 holdout
+# adjudication doc sec 5.2/8-2): `n2_pair_counts` only works where every
+# tile has the *same* neighbor-distance multiset (Z_u identical for all u),
+# because it derives `a_u` in closed form from that single shared Z. A 3x3
+# array's corner/edge/center tiles each have a different multiset -> no
+# closed form. Symmetric Sinkhorn scaling solves the same per-tile-budget
+# constraint for the general case: find `a_u > 0` such that
+#
+#     c(u,v) = a_u * a_v * phi(dist(u,v), alpha)   satisfies
+#     sum_{v!=u} c(u,v) = B = budget_pairs * lambda_0   for every tile u.
+#
+# (Adjudication sec 5.2's rejected alternative (A), "two-endpoint-average"
+# closed form `c(u,v) = (B/2)(phi/Z_u + phi/Z_v)`, does *not* hold every
+# tile's terminal count to exactly B -- it drifts up to +-21% across
+# corner/edge/center at alpha=1.915 -- which defeats N2's entire reason for
+# existing over N1 (sec 2d): "a tile's glue-terminal count is a property of
+# the tile, not of its shape/neighbor count". Sinkhorn holds every tile to
+# *exactly* B by construction, so it's the decided rule; (A) is not
+# implemented here.)
+# ---------------------------------------------------------------------------
+
+def _phi_power_law(d, alpha):
+    """K1 (design draft sec 3.2 line 301, main line): same as `phi` above."""
+    return phi(d, alpha)
+
+
+def _phi_exp(d, alpha):
+    """K2 (design draft sec 3.2 line 302): exp(-alpha*(d-1)) -- phi(1)=1
+    like every other kernel here; `alpha` here plays the role of the
+    design draft's separate `alpha'` (this module's single-alpha interface
+    reuses the same parameter slot for whichever kernel is selected)."""
+    return math.exp(-float(alpha) * (float(d) - 1.0))
+
+
+def _phi_truncated(d, alpha):
+    """K3 (design draft sec 3.2 line 303): "explicit non-simulation of
+    long-range connectivity" -- the same power-law shape as K1 at the only
+    distances any tile in T6's shapes (1xC/Rx1/2x2/3x3) has at
+    d<=sqrt(2) (its immediate 4- and 8-neighbors), zero beyond."""
+    if d > math.sqrt(2) + 1e-9:
+        return 0.0
+    return phi(d, alpha)
+
+
+_N2_SINKHORN_KERNELS = {
+    "power_law": _phi_power_law,
+    "exp": _phi_exp,
+    "truncated": _phi_truncated,
+}
+
+
+def n2_pair_counts_sinkhorn(lambda_0, alpha, R, C, budget_pairs=3.0, tol=1e-9,
+                             max_iter=1000, kernel="power_law"):
+    """General-shape N2: symmetric Sinkhorn scaling (adjudication sec 5.2,
+    decided over the closed-form-average alternative -- see module note
+    above). Solves for per-tile scale factors `a_u > 0` with Gauss-Seidel,
+    updated **in place** (each `a_u` update immediately sees the previous
+    tile's *new* value, not last iteration's) in fixed row-major tile order
+    `(i, j) for i in range(R) for j in range(C)` (sec 5.2's "執行細節"):
+
+        a_u <- B / sum_{v!=u} a_v * w_uv,   w_uv = kernel(dist(u,v), alpha)
+
+    Convergence: `max_u |sum_v c(u,v) - B| / B < tol` (checked once per
+    full sweep over all tiles), capped at `max_iter` sweeps. `a_u` is
+    initialized to 1.0 for every tile (the plain Gauss-Seidel starting
+    point -- nothing in sec 5.2 specifies a particular init, and this is
+    the least-assuming choice); note that on every shape this module's N2
+    caller actually uses (1xC/Rx1/2x2 -- uniform Z_u), the fixed point this
+    converges to is *identical* to `n2_pair_counts`'s closed form (sec
+    5.2's "在 1×C/R×1/2×2 上與現行公式逐位元等價" -- provable directly: with
+    Z_u equal for every tile, `a_u = sqrt(B/Z)` for all u is already a
+    fixed point of the update rule above).
+
+    Returns `(pair_counts, diagnostics)`: `pair_counts` is
+    `{(tile_a, tile_b): count}` exactly like `n2_pair_counts`;
+    `diagnostics = {"n2_iters": n, "n2_max_rel_dev": dev}` (sec 5.2:
+    manifest fields `n2_rule="sinkhorn"`/`n2_iters`/`n2_max_rel_dev`)."""
+    try:
+        weight_fn = _N2_SINKHORN_KERNELS[kernel]
+    except KeyError:
+        raise ValueError(f"unknown kernel {kernel!r}; choices are {sorted(_N2_SINKHORN_KERNELS)}")
+
+    dists = tile_pair_distances(R, C)
+    tiles = [(i, j) for i in range(R) for j in range(C)]
+    neighbors = {t: [] for t in tiles}
+    for (tile_a, tile_b), d in dists.items():
+        w = weight_fn(d, alpha)
+        neighbors[tile_a].append((tile_b, w))
+        neighbors[tile_b].append((tile_a, w))
+    for u in tiles:
+        if sum(w for _, w in neighbors[u]) <= 0:
+            raise ValueError(f"tile {u} has no positive-weight neighbor under kernel={kernel!r}, "
+                              f"alpha={alpha} -- Sinkhorn budget cannot be met")
+
+    budget = budget_pairs * lambda_0
+    a = {u: 1.0 for u in tiles}
+    n_iters, max_rel_dev = 0, float("inf")
+    for it in range(1, max_iter + 1):
+        for u in tiles:
+            s = sum(a[v] * w for v, w in neighbors[u])
+            a[u] = budget / s
+        max_rel_dev = 0.0
+        for u in tiles:
+            s = sum(a[u] * a[v] * w for v, w in neighbors[u])
+            max_rel_dev = max(max_rel_dev, abs(s - budget) / budget)
+        n_iters = it
+        if max_rel_dev < tol:
+            break
+
+    pair_counts = {pair: a[pair[0]] * a[pair[1]] * weight_fn(d, alpha) for pair, d in dists.items()}
+    return pair_counts, {"n2_iters": n_iters, "n2_max_rel_dev": max_rel_dev}
+
+
 def sample_glue_net_count_from_expected(rng, expected_per_pair, mode="poisson"):
     """Same sampling step as `sample_glue_net_count`, generalized to accept
     a precomputed `{(tile_a,tile_b): expected_count}` map -- N1 keeps using
