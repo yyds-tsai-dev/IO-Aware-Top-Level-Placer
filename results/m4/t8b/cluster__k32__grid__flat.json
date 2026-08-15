@@ -1,0 +1,42 @@
+{
+ "mode": "evaluate_only",
+ "npz": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/t8b/cluster__k16__grid__flat.json.npz",
+ "config": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_cluster.json",
+ "k": 32,
+ "rtype": "grid",
+ "seed": 1000,
+ "io_count": 354781,
+ "io_gp": null,
+ "ft_count": 36854,
+ "hard_lambda_sum": 279550,
+ "tree_wl": 2370614787.4161673,
+ "hpwl": 2095445937.019219,
+ "io_rg": 316082,
+ "ft_rg": 36532,
+ "runtime_s": 2528.9065415859222,
+ "evaluate_only": true,
+ "source_npz": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/t8b/cluster__k16__grid__flat.json.npz",
+ "source_npz_sha256": "db1df972f161f62f553c244e60bdfb451a59c52540057d38aae847880c15ea64",
+ "run_id": "4b6002fd-7eee-478d-a136-922b97efd377",
+ "status": "ok",
+ "schema_version": 3,
+ "repo_commit": "9760f36b3238c7eabc6757938a9aec9aa20209d7",
+ "input_sha256": {
+  "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_cluster.json": "beec18f2146b5d9f5218172508a258b3d71720b1003b5cfd20ee8e18ab1383fc"
+ },
+ "env": {
+  "torch_version": "2.8.0+cu128",
+  "cuda_version": "12.8",
+  "gpu_name": "NVIDIA L4",
+  "numpy_version": "1.26.4",
+  "ioplace_commit": "9760f36b3238c7eabc6757938a9aec9aa20209d7",
+  "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
+  "input_sha256": {
+   "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_cluster.json": "beec18f2146b5d9f5218172508a258b3d71720b1003b5cfd20ee8e18ab1383fc"
+  }
+ },
+ "command": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/drivers/evaluate_placement.py --npz /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/t8b/cluster__k16__grid__flat.json.npz --config /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_cluster.json --k 32 --rtype grid --seed 1000 --out /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/t8b/cluster__k32__grid__flat.json",
+ "hostname": "NVL5",
+ "benchmark_kind": "real",
+ "device_baseline_gb": 0.0
+}
