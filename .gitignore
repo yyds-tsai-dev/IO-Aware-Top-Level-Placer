@@ -12,3 +12,4 @@ results/**/*.route
 results/**/*.aux
 results/**/*.wts
 .superpowers/
+results/**/*.npy

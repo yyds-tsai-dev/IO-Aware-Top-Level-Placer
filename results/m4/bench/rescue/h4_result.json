@@ -1,0 +1,34 @@
+{
+ "1x2_n1": {
+  "n_glue_endpoints": 4413,
+  "n_missing_lookup": 0,
+  "n_reference_sample": 88260,
+  "ks": 0.01549966009517334,
+  "glue_mean": 0.13743685618367477,
+  "reference_mean": 0.13469195097371137
+ },
+ "1x2_n2": {
+  "n_glue_endpoints": 13207,
+  "n_missing_lookup": 0,
+  "n_reference_sample": 264140,
+  "ks": 0.010759445748466656,
+  "glue_mean": 0.13626300443074035,
+  "reference_mean": 0.1348542580438233
+ },
+ "2x2_n1": {
+  "n_glue_endpoints": 12930,
+  "n_missing_lookup": 0,
+  "n_reference_sample": 258600,
+  "ks": 0.011160092807424582,
+  "glue_mean": 0.13644781137520853,
+  "reference_mean": 0.13493456311106033
+ },
+ "2x2_n2": {
+  "n_glue_endpoints": 13083,
+  "n_missing_lookup": 0,
+  "n_reference_sample": 261660,
+  "ks": 0.010578613467859044,
+  "glue_mean": 0.13643669163323055,
+  "reference_mean": 0.13496958461869343
+ }
+}
