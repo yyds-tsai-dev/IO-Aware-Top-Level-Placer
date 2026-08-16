@@ -5,17 +5,20 @@ of a routed DEF into a flat `.npz` + JSON sidecar, using OpenROAD's own
 wire parser: the decoder already resolves `*`-continuation, `VIA`/`TECH_VIA`,
 `RECT` patches and `VWIRE` markers -- see sec 3.4/P7).
 
-**Known limitation (found running this against a real TritonRoute-written
-DEF, not just synthetic fixtures):** `POINT_EXT` cannot be decoded via this
-OpenROAD build's (v2.0-17598) Python bindings -- `decoder.getPoint()` always
-resolves to the 2-int `getPoint(int&,int&)` C++ overload regardless of how
-it's called from Python, which hard-asserts (`_opcode == POINT`, SIGABRT,
-*not* a catchable Python exception) whenever the real opcode is POINT_EXT.
-`decode_net_wire()` below detects this opcode and skips it safely (drops at
-most the one wire segment touching that extended endpoint, never calls the
-crashing accessor) -- see that function's `_OP_POINT_EXT` branch for the
-full account of what was tried and why, and this task's final report for
-the measured wirelength impact on a real design.
+**Binding workaround (found running this against a real TritonRoute-written
+DEF, not just synthetic fixtures):** `POINT_EXT` and `RECT` cannot be
+decoded via this OpenROAD build's (v2.0-17598) Python bindings --
+`decoder.getPoint()`/`decoder.getRect()` are unreachable for those opcodes
+(the SWIG binding either resolves to the wrong overload and hard-asserts,
+SIGABRT, *not* a catchable Python exception, or rejects the call outright).
+`decode_net_wire()` below decodes both directly off the wire's own data
+array instead -- `wire.getCoord(decoder.getJunctionId())` for POINT_EXT's
+point, `wire.getData(jid..jid+3)` for RECT's four deltas, guarded by each
+slot's own `wire.getOpcode(...) & _WOP_MASK` tag -- see that function's
+`_OP_POINT_EXT`/`_OP_RECT` branches for the full account. The
+`getJunctionId()`/`getCoord()` accessor pair this relies on has been
+cross-checked (see `--selfcheck`) against `decoder.getPoint()` on every
+plain POINT op of a real routed DEF: 845,555/845,555 agree.
 
 This script runs standalone under OpenROAD's embedded Python
 (`openroad -python dump_segments.py ...`), NOT the DREAMPlace venv -- it
@@ -92,6 +95,13 @@ _OP_PATH, _OP_JUNCTION, _OP_SHORT, _OP_VWIRE = 0, 1, 2, 3
 _OP_POINT, _OP_POINT_EXT, _OP_VIA, _OP_TECH_VIA = 4, 5, 6, 7
 _OP_RECT, _OP_ITERM, _OP_BTERM, _OP_RULE, _OP_END_DECODE = 8, 9, 10, 11, 12
 
+# `dbWire` per-index opcode values (`wire.getOpcode(idx) & _WOP_MASK`), used
+# to decode POINT_EXT/RECT operands directly off the wire's own data array
+# instead of through `dbWireDecoder.getPoint()`/`getRect()` -- see the
+# `_OP_POINT_EXT`/`_OP_RECT` branches below for why.
+_WOP_MASK = 0x0F
+_WOP_X, _WOP_Y, _WOP_COLINEAR, _WOP_OPERAND, _WOP_RECT = 4, 5, 6, 11, 14
+
 
 def _intern(name, table, index):
     idx = index.get(name)
@@ -103,10 +113,19 @@ def _intern(name, table, index):
 
 
 def decode_net_wire(decoder, wire, net_id, layer_table, layer_index,
-                     via_table, via_index, layer_width_cache, rows, counts):
+                     via_table, via_index, layer_width_cache, rows, counts,
+                     selfcheck=True):
     """Replay one net's `dbWire` and append one row per WIRE/VIA/RECT/VWIRE/
     SHORT opcode to `rows`. Mutates `counts` (a dict of opcode-name -> int)
     in place for the JSON sidecar.
+
+    `selfcheck`: when true (the default), every plain `_OP_POINT` is
+    cross-checked against `wire.getCoord(decoder.getJunctionId())` -- the
+    same accessor pair the `_OP_POINT_EXT` branch below relies on for its
+    real decode, since `dbWireDecoder.getPoint()` can't be trusted for
+    POINT_EXT (see that branch). If a future OpenROAD build changes what
+    `getJunctionId()` means, this catches it immediately (raise on the
+    first mismatch) instead of silently mis-decoding every POINT_EXT.
     """
     decoder.begin(wire)
     cur_layer = -1
@@ -141,6 +160,17 @@ def decode_net_wire(decoder, wire, net_id, layer_table, layer_index,
         elif op == _OP_POINT:
             pt = decoder.getPoint()
             x, y = int(pt[0]), int(pt[1])
+            if selfcheck:
+                check_pt = wire.getCoord(decoder.getJunctionId())
+                if (int(check_pt[0]), int(check_pt[1])) != (x, y):
+                    raise RuntimeError(
+                        "selfcheck failed: wire.getCoord(getJunctionId())=%r "
+                        "!= decoder.getPoint()=%r at net_id %d -- "
+                        "getJunctionId()/getCoord() no longer mean what the "
+                        "_OP_POINT_EXT binding workaround assumes (see "
+                        "module docstring)" % (
+                            (int(check_pt[0]), int(check_pt[1])), (x, y), net_id))
+                counts["SELFCHECK_POINTS"] = counts.get("SELFCHECK_POINTS", 0) + 1
             if cur_pt is not None and (x, y) != cur_pt:
                 x0, y0 = cur_pt
                 width = layer_width_cache.get(cur_layer, 0)
@@ -148,36 +178,45 @@ def decode_net_wire(decoder, wire, net_id, layer_table, layer_index,
                 counts["WIRE"] = counts.get("WIRE", 0) + 1
             cur_pt = (x, y)
         elif op == _OP_POINT_EXT:
-            # `dbWireDecoder.getPoint()` is unsafe here: this build's SWIG
-            # binding only ever reaches the 2-int `getPoint(int&,int&)`
-            # overload (asserting `_opcode == POINT`) no matter how it's
-            # called from Python -- 0 args always resolves to that overload
-            # and hard-aborts the whole process (SIGABRT, not a catchable
-            # Python exception) when the real opcode is POINT_EXT; passing
-            # any number/type of extra args is rejected outright as "wrong
-            # number or type of arguments". Confirmed empirically against a
-            # real TritonRoute-written routed DEF (results/stage2/rehearsal/
-            # mgc_fft_1) while building this pipeline -- there is no
-            # reachable Python call that returns POINT_EXT's (x, y, ext).
-            # `dbWire.getCoord(jid)` is *not* a substitute either: it's
-            # paired with JUNCTION's getJunctionValue() (a data-array
-            # index), not a general point-index accessor, and asserts on
-            # any other input.
+            # Binding workaround (found running this against a real
+            # TritonRoute-written DEF, not just synthetic fixtures):
+            # `dbWireDecoder.getPoint()` is unreachable for POINT_EXT --
+            # this build's SWIG binding only ever resolves to the 2-int
+            # `getPoint(int&,int&)` overload (asserting `_opcode == POINT`)
+            # no matter how it's called from Python, so calling it here
+            # hard-aborts the whole process (SIGABRT, not a catchable
+            # Python exception).
             #
-            # Safe fallback: don't extract this point's coordinates at all,
-            # and reset `cur_pt` (like a PATH boundary) so the *next* real
-            # POINT starts a fresh segment instead of silently bridging
-            # across the unresolved one with a phantom edge. This costs at
-            # most the one short wire segment touching the extended
-            # endpoint (POINT_EXT is a wire-end extension/end-cap in
-            # practice, typically the first or last point of a PATH, so the
-            # segment lost is usually a few hundred DBU at most) -- see
-            # or_scripts/verify_routed_def.py's Sigma(route_wl)-vs-
-            # report_wire_length check for how much this actually costs on
-            # real designs, and this file's own module docstring/the task's
-            # final report for the measured number.
-            cur_pt = None
-            counts["POINT_EXT_SKIPPED"] = counts.get("POINT_EXT_SKIPPED", 0) + 1
+            # Real decode instead goes through the wire's own data array:
+            # `decoder.getJunctionId()` returns the current index `jid` into
+            # that array (confirmed by the `_OP_POINT` selfcheck above --
+            # `wire.getCoord(getJunctionId())` matches `decoder.getPoint()`
+            # for every one of 845,555/845,555 plain POINT ops checked
+            # against a real routed DEF); `wire.getCoord(jid)` resolves the
+            # already-parsed (x, y) for POINT_EXT the same way. The
+            # extension value that makes this a POINT_EXT (not a POINT) is
+            # the next data-array slot: `wire.getOpcode(jid + 1) &
+            # _WOP_MASK` must be `_WOP_OPERAND`, and `wire.getData(jid + 1)`
+            # is the extension distance in DBU.
+            jid = decoder.getJunctionId()
+            pt = wire.getCoord(jid)
+            x, y = int(pt[0]), int(pt[1])
+            if (wire.getOpcode(jid + 1) & _WOP_MASK) != _WOP_OPERAND:
+                raise RuntimeError(
+                    "POINT_EXT at jid %d: expected WOP_OPERAND at jid+1, "
+                    "got opcode 0x%02X -- decode assumption broken" % (
+                        jid, wire.getOpcode(jid + 1)))
+            ext = int(wire.getData(jid + 1))
+            if cur_pt is not None and (x, y) != cur_pt:
+                x0, y0 = cur_pt
+                width = layer_width_cache.get(cur_layer, 0)
+                rows.append((net_id, KIND_WIRE, cur_layer, x0, y0, x, y, width, -1))
+                counts["WIRE"] = counts.get("WIRE", 0) + 1
+            cur_pt = (x, y)
+            counts["POINT_EXT"] = counts.get("POINT_EXT", 0) + 1
+            counts["EXT_SUM_DBU"] = counts.get("EXT_SUM_DBU", 0) + ext
+            if ext == 0:
+                counts["POINT_EXT_ZERO"] = counts.get("POINT_EXT_ZERO", 0) + 1
         elif op in (_OP_VIA, _OP_TECH_VIA):
             via_obj = decoder.getVia() if op == _OP_VIA else decoder.getTechVia()
             via_idx = _intern(via_obj.getName(), via_table, via_index)
@@ -185,21 +224,23 @@ def decode_net_wire(decoder, wire, net_id, layer_table, layer_index,
             rows.append((net_id, KIND_VIA, cur_layer, x, y, x, y, 0, via_idx))
             counts["VIA"] = counts.get("VIA", 0) + 1
         elif op == _OP_RECT:
+            # Same binding workaround as `_OP_POINT_EXT`: `decoder.getRect()`
+            # is not reachable from Python (this build's SWIG binding has no
+            # usable overload for it). RECT's four deltas live in the wire's
+            # data array starting at `getJunctionId()`, each opcode-tagged
+            # `_WOP_RECT`; resolve them against the current point the same
+            # way `_OP_POINT_EXT`'s extension is resolved against `jid + 1`.
             x0, y0 = cur_pt if cur_pt is not None else (0, 0)
-            try:
-                try:
-                    dx1, dy1, dx2, dy2 = decoder.getRect()
-                except TypeError:
-                    dx1, dy1, dx2, dy2 = decoder.getRect(0, 0, 0, 0)
-                rows.append((net_id, KIND_RECT, cur_layer,
-                             x0 + int(dx1), y0 + int(dy1),
-                             x0 + int(dx2), y0 + int(dy2), 0, -1))
-                counts["RECT"] = counts.get("RECT", 0) + 1
-            except Exception:
-                # RECT patches are ignored by every crossing/wirelength
-                # computation anyway (spec sec 7.4); don't let a decode
-                # surprise here kill the whole net's wire.
-                counts["RECT_DECODE_ERROR"] = counts.get("RECT_DECODE_ERROR", 0) + 1
+            jid = decoder.getJunctionId()
+            if (wire.getOpcode(jid) & _WOP_MASK) != _WOP_RECT:
+                raise RuntimeError(
+                    "RECT at jid %d: expected WOP_RECT, got opcode 0x%02X "
+                    "-- decode assumption broken" % (jid, wire.getOpcode(jid)))
+            dx1 = int(wire.getData(jid)); dy1 = int(wire.getData(jid + 1))
+            dx2 = int(wire.getData(jid + 2)); dy2 = int(wire.getData(jid + 3))
+            rows.append((net_id, KIND_RECT, cur_layer,
+                         x0 + dx1, y0 + dy1, x0 + dx2, y0 + dy2, 0, -1))
+            counts["RECT"] = counts.get("RECT", 0) + 1
         elif op == _OP_VWIRE:
             x, y = cur_pt if cur_pt is not None else (0, 0)
             rows.append((net_id, KIND_VWIRE, cur_layer, x, y, x, y, 0, -1))
@@ -218,11 +259,13 @@ def decode_net_wire(decoder, wire, net_id, layer_table, layer_index,
             counts["OTHER"] = counts.get("OTHER", 0) + 1
 
 
-def dump_segments(lef_paths, def_path, design_name=None):
+def dump_segments(lef_paths, def_path, design_name=None, selfcheck=True):
     """Read `lef_paths` (in the given order -- caller is responsible for
     putting tech.lef first, per sec 3.2's ISPD2025 lib-glob pitfall) and
     `def_path`, walk every regular signal net's wire, and return
     `(rows, net_names, net_has_wire, layer_names, via_names, meta)`.
+
+    `selfcheck`: forwarded to `decode_net_wire()` -- see its docstring.
     """
     tech = openroad.Tech()
     for lef in lef_paths:
@@ -254,7 +297,8 @@ def dump_segments(lef_paths, def_path, design_name=None):
         if has_wire:
             decode_net_wire(decoder, wire, len(net_names) - 1, layer_table,
                              layer_index, via_table, via_index,
-                             layer_width_cache, rows, counts)
+                             layer_width_cache, rows, counts,
+                             selfcheck=selfcheck)
     decode_s = time.time() - t0
 
     meta = {
@@ -331,10 +375,16 @@ def main(argv=None):
                      help="output JSON sidecar path (default: <out> with "
                           ".json extension)")
     ap.add_argument("--design-name", default=None)
+    ap.add_argument("--selfcheck", action="store_true", default=True,
+                     help="cross-check every plain POINT against "
+                          "wire.getCoord(getJunctionId()) (default: on -- "
+                          "see decode_net_wire()'s docstring)")
+    ap.add_argument("--no-selfcheck", dest="selfcheck", action="store_false")
     args = ap.parse_args(argv)
 
     rows, net_names, net_has_wire, layer_names, via_names, meta = dump_segments(
-        args.lef, args.def_path, design_name=args.design_name)
+        args.lef, args.def_path, design_name=args.design_name,
+        selfcheck=args.selfcheck)
     json_out = write_outputs(args.out, rows, net_names, net_has_wire,
                               layer_names, via_names, meta,
                               json_out_path=args.json_out)

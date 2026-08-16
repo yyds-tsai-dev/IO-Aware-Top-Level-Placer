@@ -335,6 +335,8 @@ routed.def ──[openroad -python]──> segments.npz ──[$DP/.venv312]─�
 
 **為什麼不自己寫 DEF 文字剖析器(定案理由)**:`odb.dbWireDecoder` 已經處理了 `POINT` 續值(`*`)、`POINT_EXT`(端點延伸)、`TECH_VIA`/`VIA`、`RECT` patch、`SHORT`、`JUNCTION`,以及最容易寫錯的 **`VWIRE`(virtual wire,無金屬,絕對不能算成 wire)**;而且它讀得懂 Innovus 寫出的 DEF(ISPD2025 那批就是 Innovus 23.34 產物,實測 odb 讀得動)。自寫剖析器只作 1,000-net 抽樣的交叉驗證器(S2 的驗收之一)。
 
+**已知 binding 缺陷 + workaround(實作 S2 時發現,非合成 fixture 而是對真實 TritonRoute routed DEF 跑出來的)**:這個 OpenROAD build(v2.0-17598)的 Python binding 下,`dbWireDecoder.getPoint()`/`getRect()` 對 `POINT_EXT`/`RECT` 兩個 opcode 不可達——`getPoint()` 永遠解到 2-int `getPoint(int&,int&)` overload,對 `POINT_EXT` 呼叫會 assert `_opcode == POINT` 而 SIGABRT(非可 catch 的 Python exception);`getRect()` 同樣拿不到可用的 overload。Workaround:兩者都改直接讀 `dbWire` 自己的 data array——`POINT_EXT` 用 `wire.getCoord(decoder.getJunctionId())` 取點、`wire.getData(jid+1)`(經 `wire.getOpcode(jid+1) & 0x0F == WOP_OPERAND` 驗證)取延伸量;`RECT` 用 `wire.getData(jid..jid+3)`(經 `wire.getOpcode(jid) & 0x0F == WOP_RECT` 驗證)取四個相對於目前點的 delta。`getJunctionId()`/`getCoord()` 這組 accessor 已用 `dump_segments.py --selfcheck`(預設開啟)對每個一般 `POINT` opcode 交叉驗證過 `wire.getCoord(getJunctionId()) == decoder.getPoint()`:一份真實 routed DEF 上 845,555/845,555 個 POINT 全部相符,才敢把同一組 accessor 用在 `POINT_EXT`/`RECT` 上。
+
 ### 7.2 Key 對齊(與 `per_net_crossings` 同 index)
 
 1. `netmap.json` 給 `net_index → net_name`(來自 `placedb.net_names`)。
@@ -369,6 +371,7 @@ y_internal = (y_def − shift_factor[1]) × scale_factor
 - **`VWIRE` 一律跳過**。
 - 恆等式測試(S3 驗收):`route_cross_raw ≥ route_cross_dw(δ) ≥ Λ_route − 1 ≥ 0`,任一違反即為 bug。
 - 主報表用 `route_cross_dw(2)`;`raw` 與 δ 掃描表附在報告裡。**若 `raw` 與 `dw(2)` 的總量差超過 15%,代表「沿界線走」是主要效應,§8 的所有結論必須同時用兩個值陳述。**
+- **`route_wl` 與 `dbWire::getLength()` 的 reconciliation 恆等式**:`route_wl` 是 centerline WIRE-only 的量(`ioplace/route_eval/segments.py` 的 `Segments.wire_length()`);`RECT` 不進 `route_wl`,也不進上面任何一個 crossing 量。但 odb 自己的 `dbWire::getLength()`(`verify_routed_def.py` check 1 用作 native oracle)**會**把每個 `RECT` patch 算成它的長邊,因此兩者之間有個固定、可算的落差:`dbWire::getLength() = route_wl + Σ_RECT(long_side − short_side)`。S2 的驗收(§10)因此比對的是**reconciled** 後的量,不是 `route_wl` 原始值本身;`ioplace/route_eval/segments.py` 的 `rect_reconciliation_dbu(segments)` 是這個 `Σ_RECT(long_side − short_side)` 項的純 numpy 實作。
 
 ### 7.5 分層報表
 
@@ -476,7 +479,7 @@ route[e] ≈ α·(λ_e − 1) + β·(ST_e − (λ_e − 1)) + γ·(io_mst[e] −
 |---|---|---|---|
 | **S0** 環境固化 | 否 | 把 §3 的所有探測寫成 `ioplace/diagnostics/probes_stage2/probe_env.py`,輸出 `results/stage2/env.json`(Innovus 路徑/版本、license port 連通性、OpenROAD 版本與 feature、各 benchmark 的存在性與大小 + sha256) | JSON 產出;§3 的每個數字可追溯;license 不通如實記為 `false` |
 | **S1** DEF 輸出 | 否 | `ioplace/export/def_export.py`:`export_def(placedb, params, node_x, node_y, out_dir)` 產 `out.def` / `regions.json` / `netmap.json` / `coord.json`;`run_placement_io.py` 加 `--emit-def DIR` | mgc_fft_1 GP+LG 後輸出;OpenROAD `read_def` 零 error;`#COMPONENTS` 與輸入相同;讀回座標 vs `node_x/node_y` 差 ≤ 1 DBU;`netmap` 對 `placedb.net_names` 逐項相同 |
-| **S2** routed-DEF 解析 | 否 | `ioplace/route_eval/or_scripts/dump_segments.py`(odb `dbWireDecoder`)+ `ioplace/route_eval/segments.py`(讀 npz);另寫 `def_text_parser.py` 作抽樣交叉驗證 | 手寫小 DEF 的 golden test(含 `*` 續值、via、`VWIRE`、`RECT`);對 OpenROAD routed DEF 的 `Σ route_wl` vs `report_route` 的 total wirelength 誤差 < 1%;1,000-net 抽樣 odb vs 文字解析逐 net 相同 |
+| **S2** routed-DEF 解析 | 否 | `ioplace/route_eval/or_scripts/dump_segments.py`(odb `dbWireDecoder`)+ `ioplace/route_eval/segments.py`(讀 npz);另寫 `def_text_parser.py` 作抽樣交叉驗證 | 手寫小 DEF 的 golden test(含 `*` 續值、via、`VWIRE`、`RECT`);**reconciled** `Σ route_wl + Σ_RECT(long_side − short_side)` vs `dbWire::getLength()`(`report_wire_length`)誤差 < 1%,raw definitional delta(`route_wl` 未加回 RECT 項)照實揭露、不當 gate;**全部** routed net(不抽樣)odb vs 文字解析逐 net 相同 |
 | **S3** crossing 抽取 | 否 | `ioplace/route_eval/route_crossings.py`,**重用 `evaluator_ref._walk_segment`**;產 `route_cross_raw/dw(δ)`、`Λ_route`、`route_ft`、`route_pair_demand`、`route_wl` | 合成 case:一條直線橫跨 k 個 grid region → 精確 k−1;恆等式 `raw ≥ dw(δ) ≥ Λ_route−1 ≥ 0` 隨機測試 1,000 次;把 evaluator 的 MST edge 當成「假 wire」餵進來 ⇒ 逐位元重現 `per_net_crossings` / `per_net_ft` / `boundary_pair_demand`(**這條是最強的口徑對齊證明,必做**) |
 | **S4** LEF 清洗 + F-OR 端到端演練 | 否 | 修 ISPD2015 tech.lef 的重複 VIA(DRT-0338)或改走 NanGate45;跑通 1 個 design 的 GP+LG → DEF → OR GR+DR → routed DEF → 四值表 | 端到端一次成功;§8.2 的表 1–5 產出;`results/stage2/rehearsal/*.json` |
 | **S5** NanGate45 語料接入 | 否 | 產 `benchmarks/ispd25/*.json` DREAMPlace config(**必須 glob 全 15 個 LEF,tech 在最前**——見 §3.2 踩雷);跑通 mempool_tile_wrap 的 GP+LG;量測 mempool_group / mempool_cluster 的 `PlaceDB.read` 時間與 peak RSS | tile_wrap GP+LG 完成並出 evaluator 報表;group/cluster 的讀取結果**如實記錄(含失敗)**,回填 §4.3 的 L-Q1-b |

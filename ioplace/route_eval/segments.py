@@ -119,6 +119,20 @@ class Segments:
         return out
 
 
+def rect_reconciliation_dbu(segments):
+    """Sigma(long_side - short_side) over every KIND_RECT row -- the term
+    that reconciles `Segments.wire_length()` (route_wl, RECT excluded, spec
+    sec 7.4's "RECT patch 忽略") against `dbWire::getLength()`'s own total,
+    which counts each RECT patch as its long side (see
+    or_scripts/verify_routed_def.py's check 1). Pure numpy, no odb needed;
+    RECT rows never enter `wire_length()` itself.
+    """
+    m = segments.seg_kind == KIND_RECT
+    dx = np.abs(segments.seg_x1[m] - segments.seg_x0[m])
+    dy = np.abs(segments.seg_y1[m] - segments.seg_y0[m])
+    return int(np.sum(np.maximum(dx, dy) - np.minimum(dx, dy)))
+
+
 def load_segments(npz_path, json_path=None):
     """Load a `dump_segments.py` output pair. `json_path` defaults to
     `npz_path` with its extension swapped to `.json` (dump_segments.py's own

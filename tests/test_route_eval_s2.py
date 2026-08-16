@@ -27,7 +27,9 @@ import numpy as np
 import pytest
 
 from ioplace.route_eval import def_text_parser as dtp
-from ioplace.route_eval.segments import load_segments, KIND_WIRE, KIND_VIA
+from ioplace.route_eval.segments import (
+    load_segments, rect_reconciliation_dbu, KIND_WIRE, KIND_VIA, KIND_RECT,
+)
 
 HAS_ODB = importlib.util.find_spec("odb") is not None
 
@@ -405,6 +407,57 @@ def test_segments_rows_for_net_reconstructs_kind_layer_via(tmp_path):
         ("VIA", "metal2", 1000, 0, 1000, 0, 0, "VIA23"),
         ("WIRE", "metal3", 1000, 0, 1000, 500, 140, ""),
     ]
+
+
+def _write_fake_segments_with_rect_npz(path):
+    # Same L-shaped WIRE+VIA net as _write_fake_segments_npz(), plus one
+    # RECT row with a 100 (x) x 420 (y) bbox -- the reconciliation term
+    # (spec sec 7.4 / verify_routed_def.py check 1) is exactly
+    # long_side - short_side = 420 - 100 = 320.
+    seg_net_id = np.array([0, 0, 0, 0], dtype=np.int32)
+    seg_kind = np.array([KIND_WIRE, KIND_VIA, KIND_WIRE, KIND_RECT], dtype=np.uint8)
+    seg_layer = np.array([0, 0, 1, 1], dtype=np.int16)
+    seg_x0 = np.array([0, 1000, 1000, 2000], dtype=np.int64)
+    seg_y0 = np.array([0, 0, 0, 3000], dtype=np.int64)
+    seg_x1 = np.array([1000, 1000, 1000, 2100], dtype=np.int64)
+    seg_y1 = np.array([0, 0, 500, 3420], dtype=np.int64)
+    seg_width = np.array([140, 0, 140, 0], dtype=np.int64)
+    seg_via_id = np.array([-1, 0, -1, -1], dtype=np.int32)
+    np.savez(
+        path,
+        seg_net_id=seg_net_id, seg_kind=seg_kind, seg_layer=seg_layer,
+        seg_x0=seg_x0, seg_y0=seg_y0, seg_x1=seg_x1, seg_y1=seg_y1,
+        seg_width=seg_width, seg_via_id=seg_via_id,
+        net_names=np.array(["n0", "n1"]), net_has_wire=np.array([True, False]),
+        layer_names=np.array(["metal2", "metal3"]), via_names=np.array(["VIA23"]),
+    )
+    import json
+    with open(str(path).rsplit(".", 1)[0] + ".json", "w") as f:
+        json.dump({"design_name": "fake_rect", "net_count": 2, "routed_net_count": 1}, f)
+
+
+def test_rect_reconciliation_dbu_golden(tmp_path):
+    npz = tmp_path / "fake_rect.npz"
+    _write_fake_segments_with_rect_npz(npz)
+    s = load_segments(npz)
+    assert rect_reconciliation_dbu(s) == 320
+
+
+def test_rect_rows_do_not_change_wire_length(tmp_path):
+    # RECT rows are excluded from Segments.wire_length() (spec sec 7.4's
+    # "RECT patch 忽略") -- a net with an extra RECT row must report the
+    # exact same wire_length() as the same net without it, so a future
+    # regression that starts summing RECT into wire_length() is caught here
+    # rather than only surfacing as a Sigma(route_wl) drift in production.
+    npz_no_rect = tmp_path / "fake.npz"
+    _write_fake_segments_npz(npz_no_rect)
+    s_no_rect = load_segments(npz_no_rect)
+
+    npz_rect = tmp_path / "fake_rect.npz"
+    _write_fake_segments_with_rect_npz(npz_rect)
+    s_rect = load_segments(npz_rect)
+
+    assert s_no_rect.wire_length() == s_rect.wire_length()
 
 
 # ---------------------------------------------------------------------------

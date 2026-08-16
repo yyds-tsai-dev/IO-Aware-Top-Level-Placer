@@ -11,19 +11,28 @@ Runs two checks against one routed DEF:
      summed over KIND_WIRE rows) vs two OpenROAD-native oracles that never
      touch this repo's decode loop: `report_wire_length`'s own total, and
      `sum(net.getWire().getLength() for net in block.getNets())` (odb's own
-     wire-length accumulator). Relative error must be < 1% against both
-     (sec 10 S2 row's own acceptance number).
+     wire-length accumulator, `dbWire::getLength()`). The *gate* is the
+     reconciled comparison: `dbWire::getLength()` additionally counts each
+     RECT patch's `(long_side - short_side)` (spec sec 7.4's "RECT patch
+     忽略" applies to route_wl/crossing, not to odb's own accumulator), so
+     `recon = Sigma(route_wl) + Sigma_RECT(long_side - short_side)` is what's
+     compared against the native total; relative error must be < 1%
+     (sec 10 S2 row's acceptance number). The raw, un-reconciled
+     `Sigma(route_wl)` vs native delta is still reported as
+     `definitional_delta_pct` -- informational only, since it isn't
+     comparing the same quantity.
   2. odb-decoded segments vs `ioplace.route_eval.def_text_parser`-decoded
-     segments, per net, on a sample of >= 1000 routed nets (or all of them,
-     if the design has fewer) -- sec 10 S2 row's "1,000-net 抽樣 odb vs 文字
-     解析逐 net 相同". Segments are compared as endpoint-order-independent
-     sets (a WIRE row's two endpoints can come out in either order from the
-     two decoders without that being a real disagreement).
+     segments, per net, over all routed nets by default (`--sample 0`; pass
+     a positive `--sample N` to check only a random N-net subsample) --
+     sec 10 S2 row's "odb vs 文字解析逐 net 相同". Segments are compared as
+     endpoint-order-independent sets (a WIRE row's two endpoints can come
+     out in either order from the two decoders without that being a real
+     disagreement).
 
 Usage:
     openroad -python ioplace/route_eval/or_scripts/verify_routed_def.py \\
         --lef tech.lef --lef cells.lef ... --def routed.def \\
-        [--sample 1000] [--seed 0] [--report-out wl_report.rpt]
+        [--sample 0] [--seed 0] [--report-out wl_report.rpt]
 """
 import argparse
 import datetime
@@ -141,7 +150,10 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--lef", action="append", required=True)
     ap.add_argument("--def", dest="def_path", required=True)
-    ap.add_argument("--sample", type=int, default=1000)
+    ap.add_argument("--sample", type=int, default=0,
+                     help="check all routed nets (default, 0); pass a "
+                          "positive N to check only a random N-net "
+                          "subsample instead")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--report-out", default="s2_verify_wire_length.rpt")
     ap.add_argument("--json-out", default=None,
@@ -187,14 +199,33 @@ def main(argv=None):
     def _pct_err(a, b):
         return abs(a - b) / b * 100.0 if b else float("nan")
 
-    err_native = _pct_err(ours_dbu, native_dbu)
-    print(f"[verify] Sigma(route_wl) vs dbWire.getLength(): {err_native:.4f}% "
-          f"({'PASS' if err_native < 1.0 else 'FAIL'} < 1%)")
+    # Reconciliation: `dbWire::getLength()` (the `native_dbu` oracle) counts
+    # each RECT patch as a rectangle's long side, not (like route_wl) as a
+    # zero-length excluded row -- spec sec 7.4's "RECT patch 忽略" is a
+    # route_wl/crossing convention, not odb's own. The gap between
+    # `ours_dbu` (route_wl, RECT excluded) and `native_dbu` is therefore
+    # explained by exactly `Sigma_RECT(long_side - short_side)` per patch;
+    # add that back in before comparing against the native oracle.
+    rect_term_dbu = sum(max(abs(x1 - x0), abs(y1 - y0)) - min(abs(x1 - x0), abs(y1 - y0))
+                        for _, kind, _, x0, y0, x1, y1, *_ in rows
+                        if kind == dump_segments.KIND_RECT)
+    recon_dbu = ours_dbu + rect_term_dbu
+    recon_um = recon_dbu / units
+    print(f"[verify] RECT reconciliation term Sigma(long-short) = {rect_term_dbu} DBU")
+    print(f"[verify] reconciled = Sigma(route_wl) + RECT term = {recon_dbu} DBU = {recon_um:.3f} um")
+
+    definitional_delta_pct = _pct_err(ours_dbu, native_dbu)
+    print(f"[verify] definitional delta, Sigma(route_wl) vs dbWire.getLength() "
+          f"(RECT-exclusion convention, informational only): "
+          f"{definitional_delta_pct:.4f}%")
+    err_recon = _pct_err(recon_dbu, native_dbu)
+    print(f"[verify] GATE: reconciled vs dbWire.getLength(): {err_recon:.4f}% "
+          f"({'PASS' if err_recon < 1.0 else 'FAIL'} < 1%)")
     err_report = None
     if report_total_um is not None:
         err_report = _pct_err(ours_um, report_total_um)
-        print(f"[verify] Sigma(route_wl) vs report_wire_length: {err_report:.4f}% "
-              f"({'PASS' if err_report < 1.0 else 'FAIL'} < 1%)")
+        print(f"[verify] Sigma(route_wl) vs report_wire_length (informational only): "
+              f"{err_report:.4f}%")
     else:
         print("[verify] report_wire_length total: could not parse report file "
               "(see raw report above); relying on dbWire.getLength() oracle only")
@@ -225,7 +256,9 @@ def main(argv=None):
     odb_by_net = odb_rows_by_net(rows, net_names, layer_names, via_names)
     routed_names = [name for name, has in zip(net_names, net_has_wire) if has]
     rng = random.Random(args.seed)
-    sample_names = routed_names if len(routed_names) <= args.sample else \
+    # --sample 0 (default) means "check all routed nets"; a positive N
+    # checks only a random N-net subsample.
+    sample_names = routed_names if args.sample <= 0 or len(routed_names) <= args.sample else \
         rng.sample(routed_names, args.sample)
 
     n_checked = n_match = n_mismatch = n_missing_from_text = 0
@@ -244,13 +277,12 @@ def main(argv=None):
             continue
         n_mismatch += 1
         diff = (odb_set - text_set) | (text_set - odb_set)
-        # RECT rows are the known, diagnosed gap (this odb build can't
-        # decode RECT -- see dump_segments.py's `_OP_RECT` handling); a
-        # mismatch made up *only* of RECT rows is that gap, not a real
-        # WIRE/VIA disagreement. Report the two buckets separately so a
-        # reader can see how much of the sample is "known RECT gap" vs
-        # "something else" (POINT_EXT-adjacent WIRE rows, most likely --
-        # see dump_segments.py's `_OP_POINT_EXT` handling).
+        # Both decoders now resolve RECT/POINT_EXT for real (dump_segments.py's
+        # `_OP_RECT`/`_OP_POINT_EXT` branches), so this bucket is expected to
+        # be empty -- kept as a separate count rather than folded into
+        # n_mismatch_other so a regression that reopens the old gap is
+        # immediately visible as a nonzero n_mismatch_rect_only instead of
+        # blending into "other".
         if all(row[0] == "RECT" for row in diff):
             n_mismatch_rect_only += 1
         else:
@@ -260,12 +292,11 @@ def main(argv=None):
         if len(mismatches) < 10:
             mismatches.append((name, odb_set - text_set, text_set - odb_set))
 
-    print(f"[verify] sampled {len(sample_names)} routed nets; "
+    print(f"[verify] checked {len(sample_names)} routed nets; "
           f"{n_missing_from_text} not found in text-parser output "
           f"(NETS region slice mismatch?); of {n_checked} compared: "
           f"{n_match} exact match, {n_mismatch} mismatch "
-          f"({n_mismatch_rect_only} RECT-only [known odb RECT-decode gap], "
-          f"{n_mismatch_other} other)")
+          f"({n_mismatch_rect_only} RECT-only, {n_mismatch_other} other)")
     print("[verify] first 10 mismatches (any kind):")
     for name, only_odb, only_text in mismatches:
         print(f"  MISMATCH net={name!r}: only_in_odb={sorted(only_odb)[:3]} "
@@ -275,9 +306,20 @@ def main(argv=None):
         print(f"  MISMATCH(non-RECT) net={name!r}: only_in_odb={sorted(only_odb)[:3]} "
               f"only_in_text={sorted(only_text)[:3]}")
 
-    ok = (err_native < 1.0 and (err_report is None or err_report < 1.0)
-          and n_mismatch == 0 and n_missing_from_text == 0
-          and n_checked >= min(args.sample, len(routed_names)))
+    # JUNCTION carries no geometry of its own and isn't decoded/validated by
+    # anything in this pipeline (dump_segments.py's `_OP_JUNCTION` branch
+    # only tallies it, unchanged by the POINT_EXT/RECT binding workaround --
+    # this corpus has 0 occurrences, so it's untested territory). Flag it
+    # loudly rather than silently passing if a future DEF exercises it.
+    n_junction = meta["opcode_counts"].get("JUNCTION", 0)
+    junction_unvalidated = n_junction > 0
+    if junction_unvalidated:
+        print(f"[verify] WARNING: {n_junction} JUNCTION opcode(s) seen -- "
+              f"this decode path is untested (0 occurrences in the corpus "
+              f"this pipeline was validated against); treat this run's "
+              f"result as unvalidated for any net touching a JUNCTION")
+
+    ok = err_recon < 1.0 and n_mismatch == 0 and n_missing_from_text == 0
     print(f"[verify] OVERALL: {'PASS' if ok else 'FAIL'}")
 
     if args.json_out:
@@ -285,15 +327,20 @@ def main(argv=None):
             "generated_at": datetime.datetime.now().isoformat(),
             "def_path": args.def_path,
             "lef_paths": list(args.lef),
+            "junction_unvalidated": junction_unvalidated,
             "check1_wire_length": {
                 "ours_dbu": ours_dbu,
                 "ours_um": ours_um,
                 "dbwire_native_dbu": native_dbu,
                 "dbwire_native_um": native_um,
-                "err_vs_dbwire_native_pct": err_native,
+                "rect_term_dbu": rect_term_dbu,
+                "recon_dbu": recon_dbu,
+                "recon_um": recon_um,
+                "err_vs_dbwire_native_recon_pct": err_recon,
+                "definitional_delta_pct": definitional_delta_pct,
                 "report_wire_length_drt_total_um": report_total_um,
                 "err_vs_report_wire_length_pct": err_report,
-                "pass_lt_1pct": bool(err_native < 1.0 and (err_report is None or err_report < 1.0)),
+                "pass_lt_1pct": bool(err_recon < 1.0),
             },
             "check2_odb_vs_text_parser": {
                 "sample_requested": args.sample,
