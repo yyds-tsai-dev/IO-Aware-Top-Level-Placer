@@ -1,0 +1,68 @@
+{
+ "des_perf_1": {
+  "case": "des_perf_1",
+  "config": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd2015_des_perf_1_m4.json",
+  "cuda_visible_devices": "",
+  "die": [
+   0.0,
+   0.0,
+   445000.0,
+   444000.0
+  ],
+  "gpu": 0,
+  "num_movable_nodes": 112644,
+  "num_nets": 112878,
+  "num_physical_nodes": 113018,
+  "num_pins": 319119,
+  "num_terminal_NIs": 374,
+  "num_terminals": 0,
+  "read_s": 1.2939984798431396,
+  "row_height": 2000.0,
+  "site_width": 200.0,
+  "target_density_configured": 0.91
+ },
+ "matrix_mult_1": {
+  "case": "matrix_mult_1",
+  "config": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd2015_matrix_mult_1_m4.json",
+  "cuda_visible_devices": "",
+  "die": [
+   0.0,
+   0.0,
+   550000.0,
+   550000.0
+  ],
+  "gpu": 0,
+  "num_movable_nodes": 155325,
+  "num_nets": 158527,
+  "num_physical_nodes": 160127,
+  "num_pins": 457756,
+  "num_terminal_NIs": 4802,
+  "num_terminals": 0,
+  "read_s": 1.8954358100891113,
+  "row_height": 2000.0,
+  "site_width": 200.0,
+  "target_density_configured": 0.802
+ },
+ "superblue19": {
+  "case": "superblue19",
+  "config": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd2015_superblue19_m4.json",
+  "cuda_visible_devices": "",
+  "die": [
+   1800.0,
+   1800.0,
+   1022600.0,
+   2066400.0
+  ],
+  "gpu": 0,
+  "num_movable_nodes": 506097,
+  "num_nets": 511606,
+  "num_physical_nodes": 521805,
+  "num_pins": 1712620,
+  "num_terminal_NIs": 15422,
+  "num_terminals": 286,
+  "read_s": 7.5104756355285645,
+  "row_height": 900.0,
+  "site_width": 100.0,
+  "target_density_configured": 0.53
+ }
+}
