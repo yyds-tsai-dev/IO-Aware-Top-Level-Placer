@@ -1,0 +1,42 @@
+{
+ "mode": "evaluate_only",
+ "npz": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/mempool_cluster__k16__grid__flat.json.npz",
+ "config": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_cluster.json",
+ "k": 32,
+ "rtype": "grid",
+ "seed": 2000,
+ "io_count": 355720,
+ "io_gp": null,
+ "ft_count": 37053,
+ "hard_lambda_sum": 280396,
+ "tree_wl": 2370762728.6259623,
+ "hpwl": 2095126494.7282982,
+ "io_rg": 317115,
+ "ft_rg": 36719,
+ "runtime_s": 2508.1706194877625,
+ "evaluate_only": true,
+ "source_npz": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/mempool_cluster__k16__grid__flat.json.npz",
+ "source_npz_sha256": "6ef353fb86f82491a4d9c7ab4bb26fe94468bc9dd026d7e320c02ead366fc1c2",
+ "run_id": "0d95be56-de16-4714-b3c8-5732c8a833b9",
+ "status": "ok",
+ "schema_version": 3,
+ "repo_commit": "00f29023014572a6d06b2c71eadc3acadd9faa07",
+ "input_sha256": {
+  "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_cluster.json": "beec18f2146b5d9f5218172508a258b3d71720b1003b5cfd20ee8e18ab1383fc"
+ },
+ "env": {
+  "torch_version": "2.8.0+cu128",
+  "cuda_version": "12.8",
+  "gpu_name": "NVIDIA L4",
+  "numpy_version": "1.26.4",
+  "ioplace_commit": "00f29023014572a6d06b2c71eadc3acadd9faa07",
+  "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
+  "input_sha256": {
+   "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_cluster.json": "beec18f2146b5d9f5218172508a258b3d71720b1003b5cfd20ee8e18ab1383fc"
+  }
+ },
+ "command": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/drivers/evaluate_placement.py --npz /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/mempool_cluster__k16__grid__flat.json.npz --config /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_cluster.json --k 32 --rtype grid --seed 2000 --out /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/mempool_cluster__k32__grid__flat.json",
+ "hostname": "NVL5",
+ "benchmark_kind": "real",
+ "device_baseline_gb": 0.0
+}
