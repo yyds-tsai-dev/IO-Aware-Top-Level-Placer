@@ -166,6 +166,14 @@ def run(config_json, case, k, rtype, seed, *, rho_max=0.1, of_on=2.0,
         "experiment_status": experiment_status, "workload_status": workload_status,
         "feasibility_verdict": verdict,
         "device_baseline_gb": device_baseline_gb,
+        # M4 T1b (f): sec 1.4 B3's `baseline_reserved_gb` field, carried
+        # here too so both spike_30m.py's SPIKE_SCHEMA_FIELDS artifacts and
+        # this probe's lifetime artifacts expose the same pre-run device
+        # baseline under the same name -- `device_baseline_gb` above is the
+        # authoritative field for LIFETIME_SCHEMA_FIELDS (result_gate.py);
+        # this is a same-value alias for cross-artifact-kind consistency,
+        # not a second measurement.
+        "baseline_reserved_gb": device_baseline_gb,
         # sec 1.4 D9 (T1b's exclusivity protocol): this probe doesn't run
         # the `nvidia-smi --query-compute-apps` self-test T1b specifies --
         # deliberately conservative, always the lower evidence tier.

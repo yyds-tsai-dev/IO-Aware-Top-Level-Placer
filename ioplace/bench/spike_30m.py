@@ -73,12 +73,20 @@ import os
 import socket
 import subprocess
 import sys
-import threading
 import time
 import uuid
 
 from ioplace.bench.result_gate import (HW_BUDGET_GB, SPIKE_SCHEMA_FIELDS,
                                        assert_budget, feasibility_verdict)
+# M4 T1b (d): the nvidia-smi-only primitives below (gpu_name/device_used_gb/
+# compute_app_pids/NvsmiPoller/the two tolerance constants) used to be
+# defined here; they now live in `gpu_exclusivity.py` so this module and
+# T1b's own exclusivity probe share one implementation instead of two --
+# re-imported under their original names so every existing call site
+# (`gpu_name()`, `sp.CONTAMINATION_BASELINE_GIB`, etc.) is unchanged.
+from ioplace.diagnostics.probes_m4.gpu_exclusivity import (  # noqa: E402  (re-exported)
+    CONTAMINATION_BASELINE_GIB, POSTFLIGHT_TOLERANCE_GIB, NvsmiPoller,
+    compute_app_pids, device_used_gb, gpu_name)
 
 REPO = "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer"
 DP = "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace"
@@ -86,8 +94,6 @@ DEFAULT_PYTHON = os.path.join(DP, ".venv312", "bin", "python")
 DEFAULT_BUDGET_GB = HW_BUDGET_GB["NVIDIA L4"]
 DEFAULT_BUDGET_SOURCE = "NVIDIA L4"
 DEFAULT_COUNT_FREEZE = os.path.join(REPO, "results", "m4", "scaling", "count_freeze_30m.json")
-CONTAMINATION_BASELINE_GIB = 0.5
-POSTFLIGHT_TOLERANCE_GIB = 0.2
 MEM_AVAILABLE_MIN_GB = 40.0
 
 
@@ -108,105 +114,6 @@ def _git_head(root):
         return out.decode().strip()
     except Exception:
         return None
-
-
-def _nvsmi(query, fmt="csv,noheader,nounits", timeout=5.0):
-    """Runs one `nvidia-smi --query-gpu=<query>` (or `--query-compute-apps`
-    if `query` starts with 'compute:') call; returns raw stdout text, or
-    None if nvidia-smi itself failed/timed out (a provenance-level
-    "evidence unavailable" signal, not silently treated as "0 usage")."""
-    try:
-        if query.startswith("compute:"):
-            args = ["nvidia-smi", f"--query-compute-apps={query[8:]}", f"--format={fmt}"]
-        else:
-            args = ["nvidia-smi", f"--query-gpu={query}", f"--format={fmt}"]
-        out = subprocess.check_output(args, stderr=subprocess.DEVNULL, timeout=timeout)
-        return out.decode()
-    except Exception:
-        return None
-
-
-def gpu_name():
-    text = _nvsmi("name", fmt="csv,noheader")
-    return text.strip().splitlines()[0] if text else None
-
-
-def device_used_gb():
-    text = _nvsmi("memory.used")
-    if not text:
-        return None
-    try:
-        return float(text.strip().splitlines()[0]) / 1024.0   # MiB -> GiB
-    except (ValueError, IndexError):
-        return None
-
-
-def compute_app_pids():
-    """[(pid:int, used_mib:float), ...], or None if the query itself
-    failed/is unavailable on this host (distinct from "empty but the query
-    worked" -- sec 1.4 T1b's own documented degrade path: this host has
-    been observed to return an empty compute-apps list even while our own
-    workload is running, in which case the caller must fall back to
-    `exclusivity_evidence="baseline_only"` rather than trusting an empty
-    list as proof of exclusivity)."""
-    text = _nvsmi("compute:pid,used_memory")
-    if text is None:
-        return None
-    pids = []
-    for line in text.strip().splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        parts = [p.strip() for p in line.split(",")]
-        try:
-            pids.append((int(parts[0]), float(parts[1].split()[0])))
-        except (ValueError, IndexError):
-            continue
-    return pids
-
-
-class NvsmiPoller:
-    """Background thread sampling `nvidia-smi --query-gpu=memory.used`
-    every `interval_s` -- the parent's ONLY window into device memory,
-    since it never touches CUDA itself (module docstring)."""
-
-    def __init__(self, interval_s=0.5):
-        self.interval_s = interval_s
-        self._peak_gb = 0.0
-        self._lock = threading.Lock()
-        self._stop_evt = threading.Event()
-        self._thread = None
-
-    def _sample_once(self):
-        used = device_used_gb()
-        if used is not None:
-            with self._lock:
-                self._peak_gb = max(self._peak_gb, used)
-
-    def start(self):
-        self._sample_once()
-        self._stop_evt.clear()
-
-        def _loop():
-            while not self._stop_evt.wait(self.interval_s):
-                self._sample_once()
-
-        self._thread = threading.Thread(target=_loop, daemon=True)
-        self._thread.start()
-        return self
-
-    def stop(self):
-        if self._thread is not None:
-            self._stop_evt.set()
-            self._thread.join()
-            self._thread = None
-        self._sample_once()
-        return self
-
-    @property
-    def peak_gb(self):
-        with self._lock:
-            return self._peak_gb
 
 
 def _preflight(budget_gb, budget_source, cache_dir):
