@@ -1,0 +1,148 @@
+{
+ "backend": "mtkahypar",
+ "env": {
+  "command": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/diagnostics/probes_m4/probe_rent_arrays.py --target 3x3_noglue --seed 0 --out /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/probes/probe_rent_arrays__3x3_noglue.json",
+  "hostname": "NVL5",
+  "input_sha256": {
+   "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/arrays/3x3_noglue/3x3_noglue.nets": "49eab574f45186869d39b7c9226b80802f66d858d95270fc33c97c21de2102d8",
+   "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/arrays/3x3_noglue/3x3_noglue.nodes": "bd3c3fb80b4b4cdd2cf1aa71d8298b8de265f32fcf004b075ef2b22f4a632d85",
+   "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/arrays/3x3_noglue/3x3_noglue.pl": "0e836f2e2e07e4d86b2d708f09f9ea8fc9816c08b49cd2165e9e875233fe75b5"
+  },
+  "python_executable": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/.venv312/bin/python",
+  "python_version": "3.12.13",
+  "repo_commit": "431deaa6af2a0ffee67fda899c7f6d0e9963a5ff",
+  "utc_timestamp": "2026-08-16T12:39:56.687433+00:00"
+ },
+ "kind": "bookshelf",
+ "levels": [
+  {
+   "avg_block_size": 27804699.0,
+   "avg_terminals": 0.0,
+   "level": 0,
+   "n_blocks": 1
+  },
+  {
+   "avg_block_size": 13902349.5,
+   "avg_terminals": 6379.0,
+   "level": 1,
+   "n_blocks": 2
+  },
+  {
+   "avg_block_size": 6951174.75,
+   "avg_terminals": 5873.25,
+   "level": 2,
+   "n_blocks": 4
+  },
+  {
+   "avg_block_size": 3475587.375,
+   "avg_terminals": 4266.75,
+   "level": 3,
+   "n_blocks": 8
+  },
+  {
+   "avg_block_size": 1737793.6875,
+   "avg_terminals": 8989.5,
+   "level": 4,
+   "n_blocks": 16
+  },
+  {
+   "avg_block_size": 868896.84375,
+   "avg_terminals": 7684.65625,
+   "level": 5,
+   "n_blocks": 32
+  },
+  {
+   "avg_block_size": 434448.421875,
+   "avg_terminals": 5422.203125,
+   "level": 6,
+   "n_blocks": 64
+  },
+  {
+   "avg_block_size": 217224.2109375,
+   "avg_terminals": 3575.3984375,
+   "level": 7,
+   "n_blocks": 128
+  },
+  {
+   "avg_block_size": 108612.10546875,
+   "avg_terminals": 2363.99609375,
+   "level": 8,
+   "n_blocks": 256
+  },
+  {
+   "avg_block_size": 54306.052734375,
+   "avg_terminals": 1590.759765625,
+   "level": 9,
+   "n_blocks": 512
+  },
+  {
+   "avg_block_size": 27153.0263671875,
+   "avg_terminals": 1189.078125,
+   "level": 10,
+   "n_blocks": 1024
+  },
+  {
+   "avg_block_size": 13576.51318359375,
+   "avg_terminals": 884.544921875,
+   "level": 11,
+   "n_blocks": 2048
+  },
+  {
+   "avg_block_size": 6788.256591796875,
+   "avg_terminals": 698.725830078125,
+   "level": 12,
+   "n_blocks": 4096
+  },
+  {
+   "avg_block_size": 3394.1282958984375,
+   "avg_terminals": 527.33203125,
+   "level": 13,
+   "n_blocks": 8192
+  },
+  {
+   "avg_block_size": 1697.0641479492188,
+   "avg_terminals": 375.2105712890625,
+   "level": 14,
+   "n_blocks": 16384
+  },
+  {
+   "avg_block_size": 848.5320739746094,
+   "avg_terminals": 255.04660034179688,
+   "level": 15,
+   "n_blocks": 32768
+  }
+ ],
+ "levels_used": [
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14
+ ],
+ "load_s": 244.362446308136,
+ "log_t": 2.281517569039837,
+ "n_bootstrap": 200,
+ "net_degrees_max": 342429,
+ "num_nets": 31535892,
+ "num_physical": 27804699,
+ "p": 0.4799491283143621,
+ "p_ci_hi": 0.48930578136877334,
+ "p_ci_lo": 0.4677449752151902,
+ "path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/arrays/3x3_noglue/3x3_noglue",
+ "rent_params": {
+  "b_hi": 1000000.0,
+  "b_lo": 1000.0,
+  "backend": "mtkahypar",
+  "max_net_degree": 100,
+  "n_bootstrap": 200,
+  "seed": 0,
+  "threads": 16
+ },
+ "target": "3x3_noglue",
+ "total_s": 2854.5064795017242
+}

@@ -49,9 +49,47 @@
    "status": "ok"
   },
   "B1_rent_invariance_did": {
+   "status": "ok",
    "metric": "B1_rent_invariance_did",
-   "reason": "needs rent.measure_rent runs on 3x3_n2, 3x3_noglue, and 2x2_noglue (2x2_n2's p is already on file, 0.5262620) -- sec 4.3's pre-registered wall-time estimate is 45-60 min/run, ~3h for the full set; not run in this task's scope (T6B execution was pre-registered as GPU-clear/CPU-only, Rent runs were left out of this task's instructed set: B-0/B-3/B-4/B-5/B-6 only)",
-   "status": "pending_measurement"
+   "delta_glue_3x3": 0.059143808509904194,
+   "delta_glue_2x2": 0.055745649176860756,
+   "did": 0.003398159333043438,
+   "threshold": 0.03,
+   "inputs": {
+    "p_3x3_glue": {
+     "value": 0.5390929368242663,
+     "source": "results/m4/probes/probe_rent_arrays__3x3_n2.json",
+     "measured": "2026-08-16"
+    },
+    "p_3x3_noglue": {
+     "value": 0.4799491283143621,
+     "source": "results/m4/probes/probe_rent_arrays__3x3_noglue.json"
+    },
+    "p_2x2_glue": {
+     "value": 0.526262,
+     "source": "on-file (T6 2x2 N2 measurement)"
+    },
+    "p_2x2_noglue": {
+     "value": 0.47051635082313925,
+     "source": "results/m4/probes/probe_rent_arrays__2x2_noglue.json"
+    }
+   },
+   "preregistered_prediction": {
+    "p_3x3_n2_seed0": "0.530 +/- 0.008",
+    "band": [
+     0.522,
+     0.538
+    ],
+    "measured": 0.5390929368242663,
+    "outside_band_by": 0.0010929368242663,
+    "note": "measured p exceeds the preregistered prediction band upper edge by 0.0011; the prediction is a registered forecast, NOT the B-1 criterion (DiD<=0.03) - disclosed without verdict change per adjudication sec 4.3"
+   },
+   "runtime_s": {
+    "3x3_n2": 2843.0,
+    "3x3_noglue": 2882.0,
+    "2x2_noglue": 1183.6
+   },
+   "abort_conditions": "none triggered (all runs << 4h wall / 100GB RSS preregistered caps)"
   },
   "B2_h5_matched_resolution": {
    "metric": "B2_h5_matched_resolution",
@@ -440,5 +478,8 @@
  "quality_claims_prohibited": true,
  "scaling_usable": true,
  "scaling_usable_note": "sec 4.1: \"B-0 \u8207 B-3\u2026B-6 \u5168\u7da0 \u21d2 3\u00d73 bench \u53ef\u7528\u65bc scaling(\u4e14\u6c38\u4e45\u4e0d\u5f97\u7528\u65bc\u54c1\u8cea\u5ba3\u7a31)\u3002B-1\u3001B-2 \u7684\u7d50\u679c\u4e00\u5f8b\u767c\u8868,\u5176\u5224\u5b9a\u5beb\u5165\u5831\u544a\u4f46\u4e0d\u963b\u64cb scaling \u7528\u9014\"",
- "shape": "3x3"
+ "shape": "3x3",
+ "non_gating_results": {
+  "B1_rent_invariance_did": "ok"
+ }
 }
