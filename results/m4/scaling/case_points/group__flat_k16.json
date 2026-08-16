@@ -1,0 +1,15 @@
+{
+ "tag": "case__group__flat_k16",
+ "ok": true,
+ "n_physical": 3089411,
+ "n_filler": 47065,
+ "n_total": 3136476,
+ "n_pins": 12026191,
+ "n_bins": 4194304,
+ "gp_peak_alloc_gb": 2.963881015777588,
+ "t_gp": 78.9406845709309,
+ "gp_iterations_run": 1000,
+ "source_profile": "results/m4/profile/group__k16__grid__flat.json",
+ "source_corpus": "results/m4/corpus/mempool_group.json",
+ "note": "adapter: design-point-3 case-level leverage from flat run + corpus read stats"
+}

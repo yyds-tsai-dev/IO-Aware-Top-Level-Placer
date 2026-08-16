@@ -1,0 +1,15 @@
+{
+ "tag": "case__sb12__flat_k16",
+ "ok": true,
+ "n_physical": 1292945,
+ "n_filler": 640066,
+ "n_total": 1933011,
+ "n_pins": 4772990,
+ "n_bins": 1048576,
+ "gp_peak_alloc_gb": 1.3846383094787598,
+ "t_gp": 75.1919788569212,
+ "gp_iterations_run": 1052,
+ "source_profile": "results/m4/profile/sb12__k16__grid__flat.json",
+ "source_corpus": "results/m4/corpus/superblue12.json",
+ "note": "adapter: design-point-3 case-level leverage from flat run + corpus read stats"
+}
