@@ -45,6 +45,27 @@ def _looks_like_tensor(obj):
 
 _PRIMITIVE_TYPES = (int, float, str, bytes, bool, type(None))
 
+# T2b lifetime-probe hang fix (mempool_cluster, 11.3M cells): `node_budget`
+# only bounds how many nodes `walk()` *processes* -- it does not bound the
+# cost of *enumerating into* a single oversized dict/list/tuple, since
+# `sorted(d.keys(), key=str)` (dict) and `enumerate(obj)` (list/tuple) both
+# run to completion over the whole container before the per-child budget
+# check ever gets a chance to short-circuit anything. A real DREAMPlace
+# `PlaceDB` at this scale carries three plain Python dicts sized in the
+# *tens of millions* of entries (`node_name2id_map`, `net_name2id_map`,
+# `pin_name2id_map` -- see `dreamplace/PlaceDB.py`'s
+# `initialize_from_rawdb`), reachable from the `"placer"` root every T2b
+# LifetimeRecorder tracks; every `mark()`/`phase_begin()` scan pays a full
+# `sorted()` over each of them, unconditionally, regardless of node_budget.
+# None of these are CUDA-tensor containers -- DREAMPlace keeps its
+# large host-side netlist data in plain lists/dicts (or numpy arrays, which
+# have no `__dict__` and are never walked past in the first place), never
+# in a Python list/tuple/dict of CUDA tensors -- so a length cap here is a
+# cheap `len()` check (O(1) for both dict and list/tuple) that fully
+# replaces the O(n log n)/O(n) cost with a no-op for exactly the containers
+# that were never going to hold a tensor to begin with.
+_MAX_CONTAINER_LEN = 10_000
+
 
 def scan_cuda_tensors(root, prefix, *, max_depth=6, node_budget=200_000):
     """Deterministic walk of `root`'s object graph (`__dict__` /
@@ -73,6 +94,16 @@ def scan_cuda_tensors(root, prefix, *, max_depth=6, node_budget=200_000):
       or self-referential object graph; traversal beyond the budget is
       silently truncated (no exception), since this is a diagnostic scan,
       not a correctness-critical path.
+    - A dict/list/tuple longer than `_MAX_CONTAINER_LEN` (10_000) is
+      skipped outright -- not descended into at all -- rather than relying
+      on `node_budget` to cut it short: `node_budget` only gates the
+      *children* `walk()` is called on, not the O(n log n) `sorted()` (for
+      a dict) or O(n) `enumerate()` (for a list/tuple) needed to iterate
+      the container in the first place, so a single oversized container
+      (e.g. `PlaceDB.node_name2id_map`/`net_name2id_map`/`pin_name2id_map`
+      at multi-million-entry scale) would pay that cost regardless of how
+      small `node_budget` is. This is a length check (`len()`, O(1) for
+      both), not a budget spend.
 
     Returns `list[{"name", "root", "dtype", "shape", "bytes",
     "storage_ptr"}]`, one entry per distinct storage. `bytes` is
@@ -124,10 +155,23 @@ def scan_cuda_tensors(root, prefix, *, max_depth=6, node_budget=200_000):
         seen_ids.add(oid)
 
         if isinstance(obj, dict):
+            if len(obj) > _MAX_CONTAINER_LEN:
+                # See _MAX_CONTAINER_LEN's docstring: sorted() below is
+                # O(n log n) and runs to completion regardless of
+                # node_budget -- skip it outright for an oversized dict
+                # (DREAMPlace's giant name2id maps are exactly this shape)
+                # rather than pay that cost only to have every child call
+                # immediately no-op against an exhausted budget.
+                return
             for k in sorted(obj.keys(), key=str):
                 walk(obj[k], f"{name}.{k}", depth + 1)
             return
         if isinstance(obj, (list, tuple)):
+            if len(obj) > _MAX_CONTAINER_LEN:
+                # Same rationale as the dict branch above -- enumerate()
+                # over an oversized list/tuple is O(n) regardless of
+                # node_budget.
+                return
             for i, v in enumerate(obj):
                 walk(v, f"{name}[{i}]", depth + 1)
             return

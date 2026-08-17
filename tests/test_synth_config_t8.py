@@ -137,9 +137,24 @@ def test_aux_input_is_absolute_and_exists(case):
 
 @pytest.mark.parametrize("case", CASES)
 def test_aux_input_points_at_expected_case_file(case):
+    # aux_input points at the letter-prefixed alias aux (synA/synB symlink
+    # dir): the DREAMPlace bookshelf lexer cannot parse digit-leading
+    # filenames ("1x2_n2.aux:1.21 syntax error"), the cause of T6B V1
+    # infrastructure_blocked. The alias aux must live under the case's own
+    # alias/ dir and its referenced files must resolve (via symlinks) to the
+    # original array files.
     data = _load(case)
-    expected_path = os.path.join(ARRAYS_DIR, case, f"{case}.aux")
-    assert os.path.abspath(data["aux_input"]) == os.path.abspath(expected_path)
+    aux = os.path.abspath(data["aux_input"])
+    alias_dir = os.path.join(ARRAYS_DIR, case, "alias")
+    assert os.path.dirname(aux) == os.path.abspath(alias_dir), (
+        f"{case}: aux_input must live in {alias_dir}, got {aux!r}")
+    base = os.path.splitext(os.path.basename(aux))[0]
+    assert base and not base[0].isdigit(), (
+        f"{case}: alias aux basename must not start with a digit, got {base!r}")
+    nodes_alias = os.path.join(alias_dir, f"{base}.nodes")
+    original_nodes = os.path.join(ARRAYS_DIR, case, f"{case}.nodes")
+    assert os.path.realpath(nodes_alias) == os.path.realpath(original_nodes), (
+        f"{case}: alias .nodes must resolve to the original array file")
 
 
 @pytest.mark.parametrize("case", CASES)

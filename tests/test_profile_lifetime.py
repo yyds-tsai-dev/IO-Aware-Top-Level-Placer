@@ -15,6 +15,8 @@ the former needs a live CUDA device and the latter is a real DREAMPlace
 placement (this repo's own convention, see `tests/test_driver_io.py`,
 marks *any* `run_io`/`run_flat` call `@pytest.mark.slow`, even on the
 tiny `simple.json` toy config)."""
+import time
+
 import pytest
 import torch
 
@@ -161,6 +163,57 @@ def test_scan_cuda_tensors_node_budget_truncates():
     found_tiny = scan_cuda_tensors(root, "root", node_budget=3)
     assert len(found_full) == 50
     assert len(found_tiny) < 50                # truncated, not an error
+
+
+def test_scan_cuda_tensors_oversized_list_does_not_hang():
+    """T2b lifetime-probe hang fix (mempool_cluster, 11.3M cells):
+    `node_budget` alone doesn't bound the cost of *enumerating into* a
+    single oversized container -- a real `PlaceDB`'s `node_name2id_map`/
+    `net_name2id_map`/`pin_name2id_map` are plain Python dicts sized in the
+    tens of millions of entries (`dreamplace/PlaceDB.py`'s
+    `initialize_from_rawdb`), and `sorted(d.keys(), key=str)`/
+    `enumerate(list)` ran to completion over the whole container
+    regardless of node_budget, on every checkpoint scan. A 500k-element
+    list (proportionally representative, kept smaller than a real
+    multi-million-entry name map so this test itself stays fast) must
+    still scan in well under the multi-hour hangs this caused -- <5s here
+    is a generous ceiling, not a tight bound; `_MAX_CONTAINER_LEN`'s skip
+    makes the actual cost O(1) regardless of list size."""
+    big_list = list(range(500_000))            # plain ints -- no tensors inside
+    t = FakeTensor(0x9000, 4)
+    root = Holder(huge=big_list, t=t)
+    t0 = time.perf_counter()
+    found = scan_cuda_tensors(root, "root")
+    dt = time.perf_counter() - t0
+    assert dt < 5.0, f"scan took {dt:.2f}s, expected <5s"
+    # The oversized list is skipped, but a sibling tensor is still found.
+    assert len(found) == 1
+    assert found[0]["storage_ptr"] == 0x9000
+
+
+def test_scan_cuda_tensors_oversized_dict_does_not_hang():
+    """Same fix, dict form -- a big plain dict (like PlaceDB's name2id
+    maps) must not pay the O(n log n) `sorted()` cost."""
+    big_dict = {f"k{i}": i for i in range(500_000)}
+    t = FakeTensor(0xA000, 4)
+    root = Holder(huge=big_dict, t=t)
+    t0 = time.perf_counter()
+    found = scan_cuda_tensors(root, "root")
+    dt = time.perf_counter() - t0
+    assert dt < 5.0, f"scan took {dt:.2f}s, expected <5s"
+    assert len(found) == 1
+    assert found[0]["storage_ptr"] == 0xA000
+
+
+def test_scan_cuda_tensors_small_container_still_walked():
+    """The length cap must not touch ordinary-sized containers -- a tensor
+    inside a small list (well under _MAX_CONTAINER_LEN) is still found,
+    same as before this fix (group's small buffer lists are unaffected)."""
+    t = FakeTensor(0xB000, 4)
+    root = Holder(small=[0, 1, 2, t, 4])
+    found = scan_cuda_tensors(root, "root")
+    assert len(found) == 1
+    assert found[0]["name"] == "root.small[3]"
 
 
 # ---------------------------------------------------------------------------
