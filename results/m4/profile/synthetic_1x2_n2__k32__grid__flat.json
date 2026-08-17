@@ -1,0 +1,42 @@
+{
+ "mode": "evaluate_only",
+ "npz": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/synthetic_1x2_n2__k16__grid__flat.json.npz",
+ "config": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/synthetic_1x2_n2.json",
+ "k": 32,
+ "rtype": "grid",
+ "seed": 2000,
+ "io_count": 346629,
+ "io_gp": null,
+ "ft_count": 86093,
+ "hard_lambda_sum": 222781,
+ "tree_wl": 1455551298.1434383,
+ "hpwl": 1301209063.7317538,
+ "io_rg": 308570,
+ "ft_rg": 85789,
+ "runtime_s": 1351.641010761261,
+ "evaluate_only": true,
+ "source_npz": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/synthetic_1x2_n2__k16__grid__flat.json.npz",
+ "source_npz_sha256": "8b9b16abc230c6f4b7ee1a3803f5ab839c1e4836aac4c9ef0ca446671e93d019",
+ "run_id": "62138cb1-4286-4757-ad99-14feba0c6325",
+ "status": "ok",
+ "schema_version": 3,
+ "repo_commit": "9b662a2a6b5b2310b5d2544f76e97fb32c674727",
+ "input_sha256": {
+  "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/synthetic_1x2_n2.json": "4e0ec68fc8eacdb43df1bf0afd5200ec3c86eeab095f345cabb83afc9b1c5d0c"
+ },
+ "env": {
+  "torch_version": "2.8.0+cu128",
+  "cuda_version": "12.8",
+  "gpu_name": "NVIDIA L4",
+  "numpy_version": "1.26.4",
+  "ioplace_commit": "9b662a2a6b5b2310b5d2544f76e97fb32c674727",
+  "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
+  "input_sha256": {
+   "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/synthetic_1x2_n2.json": "4e0ec68fc8eacdb43df1bf0afd5200ec3c86eeab095f345cabb83afc9b1c5d0c"
+  }
+ },
+ "command": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/drivers/evaluate_placement.py --npz /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/synthetic_1x2_n2__k16__grid__flat.json.npz --config /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/synthetic_1x2_n2.json --k 32 --rtype grid --seed 2000 --out /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/synthetic_1x2_n2__k32__grid__flat.json",
+ "hostname": "NVL5",
+ "benchmark_kind": "real",
+ "device_baseline_gb": 0.0
+}

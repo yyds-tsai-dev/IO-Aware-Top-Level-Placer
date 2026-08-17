@@ -1,0 +1,3154 @@
+{
+ "record_kind": "lifetime",
+ "case": "group",
+ "K": 32,
+ "rtype": "grid",
+ "arm": "ours@M2",
+ "benchmark_kind": "real",
+ "budget_gb": 19.5,
+ "budget_source": "NVIDIA L4",
+ "experiment_status": "ok",
+ "workload_status": "completed",
+ "feasibility_verdict": "feasible_l4_contract",
+ "device_baseline_gb": 0.20050048828125,
+ "baseline_reserved_gb": 0.20050048828125,
+ "exclusivity_evidence": "baseline_only",
+ "host_mem_available_gb_at_start": 94.79573822021484,
+ "buffers": [
+  {
+   "name": "eval_ctx.D_t",
+   "root": "eval_ctx",
+   "dtype": "torch.int64",
+   "shape": [
+    32,
+    32
+   ],
+   "bytes": 8192,
+   "storage_ptr": 124927521850368,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx.Ph",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    512,
+    512
+   ],
+   "bytes": 1048576,
+   "storage_ptr": 124913930205184,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx.Pv",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    512,
+    512
+   ],
+   "bytes": 1048576,
+   "storage_ptr": 124927526041600,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._bit_range",
+   "root": "eval_ctx",
+   "dtype": "torch.int64",
+   "shape": [
+    32
+   ],
+   "bytes": 256,
+   "storage_ptr": 124913931254272,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[0][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    2109281
+   ],
+   "bytes": 8437124,
+   "storage_ptr": 124913935450112,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[0][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    2109281,
+    2
+   ],
+   "bytes": 16874248,
+   "storage_ptr": 124927527092224,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[1][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    598755
+   ],
+   "bytes": 2395020,
+   "storage_ptr": 124913943887360,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[1][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    598755,
+    3
+   ],
+   "bytes": 7185060,
+   "storage_ptr": 124913946282496,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[2][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    241666
+   ],
+   "bytes": 966664,
+   "storage_ptr": 124927521858560,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[2][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    241666,
+    4
+   ],
+   "bytes": 3866656,
+   "storage_ptr": 124913721540608,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[3][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    86965
+   ],
+   "bytes": 347860,
+   "storage_ptr": 124913742512128,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[3][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    86965,
+    5
+   ],
+   "bytes": 1739300,
+   "storage_ptr": 124927543966720,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[4][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    37852
+   ],
+   "bytes": 151408,
+   "storage_ptr": 124913742860288,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[4][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    37852,
+    6
+   ],
+   "bytes": 908448,
+   "storage_ptr": 124913743011840,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[5][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    28221
+   ],
+   "bytes": 112884,
+   "storage_ptr": 124913743920640,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[5][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    28221,
+    7
+   ],
+   "bytes": 790188,
+   "storage_ptr": 124913744609280,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[6][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    14171
+   ],
+   "bytes": 56684,
+   "storage_ptr": 124927522825728,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[6][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    14171,
+    8
+   ],
+   "bytes": 453472,
+   "storage_ptr": 124913744033792,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[7][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    16559
+   ],
+   "bytes": 66236,
+   "storage_ptr": 124913744487424,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[7][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    16559,
+    9
+   ],
+   "bytes": 596124,
+   "storage_ptr": 124913745399808,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[8][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    17940
+   ],
+   "bytes": 71760,
+   "storage_ptr": 124913745996288,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[8][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    17940,
+    10
+   ],
+   "bytes": 717600,
+   "storage_ptr": 124913746706432,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[9][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    7487
+   ],
+   "bytes": 29948,
+   "storage_ptr": 124913744553984,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[9][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    7487,
+    11
+   ],
+   "bytes": 329428,
+   "storage_ptr": 124913746068480,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[10][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    6467
+   ],
+   "bytes": 25868,
+   "storage_ptr": 124913746398208,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[10][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    6467,
+    12
+   ],
+   "bytes": 310416,
+   "storage_ptr": 124913747424256,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[11][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    7129
+   ],
+   "bytes": 28516,
+   "storage_ptr": 124913746424320,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[11][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    7129,
+    13
+   ],
+   "bytes": 370708,
+   "storage_ptr": 124913747735040,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[12][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    5930
+   ],
+   "bytes": 23720,
+   "storage_ptr": 124913744584192,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[12][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    5930,
+    14
+   ],
+   "bytes": 332080,
+   "storage_ptr": 124913748106240,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[13][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    5132
+   ],
+   "bytes": 20528,
+   "storage_ptr": 124913746452992,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[13][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    5132,
+    15
+   ],
+   "bytes": 307920,
+   "storage_ptr": 124913748438528,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[14][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    4618
+   ],
+   "bytes": 18472,
+   "storage_ptr": 124913748746752,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[14][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    4618,
+    16
+   ],
+   "bytes": 295552,
+   "storage_ptr": 124913748803584,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[15][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    14994
+   ],
+   "bytes": 59976,
+   "storage_ptr": 124913746473984,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[15][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    14994,
+    17
+   ],
+   "bytes": 1019592,
+   "storage_ptr": 124913749099520,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[16][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    6528
+   ],
+   "bytes": 26112,
+   "storage_ptr": 124913748765696,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[16][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    6528,
+    18
+   ],
+   "bytes": 470016,
+   "storage_ptr": 124913750119424,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[17][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    3728
+   ],
+   "bytes": 14912,
+   "storage_ptr": 124927522882560,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[17][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    3728,
+    19
+   ],
+   "bytes": 283328,
+   "storage_ptr": 124913750589440,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[18][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    2591
+   ],
+   "bytes": 10364,
+   "storage_ptr": 124913748791808,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[18][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    2591,
+    20
+   ],
+   "bytes": 207280,
+   "storage_ptr": 124913750900736,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[19][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    2362
+   ],
+   "bytes": 9448,
+   "storage_ptr": 124913750873088,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[19][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    2362,
+    21
+   ],
+   "bytes": 198408,
+   "storage_ptr": 124913751108096,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[20][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    3170
+   ],
+   "bytes": 12680,
+   "storage_ptr": 124913750882816,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[20][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    3170,
+    22
+   ],
+   "bytes": 278960,
+   "storage_ptr": 124913751306752,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[21][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1978
+   ],
+   "bytes": 7912,
+   "storage_ptr": 124913746534400,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[21][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1978,
+    23
+   ],
+   "bytes": 181976,
+   "storage_ptr": 124913751585792,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[22][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    3899
+   ],
+   "bytes": 15596,
+   "storage_ptr": 124913746542592,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[22][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    3899,
+    24
+   ],
+   "bytes": 374304,
+   "storage_ptr": 124913751768064,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[23][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1712
+   ],
+   "bytes": 6848,
+   "storage_ptr": 124913746558464,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[23][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1712,
+    25
+   ],
+   "bytes": 171200,
+   "storage_ptr": 124913752142848,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[24][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1508
+   ],
+   "bytes": 6032,
+   "storage_ptr": 124913746565632,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[24][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1508,
+    26
+   ],
+   "bytes": 156832,
+   "storage_ptr": 124913752314368,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[25][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1581
+   ],
+   "bytes": 6324,
+   "storage_ptr": 124913746571776,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[25][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1581,
+    27
+   ],
+   "bytes": 170748,
+   "storage_ptr": 124913752471552,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[26][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1791
+   ],
+   "bytes": 7164,
+   "storage_ptr": 124913746578432,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[26][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1791,
+    28
+   ],
+   "bytes": 200592,
+   "storage_ptr": 124913752642560,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[27][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1649
+   ],
+   "bytes": 6596,
+   "storage_ptr": 124913746585600,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[27][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1649,
+    29
+   ],
+   "bytes": 191284,
+   "storage_ptr": 124913752997888,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[28][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1669
+   ],
+   "bytes": 6676,
+   "storage_ptr": 124913746592256,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[28][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1669,
+    30
+   ],
+   "bytes": 200280,
+   "storage_ptr": 124913753189376,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[29][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1757
+   ],
+   "bytes": 7028,
+   "storage_ptr": 124913746599424,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[29][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1757,
+    31
+   ],
+   "bytes": 217868,
+   "storage_ptr": 124913753390080,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[30][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    2669
+   ],
+   "bytes": 10676,
+   "storage_ptr": 124913746606592,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[30][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    2669,
+    32
+   ],
+   "bytes": 341632,
+   "storage_ptr": 124913753608192,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[31][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    9565
+   ],
+   "bytes": 38260,
+   "storage_ptr": 124913746617344,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[31][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    9565,
+    33
+   ],
+   "bytes": 1262580,
+   "storage_ptr": 124927502695424,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[32][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    2330
+   ],
+   "bytes": 9320,
+   "storage_ptr": 124913746655744,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[32][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    2330,
+    34
+   ],
+   "bytes": 316880,
+   "storage_ptr": 124913753950208,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[33][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1364
+   ],
+   "bytes": 5456,
+   "storage_ptr": 124913746665472,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[33][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1364,
+    35
+   ],
+   "bytes": 190960,
+   "storage_ptr": 124913754267136,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[34][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    2433
+   ],
+   "bytes": 9732,
+   "storage_ptr": 124913746671104,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[34][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    2433,
+    36
+   ],
+   "bytes": 350352,
+   "storage_ptr": 124913754458112,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[35][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1133
+   ],
+   "bytes": 4532,
+   "storage_ptr": 124913750895616,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[35][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1133,
+    37
+   ],
+   "bytes": 167684,
+   "storage_ptr": 124913754808832,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[36][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1518
+   ],
+   "bytes": 6072,
+   "storage_ptr": 124913746681344,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[36][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1518,
+    38
+   ],
+   "bytes": 230736,
+   "storage_ptr": 124913549574144,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[37][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    904
+   ],
+   "bytes": 3616,
+   "storage_ptr": 124913746687488,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[37][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    904,
+    39
+   ],
+   "bytes": 141024,
+   "storage_ptr": 124913752843264,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[38][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    807
+   ],
+   "bytes": 3228,
+   "storage_ptr": 124913752984576,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[38][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    807,
+    40
+   ],
+   "bytes": 129120,
+   "storage_ptr": 124913549805056,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[39][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    882
+   ],
+   "bytes": 3528,
+   "storage_ptr": 124913752988160,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[39][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    882,
+    41
+   ],
+   "bytes": 144648,
+   "storage_ptr": 124913549934592,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[40][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1007
+   ],
+   "bytes": 4028,
+   "storage_ptr": 124913752991744,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[40][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1007,
+    42
+   ],
+   "bytes": 169176,
+   "storage_ptr": 124913550079488,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[41][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    853
+   ],
+   "bytes": 3412,
+   "storage_ptr": 124913746691584,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[41][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    853,
+    43
+   ],
+   "bytes": 146716,
+   "storage_ptr": 124913550248960,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[42][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    745
+   ],
+   "bytes": 2980,
+   "storage_ptr": 124913746695168,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[42][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    745,
+    44
+   ],
+   "bytes": 131120,
+   "storage_ptr": 124913550395904,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[43][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    683
+   ],
+   "bytes": 2732,
+   "storage_ptr": 124913746698240,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[43][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    683,
+    45
+   ],
+   "bytes": 122940,
+   "storage_ptr": 124913550527488,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[44][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    671
+   ],
+   "bytes": 2684,
+   "storage_ptr": 124913746701312,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[44][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    671,
+    46
+   ],
+   "bytes": 123464,
+   "storage_ptr": 124913550650880,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[45][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    677
+   ],
+   "bytes": 2708,
+   "storage_ptr": 124913754976768,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[45][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    677,
+    47
+   ],
+   "bytes": 127276,
+   "storage_ptr": 124913550774784,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[46][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    596
+   ],
+   "bytes": 2384,
+   "storage_ptr": 124913754979840,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[46][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    596,
+    48
+   ],
+   "bytes": 114432,
+   "storage_ptr": 124913550902272,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[47][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    628
+   ],
+   "bytes": 2512,
+   "storage_ptr": 124913754982400,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[47][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    628,
+    49
+   ],
+   "bytes": 123088,
+   "storage_ptr": 124913551016960,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[48][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    566
+   ],
+   "bytes": 2264,
+   "storage_ptr": 124913754984960,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[48][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    566,
+    50
+   ],
+   "bytes": 113200,
+   "storage_ptr": 124913551140352,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[49][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    542
+   ],
+   "bytes": 2168,
+   "storage_ptr": 124913754987520,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[49][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    542,
+    51
+   ],
+   "bytes": 110568,
+   "storage_ptr": 124913551254016,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[50][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    472
+   ],
+   "bytes": 1888,
+   "storage_ptr": 124913746704384,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[50][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    472,
+    52
+   ],
+   "bytes": 98176,
+   "storage_ptr": 124913754990080,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[51][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    473
+   ],
+   "bytes": 1892,
+   "storage_ptr": 124913752995840,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[51][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    473,
+    53
+   ],
+   "bytes": 100276,
+   "storage_ptr": 124913551364608,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[52][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    429
+   ],
+   "bytes": 1716,
+   "storage_ptr": 124927527090176,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[52][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    429,
+    54
+   ],
+   "bytes": 92664,
+   "storage_ptr": 124913551464960,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[53][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    350
+   ],
+   "bytes": 1400,
+   "storage_ptr": 124913755088384,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[53][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    350,
+    55
+   ],
+   "bytes": 77000,
+   "storage_ptr": 124913551557632,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[54][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    358
+   ],
+   "bytes": 1432,
+   "storage_ptr": 124913755089920,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[54][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    358,
+    56
+   ],
+   "bytes": 80192,
+   "storage_ptr": 124913551671296,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[55][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    337
+   ],
+   "bytes": 1348,
+   "storage_ptr": 124913755091456,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[55][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    337,
+    57
+   ],
+   "bytes": 76836,
+   "storage_ptr": 124913551751680,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[56][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    312
+   ],
+   "bytes": 1248,
+   "storage_ptr": 124913755092992,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[56][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    312,
+    58
+   ],
+   "bytes": 72384,
+   "storage_ptr": 124913551828992,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[57][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    321
+   ],
+   "bytes": 1284,
+   "storage_ptr": 124913551634944,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[57][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    321,
+    59
+   ],
+   "bytes": 75756,
+   "storage_ptr": 124913551901696,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[58][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    305
+   ],
+   "bytes": 1220,
+   "storage_ptr": 124913551636480,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[58][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    305,
+    60
+   ],
+   "bytes": 73200,
+   "storage_ptr": 124913551977472,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[59][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    255
+   ],
+   "bytes": 1020,
+   "storage_ptr": 124913744608256,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[59][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    255,
+    61
+   ],
+   "bytes": 62220,
+   "storage_ptr": 124913552050688,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[60][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    233
+   ],
+   "bytes": 932,
+   "storage_ptr": 124913748802560,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[60][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    233,
+    62
+   ],
+   "bytes": 57784,
+   "storage_ptr": 124913552113152,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[61][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    281
+   ],
+   "bytes": 1124,
+   "storage_ptr": 124913551638016,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[61][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    281,
+    63
+   ],
+   "bytes": 70812,
+   "storage_ptr": 124913552171008,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[62][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    211
+   ],
+   "bytes": 844,
+   "storage_ptr": 124913551639552,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[62][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    211,
+    64
+   ],
+   "bytes": 54016,
+   "storage_ptr": 124913552242176,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[63][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    290
+   ],
+   "bytes": 1160,
+   "storage_ptr": 124913551640576,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[63][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    290,
+    65
+   ],
+   "bytes": 75400,
+   "storage_ptr": 124913552296448,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[64][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    289
+   ],
+   "bytes": 1156,
+   "storage_ptr": 124913551642112,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[64][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    289,
+    66
+   ],
+   "bytes": 76296,
+   "storage_ptr": 124913552372224,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[65][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    196
+   ],
+   "bytes": 784,
+   "storage_ptr": 124913551643648,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[65][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    196,
+    67
+   ],
+   "bytes": 52528,
+   "storage_ptr": 124913552449024,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[66][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    201
+   ],
+   "bytes": 804,
+   "storage_ptr": 124913551644672,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[66][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    201,
+    68
+   ],
+   "bytes": 54672,
+   "storage_ptr": 124913552501760,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[67][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    156
+   ],
+   "bytes": 624,
+   "storage_ptr": 124913551645696,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[67][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    156,
+    69
+   ],
+   "bytes": 43056,
+   "storage_ptr": 124913552556544,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[68][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    152
+   ],
+   "bytes": 608,
+   "storage_ptr": 124913551646720,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[68][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    152,
+    70
+   ],
+   "bytes": 42560,
+   "storage_ptr": 124913552600064,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[69][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    154
+   ],
+   "bytes": 616,
+   "storage_ptr": 124913551647744,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[69][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    154,
+    71
+   ],
+   "bytes": 43736,
+   "storage_ptr": 124913552643072,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[70][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    110
+   ],
+   "bytes": 440,
+   "storage_ptr": 124913750900224,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[70][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    110,
+    72
+   ],
+   "bytes": 31680,
+   "storage_ptr": 124913552687104,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[71][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    116
+   ],
+   "bytes": 464,
+   "storage_ptr": 124913755094528,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[71][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    116,
+    73
+   ],
+   "bytes": 33872,
+   "storage_ptr": 124913552718848,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[72][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    95
+   ],
+   "bytes": 380,
+   "storage_ptr": 124913931254784,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[72][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    95,
+    74
+   ],
+   "bytes": 28120,
+   "storage_ptr": 124913552753152,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[73][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    99
+   ],
+   "bytes": 396,
+   "storage_ptr": 124913551648768,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[73][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    99,
+    75
+   ],
+   "bytes": 29700,
+   "storage_ptr": 124913552781312,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[74][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    152
+   ],
+   "bytes": 608,
+   "storage_ptr": 124913551649280,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[74][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    152,
+    76
+   ],
+   "bytes": 46208,
+   "storage_ptr": 124913552811520,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[75][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551650304,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[75][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1,
+    78
+   ],
+   "bytes": 312,
+   "storage_ptr": 124913551650816,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[76][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551651328,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[76][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1,
+    83
+   ],
+   "bytes": 332,
+   "storage_ptr": 124913551651840,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[77][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551652352,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[77][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1,
+    86
+   ],
+   "bytes": 344,
+   "storage_ptr": 124913551652864,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[78][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551653376,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[78][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1,
+    89
+   ],
+   "bytes": 356,
+   "storage_ptr": 124913551653888,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[79][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551654400,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[79][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1,
+    101
+   ],
+   "bytes": 404,
+   "storage_ptr": 124913551654912,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[80][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551655424,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[80][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1,
+    108
+   ],
+   "bytes": 432,
+   "storage_ptr": 124913551655936,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[81][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551656448,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[81][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1,
+    111
+   ],
+   "bytes": 444,
+   "storage_ptr": 124913551656960,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[82][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551657472,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[82][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1,
+    127
+   ],
+   "bytes": 508,
+   "storage_ptr": 124913551657984,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[83][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551658496,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[83][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1,
+    128
+   ],
+   "bytes": 512,
+   "storage_ptr": 124913551659008,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[84][1]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551659520,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._buckets[84][2]",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    1,
+    167
+   ],
+   "bytes": 668,
+   "storage_ptr": 124913551660032,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._cell_h_t",
+   "root": "eval_ctx",
+   "dtype": "torch.float64",
+   "shape": [],
+   "bytes": 8,
+   "storage_ptr": 124927521849856,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._cell_w_t",
+   "root": "eval_ctx",
+   "dtype": "torch.float64",
+   "shape": [],
+   "bytes": 8,
+   "storage_ptr": 124927521849344,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._pow2_k",
+   "root": "eval_ctx",
+   "dtype": "torch.int64",
+   "shape": [
+    32
+   ],
+   "bytes": 256,
+   "storage_ptr": 124913931255296,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx._seg_bounds_t",
+   "root": "eval_ctx",
+   "dtype": "torch.int64",
+   "shape": [
+    10
+   ],
+   "bytes": 80,
+   "storage_ptr": 124913931253760,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx.degrees_t",
+   "root": "eval_ctx",
+   "dtype": "torch.int64",
+   "shape": [
+    3503992
+   ],
+   "bytes": 28031936,
+   "storage_ptr": 124927474663424,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx.grid_t",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    512,
+    512
+   ],
+   "bytes": 1048576,
+   "storage_ptr": 124927520800768,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx.large_net_ids_t",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    258
+   ],
+   "bytes": 1032,
+   "storage_ptr": 124913551661056,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx.pin2net_t",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    12026191
+   ],
+   "bytes": 48104764,
+   "storage_ptr": 124927426428928,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx.pin2node_t",
+   "root": "eval_ctx",
+   "dtype": "torch.int32",
+   "shape": [
+    12026191
+   ],
+   "bytes": 48104764,
+   "storage_ptr": 124927378194432,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx.pin_offset_x_t",
+   "root": "eval_ctx",
+   "dtype": "torch.float64",
+   "shape": [
+    12026191
+   ],
+   "bytes": 96209528,
+   "storage_ptr": 124913553768448,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "eval_ctx.pin_offset_y_t",
+   "root": "eval_ctx",
+   "dtype": "torch.float64",
+   "shape": [
+    12026191
+   ],
+   "bytes": 96209528,
+   "storage_ptr": 124913453105152,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "io_term.deg_bucket",
+   "root": "io_term",
+   "dtype": "torch.int64",
+   "shape": [
+    3270859
+   ],
+   "bytes": 26166872,
+   "storage_ptr": 124913251778560,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "io_term.net_idx",
+   "root": "io_term",
+   "dtype": "torch.int64",
+   "shape": [
+    11198112
+   ],
+   "bytes": 89584896,
+   "storage_ptr": 124913050451968,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "io_term.node_idx",
+   "root": "io_term",
+   "dtype": "torch.int64",
+   "shape": [
+    11198112
+   ],
+   "bytes": 89584896,
+   "storage_ptr": 124913318887424,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "io_term.rect2region",
+   "root": "io_term",
+   "dtype": "torch.int64",
+   "shape": [
+    32
+   ],
+   "bytes": 256,
+   "storage_ptr": 124913551663616,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "io_term.rects",
+   "root": "io_term",
+   "dtype": "torch.float64",
+   "shape": [
+    32,
+    4
+   ],
+   "bytes": 1024,
+   "storage_ptr": 124913551662592,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "io_term.w",
+   "root": "io_term",
+   "dtype": "torch.float64",
+   "shape": [
+    3270859
+   ],
+   "bytes": 26166872,
+   "storage_ptr": 124913419550720,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.flat_net2pin_map",
+   "root": "placer",
+   "dtype": "torch.int32",
+   "shape": [
+    12026191
+   ],
+   "bytes": 48104764,
+   "storage_ptr": 124910198325248,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.flat_net2pin_start_map",
+   "root": "placer",
+   "dtype": "torch.int32",
+   "shape": [
+    3503993
+   ],
+   "bytes": 14015972,
+   "storage_ptr": 124910246559744,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.flat_node2pin_map",
+   "root": "placer",
+   "dtype": "torch.int32",
+   "shape": [
+    12026191
+   ],
+   "bytes": 48104764,
+   "storage_ptr": 124910332542976,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.flat_node2pin_start_map",
+   "root": "placer",
+   "dtype": "torch.int32",
+   "shape": [
+    3089412
+   ],
+   "bytes": 12357648,
+   "storage_ptr": 124913199220224,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.flat_region_boxes",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    0
+   ],
+   "bytes": 0,
+   "storage_ptr": 0,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.flat_region_boxes_start",
+   "root": "placer",
+   "dtype": "torch.int32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551665152,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.movable_macro_mask",
+   "root": "placer",
+   "dtype": "torch.bool",
+   "shape": [
+    3077669
+   ],
+   "bytes": 3077669,
+   "storage_ptr": 124913737953792,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.movable_macro_pins",
+   "root": "placer",
+   "dtype": "torch.int64",
+   "shape": [
+    12026191
+   ],
+   "bytes": 96209528,
+   "storage_ptr": 124912681353216,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.net_mask_all",
+   "root": "placer",
+   "dtype": "torch.uint8",
+   "shape": [
+    3503992
+   ],
+   "bytes": 3503992,
+   "storage_ptr": 124912647798784,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.net_mask_ignore_large_degrees",
+   "root": "placer",
+   "dtype": "torch.uint8",
+   "shape": [
+    3503992
+   ],
+   "bytes": 3503992,
+   "storage_ptr": 124913236294656,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.net_weights",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    3503992
+   ],
+   "bytes": 14015968,
+   "storage_ptr": 124910313668608,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.node2fence_region_map",
+   "root": "placer",
+   "dtype": "torch.int32",
+   "shape": [
+    3077989
+   ],
+   "bytes": 12311956,
+   "storage_ptr": 124913211578368,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.node_areas",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    3136476
+   ],
+   "bytes": 12545904,
+   "storage_ptr": 124913700532224,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.node_size_x",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    3136476
+   ],
+   "bytes": 12545904,
+   "storage_ptr": 124913725407744,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.node_size_y",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    3136476
+   ],
+   "bytes": 12545904,
+   "storage_ptr": 124913687986176,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.num_pins_in_nodes",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    3136476
+   ],
+   "bytes": 12545904,
+   "storage_ptr": 124912651302912,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.pin2net_map",
+   "root": "placer",
+   "dtype": "torch.int32",
+   "shape": [
+    12026191
+   ],
+   "bytes": 48104764,
+   "storage_ptr": 124910265434112,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.pin2node_map",
+   "root": "placer",
+   "dtype": "torch.int32",
+   "shape": [
+    12026191
+   ],
+   "bytes": 48104764,
+   "storage_ptr": 124910399651840,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.pin_mask_ignore_fixed_macros",
+   "root": "placer",
+   "dtype": "torch.bool",
+   "shape": [
+    12026191
+   ],
+   "bytes": 12026191,
+   "storage_ptr": 124912668770304,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.pin_offset_x",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    12026191
+   ],
+   "bytes": 48104764,
+   "storage_ptr": 124913151115264,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.pin_offset_y",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    12026191
+   ],
+   "bytes": 48104764,
+   "storage_ptr": 124912782016512,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.pin_weights",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    3089411
+   ],
+   "bytes": 12357644,
+   "storage_ptr": 124913223936512,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.pos.0",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    6272952
+   ],
+   "bytes": 25091808,
+   "storage_ptr": 124913285332992,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.sorted_node_map",
+   "root": "placer",
+   "dtype": "torch.int32",
+   "shape": [
+    3077669
+   ],
+   "bytes": 12310676,
+   "storage_ptr": 124912178036736,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.target_density",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551664128,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.data_collections.unit_pin_capacity",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913551664640,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.density",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [],
+   "bytes": 4,
+   "storage_ptr": 124913552895488,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": "gp_iter_2"
+  },
+  {
+   "name": "placer.model.density_weight",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    1
+   ],
+   "bytes": 4,
+   "storage_ptr": 124913552894976,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.density_weight_grad_precond",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [],
+   "bytes": 4,
+   "storage_ptr": 124913551670272,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.gamma",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [],
+   "bytes": 4,
+   "storage_ptr": 124913551666176,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.init_density",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [],
+   "bytes": 4,
+   "storage_ptr": 124913552893440,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.dct2.buf",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048,
+    1025,
+    2
+   ],
+   "bytes": 16793600,
+   "storage_ptr": 124911238512640,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.dct2.expkM",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048,
+    2
+   ],
+   "bytes": 16384,
+   "storage_ptr": 124913552923648,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.dct2.expkN",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048,
+    2
+   ],
+   "bytes": 16384,
+   "storage_ptr": 124913552940032,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.dct2.out",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048,
+    2048
+   ],
+   "bytes": 16777216,
+   "storage_ptr": 124911372730368,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.idct2.buf",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048,
+    1025,
+    2
+   ],
+   "bytes": 16793600,
+   "storage_ptr": 124909661454336,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.idct2.out",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048,
+    2048
+   ],
+   "bytes": 16777216,
+   "storage_ptr": 124910718418944,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.idct_idxst.buf",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048,
+    1025,
+    2
+   ],
+   "bytes": 16793600,
+   "storage_ptr": 124910567424000,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.idct_idxst.out",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048,
+    2048
+   ],
+   "bytes": 16777216,
+   "storage_ptr": 124910701641728,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.idxst_idct.buf",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048,
+    1025,
+    2
+   ],
+   "bytes": 16793600,
+   "storage_ptr": 124910835859456,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.idxst_idct.out",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048,
+    2048
+   ],
+   "bytes": 16777216,
+   "storage_ptr": 124911389507584,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.bin_center_x",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048
+   ],
+   "bytes": 8192,
+   "storage_ptr": 124913552874496,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.bin_center_y",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048
+   ],
+   "bytes": 8192,
+   "storage_ptr": 124913552882688,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.initial_density_map",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048,
+    2048
+   ],
+   "bytes": 16777216,
+   "storage_ptr": 124911909601280,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.inv_wu2_plus_wv2",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    2048,
+    2048
+   ],
+   "bytes": 16777216,
+   "storage_ptr": 124911657943040,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.node_size_x_clamped",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    3136476
+   ],
+   "bytes": 12545904,
+   "storage_ptr": 124910131216384,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.node_size_y_clamped",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    3136476
+   ],
+   "bytes": 12545904,
+   "storage_ptr": 124912312254464,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.num_filler_impacted_bins_x",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [],
+   "bytes": 4,
+   "storage_ptr": 124913551666688,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.num_filler_impacted_bins_y",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [],
+   "bytes": 4,
+   "storage_ptr": 124913551667200,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.offset_x",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    3136476
+   ],
+   "bytes": 12545904,
+   "storage_ptr": 124910156308480,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.offset_y",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [
+    3136476
+   ],
+   "bytes": 12545904,
+   "storage_ptr": 124910183608320,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.op_collections.density_op.padding_mask",
+   "root": "placer",
+   "dtype": "torch.uint8",
+   "shape": [
+    2048,
+    2048
+   ],
+   "bytes": 4194304,
+   "storage_ptr": 124912830251008,
+   "create_phase": "gp_iter_1",
+   "destroy_phase": null
+  },
+  {
+   "name": "placer.model.density",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [],
+   "bytes": 4,
+   "storage_ptr": 124913552897024,
+   "create_phase": "gp_iter_2",
+   "destroy_phase": "gp_iter_299"
+  },
+  {
+   "name": "placer.model.density",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [],
+   "bytes": 4,
+   "storage_ptr": 124913552903680,
+   "create_phase": "gp_iter_299",
+   "destroy_phase": "teardown"
+  },
+  {
+   "name": "placer.model.density",
+   "root": "placer",
+   "dtype": "torch.float32",
+   "shape": [],
+   "bytes": 4,
+   "storage_ptr": 124913553543168,
+   "create_phase": "teardown",
+   "destroy_phase": null
+  }
+ ],
+ "phases": [
+  {
+   "name": "read",
+   "t_s": 78.02902612183243,
+   "resident_gb": 0.0,
+   "alloc_start_gb": 0.0,
+   "unattributed_gb": 0.0,
+   "transient_gb": 0.0,
+   "peak_alloc_gb": 0.0,
+   "peak_reserved_gb": 0.0,
+   "device_used_peak_gb": 0.0,
+   "host_rss_hwm_at_phase_end": 16.82870101928711
+  },
+  {
+   "name": "initialize",
+   "t_s": 0.47515122778713703,
+   "resident_gb": 0.0,
+   "alloc_start_gb": 0.0,
+   "unattributed_gb": 0.0,
+   "transient_gb": 0.35546350479125977,
+   "peak_alloc_gb": 0.35546350479125977,
+   "peak_reserved_gb": 0.375,
+   "device_used_peak_gb": 0.388671875,
+   "host_rss_hwm_at_phase_end": 17.234508514404297
+  },
+  {
+   "name": "io_term_build",
+   "t_s": 0.85184934316203,
+   "resident_gb": 0.3524414077401161,
+   "alloc_start_gb": 0.3535141944885254,
+   "unattributed_gb": 0.0010727867484092712,
+   "transient_gb": 0.32506370544433594,
+   "peak_alloc_gb": 0.6785778999328613,
+   "peak_reserved_gb": 0.728515625,
+   "device_used_peak_gb": 0.404296875,
+   "host_rss_hwm_at_phase_end": 17.853065490722656
+  },
+  {
+   "name": "placer_build",
+   "t_s": 0.5294353114441037,
+   "resident_gb": 0.5680470690131187,
+   "alloc_start_gb": 0.5702247619628906,
+   "unattributed_gb": 0.002177692949771881,
+   "transient_gb": 0.6199722290039062,
+   "peak_alloc_gb": 1.1901969909667969,
+   "peak_reserved_gb": 1.30078125,
+   "device_used_peak_gb": 1.1328125,
+   "host_rss_hwm_at_phase_end": 17.853065490722656
+  },
+  {
+   "name": "gp",
+   "t_s": 3809.5962165370584,
+   "resident_gb": 1.1788128688931465,
+   "alloc_start_gb": 1.1838808059692383,
+   "unattributed_gb": 0.005067937076091766,
+   "transient_gb": 2.8278861045837402,
+   "peak_alloc_gb": 4.0117669105529785,
+   "peak_reserved_gb": 6.0390625,
+   "device_used_peak_gb": 6.078125,
+   "host_rss_hwm_at_phase_end": 17.985713958740234
+  },
+  {
+   "name": "eval",
+   "t_s": 914.2722675958648,
+   "resident_gb": 1.2962109856307507,
+   "alloc_start_gb": 1.9033827781677246,
+   "unattributed_gb": 0.607171792536974,
+   "transient_gb": 1.9280586242675781,
+   "peak_alloc_gb": 3.8314414024353027,
+   "peak_reserved_gb": 6.0390625,
+   "device_used_peak_gb": 6.078125,
+   "host_rss_hwm_at_phase_end": 18.588668823242188
+  }
+ ],
+ "totals": {
+  "peak_alloc_gb_run": 4.0117669105529785,
+  "peak_reserved_gb_run": 6.0390625,
+  "device_used_gb_run": 6.078125,
+  "resident_max_gb": 1.2962109856307507,
+  "max_phase_transient_gb": 2.8278861045837402,
+  "identity_residual_gb": -0.11233017966151237,
+  "standalone_upper_bound_gb": 1.2962109968066216,
+  "upper_bound_over_measured": 0.32310227032306643
+ },
+ "n_callbacks_with_active": 300,
+ "n_evals_while_active": 299,
+ "of_on": 2.0,
+ "gp_iterations_run": 300,
+ "run_id": "9803d896-5dfe-49e2-92d3-a70e1f12f44a",
+ "repo_commit": "9b662a2a6b5b2310b5d2544f76e97fb32c674727",
+ "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
+ "command": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/diagnostics/probes_m4/probe_lifetime_gate.py --config benchmarks/ispd25/mempool_group.json --case group --k 32 --rtype grid --seed 1000 --rho-max 0.05 --of-on 2.0 --iterations 300 --diag-every 2 --out results/m4/profile/lifetime_group__k32__ours_m2.json",
+ "hostname": "NVL5",
+ "gpu_name": "NVIDIA L4",
+ "seed": 1000,
+ "input_sha256": {
+  "benchmarks/ispd25/mempool_group.json": "fccc19b1dfc8bef6f922cdc67456339825295ec5a39a21f5654b0c9846a2bafd"
+ }
+}
