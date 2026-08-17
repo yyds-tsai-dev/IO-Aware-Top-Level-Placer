@@ -335,20 +335,35 @@ the design draft's verbatim mandatory-disclosure sentence to stderr:
 result outside the band is not a bug in the script — it is a finding that must be disclosed
 verbatim per the rule above, never used to widen the band after the fact.
 
-**Discrepancy — the checker does not implement the per-phase `s_p^obs` protocol its own frozen
-JSON describes.** `h100_prediction.json`'s own `t14_check_protocol` field (and spec §6.3's T14
-row) specify: compare per-phase `T_H100,p` against `T_L4,p / s_p`, report each phase's actual
-`s_p^obs`, and judge the mainline hypothesis "confirmed" only if **every phase's `s_p^obs`** is
-within 50% relative error of its declared value **and** the total falls inside
-`[min(T̂_BW,T̂_SM,T̂_FP64), max(...)]`. The actual `scripts/m4_check_prediction.py` implementation
-only compares the **total** wall-time against `[total_fast_s, total_slow_s]` (which happens to be
-the S-BW/S-FP64 endpoints already, since `s_p_lo=2.5`/`s_p_hi=5.0` for the GP/eval phases in this
-forecast) — it does **not** extract or compare per-phase timings at all, and does not compute any
-`s_p^obs`. Whoever runs T14 will need to do the per-phase comparison by hand against
-`h100_prediction.json`'s `wall_time_forecast.phases.{read,gp,lg,eval}` block (each entry already
-carries `t_l4_measured_s`, `s_p_lo`, `s_p_hi`, `t_h100_fast_s`, `t_h100_slow_s`) if the full T14
-protocol described in the spec is required — the checker script alone only satisfies the
-total-time band check.
+**Gap found and since closed:** an earlier draft of this runbook flagged that
+`scripts/m4_check_prediction.py` only compared the **total** wall-time against
+`[total_fast_s, total_slow_s]` and did not implement the per-phase `s_p^obs` protocol that
+`h100_prediction.json`'s own `t14_check_protocol` field and spec §6.3's T14 row describe. **This
+is now fixed** — the checker reads the frozen prediction's `wall_time_forecast.phases.*` (each
+phase's already-scaled `t_l4_extrapolated_27m_s` and declared `[s_p_lo, s_p_hi]` band — the
+count-ratio scaling is read back verbatim, never recomputed) and the actual run's T8a-schema
+`phases.{read,gp,lg,eval}.t_s`, computes `s_p_obs = t_l4_extrapolated_27m_s / T_H100,p` per phase
+(`check_phase_s_p`/`check_all_phases`), and derives a `mainline_hypothesis.confirmed` verdict
+(`build_mainline_hypothesis_verdict`) that is `True` only when every phase's `s_p_obs` is within
+50% relative error of its declared band **and** the total falls inside
+`[total_fast_s, total_slow_s]` — matching this repo's actual (non-3-scenario) frozen forecast
+structure, since `m4_forecast.py` never implemented spec §6.3's S-BW/S-SM/S-FP64 3-scenario table
+either (see §5's `wall_time_forecast` fields above: one `[s_p_lo, s_p_hi]` band per phase, not
+three named scenarios) — `[total_fast_s, total_slow_s]` *is* this repo's `[min, max]`. Memory stays
+a separate check (`items.gpu_peak`, unchanged), per spec §6.3's own text keeping it out of the
+wall-time mainline hypothesis. `check_prediction`'s output JSON now carries a `phase_checks` block
+(per-phase `s_p_obs`/`relative_error`/`same_order`), a `mainline_hypothesis` block
+(`confirmed`/`phases_same_order`/`total_time_in_band`/`reason`), and a
+`no_new_prediction_interval_note` (spec §6.3(ii): "首跑不產生 prediction interval"); a `confirmed:
+false` verdict now also drives `any_out_of_band`/the mandatory-disclosure sentence, same as the
+existing total-time/GPU-peak items. A `confirmed: null` (missing per-phase `t_s` in the actual
+run) is reported as indeterminate, never silently treated as a pass. Covered by
+`tests/test_m4_handoff.py` (`test_scenario_all_pass_mainline_confirmed`,
+`test_scenario_one_phase_out_of_order_disconfirms_mainline`,
+`test_scenario_total_wall_time_out_of_band_disconfirms_mainline`,
+`test_scenario_gpu_memory_out_of_band_independent_of_mainline`, plus the phase-level and
+missing-data unit tests) — T14 can now run `scripts/m4_check_prediction.py` as the single source
+of truth for the full protocol; no by-hand per-phase arithmetic is required.
 
 ---
 
@@ -358,11 +373,11 @@ total-time band check.
    the L4 side; the H100 run only executes §4's command and records results.
 2. Run §4's single command with the frozen K/ρ/seed/rtype combination(s) required by the M4 task
    list (`flat` = `--rho 0.0`, `ours@M2` = `--rho >0.0`).
-3. **Per-phase comparison** (spec §6.3 T14 row, §5 above): for each of
-   `read`/`gp`/`lg`/`eval`, compute `s_p^obs = T_L4,p / T_H100,p` from the actual run and compare
-   against the declared `s_p_lo`/`s_p_hi` in `h100_prediction.json`'s
-   `wall_time_forecast.phases.<phase>` — same order (in-band, relative error ≤ 50%) is required
-   for the mainline hypothesis to be judged "confirmed" per phase.
+3. **Per-phase comparison** (spec §6.3 T14 row, §5 above): `scripts/m4_check_prediction.py` now
+   computes this automatically (`s_p_obs = t_l4_extrapolated_27m_s / T_H100,p` for each of
+   `read`/`gp`/`lg`/`eval`, compared against the declared `[s_p_lo, s_p_hi]` in
+   `h100_prediction.json`'s `wall_time_forecast.phases.<phase>`) — no manual arithmetic needed;
+   the actual run's schema-v3 profile JSON just needs its `phases.<phase>.t_s` fields populated.
 4. **Memory comparison**: compare `device_used_gb` against the analytic
    `gpu_memory_forecast.lower_bound_gb`/`upper_bound_gb` (not a statistical interval — a resolved
    analytic range).
@@ -371,10 +386,13 @@ total-time band check.
    substituted for the (unmeasured) H100 constant. T14's first run should measure the actual
    H100 `cuda_context` baseline and record it for any subsequent (re-)forecast; it is explicitly
    *not* refit into the already-frozen `h100_prediction.json`.
-6. Run `scripts/m4_check_prediction.py` (§5) for the total-time/GPU-peak band verdicts; do the
-   per-phase `s_p^obs` comparison by hand per item 3 above, since the script does not do it.
-7. Any out-of-band verdict (total time, GPU peak, or a per-phase `s_p^obs`) triggers the mandatory
-   disclosure sentence in the report and a re-fit — never a retroactive interval widening.
+6. Run `scripts/m4_check_prediction.py` (§5) — it now emits the total-time/GPU-peak band
+   verdicts, the full per-phase `s_p_obs` table (`phase_checks`), and the combined
+   `mainline_hypothesis.confirmed` verdict for item 3 in a single pass; nothing further needs to
+   be computed by hand.
+7. Any out-of-band verdict (total time, GPU peak, a per-phase `s_p_obs`, or an overall
+   `mainline_hypothesis.confirmed == false`) triggers the mandatory disclosure sentence in the
+   report and a re-fit — never a retroactive interval widening.
 8. **No new prediction interval is produced on the first run** — a calibrated interval needs at
    least a second H100 observation (spec: recorded as future work).
 

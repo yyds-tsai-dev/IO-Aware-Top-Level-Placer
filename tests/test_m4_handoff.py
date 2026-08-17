@@ -293,6 +293,168 @@ def test_check_prediction_any_out_of_band_carries_mandatory_disclosure():
     assert result["items"]["wall_time"]["verdict"] == "out"
 
 
+# ---------------------------------------------------------------------------
+# m4_check_prediction.py: per-phase s_p^obs mainline hypothesis (sec 6.3
+# T14 row / h100_prediction.json's own t14_check_protocol field)
+# ---------------------------------------------------------------------------
+#
+# Reuses the module's own `_cluster_flat_fixture`/`_count_freeze_fixture`/
+# `_probe_gp_fixture` through the real `fc.build_wall_time_forecast` /
+# `fc.build_gpu_memory_forecast` code path (same numbers as this file's
+# top-of-module docstring: node_ratio=2.0, pin_ratio=4.0):
+#
+#   phase   t_l4_extrapolated_27m_s   band          fast/slow (s_hi/s_lo)
+#   read    200.0                     [1.0, 1.0]    200 / 200
+#   gp      100.0                     [2.5, 5.0]    20  / 40
+#   lg      40.0                      [1.0, 1.0]    40  / 40
+#   eval    120.0                     [2.5, 5.0]    24  / 48
+#   total_fast_s=284.0, total_slow_s=328.0
+#   gpu_memory_forecast: lower_bound_gb=8.0, upper_bound_gb=12.2
+
+def _full_prediction_fixture():
+    ratios = fc.compute_scale_ratios(_count_freeze_fixture(), _probe_gp_fixture())
+    cluster_flat = _cluster_flat_fixture()
+    return {
+        "wall_time_forecast": fc.build_wall_time_forecast(cluster_flat, ratios),
+        "gpu_memory_forecast": fc.build_gpu_memory_forecast(cluster_flat, _probe_gp_fixture(), ratios),
+        "host_rss_forecast": fc.build_host_rss_forecast(cluster_flat, ratios),
+    }
+
+
+def test_check_phase_s_p_in_band_and_out_of_band():
+    pred = _full_prediction_fixture()
+    gp_phase = pred["wall_time_forecast"]["phases"]["gp"]  # t_extrap=100, band [2.5, 5.0]
+
+    in_band = chk.check_phase_s_p("gp", gp_phase, actual_t_s=25.0)  # s_p_obs=4.0
+    assert in_band["s_p_obs"] == pytest.approx(4.0)
+    assert in_band["relative_error"] == pytest.approx(0.0)
+    assert in_band["same_order"] is True
+    assert in_band["verdict"] == "in"
+
+    out_of_band = chk.check_phase_s_p("gp", gp_phase, actual_t_s=5.0)  # s_p_obs=20.0
+    assert out_of_band["s_p_obs"] == pytest.approx(20.0)
+    assert out_of_band["relative_error"] == pytest.approx(3.0)  # (20-5)/5
+    assert out_of_band["same_order"] is False
+    assert out_of_band["verdict"] == "out"
+
+
+def test_check_phase_s_p_within_tolerance_just_outside_band():
+    pred = _full_prediction_fixture()
+    eval_phase = pred["wall_time_forecast"]["phases"]["eval"]  # t_extrap=120, band [2.5, 5.0]
+    # actual_t_s=50 -> s_p_obs=2.4, just below lo=2.5, relative_error=0.04 <= 0.5
+    result = chk.check_phase_s_p("eval", eval_phase, actual_t_s=50.0)
+    assert result["s_p_obs"] == pytest.approx(2.4)
+    assert result["relative_error"] == pytest.approx(0.04)
+    assert result["same_order"] is True
+
+
+def test_check_all_phases_unavailable_without_phases_block():
+    pred = _full_prediction_fixture()
+    result = chk.check_all_phases({"t_total": 300.0}, pred)
+    assert result["available"] is False
+    assert result["phases"] == {}
+
+
+def _phases_actual(read=200.0, gp=25.0, lg=40.0, eval_=30.0):
+    return {"read": {"t_s": read}, "gp": {"t_s": gp}, "lg": {"t_s": lg}, "eval": {"t_s": eval_}}
+
+
+def test_scenario_all_pass_mainline_confirmed():
+    """全過: every phase's s_p_obs in-band, total in [284, 328], memory in
+    [8.0, 12.2] -> mainline confirmed True, any_out_of_band False."""
+    pred = _full_prediction_fixture()
+    actual = {"phases": _phases_actual(), "device_used_gb": 10.0, "host_peak_rss_gb": 15.0}
+    # sanity: total = 200+25+40+30 = 295, inside [284, 328]
+    assert sum(p["t_s"] for p in actual["phases"].values()) == pytest.approx(295.0)
+
+    result = chk.check_prediction(actual, pred)
+    assert result["mainline_hypothesis"]["confirmed"] is True
+    assert result["mainline_hypothesis"]["phases_same_order"] is True
+    assert result["mainline_hypothesis"]["total_time_in_band"] is True
+    assert result["items"]["gpu_peak"]["verdict"] == "in"
+    assert result["any_out_of_band"] is False
+    assert "mandatory_disclosure" not in result
+    assert result["no_new_prediction_interval_note"] == chk.FIRST_RUN_NO_INTERVAL_NOTE
+
+
+def test_scenario_one_phase_out_of_order_disconfirms_mainline():
+    """一 phase 亂序: gp's s_p_obs=20.0 (band [2.5,5.0], >50% relative error)
+    while total (295) stays inside [284, 328] and memory stays in-band --
+    isolates the per-phase failure from the total-time/GPU-peak items,
+    which individually still read "in"."""
+    pred = _full_prediction_fixture()
+    actual = {"phases": _phases_actual(gp=5.0, eval_=50.0),
+              "device_used_gb": 10.0, "host_peak_rss_gb": 15.0}
+    assert sum(p["t_s"] for p in actual["phases"].values()) == pytest.approx(295.0)
+
+    result = chk.check_prediction(actual, pred)
+    assert result["items"]["wall_time"]["verdict"] == "in"       # total alone still in-band
+    assert result["items"]["gpu_peak"]["verdict"] == "in"
+    assert result["phase_checks"]["phases"]["gp"]["same_order"] is False
+    assert result["mainline_hypothesis"]["confirmed"] is False
+    assert result["mainline_hypothesis"]["phases_same_order"] is False
+    assert result["mainline_hypothesis"]["total_time_in_band"] is True
+    assert "gp" in result["mainline_hypothesis"]["reason"]
+    assert result["any_out_of_band"] is True
+    assert result["mandatory_disclosure"] == chk.MANDATORY_REFIT_DISCLOSURE_SENTENCE
+
+
+def test_scenario_total_wall_time_out_of_band_disconfirms_mainline():
+    """總時間落外: every individual phase stays same_order (within 50%
+    tolerance of its declared band) but the sum (470) falls outside
+    [284, 328]."""
+    pred = _full_prediction_fixture()
+    actual = {"phases": _phases_actual(read=300.0, gp=50.0, lg=60.0, eval_=60.0),
+              "device_used_gb": 10.0, "host_peak_rss_gb": 15.0}
+    total = sum(p["t_s"] for p in actual["phases"].values())
+    assert total == pytest.approx(470.0)
+    assert not (284.0 <= total <= 328.0)
+
+    result = chk.check_prediction(actual, pred)
+    phase_verdicts = result["phase_checks"]["phases"]
+    assert all(p["same_order"] for p in phase_verdicts.values()), phase_verdicts
+    assert result["items"]["wall_time"]["verdict"] == "out"
+    assert result["mainline_hypothesis"]["phases_same_order"] is True
+    assert result["mainline_hypothesis"]["total_time_in_band"] is False
+    assert result["mainline_hypothesis"]["confirmed"] is False
+    assert "total wall-time" in result["mainline_hypothesis"]["reason"]
+    assert result["any_out_of_band"] is True
+    assert result["mandatory_disclosure"] == chk.MANDATORY_REFIT_DISCLOSURE_SENTENCE
+
+
+def test_scenario_gpu_memory_out_of_band_independent_of_mainline():
+    """記憶體落外: phases/total all pass (mainline confirmed True) but
+    device_used_gb (50.0) is outside [lower_bound_gb=8.0,
+    upper_bound_gb=12.2] -- memory is judged as its own sentence (spec sec
+    6.3), not folded into the wall-time mainline hypothesis."""
+    pred = _full_prediction_fixture()
+    actual = {"phases": _phases_actual(), "device_used_gb": 50.0, "host_peak_rss_gb": 15.0}
+
+    result = chk.check_prediction(actual, pred)
+    assert result["mainline_hypothesis"]["confirmed"] is True  # wall-time side is clean
+    assert result["items"]["gpu_peak"]["verdict"] == "out"
+    assert result["any_out_of_band"] is True
+    assert result["mandatory_disclosure"] == chk.MANDATORY_REFIT_DISCLOSURE_SENTENCE
+
+
+def test_scenario_missing_phase_actual_is_indeterminate_not_a_pass():
+    pred = _full_prediction_fixture()
+    # t_total given explicitly (295, in-band) so the wall_time item's own
+    # phases-sum fallback (which would otherwise silently undercount from
+    # the same missing "eval" entry) does not conflate with the per-phase
+    # mainline check this test isolates.
+    actual = {"t_total": 295.0,
+              "phases": {"read": {"t_s": 200.0}, "gp": {"t_s": 25.0}, "lg": {"t_s": 40.0}},
+              "device_used_gb": 10.0, "host_peak_rss_gb": 15.0}  # eval missing
+
+    result = chk.check_prediction(actual, pred)
+    assert result["mainline_hypothesis"]["confirmed"] is None
+    assert "eval" in result["mainline_hypothesis"]["reason"]
+    # an indeterminate mainline verdict does not itself force any_out_of_band
+    # (it is neither a pass nor a disconfirmed hypothesis)
+    assert result["any_out_of_band"] is False
+
+
 def test_check_prediction_cli_exit_codes(tmp_path, capsys):
     pred_path = _write_json(tmp_path / "h100_prediction.json", _prediction_fixture())
 
