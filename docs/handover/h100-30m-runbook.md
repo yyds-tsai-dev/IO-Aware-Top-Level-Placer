@@ -294,12 +294,20 @@ prints the §2.2/§7.0 three-state recording guidance (`feasible_l4_contract` /
 `infeasible_l4_contract` / `invalid_measurement`) instead of treating a crash or OOM as just a
 bug — an OOM at this scale is a legitimate, informative result.
 
-Example T10 invocation once the config exists:
+Example T10 invocation once the config exists (**use ABSOLUTE paths for
+--config/--out** — the driver resolves them against its own cwd; the L4
+rehearsal failed twice on relative paths before this was pinned down):
 
 ```bash
-bash scripts/m4_run.sh --config benchmarks/ispd25/synthetic_3x3_n2.json \
-    --k 16 --rho 0.0 --rtype grid --out results/m4/t10/h100_3x3__k16__grid__flat.json
+bash scripts/m4_run.sh --config "$REPO/benchmarks/ispd25/synthetic_3x3_n2.json" \
+    --k 16 --rho 0.0 --rtype grid --out "$REPO/results/m4/t10/h100_3x3__k16__grid__flat.json"
 ```
+
+L4 rehearsal record (2026-08-18): the full runbook flow was exercised on the
+3.1M `mempool_group` case (`--k 16 --rho 0.20 --seed 3000`) — environment
+check printed the expected SKU + host-RAM warnings, run completed in 22.2 min,
+`status=ok`, `legalization_status=success`, artifact
+`results/m4/profile/rehearsal_group__k16__grid__oursM2_seed3000.json`.
 
 ---
 
