@@ -60,12 +60,14 @@ ROUTE_TIMEOUT_S=14400
 THREADS=8
 
 DRY_RUN=0
+SHARD_GLOB="*"
 for arg in "$@"; do
     case "$arg" in
         --dry-run) DRY_RUN=1 ;;
         -h|--help)
             sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
             exit 0 ;;
+        --shard=*) SHARD_GLOB="${arg#--shard=}" ;;
         *) echo "stage2_s8_route.sh: unknown argument: $arg" >&2; exit 2 ;;
     esac
 done
@@ -214,8 +216,11 @@ if [ "$DRY_RUN" -eq 0 ]; then
 fi
 
 # Smallest out.def first (task instruction). `du -k` sorts numerically ascending.
+# --shard=GLOB: only route arm dirs whose basename matches the glob (e.g.
+# --shard='superblue19__*'), so several instances can run disjoint shards
+# concurrently. Default: everything.
 mapfile -t ordered_defs < <(
-    find "$S8_ROOT" -mindepth 2 -maxdepth 2 -type f -name out.def 2>/dev/null \
+    find "$S8_ROOT" -mindepth 2 -maxdepth 2 -type f -name out.def -path "$S8_ROOT/$SHARD_GLOB/out.def" 2>/dev/null \
         -exec du -k {} \; | sort -n -k1,1 | cut -f2-
 )
 
