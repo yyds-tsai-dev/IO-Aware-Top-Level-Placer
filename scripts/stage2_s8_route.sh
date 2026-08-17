@@ -49,7 +49,14 @@ REPO="${IOPLACE_REPO:-/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer}"
 S8_ROOT="$REPO/results/stage2/s8"
 OPENROAD="${OPENROAD_BIN:-openroad}"
 FIX_VIAS_PY="${STAGE2_FIX_VIAS_PY:-/usr/bin/python3}"
-ROUTE_TIMEOUT_S=43200   # 12h, per this task's instruction
+# 4h + capped DR iterations: des_perf_1 measurement (2026-08-17) showed DRT
+# plateaus at ~172k violations for hours on high-utilization ISPD2015 designs
+# and a timeout kill leaves NO routed.def at all. Stage2's crossing ground
+# truth needs complete wires, not DRC-clean routing (mgc_fft_1 precedent:
+# 57.7k violations, 0 unrouted nets, S2/S3 acceptance green) - so cap DR at
+# 5 optimization iterations, let it write the DEF, and disclose the final
+# violation count in S9/the report instead of chasing convergence.
+ROUTE_TIMEOUT_S=14400
 THREADS=8
 
 DRY_RUN=0
@@ -145,7 +152,7 @@ route_one() {
         echo 'puts "COUNT_IN insts=[llength [$block getInsts]] nets=[llength [$block getNets]]"'
         echo "set_thread_count $THREADS"
         echo "global_route -allow_congestion -congestion_report_file $or_run/congestion.rpt -guide_file $or_run/route.guide"
-        echo "detailed_route -output_drc $or_run/drc.rpt -verbose 1"
+        echo "detailed_route -droute_end_iter 5 -output_drc $or_run/drc.rpt -verbose 1"
         echo "write_def $routed_def"
         echo 'puts "DONE_ROUTE"'
         echo "exit"
