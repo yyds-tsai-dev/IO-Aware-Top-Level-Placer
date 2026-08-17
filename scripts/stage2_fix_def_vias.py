@@ -62,7 +62,11 @@ import os
 import re
 import sys
 
-_LEF_VIA_START_RE = re.compile(r'^VIA\s+(\S+)\s+\S+\s*$')
+# `VIA <name>` with an optional trailing token: mgc_fft_1's tech.lef writes
+# `VIA VIA23_2cut_E DEFAULT`, superblue19's writes bare `VIA SDA_via8_1x2_HH`
+# (measured 2026-08-18; the mandatory-token form silently matched 0 LEF names
+# on superblue19 and let DRT-0338 through).
+_LEF_VIA_START_RE = re.compile(r'^VIA\s+(\S+)(?:\s+\S+)?\s*$')
 _VIAS_HEADER_RE = re.compile(r'^VIAS\s+(\d+)\s*;\s*$')
 _DEF_VIA_NAME_RE = re.compile(r'^\s*-\s+(\S+)\s*$')
 
