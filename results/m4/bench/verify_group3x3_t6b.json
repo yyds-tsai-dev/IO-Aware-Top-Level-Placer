@@ -92,9 +92,49 @@
    "abort_conditions": "none triggered (all runs << 4h wall / 100GB RSS preregistered caps)"
   },
   "B2_h5_matched_resolution": {
-   "metric": "B2_h5_matched_resolution",
-   "reason": "needs evaluator_gpu/evaluator_ref hard_lambda_sum runs at matched per-tile resolution (K=16 on the 2x2 array vs K=4 on the source group, sec 4.4) -- a T8/T9 product, not produced in this task's scope",
-   "status": "pending_measurement"
+   "status": "fail",
+   "metric": "B2_H5_k_grid_lambda_ratio_matched_resolution",
+   "ratio": 1.5823632884134173,
+   "band": [
+    0.7,
+    1.4
+   ],
+   "lambda_synthetic": 0.014085520078522788,
+   "lambda_real": 0.008901571580724592,
+   "resolution": {
+    "synthetic": {
+     "k": 16,
+     "grid": "make_grid_regions(die_2x2, 4, 4)",
+     "regions_per_tile": "2x2"
+    },
+    "real": {
+     "k": 4,
+     "grid": "make_grid_regions(die_group, 2, 2)",
+     "regions_per_tile": "2x2"
+    }
+   },
+   "diagnostic_mismatched_resolution": {
+    "ratio": 0.6360571850211726,
+    "real_k": 16,
+    "note": "both sides K=16 -- resolution-mismatched (real's per-tile resolution is 4x the synthetic array's at the same raw K), diagnostic only, does not gate status"
+   },
+   "inputs": {
+    "synthetic_2x2_k16": {
+     "hard_lambda_sum": 197793,
+     "n_nets": 14042293,
+     "source": "results/m4/profile/synthetic_2x2_n2__k16__grid__flat.json (seed B)"
+    },
+    "real_group_k4": {
+     "hard_lambda_sum": 31191,
+     "n_nets": 3503988,
+     "source": "results/m4/bench/group__k4__grid__flat_eval_b2.json (evaluate-only on seed-A flat npz)"
+    },
+    "real_group_k16_diagnostic": {
+     "hard_lambda_sum": 77596,
+     "source": "results/m4/t8b/group__k16__grid__flat.json"
+    }
+   },
+   "adjudication_note": "per 2026-08-15 adjudication sec 4.1 B-2 row: fail is published and disclosed, does NOT gate scaling usage; the mismatched both-K16 diagnostic ratio 0.636 flips direction, confirming sec 4.4 resolution-effect prediction"
   },
   "B3_h3prime_degree_ks": {
    "bucket_rel_tol": 0.2,
@@ -480,6 +520,7 @@
  "scaling_usable_note": "sec 4.1: \"B-0 \u8207 B-3\u2026B-6 \u5168\u7da0 \u21d2 3\u00d73 bench \u53ef\u7528\u65bc scaling(\u4e14\u6c38\u4e45\u4e0d\u5f97\u7528\u65bc\u54c1\u8cea\u5ba3\u7a31)\u3002B-1\u3001B-2 \u7684\u7d50\u679c\u4e00\u5f8b\u767c\u8868,\u5176\u5224\u5b9a\u5beb\u5165\u5831\u544a\u4f46\u4e0d\u963b\u64cb scaling \u7528\u9014\"",
  "shape": "3x3",
  "non_gating_results": {
-  "B1_rent_invariance_did": "ok"
+  "B1_rent_invariance_did": "ok",
+  "B2_h5_matched_resolution": "fail"
  }
 }
