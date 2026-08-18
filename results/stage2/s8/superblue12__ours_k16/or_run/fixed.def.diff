@@ -1,0 +1,1297 @@
+--- /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue12__ours_k16/out.def
++++ /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue12__ours_k16/or_run/fixed.def
+@@ -2310,1293 +2310,7 @@
+ TRACKS Y 58 DO 10360 STEP 200 LAYER metal6 ;
+ TRACKS Y 258 DO 5180 STEP 400 LAYER metal8 ;
+ TRACKS X 120 DO 3552 STEP 400 LAYER metal9 ;
+-VIAS 303 ;
+-
+-- SDA_via1_1x2_HH
+-+ RECT metal1 ( -105 -25 ) ( 105 25 )
+-+ RECT via1 ( -91 -25 ) ( -41 25 )
+-+ RECT via1 ( 41 -25 ) ( 91 25 )
+-+ RECT metal2 ( -121 -25 ) ( 121 25 ) ;
+-- SDA_via1_1x2_HH_0
+-+ RECT metal1 ( -39 -25 ) ( 171 25 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT via1 ( 107 -25 ) ( 157 25 )
+-+ RECT metal2 ( -55 -25 ) ( 187 25 ) ;
+-- SDA_via1_1x2_HH_1
+-+ RECT metal1 ( -171 -25 ) ( 39 25 )
+-+ RECT via1 ( -157 -25 ) ( -107 25 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -187 -25 ) ( 55 25 ) ;
+-- SDA_via1_1x2_HV
+-+ RECT metal1 ( -105 -25 ) ( 105 25 )
+-+ RECT via1 ( -91 -25 ) ( -41 25 )
+-+ RECT via1 ( 41 -25 ) ( 91 25 )
+-+ RECT metal2 ( -91 -55 ) ( 91 55 ) ;
+-- SDA_via1_1x2_HV_0
+-+ RECT metal1 ( -39 -25 ) ( 171 25 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT via1 ( 107 -25 ) ( 157 25 )
+-+ RECT metal2 ( -25 -55 ) ( 157 55 ) ;
+-- SDA_via1_1x2_HV_1
+-+ RECT metal1 ( -171 -25 ) ( 39 25 )
+-+ RECT via1 ( -157 -25 ) ( -107 25 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -157 -55 ) ( 25 55 ) ;
+-- SDA_via1_1x2_VH
+-+ RECT metal1 ( -91 -39 ) ( 91 39 )
+-+ RECT via1 ( -91 -25 ) ( -41 25 )
+-+ RECT via1 ( 41 -25 ) ( 91 25 )
+-+ RECT metal2 ( -121 -25 ) ( 121 25 ) ;
+-- SDA_via1_1x2_VH_0
+-+ RECT metal1 ( -25 -39 ) ( 157 39 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT via1 ( 107 -25 ) ( 157 25 )
+-+ RECT metal2 ( -55 -25 ) ( 187 25 ) ;
+-- SDA_via1_1x2_VH_1
+-+ RECT metal1 ( -157 -39 ) ( 25 39 )
+-+ RECT via1 ( -157 -25 ) ( -107 25 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -187 -25 ) ( 55 25 ) ;
+-- SDA_via1_1x2_VV
+-+ RECT metal1 ( -91 -39 ) ( 91 39 )
+-+ RECT via1 ( -91 -25 ) ( -41 25 )
+-+ RECT via1 ( 41 -25 ) ( 91 25 )
+-+ RECT metal2 ( -91 -55 ) ( 91 55 ) ;
+-- SDA_via1_1x2_VV_0
+-+ RECT metal1 ( -25 -39 ) ( 157 39 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT via1 ( 107 -25 ) ( 157 25 )
+-+ RECT metal2 ( -25 -55 ) ( 157 55 ) ;
+-- SDA_via1_1x2_VV_1
+-+ RECT metal1 ( -157 -39 ) ( 25 39 )
+-+ RECT via1 ( -157 -25 ) ( -107 25 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -157 -55 ) ( 25 55 ) ;
+-- SDA_via1_2x1_HH
+-+ RECT metal1 ( -39 -91 ) ( 39 91 )
+-+ RECT via1 ( -25 -91 ) ( 25 -41 )
+-+ RECT via1 ( -25 41 ) ( 25 91 )
+-+ RECT metal2 ( -55 -91 ) ( 55 91 ) ;
+-- SDA_via1_2x1_HH_0
+-+ RECT metal1 ( -39 -25 ) ( 39 157 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT via1 ( -25 107 ) ( 25 157 )
+-+ RECT metal2 ( -55 -25 ) ( 55 157 ) ;
+-- SDA_via1_2x1_HH_1
+-+ RECT metal1 ( -39 -157 ) ( 39 25 )
+-+ RECT via1 ( -25 -157 ) ( 25 -107 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -55 -157 ) ( 55 25 ) ;
+-- SDA_via1_2x1_HV
+-+ RECT metal1 ( -39 -91 ) ( 39 91 )
+-+ RECT via1 ( -25 -91 ) ( 25 -41 )
+-+ RECT via1 ( -25 41 ) ( 25 91 )
+-+ RECT metal2 ( -25 -121 ) ( 25 121 ) ;
+-- SDA_via1_2x1_HV_0
+-+ RECT metal1 ( -39 -25 ) ( 39 157 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT via1 ( -25 107 ) ( 25 157 )
+-+ RECT metal2 ( -25 -55 ) ( 25 187 ) ;
+-- SDA_via1_2x1_HV_1
+-+ RECT metal1 ( -39 -157 ) ( 39 25 )
+-+ RECT via1 ( -25 -157 ) ( 25 -107 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -25 -187 ) ( 25 55 ) ;
+-- SDA_via1_2x1_VH
+-+ RECT metal1 ( -25 -105 ) ( 25 105 )
+-+ RECT via1 ( -25 -91 ) ( 25 -41 )
+-+ RECT via1 ( -25 41 ) ( 25 91 )
+-+ RECT metal2 ( -55 -91 ) ( 55 91 ) ;
+-- SDA_via1_2x1_VH_0
+-+ RECT metal1 ( -25 -39 ) ( 25 171 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT via1 ( -25 107 ) ( 25 157 )
+-+ RECT metal2 ( -55 -25 ) ( 55 157 ) ;
+-- SDA_via1_2x1_VH_1
+-+ RECT metal1 ( -25 -171 ) ( 25 39 )
+-+ RECT via1 ( -25 -157 ) ( 25 -107 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -55 -157 ) ( 55 25 ) ;
+-- SDA_via1_2x1_VV
+-+ RECT metal1 ( -25 -105 ) ( 25 105 )
+-+ RECT via1 ( -25 -91 ) ( 25 -41 )
+-+ RECT via1 ( -25 41 ) ( 25 91 )
+-+ RECT metal2 ( -25 -121 ) ( 25 121 ) ;
+-- SDA_via1_2x1_VV_0
+-+ RECT metal1 ( -25 -39 ) ( 25 171 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT via1 ( -25 107 ) ( 25 157 )
+-+ RECT metal2 ( -25 -55 ) ( 25 187 ) ;
+-- SDA_via1_2x1_VV_1
+-+ RECT metal1 ( -25 -171 ) ( 25 39 )
+-+ RECT via1 ( -25 -157 ) ( 25 -107 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -25 -187 ) ( 25 55 ) ;
+-- SDA_via1_2x2_VH
+-+ RECT metal1 ( -91 -105 ) ( 91 105 )
+-+ RECT via1 ( -91 -91 ) ( -41 -41 )
+-+ RECT via1 ( -91 41 ) ( -41 91 )
+-+ RECT via1 ( 41 -91 ) ( 91 -41 )
+-+ RECT via1 ( 41 41 ) ( 91 91 )
+-+ RECT metal2 ( -121 -91 ) ( 121 91 ) ;
+-- SDA_via1_HH
+-+ RECT metal1 ( -39 -25 ) ( 39 25 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -55 -25 ) ( 55 25 ) ;
+-- SDA_via1_HV
+-+ RECT metal1 ( -39 -25 ) ( 39 25 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -25 -55 ) ( 25 55 ) ;
+-- SDA_via1_VH
+-+ RECT metal1 ( -25 -39 ) ( 25 39 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -55 -25 ) ( 55 25 ) ;
+-- SDA_via1_VH_N
+-+ RECT metal1 ( -25 -39 ) ( 25 121 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -55 -25 ) ( 55 25 ) ;
+-- SDA_via1_VH_S
+-+ RECT metal1 ( -25 -121 ) ( 25 39 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -55 -25 ) ( 55 25 ) ;
+-- SDA_via1_VH_V
+-+ RECT metal1 ( -25 -80 ) ( 25 80 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -55 -25 ) ( 55 25 ) ;
+-- SDA_via1_VV
+-+ RECT metal1 ( -25 -39 ) ( 25 39 )
+-+ RECT via1 ( -25 -25 ) ( 25 25 )
+-+ RECT metal2 ( -25 -55 ) ( 25 55 ) ;
+-- SDA_via2_1x2_HH
+-+ RECT metal2 ( -107 -25 ) ( 107 25 )
+-+ RECT via2 ( -91 -25 ) ( -41 25 )
+-+ RECT via2 ( 41 -25 ) ( 91 25 )
+-+ RECT metal3 ( -121 -25 ) ( 121 25 ) ;
+-- SDA_via2_1x2_HH_0
+-+ RECT metal2 ( -41 -25 ) ( 173 25 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT via2 ( 107 -25 ) ( 157 25 )
+-+ RECT metal3 ( -55 -25 ) ( 187 25 ) ;
+-- SDA_via2_1x2_HH_1
+-+ RECT metal2 ( -173 -25 ) ( 41 25 )
+-+ RECT via2 ( -157 -25 ) ( -107 25 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -187 -25 ) ( 55 25 ) ;
+-- SDA_via2_1x2_HV
+-+ RECT metal2 ( -107 -25 ) ( 107 25 )
+-+ RECT via2 ( -91 -25 ) ( -41 25 )
+-+ RECT via2 ( 41 -25 ) ( 91 25 )
+-+ RECT metal3 ( -91 -55 ) ( 91 55 ) ;
+-- SDA_via2_1x2_HV_0
+-+ RECT metal2 ( -41 -25 ) ( 173 25 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT via2 ( 107 -25 ) ( 157 25 )
+-+ RECT metal3 ( -25 -55 ) ( 157 55 ) ;
+-- SDA_via2_1x2_HV_1
+-+ RECT metal2 ( -173 -25 ) ( 41 25 )
+-+ RECT via2 ( -157 -25 ) ( -107 25 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -157 -55 ) ( 25 55 ) ;
+-- SDA_via2_1x2_VH
+-+ RECT metal2 ( -91 -41 ) ( 91 41 )
+-+ RECT via2 ( -91 -25 ) ( -41 25 )
+-+ RECT via2 ( 41 -25 ) ( 91 25 )
+-+ RECT metal3 ( -121 -25 ) ( 121 25 ) ;
+-- SDA_via2_1x2_VH_0
+-+ RECT metal2 ( -25 -41 ) ( 157 41 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT via2 ( 107 -25 ) ( 157 25 )
+-+ RECT metal3 ( -55 -25 ) ( 187 25 ) ;
+-- SDA_via2_1x2_VH_1
+-+ RECT metal2 ( -157 -41 ) ( 25 41 )
+-+ RECT via2 ( -157 -25 ) ( -107 25 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -187 -25 ) ( 55 25 ) ;
+-- SDA_via2_1x2_VV
+-+ RECT metal2 ( -91 -41 ) ( 91 41 )
+-+ RECT via2 ( -91 -25 ) ( -41 25 )
+-+ RECT via2 ( 41 -25 ) ( 91 25 )
+-+ RECT metal3 ( -91 -55 ) ( 91 55 ) ;
+-- SDA_via2_1x2_VV_0
+-+ RECT metal2 ( -25 -41 ) ( 157 41 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT via2 ( 107 -25 ) ( 157 25 )
+-+ RECT metal3 ( -25 -55 ) ( 157 55 ) ;
+-- SDA_via2_1x2_VV_1
+-+ RECT metal2 ( -157 -41 ) ( 25 41 )
+-+ RECT via2 ( -157 -25 ) ( -107 25 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -157 -55 ) ( 25 55 ) ;
+-- SDA_via2_2x1_HH
+-+ RECT metal2 ( -41 -91 ) ( 41 91 )
+-+ RECT via2 ( -25 -91 ) ( 25 -41 )
+-+ RECT via2 ( -25 41 ) ( 25 91 )
+-+ RECT metal3 ( -55 -91 ) ( 55 91 ) ;
+-- SDA_via2_2x1_HH_0
+-+ RECT metal2 ( -41 -25 ) ( 41 157 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT via2 ( -25 107 ) ( 25 157 )
+-+ RECT metal3 ( -55 -25 ) ( 55 157 ) ;
+-- SDA_via2_2x1_HH_1
+-+ RECT metal2 ( -41 -157 ) ( 41 25 )
+-+ RECT via2 ( -25 -157 ) ( 25 -107 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -55 -157 ) ( 55 25 ) ;
+-- SDA_via2_2x1_HV
+-+ RECT metal2 ( -41 -91 ) ( 41 91 )
+-+ RECT via2 ( -25 -91 ) ( 25 -41 )
+-+ RECT via2 ( -25 41 ) ( 25 91 )
+-+ RECT metal3 ( -25 -121 ) ( 25 121 ) ;
+-- SDA_via2_2x1_HV_0
+-+ RECT metal2 ( -41 -25 ) ( 41 157 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT via2 ( -25 107 ) ( 25 157 )
+-+ RECT metal3 ( -25 -55 ) ( 25 187 ) ;
+-- SDA_via2_2x1_HV_1
+-+ RECT metal2 ( -41 -157 ) ( 41 25 )
+-+ RECT via2 ( -25 -157 ) ( 25 -107 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -25 -187 ) ( 25 55 ) ;
+-- SDA_via2_2x1_VH
+-+ RECT metal2 ( -25 -107 ) ( 25 107 )
+-+ RECT via2 ( -25 -91 ) ( 25 -41 )
+-+ RECT via2 ( -25 41 ) ( 25 91 )
+-+ RECT metal3 ( -55 -91 ) ( 55 91 ) ;
+-- SDA_via2_2x1_VH_0
+-+ RECT metal2 ( -25 -41 ) ( 25 173 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT via2 ( -25 107 ) ( 25 157 )
+-+ RECT metal3 ( -55 -25 ) ( 55 157 ) ;
+-- SDA_via2_2x1_VH_1
+-+ RECT metal2 ( -25 -173 ) ( 25 41 )
+-+ RECT via2 ( -25 -157 ) ( 25 -107 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -55 -157 ) ( 55 25 ) ;
+-- SDA_via2_2x1_VV
+-+ RECT metal2 ( -25 -107 ) ( 25 107 )
+-+ RECT via2 ( -25 -91 ) ( 25 -41 )
+-+ RECT via2 ( -25 41 ) ( 25 91 )
+-+ RECT metal3 ( -25 -121 ) ( 25 121 ) ;
+-- SDA_via2_2x1_VV_0
+-+ RECT metal2 ( -25 -41 ) ( 25 173 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT via2 ( -25 107 ) ( 25 157 )
+-+ RECT metal3 ( -25 -55 ) ( 25 187 ) ;
+-- SDA_via2_2x1_VV_1
+-+ RECT metal2 ( -25 -173 ) ( 25 41 )
+-+ RECT via2 ( -25 -157 ) ( 25 -107 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -25 -187 ) ( 25 55 ) ;
+-- SDA_via2_2x2_HV
+-+ RECT metal2 ( -107 -91 ) ( 107 91 )
+-+ RECT via2 ( -91 -91 ) ( -41 -41 )
+-+ RECT via2 ( -91 41 ) ( -41 91 )
+-+ RECT via2 ( 41 -91 ) ( 91 -41 )
+-+ RECT via2 ( 41 41 ) ( 91 91 )
+-+ RECT metal3 ( -91 -121 ) ( 91 121 ) ;
+-- SDA_via2_HH
+-+ RECT metal2 ( -41 -25 ) ( 41 25 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -55 -25 ) ( 55 25 ) ;
+-- SDA_via2_HV
+-+ RECT metal2 ( -41 -25 ) ( 41 25 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -25 -55 ) ( 25 55 ) ;
+-- SDA_via2_HV_E
+-+ RECT metal2 ( -41 -25 ) ( 159 25 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -25 -55 ) ( 25 55 ) ;
+-- SDA_via2_HV_H
+-+ RECT metal2 ( -100 -25 ) ( 100 25 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -25 -55 ) ( 25 55 ) ;
+-- SDA_via2_HV_W
+-+ RECT metal2 ( -159 -25 ) ( 41 25 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -25 -55 ) ( 25 55 ) ;
+-- SDA_via2_VH
+-+ RECT metal2 ( -25 -41 ) ( 25 41 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -55 -25 ) ( 55 25 ) ;
+-- SDA_via2_VV
+-+ RECT metal2 ( -25 -41 ) ( 25 41 )
+-+ RECT via2 ( -25 -25 ) ( 25 25 )
+-+ RECT metal3 ( -25 -55 ) ( 25 55 ) ;
+-- SDA_via3_1x2_HH
+-+ RECT metal3 ( -107 -25 ) ( 107 25 )
+-+ RECT via3 ( -91 -25 ) ( -41 25 )
+-+ RECT via3 ( 41 -25 ) ( 91 25 )
+-+ RECT metal4 ( -121 -25 ) ( 121 25 ) ;
+-- SDA_via3_1x2_HH_0
+-+ RECT metal3 ( -41 -25 ) ( 173 25 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT via3 ( 107 -25 ) ( 157 25 )
+-+ RECT metal4 ( -55 -25 ) ( 187 25 ) ;
+-- SDA_via3_1x2_HH_1
+-+ RECT metal3 ( -173 -25 ) ( 41 25 )
+-+ RECT via3 ( -157 -25 ) ( -107 25 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -187 -25 ) ( 55 25 ) ;
+-- SDA_via3_1x2_HV
+-+ RECT metal3 ( -107 -25 ) ( 107 25 )
+-+ RECT via3 ( -91 -25 ) ( -41 25 )
+-+ RECT via3 ( 41 -25 ) ( 91 25 )
+-+ RECT metal4 ( -91 -55 ) ( 91 55 ) ;
+-- SDA_via3_1x2_HV_0
+-+ RECT metal3 ( -41 -25 ) ( 173 25 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT via3 ( 107 -25 ) ( 157 25 )
+-+ RECT metal4 ( -25 -55 ) ( 157 55 ) ;
+-- SDA_via3_1x2_HV_1
+-+ RECT metal3 ( -173 -25 ) ( 41 25 )
+-+ RECT via3 ( -157 -25 ) ( -107 25 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -157 -55 ) ( 25 55 ) ;
+-- SDA_via3_1x2_VH
+-+ RECT metal3 ( -91 -41 ) ( 91 41 )
+-+ RECT via3 ( -91 -25 ) ( -41 25 )
+-+ RECT via3 ( 41 -25 ) ( 91 25 )
+-+ RECT metal4 ( -121 -25 ) ( 121 25 ) ;
+-- SDA_via3_1x2_VH_0
+-+ RECT metal3 ( -25 -41 ) ( 157 41 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT via3 ( 107 -25 ) ( 157 25 )
+-+ RECT metal4 ( -55 -25 ) ( 187 25 ) ;
+-- SDA_via3_1x2_VH_1
+-+ RECT metal3 ( -157 -41 ) ( 25 41 )
+-+ RECT via3 ( -157 -25 ) ( -107 25 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -187 -25 ) ( 55 25 ) ;
+-- SDA_via3_1x2_VV
+-+ RECT metal3 ( -91 -41 ) ( 91 41 )
+-+ RECT via3 ( -91 -25 ) ( -41 25 )
+-+ RECT via3 ( 41 -25 ) ( 91 25 )
+-+ RECT metal4 ( -91 -55 ) ( 91 55 ) ;
+-- SDA_via3_1x2_VV_0
+-+ RECT metal3 ( -25 -41 ) ( 157 41 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT via3 ( 107 -25 ) ( 157 25 )
+-+ RECT metal4 ( -25 -55 ) ( 157 55 ) ;
+-- SDA_via3_1x2_VV_1
+-+ RECT metal3 ( -157 -41 ) ( 25 41 )
+-+ RECT via3 ( -157 -25 ) ( -107 25 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -157 -55 ) ( 25 55 ) ;
+-- SDA_via3_2x1_HH
+-+ RECT metal3 ( -41 -91 ) ( 41 91 )
+-+ RECT via3 ( -25 -91 ) ( 25 -41 )
+-+ RECT via3 ( -25 41 ) ( 25 91 )
+-+ RECT metal4 ( -55 -91 ) ( 55 91 ) ;
+-- SDA_via3_2x1_HH_0
+-+ RECT metal3 ( -41 -25 ) ( 41 157 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT via3 ( -25 107 ) ( 25 157 )
+-+ RECT metal4 ( -55 -25 ) ( 55 157 ) ;
+-- SDA_via3_2x1_HH_1
+-+ RECT metal3 ( -41 -157 ) ( 41 25 )
+-+ RECT via3 ( -25 -157 ) ( 25 -107 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -55 -157 ) ( 55 25 ) ;
+-- SDA_via3_2x1_HV
+-+ RECT metal3 ( -41 -91 ) ( 41 91 )
+-+ RECT via3 ( -25 -91 ) ( 25 -41 )
+-+ RECT via3 ( -25 41 ) ( 25 91 )
+-+ RECT metal4 ( -25 -121 ) ( 25 121 ) ;
+-- SDA_via3_2x1_HV_0
+-+ RECT metal3 ( -41 -25 ) ( 41 157 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT via3 ( -25 107 ) ( 25 157 )
+-+ RECT metal4 ( -25 -55 ) ( 25 187 ) ;
+-- SDA_via3_2x1_HV_1
+-+ RECT metal3 ( -41 -157 ) ( 41 25 )
+-+ RECT via3 ( -25 -157 ) ( 25 -107 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -25 -187 ) ( 25 55 ) ;
+-- SDA_via3_2x1_VH
+-+ RECT metal3 ( -25 -107 ) ( 25 107 )
+-+ RECT via3 ( -25 -91 ) ( 25 -41 )
+-+ RECT via3 ( -25 41 ) ( 25 91 )
+-+ RECT metal4 ( -55 -91 ) ( 55 91 ) ;
+-- SDA_via3_2x1_VH_0
+-+ RECT metal3 ( -25 -41 ) ( 25 173 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT via3 ( -25 107 ) ( 25 157 )
+-+ RECT metal4 ( -55 -25 ) ( 55 157 ) ;
+-- SDA_via3_2x1_VH_1
+-+ RECT metal3 ( -25 -173 ) ( 25 41 )
+-+ RECT via3 ( -25 -157 ) ( 25 -107 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -55 -157 ) ( 55 25 ) ;
+-- SDA_via3_2x1_VV
+-+ RECT metal3 ( -25 -107 ) ( 25 107 )
+-+ RECT via3 ( -25 -91 ) ( 25 -41 )
+-+ RECT via3 ( -25 41 ) ( 25 91 )
+-+ RECT metal4 ( -25 -121 ) ( 25 121 ) ;
+-- SDA_via3_2x1_VV_0
+-+ RECT metal3 ( -25 -41 ) ( 25 173 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT via3 ( -25 107 ) ( 25 157 )
+-+ RECT metal4 ( -25 -55 ) ( 25 187 ) ;
+-- SDA_via3_2x1_VV_1
+-+ RECT metal3 ( -25 -173 ) ( 25 41 )
+-+ RECT via3 ( -25 -157 ) ( 25 -107 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -25 -187 ) ( 25 55 ) ;
+-- SDA_via3_2x2_VH
+-+ RECT metal3 ( -91 -107 ) ( 91 107 )
+-+ RECT via3 ( -91 -91 ) ( -41 -41 )
+-+ RECT via3 ( -91 41 ) ( -41 91 )
+-+ RECT via3 ( 41 -91 ) ( 91 -41 )
+-+ RECT via3 ( 41 41 ) ( 91 91 )
+-+ RECT metal4 ( -121 -91 ) ( 121 91 ) ;
+-- SDA_via3_HH
+-+ RECT metal3 ( -41 -25 ) ( 41 25 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -55 -25 ) ( 55 25 ) ;
+-- SDA_via3_HV
+-+ RECT metal3 ( -41 -25 ) ( 41 25 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -25 -55 ) ( 25 55 ) ;
+-- SDA_via3_VH
+-+ RECT metal3 ( -25 -41 ) ( 25 41 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -55 -25 ) ( 55 25 ) ;
+-- SDA_via3_VH_N
+-+ RECT metal3 ( -25 -41 ) ( 25 159 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -55 -25 ) ( 55 25 ) ;
+-- SDA_via3_VH_S
+-+ RECT metal3 ( -25 -159 ) ( 25 41 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -55 -25 ) ( 55 25 ) ;
+-- SDA_via3_VH_V
+-+ RECT metal3 ( -25 -100 ) ( 25 100 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -55 -25 ) ( 55 25 ) ;
+-- SDA_via3_VV
+-+ RECT metal3 ( -25 -41 ) ( 25 41 )
+-+ RECT via3 ( -25 -25 ) ( 25 25 )
+-+ RECT metal4 ( -25 -55 ) ( 25 55 ) ;
+-- SDA_via4_1x2_HH
+-+ RECT metal4 ( -189 -50 ) ( 189 50 )
+-+ RECT via4 ( -150 -50 ) ( -50 50 )
+-+ RECT via4 ( 50 -50 ) ( 150 50 )
+-+ RECT metal5 ( -189 -50 ) ( 189 50 ) ;
+-- SDA_via4_1x2_HH_0
+-+ RECT metal4 ( -89 -50 ) ( 289 50 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT via4 ( 150 -50 ) ( 250 50 )
+-+ RECT metal5 ( -89 -50 ) ( 289 50 ) ;
+-- SDA_via4_1x2_HH_1
+-+ RECT metal4 ( -289 -50 ) ( 89 50 )
+-+ RECT via4 ( -250 -50 ) ( -150 50 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT metal5 ( -289 -50 ) ( 89 50 ) ;
+-- SDA_via4_1x2_HV
+-+ RECT metal4 ( -189 -50 ) ( 189 50 )
+-+ RECT via4 ( -150 -50 ) ( -50 50 )
+-+ RECT via4 ( 50 -50 ) ( 150 50 )
+-+ RECT metal5 ( -150 -89 ) ( 150 89 ) ;
+-- SDA_via4_1x2_HV_0
+-+ RECT metal4 ( -89 -50 ) ( 289 50 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT via4 ( 150 -50 ) ( 250 50 )
+-+ RECT metal5 ( -50 -89 ) ( 250 89 ) ;
+-- SDA_via4_1x2_HV_1
+-+ RECT metal4 ( -289 -50 ) ( 89 50 )
+-+ RECT via4 ( -250 -50 ) ( -150 50 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT metal5 ( -250 -89 ) ( 50 89 ) ;
+-- SDA_via4_1x2_VH
+-+ RECT metal4 ( -150 -89 ) ( 150 89 )
+-+ RECT via4 ( -150 -50 ) ( -50 50 )
+-+ RECT via4 ( 50 -50 ) ( 150 50 )
+-+ RECT metal5 ( -189 -50 ) ( 189 50 ) ;
+-- SDA_via4_1x2_VH_0
+-+ RECT metal4 ( -50 -89 ) ( 250 89 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT via4 ( 150 -50 ) ( 250 50 )
+-+ RECT metal5 ( -89 -50 ) ( 289 50 ) ;
+-- SDA_via4_1x2_VH_1
+-+ RECT metal4 ( -250 -89 ) ( 50 89 )
+-+ RECT via4 ( -250 -50 ) ( -150 50 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT metal5 ( -289 -50 ) ( 89 50 ) ;
+-- SDA_via4_1x2_VV
+-+ RECT metal4 ( -150 -89 ) ( 150 89 )
+-+ RECT via4 ( -150 -50 ) ( -50 50 )
+-+ RECT via4 ( 50 -50 ) ( 150 50 )
+-+ RECT metal5 ( -150 -89 ) ( 150 89 ) ;
+-- SDA_via4_1x2_VV_0
+-+ RECT metal4 ( -50 -89 ) ( 250 89 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT via4 ( 150 -50 ) ( 250 50 )
+-+ RECT metal5 ( -50 -89 ) ( 250 89 ) ;
+-- SDA_via4_1x2_VV_1
+-+ RECT metal4 ( -250 -89 ) ( 50 89 )
+-+ RECT via4 ( -250 -50 ) ( -150 50 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT metal5 ( -250 -89 ) ( 50 89 ) ;
+-- SDA_via4_2x1_HH
+-+ RECT metal4 ( -89 -150 ) ( 89 150 )
+-+ RECT via4 ( -50 -150 ) ( 50 -50 )
+-+ RECT via4 ( -50 50 ) ( 50 150 )
+-+ RECT metal5 ( -89 -150 ) ( 89 150 ) ;
+-- SDA_via4_2x1_HH_0
+-+ RECT metal4 ( -89 -50 ) ( 89 250 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT via4 ( -50 150 ) ( 50 250 )
+-+ RECT metal5 ( -89 -50 ) ( 89 250 ) ;
+-- SDA_via4_2x1_HH_1
+-+ RECT metal4 ( -89 -250 ) ( 89 50 )
+-+ RECT via4 ( -50 -250 ) ( 50 -150 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT metal5 ( -89 -250 ) ( 89 50 ) ;
+-- SDA_via4_2x1_HV
+-+ RECT metal4 ( -89 -150 ) ( 89 150 )
+-+ RECT via4 ( -50 -150 ) ( 50 -50 )
+-+ RECT via4 ( -50 50 ) ( 50 150 )
+-+ RECT metal5 ( -50 -189 ) ( 50 189 ) ;
+-- SDA_via4_2x1_HV_0
+-+ RECT metal4 ( -89 -50 ) ( 89 250 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT via4 ( -50 150 ) ( 50 250 )
+-+ RECT metal5 ( -50 -89 ) ( 50 289 ) ;
+-- SDA_via4_2x1_HV_1
+-+ RECT metal4 ( -89 -250 ) ( 89 50 )
+-+ RECT via4 ( -50 -250 ) ( 50 -150 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT metal5 ( -50 -289 ) ( 50 89 ) ;
+-- SDA_via4_2x1_VH
+-+ RECT metal4 ( -50 -189 ) ( 50 189 )
+-+ RECT via4 ( -50 -150 ) ( 50 -50 )
+-+ RECT via4 ( -50 50 ) ( 50 150 )
+-+ RECT metal5 ( -89 -150 ) ( 89 150 ) ;
+-- SDA_via4_2x1_VH_0
+-+ RECT metal4 ( -50 -89 ) ( 50 289 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT via4 ( -50 150 ) ( 50 250 )
+-+ RECT metal5 ( -89 -50 ) ( 89 250 ) ;
+-- SDA_via4_2x1_VH_1
+-+ RECT metal4 ( -50 -289 ) ( 50 89 )
+-+ RECT via4 ( -50 -250 ) ( 50 -150 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT metal5 ( -89 -250 ) ( 89 50 ) ;
+-- SDA_via4_2x1_VV
+-+ RECT metal4 ( -50 -189 ) ( 50 189 )
+-+ RECT via4 ( -50 -150 ) ( 50 -50 )
+-+ RECT via4 ( -50 50 ) ( 50 150 )
+-+ RECT metal5 ( -50 -189 ) ( 50 189 ) ;
+-- SDA_via4_2x1_VV_0
+-+ RECT metal4 ( -50 -89 ) ( 50 289 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT via4 ( -50 150 ) ( 50 250 )
+-+ RECT metal5 ( -50 -89 ) ( 50 289 ) ;
+-- SDA_via4_2x1_VV_1
+-+ RECT metal4 ( -50 -289 ) ( 50 89 )
+-+ RECT via4 ( -50 -250 ) ( 50 -150 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT metal5 ( -50 -289 ) ( 50 89 ) ;
+-- SDA_via4_2x2_HV
+-+ RECT metal4 ( -189 -150 ) ( 189 150 )
+-+ RECT via4 ( -150 -150 ) ( -50 -50 )
+-+ RECT via4 ( -150 50 ) ( -50 150 )
+-+ RECT via4 ( 50 -150 ) ( 150 -50 )
+-+ RECT via4 ( 50 50 ) ( 150 150 )
+-+ RECT metal5 ( -150 -189 ) ( 150 189 ) ;
+-- SDA_via4_HH
+-+ RECT metal4 ( -89 -50 ) ( 89 50 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT metal5 ( -89 -50 ) ( 89 50 ) ;
+-- SDA_via4_HV
+-+ RECT metal4 ( -89 -50 ) ( 89 50 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT metal5 ( -50 -89 ) ( 50 89 ) ;
+-- SDA_via4_VH
+-+ RECT metal4 ( -50 -89 ) ( 50 89 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT metal5 ( -89 -50 ) ( 89 50 ) ;
+-- SDA_via4_VV
+-+ RECT metal4 ( -50 -89 ) ( 50 89 )
+-+ RECT via4 ( -50 -50 ) ( 50 50 )
+-+ RECT metal5 ( -50 -89 ) ( 50 89 ) ;
+-- SDA_via5_1x2_HH
+-+ RECT metal5 ( -189 -50 ) ( 189 50 )
+-+ RECT via5 ( -150 -50 ) ( -50 50 )
+-+ RECT via5 ( 50 -50 ) ( 150 50 )
+-+ RECT metal6 ( -189 -50 ) ( 189 50 ) ;
+-- SDA_via5_1x2_HH_0
+-+ RECT metal5 ( -89 -50 ) ( 289 50 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT via5 ( 150 -50 ) ( 250 50 )
+-+ RECT metal6 ( -89 -50 ) ( 289 50 ) ;
+-- SDA_via5_1x2_HH_1
+-+ RECT metal5 ( -289 -50 ) ( 89 50 )
+-+ RECT via5 ( -250 -50 ) ( -150 50 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -289 -50 ) ( 89 50 ) ;
+-- SDA_via5_1x2_HV
+-+ RECT metal5 ( -189 -50 ) ( 189 50 )
+-+ RECT via5 ( -150 -50 ) ( -50 50 )
+-+ RECT via5 ( 50 -50 ) ( 150 50 )
+-+ RECT metal6 ( -150 -89 ) ( 150 89 ) ;
+-- SDA_via5_1x2_HV_0
+-+ RECT metal5 ( -89 -50 ) ( 289 50 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT via5 ( 150 -50 ) ( 250 50 )
+-+ RECT metal6 ( -50 -89 ) ( 250 89 ) ;
+-- SDA_via5_1x2_HV_1
+-+ RECT metal5 ( -289 -50 ) ( 89 50 )
+-+ RECT via5 ( -250 -50 ) ( -150 50 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -250 -89 ) ( 50 89 ) ;
+-- SDA_via5_1x2_VH
+-+ RECT metal5 ( -150 -89 ) ( 150 89 )
+-+ RECT via5 ( -150 -50 ) ( -50 50 )
+-+ RECT via5 ( 50 -50 ) ( 150 50 )
+-+ RECT metal6 ( -189 -50 ) ( 189 50 ) ;
+-- SDA_via5_1x2_VH_0
+-+ RECT metal5 ( -50 -89 ) ( 250 89 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT via5 ( 150 -50 ) ( 250 50 )
+-+ RECT metal6 ( -89 -50 ) ( 289 50 ) ;
+-- SDA_via5_1x2_VH_1
+-+ RECT metal5 ( -250 -89 ) ( 50 89 )
+-+ RECT via5 ( -250 -50 ) ( -150 50 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -289 -50 ) ( 89 50 ) ;
+-- SDA_via5_1x2_VV
+-+ RECT metal5 ( -150 -89 ) ( 150 89 )
+-+ RECT via5 ( -150 -50 ) ( -50 50 )
+-+ RECT via5 ( 50 -50 ) ( 150 50 )
+-+ RECT metal6 ( -150 -89 ) ( 150 89 ) ;
+-- SDA_via5_1x2_VV_0
+-+ RECT metal5 ( -50 -89 ) ( 250 89 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT via5 ( 150 -50 ) ( 250 50 )
+-+ RECT metal6 ( -50 -89 ) ( 250 89 ) ;
+-- SDA_via5_1x2_VV_1
+-+ RECT metal5 ( -250 -89 ) ( 50 89 )
+-+ RECT via5 ( -250 -50 ) ( -150 50 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -250 -89 ) ( 50 89 ) ;
+-- SDA_via5_2x1_HH
+-+ RECT metal5 ( -89 -150 ) ( 89 150 )
+-+ RECT via5 ( -50 -150 ) ( 50 -50 )
+-+ RECT via5 ( -50 50 ) ( 50 150 )
+-+ RECT metal6 ( -89 -150 ) ( 89 150 ) ;
+-- SDA_via5_2x1_HH_0
+-+ RECT metal5 ( -89 -50 ) ( 89 250 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT via5 ( -50 150 ) ( 50 250 )
+-+ RECT metal6 ( -89 -50 ) ( 89 250 ) ;
+-- SDA_via5_2x1_HH_1
+-+ RECT metal5 ( -89 -250 ) ( 89 50 )
+-+ RECT via5 ( -50 -250 ) ( 50 -150 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -89 -250 ) ( 89 50 ) ;
+-- SDA_via5_2x1_HV
+-+ RECT metal5 ( -89 -150 ) ( 89 150 )
+-+ RECT via5 ( -50 -150 ) ( 50 -50 )
+-+ RECT via5 ( -50 50 ) ( 50 150 )
+-+ RECT metal6 ( -50 -189 ) ( 50 189 ) ;
+-- SDA_via5_2x1_HV_0
+-+ RECT metal5 ( -89 -50 ) ( 89 250 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT via5 ( -50 150 ) ( 50 250 )
+-+ RECT metal6 ( -50 -89 ) ( 50 289 ) ;
+-- SDA_via5_2x1_HV_1
+-+ RECT metal5 ( -89 -250 ) ( 89 50 )
+-+ RECT via5 ( -50 -250 ) ( 50 -150 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -50 -289 ) ( 50 89 ) ;
+-- SDA_via5_2x1_VH
+-+ RECT metal5 ( -50 -189 ) ( 50 189 )
+-+ RECT via5 ( -50 -150 ) ( 50 -50 )
+-+ RECT via5 ( -50 50 ) ( 50 150 )
+-+ RECT metal6 ( -89 -150 ) ( 89 150 ) ;
+-- SDA_via5_2x1_VH_0
+-+ RECT metal5 ( -50 -89 ) ( 50 289 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT via5 ( -50 150 ) ( 50 250 )
+-+ RECT metal6 ( -89 -50 ) ( 89 250 ) ;
+-- SDA_via5_2x1_VH_1
+-+ RECT metal5 ( -50 -289 ) ( 50 89 )
+-+ RECT via5 ( -50 -250 ) ( 50 -150 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -89 -250 ) ( 89 50 ) ;
+-- SDA_via5_2x1_VH_N_0
+-+ RECT metal5 ( -50 -89 ) ( 50 301 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT via5 ( -50 150 ) ( 50 250 )
+-+ RECT metal6 ( -89 -50 ) ( 89 250 ) ;
+-- SDA_via5_2x1_VH_S_1
+-+ RECT metal5 ( -50 -301 ) ( 50 89 )
+-+ RECT via5 ( -50 -250 ) ( 50 -150 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -89 -250 ) ( 89 50 ) ;
+-- SDA_via5_2x1_VH_V
+-+ RECT metal5 ( -50 -195 ) ( 50 195 )
+-+ RECT via5 ( -50 -150 ) ( 50 -50 )
+-+ RECT via5 ( -50 50 ) ( 50 150 )
+-+ RECT metal6 ( -89 -150 ) ( 89 150 ) ;
+-- SDA_via5_2x1_VV
+-+ RECT metal5 ( -50 -189 ) ( 50 189 )
+-+ RECT via5 ( -50 -150 ) ( 50 -50 )
+-+ RECT via5 ( -50 50 ) ( 50 150 )
+-+ RECT metal6 ( -50 -189 ) ( 50 189 ) ;
+-- SDA_via5_2x1_VV_0
+-+ RECT metal5 ( -50 -89 ) ( 50 289 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT via5 ( -50 150 ) ( 50 250 )
+-+ RECT metal6 ( -50 -89 ) ( 50 289 ) ;
+-- SDA_via5_2x1_VV_1
+-+ RECT metal5 ( -50 -289 ) ( 50 89 )
+-+ RECT via5 ( -50 -250 ) ( 50 -150 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -50 -289 ) ( 50 89 ) ;
+-- SDA_via5_2x1_VV_N_0
+-+ RECT metal5 ( -50 -89 ) ( 50 301 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT via5 ( -50 150 ) ( 50 250 )
+-+ RECT metal6 ( -50 -89 ) ( 50 289 ) ;
+-- SDA_via5_2x1_VV_S_1
+-+ RECT metal5 ( -50 -301 ) ( 50 89 )
+-+ RECT via5 ( -50 -250 ) ( 50 -150 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -50 -289 ) ( 50 89 ) ;
+-- SDA_via5_2x1_VV_V
+-+ RECT metal5 ( -50 -195 ) ( 50 195 )
+-+ RECT via5 ( -50 -150 ) ( 50 -50 )
+-+ RECT via5 ( -50 50 ) ( 50 150 )
+-+ RECT metal6 ( -50 -189 ) ( 50 189 ) ;
+-- SDA_via5_2x2_VH
+-+ RECT metal5 ( -150 -189 ) ( 150 189 )
+-+ RECT via5 ( -150 -150 ) ( -50 -50 )
+-+ RECT via5 ( -150 50 ) ( -50 150 )
+-+ RECT via5 ( 50 -150 ) ( 150 -50 )
+-+ RECT via5 ( 50 50 ) ( 150 150 )
+-+ RECT metal6 ( -189 -150 ) ( 189 150 ) ;
+-- SDA_via5_HH
+-+ RECT metal5 ( -89 -50 ) ( 89 50 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -89 -50 ) ( 89 50 ) ;
+-- SDA_via5_HV
+-+ RECT metal5 ( -89 -50 ) ( 89 50 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -50 -89 ) ( 50 89 ) ;
+-- SDA_via5_VH
+-+ RECT metal5 ( -50 -89 ) ( 50 89 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -89 -50 ) ( 89 50 ) ;
+-- SDA_via5_VH_N
+-+ RECT metal5 ( -50 -89 ) ( 50 301 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -89 -50 ) ( 89 50 ) ;
+-- SDA_via5_VH_S
+-+ RECT metal5 ( -50 -301 ) ( 50 89 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -89 -50 ) ( 89 50 ) ;
+-- SDA_via5_VH_V
+-+ RECT metal5 ( -50 -195 ) ( 50 195 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -89 -50 ) ( 89 50 ) ;
+-- SDA_via5_VV
+-+ RECT metal5 ( -50 -89 ) ( 50 89 )
+-+ RECT via5 ( -50 -50 ) ( 50 50 )
+-+ RECT metal6 ( -50 -89 ) ( 50 89 ) ;
+-- SDA_via6_1x2_HH
+-+ RECT metal6 ( -189 -50 ) ( 189 50 )
+-+ RECT via6 ( -150 -50 ) ( -50 50 )
+-+ RECT via6 ( 50 -50 ) ( 150 50 )
+-+ RECT metal7 ( -189 -50 ) ( 189 50 ) ;
+-- SDA_via6_1x2_HH_0
+-+ RECT metal6 ( -89 -50 ) ( 289 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT via6 ( 150 -50 ) ( 250 50 )
+-+ RECT metal7 ( -89 -50 ) ( 289 50 ) ;
+-- SDA_via6_1x2_HH_1
+-+ RECT metal6 ( -289 -50 ) ( 89 50 )
+-+ RECT via6 ( -250 -50 ) ( -150 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -289 -50 ) ( 89 50 ) ;
+-- SDA_via6_1x2_HH_E_0
+-+ RECT metal6 ( -89 -50 ) ( 301 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT via6 ( 150 -50 ) ( 250 50 )
+-+ RECT metal7 ( -89 -50 ) ( 289 50 ) ;
+-- SDA_via6_1x2_HH_H
+-+ RECT metal6 ( -195 -50 ) ( 195 50 )
+-+ RECT via6 ( -150 -50 ) ( -50 50 )
+-+ RECT via6 ( 50 -50 ) ( 150 50 )
+-+ RECT metal7 ( -189 -50 ) ( 189 50 ) ;
+-- SDA_via6_1x2_HH_W_1
+-+ RECT metal6 ( -301 -50 ) ( 89 50 )
+-+ RECT via6 ( -250 -50 ) ( -150 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -289 -50 ) ( 89 50 ) ;
+-- SDA_via6_1x2_HV
+-+ RECT metal6 ( -189 -50 ) ( 189 50 )
+-+ RECT via6 ( -150 -50 ) ( -50 50 )
+-+ RECT via6 ( 50 -50 ) ( 150 50 )
+-+ RECT metal7 ( -150 -89 ) ( 150 89 ) ;
+-- SDA_via6_1x2_HV_0
+-+ RECT metal6 ( -89 -50 ) ( 289 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT via6 ( 150 -50 ) ( 250 50 )
+-+ RECT metal7 ( -50 -89 ) ( 250 89 ) ;
+-- SDA_via6_1x2_HV_1
+-+ RECT metal6 ( -289 -50 ) ( 89 50 )
+-+ RECT via6 ( -250 -50 ) ( -150 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -250 -89 ) ( 50 89 ) ;
+-- SDA_via6_1x2_HV_E_0
+-+ RECT metal6 ( -89 -50 ) ( 301 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT via6 ( 150 -50 ) ( 250 50 )
+-+ RECT metal7 ( -50 -89 ) ( 250 89 ) ;
+-- SDA_via6_1x2_HV_H
+-+ RECT metal6 ( -195 -50 ) ( 195 50 )
+-+ RECT via6 ( -150 -50 ) ( -50 50 )
+-+ RECT via6 ( 50 -50 ) ( 150 50 )
+-+ RECT metal7 ( -150 -89 ) ( 150 89 ) ;
+-- SDA_via6_1x2_HV_W_1
+-+ RECT metal6 ( -301 -50 ) ( 89 50 )
+-+ RECT via6 ( -250 -50 ) ( -150 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -250 -89 ) ( 50 89 ) ;
+-- SDA_via6_1x2_VH
+-+ RECT metal6 ( -150 -89 ) ( 150 89 )
+-+ RECT via6 ( -150 -50 ) ( -50 50 )
+-+ RECT via6 ( 50 -50 ) ( 150 50 )
+-+ RECT metal7 ( -189 -50 ) ( 189 50 ) ;
+-- SDA_via6_1x2_VH_0
+-+ RECT metal6 ( -50 -89 ) ( 250 89 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT via6 ( 150 -50 ) ( 250 50 )
+-+ RECT metal7 ( -89 -50 ) ( 289 50 ) ;
+-- SDA_via6_1x2_VH_1
+-+ RECT metal6 ( -250 -89 ) ( 50 89 )
+-+ RECT via6 ( -250 -50 ) ( -150 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -289 -50 ) ( 89 50 ) ;
+-- SDA_via6_1x2_VV
+-+ RECT metal6 ( -150 -89 ) ( 150 89 )
+-+ RECT via6 ( -150 -50 ) ( -50 50 )
+-+ RECT via6 ( 50 -50 ) ( 150 50 )
+-+ RECT metal7 ( -150 -89 ) ( 150 89 ) ;
+-- SDA_via6_1x2_VV_0
+-+ RECT metal6 ( -50 -89 ) ( 250 89 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT via6 ( 150 -50 ) ( 250 50 )
+-+ RECT metal7 ( -50 -89 ) ( 250 89 ) ;
+-- SDA_via6_1x2_VV_1
+-+ RECT metal6 ( -250 -89 ) ( 50 89 )
+-+ RECT via6 ( -250 -50 ) ( -150 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -250 -89 ) ( 50 89 ) ;
+-- SDA_via6_2x1_HH
+-+ RECT metal6 ( -89 -150 ) ( 89 150 )
+-+ RECT via6 ( -50 -150 ) ( 50 -50 )
+-+ RECT via6 ( -50 50 ) ( 50 150 )
+-+ RECT metal7 ( -89 -150 ) ( 89 150 ) ;
+-- SDA_via6_2x1_HH_0
+-+ RECT metal6 ( -89 -50 ) ( 89 250 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT via6 ( -50 150 ) ( 50 250 )
+-+ RECT metal7 ( -89 -50 ) ( 89 250 ) ;
+-- SDA_via6_2x1_HH_1
+-+ RECT metal6 ( -89 -250 ) ( 89 50 )
+-+ RECT via6 ( -50 -250 ) ( 50 -150 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -89 -250 ) ( 89 50 ) ;
+-- SDA_via6_2x1_HV
+-+ RECT metal6 ( -89 -150 ) ( 89 150 )
+-+ RECT via6 ( -50 -150 ) ( 50 -50 )
+-+ RECT via6 ( -50 50 ) ( 50 150 )
+-+ RECT metal7 ( -50 -189 ) ( 50 189 ) ;
+-- SDA_via6_2x1_HV_0
+-+ RECT metal6 ( -89 -50 ) ( 89 250 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT via6 ( -50 150 ) ( 50 250 )
+-+ RECT metal7 ( -50 -89 ) ( 50 289 ) ;
+-- SDA_via6_2x1_HV_1
+-+ RECT metal6 ( -89 -250 ) ( 89 50 )
+-+ RECT via6 ( -50 -250 ) ( 50 -150 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -50 -289 ) ( 50 89 ) ;
+-- SDA_via6_2x1_VH
+-+ RECT metal6 ( -50 -189 ) ( 50 189 )
+-+ RECT via6 ( -50 -150 ) ( 50 -50 )
+-+ RECT via6 ( -50 50 ) ( 50 150 )
+-+ RECT metal7 ( -89 -150 ) ( 89 150 ) ;
+-- SDA_via6_2x1_VH_0
+-+ RECT metal6 ( -50 -89 ) ( 50 289 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT via6 ( -50 150 ) ( 50 250 )
+-+ RECT metal7 ( -89 -50 ) ( 89 250 ) ;
+-- SDA_via6_2x1_VH_1
+-+ RECT metal6 ( -50 -289 ) ( 50 89 )
+-+ RECT via6 ( -50 -250 ) ( 50 -150 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -89 -250 ) ( 89 50 ) ;
+-- SDA_via6_2x1_VV
+-+ RECT metal6 ( -50 -189 ) ( 50 189 )
+-+ RECT via6 ( -50 -150 ) ( 50 -50 )
+-+ RECT via6 ( -50 50 ) ( 50 150 )
+-+ RECT metal7 ( -50 -189 ) ( 50 189 ) ;
+-- SDA_via6_2x1_VV_0
+-+ RECT metal6 ( -50 -89 ) ( 50 289 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT via6 ( -50 150 ) ( 50 250 )
+-+ RECT metal7 ( -50 -89 ) ( 50 289 ) ;
+-- SDA_via6_2x1_VV_1
+-+ RECT metal6 ( -50 -289 ) ( 50 89 )
+-+ RECT via6 ( -50 -250 ) ( 50 -150 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -50 -289 ) ( 50 89 ) ;
+-- SDA_via6_2x2_HV
+-+ RECT metal6 ( -189 -150 ) ( 189 150 )
+-+ RECT via6 ( -150 -150 ) ( -50 -50 )
+-+ RECT via6 ( -150 50 ) ( -50 150 )
+-+ RECT via6 ( 50 -150 ) ( 150 -50 )
+-+ RECT via6 ( 50 50 ) ( 150 150 )
+-+ RECT metal7 ( -150 -189 ) ( 150 189 ) ;
+-- SDA_via6_HH
+-+ RECT metal6 ( -89 -50 ) ( 89 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -89 -50 ) ( 89 50 ) ;
+-- SDA_via6_HV
+-+ RECT metal6 ( -89 -50 ) ( 89 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -50 -89 ) ( 50 89 ) ;
+-- SDA_via6_HV_E
+-+ RECT metal6 ( -89 -50 ) ( 301 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -50 -89 ) ( 50 89 ) ;
+-- SDA_via6_HV_H
+-+ RECT metal6 ( -195 -50 ) ( 195 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -50 -89 ) ( 50 89 ) ;
+-- SDA_via6_HV_W
+-+ RECT metal6 ( -301 -50 ) ( 89 50 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -50 -89 ) ( 50 89 ) ;
+-- SDA_via6_VH
+-+ RECT metal6 ( -50 -89 ) ( 50 89 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -89 -50 ) ( 89 50 ) ;
+-- SDA_via6_VV
+-+ RECT metal6 ( -50 -89 ) ( 50 89 )
+-+ RECT via6 ( -50 -50 ) ( 50 50 )
+-+ RECT metal7 ( -50 -89 ) ( 50 89 ) ;
+-- SDA_via7_1x2_HH
+-+ RECT metal7 ( -238 -75 ) ( 238 75 )
+-+ RECT via7 ( -225 -75 ) ( -75 75 )
+-+ RECT via7 ( 75 -75 ) ( 225 75 )
+-+ RECT metal8 ( -265 -100 ) ( 265 100 ) ;
+-- SDA_via7_1x2_HH_0
+-+ RECT metal7 ( -88 -75 ) ( 388 75 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT via7 ( 225 -75 ) ( 375 75 )
+-+ RECT metal8 ( -115 -100 ) ( 415 100 ) ;
+-- SDA_via7_1x2_HH_1
+-+ RECT metal7 ( -388 -75 ) ( 88 75 )
+-+ RECT via7 ( -375 -75 ) ( -225 75 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -415 -100 ) ( 115 100 ) ;
+-- SDA_via7_1x2_HV
+-+ RECT metal7 ( -238 -75 ) ( 238 75 )
+-+ RECT via7 ( -225 -75 ) ( -75 75 )
+-+ RECT via7 ( 75 -75 ) ( 225 75 )
+-+ RECT metal8 ( -250 -115 ) ( 250 115 ) ;
+-- SDA_via7_1x2_HV_0
+-+ RECT metal7 ( -88 -75 ) ( 388 75 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT via7 ( 225 -75 ) ( 375 75 )
+-+ RECT metal8 ( -100 -115 ) ( 400 115 ) ;
+-- SDA_via7_1x2_HV_1
+-+ RECT metal7 ( -388 -75 ) ( 88 75 )
+-+ RECT via7 ( -375 -75 ) ( -225 75 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -400 -115 ) ( 100 115 ) ;
+-- SDA_via7_1x2_VH
+-+ RECT metal7 ( -225 -88 ) ( 225 88 )
+-+ RECT via7 ( -225 -75 ) ( -75 75 )
+-+ RECT via7 ( 75 -75 ) ( 225 75 )
+-+ RECT metal8 ( -265 -100 ) ( 265 100 ) ;
+-- SDA_via7_1x2_VH_0
+-+ RECT metal7 ( -75 -88 ) ( 375 88 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT via7 ( 225 -75 ) ( 375 75 )
+-+ RECT metal8 ( -115 -100 ) ( 415 100 ) ;
+-- SDA_via7_1x2_VH_1
+-+ RECT metal7 ( -375 -88 ) ( 75 88 )
+-+ RECT via7 ( -375 -75 ) ( -225 75 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -415 -100 ) ( 115 100 ) ;
+-- SDA_via7_1x2_VV
+-+ RECT metal7 ( -225 -88 ) ( 225 88 )
+-+ RECT via7 ( -225 -75 ) ( -75 75 )
+-+ RECT via7 ( 75 -75 ) ( 225 75 )
+-+ RECT metal8 ( -250 -115 ) ( 250 115 ) ;
+-- SDA_via7_1x2_VV_0
+-+ RECT metal7 ( -75 -88 ) ( 375 88 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT via7 ( 225 -75 ) ( 375 75 )
+-+ RECT metal8 ( -100 -115 ) ( 400 115 ) ;
+-- SDA_via7_1x2_VV_1
+-+ RECT metal7 ( -375 -88 ) ( 75 88 )
+-+ RECT via7 ( -375 -75 ) ( -225 75 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -400 -115 ) ( 100 115 ) ;
+-- SDA_via7_2x1_HH
+-+ RECT metal7 ( -88 -225 ) ( 88 225 )
+-+ RECT via7 ( -75 -225 ) ( 75 -75 )
+-+ RECT via7 ( -75 75 ) ( 75 225 )
+-+ RECT metal8 ( -115 -250 ) ( 115 250 ) ;
+-- SDA_via7_2x1_HH_0
+-+ RECT metal7 ( -88 -75 ) ( 88 375 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT via7 ( -75 225 ) ( 75 375 )
+-+ RECT metal8 ( -115 -100 ) ( 115 400 ) ;
+-- SDA_via7_2x1_HH_1
+-+ RECT metal7 ( -88 -375 ) ( 88 75 )
+-+ RECT via7 ( -75 -375 ) ( 75 -225 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -115 -400 ) ( 115 100 ) ;
+-- SDA_via7_2x1_HV
+-+ RECT metal7 ( -88 -225 ) ( 88 225 )
+-+ RECT via7 ( -75 -225 ) ( 75 -75 )
+-+ RECT via7 ( -75 75 ) ( 75 225 )
+-+ RECT metal8 ( -100 -265 ) ( 100 265 ) ;
+-- SDA_via7_2x1_HV_0
+-+ RECT metal7 ( -88 -75 ) ( 88 375 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT via7 ( -75 225 ) ( 75 375 )
+-+ RECT metal8 ( -100 -115 ) ( 100 415 ) ;
+-- SDA_via7_2x1_HV_1
+-+ RECT metal7 ( -88 -375 ) ( 88 75 )
+-+ RECT via7 ( -75 -375 ) ( 75 -225 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -100 -415 ) ( 100 115 ) ;
+-- SDA_via7_2x1_VH
+-+ RECT metal7 ( -75 -238 ) ( 75 238 )
+-+ RECT via7 ( -75 -225 ) ( 75 -75 )
+-+ RECT via7 ( -75 75 ) ( 75 225 )
+-+ RECT metal8 ( -115 -250 ) ( 115 250 ) ;
+-- SDA_via7_2x1_VH_0
+-+ RECT metal7 ( -75 -88 ) ( 75 388 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT via7 ( -75 225 ) ( 75 375 )
+-+ RECT metal8 ( -115 -100 ) ( 115 400 ) ;
+-- SDA_via7_2x1_VH_1
+-+ RECT metal7 ( -75 -388 ) ( 75 88 )
+-+ RECT via7 ( -75 -375 ) ( 75 -225 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -115 -400 ) ( 115 100 ) ;
+-- SDA_via7_2x1_VV
+-+ RECT metal7 ( -75 -238 ) ( 75 238 )
+-+ RECT via7 ( -75 -225 ) ( 75 -75 )
+-+ RECT via7 ( -75 75 ) ( 75 225 )
+-+ RECT metal8 ( -100 -265 ) ( 100 265 ) ;
+-- SDA_via7_2x1_VV_0
+-+ RECT metal7 ( -75 -88 ) ( 75 388 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT via7 ( -75 225 ) ( 75 375 )
+-+ RECT metal8 ( -100 -115 ) ( 100 415 ) ;
+-- SDA_via7_2x1_VV_1
+-+ RECT metal7 ( -75 -388 ) ( 75 88 )
+-+ RECT via7 ( -75 -375 ) ( 75 -225 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -100 -415 ) ( 100 115 ) ;
+-- SDA_via7_2x2_VH
+-+ RECT metal7 ( -225 -238 ) ( 225 238 )
+-+ RECT via7 ( -225 -225 ) ( -75 -75 )
+-+ RECT via7 ( -225 75 ) ( -75 225 )
+-+ RECT via7 ( 75 -225 ) ( 225 -75 )
+-+ RECT via7 ( 75 75 ) ( 225 225 )
+-+ RECT metal8 ( -265 -250 ) ( 265 250 ) ;
+-- SDA_via7_HH
+-+ RECT metal7 ( -88 -75 ) ( 88 75 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -115 -100 ) ( 115 100 ) ;
+-- SDA_via7_HV
+-+ RECT metal7 ( -88 -75 ) ( 88 75 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -100 -115 ) ( 100 115 ) ;
+-- SDA_via7_VH
+-+ RECT metal7 ( -75 -88 ) ( 75 88 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -115 -100 ) ( 115 100 ) ;
+-- SDA_via7_VH_N
+-+ RECT metal7 ( -75 -88 ) ( 75 172 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -115 -100 ) ( 115 100 ) ;
+-- SDA_via7_VH_S
+-+ RECT metal7 ( -75 -172 ) ( 75 88 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -115 -100 ) ( 115 100 ) ;
+-- SDA_via7_VH_V
+-+ RECT metal7 ( -75 -130 ) ( 75 130 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -115 -100 ) ( 115 100 ) ;
+-- SDA_via7_VV
+-+ RECT metal7 ( -75 -88 ) ( 75 88 )
+-+ RECT via7 ( -75 -75 ) ( 75 75 )
+-+ RECT metal8 ( -100 -115 ) ( 100 115 ) ;
+-- SDA_via8_1x2_HH
+-+ RECT metal8 ( -250 -100 ) ( 250 100 )
+-+ RECT via8 ( -225 -75 ) ( -75 75 )
+-+ RECT via8 ( 75 -75 ) ( 225 75 )
+-+ RECT metal9 ( -265 -100 ) ( 265 100 ) ;
+-- SDA_via8_1x2_HH_0
+-+ RECT metal8 ( -100 -100 ) ( 400 100 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT via8 ( 225 -75 ) ( 375 75 )
+-+ RECT metal9 ( -115 -100 ) ( 415 100 ) ;
+-- SDA_via8_1x2_HH_1
+-+ RECT metal8 ( -400 -100 ) ( 100 100 )
+-+ RECT via8 ( -375 -75 ) ( -225 75 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -415 -100 ) ( 115 100 ) ;
+-- SDA_via8_1x2_HH_E_0
+-+ RECT metal8 ( -100 -100 ) ( 540 100 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT via8 ( 225 -75 ) ( 375 75 )
+-+ RECT metal9 ( -115 -100 ) ( 415 100 ) ;
+-- SDA_via8_1x2_HH_H
+-+ RECT metal8 ( -320 -100 ) ( 320 100 )
+-+ RECT via8 ( -225 -75 ) ( -75 75 )
+-+ RECT via8 ( 75 -75 ) ( 225 75 )
+-+ RECT metal9 ( -265 -100 ) ( 265 100 ) ;
+-- SDA_via8_1x2_HH_W_1
+-+ RECT metal8 ( -540 -100 ) ( 100 100 )
+-+ RECT via8 ( -375 -75 ) ( -225 75 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -415 -100 ) ( 115 100 ) ;
+-- SDA_via8_1x2_HV
+-+ RECT metal8 ( -470 -100 ) ( 470 100 )
+-+ RECT via8 ( -225 -75 ) ( -75 75 )
+-+ RECT via8 ( 75 -75 ) ( 225 75 )
+-+ RECT metal9 ( -250 -115 ) ( 250 115 ) ;
+-- SDA_via8_1x2_HV_0
+-+ RECT metal8 ( -320 -100 ) ( 620 100 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT via8 ( 225 -75 ) ( 375 75 )
+-+ RECT metal9 ( -100 -115 ) ( 400 115 ) ;
+-- SDA_via8_1x2_HV_1
+-+ RECT metal8 ( -400 -100 ) ( 100 100 )
+-+ RECT via8 ( -375 -75 ) ( -225 75 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -400 -115 ) ( 100 115 ) ;
+-- SDA_via8_1x2_HV_E_0
+-+ RECT metal8 ( -100 -100 ) ( 540 100 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT via8 ( 225 -75 ) ( 375 75 )
+-+ RECT metal9 ( -100 -115 ) ( 400 115 ) ;
+-- SDA_via8_1x2_HV_H
+-+ RECT metal8 ( -320 -100 ) ( 320 100 )
+-+ RECT via8 ( -225 -75 ) ( -75 75 )
+-+ RECT via8 ( 75 -75 ) ( 225 75 )
+-+ RECT metal9 ( -250 -115 ) ( 250 115 ) ;
+-- SDA_via8_1x2_HV_W_1
+-+ RECT metal8 ( -540 -100 ) ( 100 100 )
+-+ RECT via8 ( -375 -75 ) ( -225 75 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -400 -115 ) ( 100 115 ) ;
+-- SDA_via8_2x1_HH
+-+ RECT metal8 ( -100 -250 ) ( 100 250 )
+-+ RECT via8 ( -75 -225 ) ( 75 -75 )
+-+ RECT via8 ( -75 75 ) ( 75 225 )
+-+ RECT metal9 ( -115 -250 ) ( 115 250 ) ;
+-- SDA_via8_2x1_HH_0
+-+ RECT metal8 ( -100 -100 ) ( 100 400 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT via8 ( -75 225 ) ( 75 375 )
+-+ RECT metal9 ( -115 -100 ) ( 115 400 ) ;
+-- SDA_via8_2x1_HH_1
+-+ RECT metal8 ( -100 -400 ) ( 100 100 )
+-+ RECT via8 ( -75 -375 ) ( 75 -225 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -115 -400 ) ( 115 100 ) ;
+-- SDA_via8_2x1_HH_E_0
+-+ RECT metal8 ( -100 -100 ) ( 156 400 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT via8 ( -75 225 ) ( 75 375 )
+-+ RECT metal9 ( -115 -100 ) ( 115 400 ) ;
+-- SDA_via8_2x1_HH_H
+-+ RECT metal8 ( -128 -250 ) ( 128 250 )
+-+ RECT via8 ( -75 -225 ) ( 75 -75 )
+-+ RECT via8 ( -75 75 ) ( 75 225 )
+-+ RECT metal9 ( -115 -250 ) ( 115 250 ) ;
+-- SDA_via8_2x1_HH_W_1
+-+ RECT metal8 ( -156 -400 ) ( 100 100 )
+-+ RECT via8 ( -75 -375 ) ( 75 -225 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -115 -400 ) ( 115 100 ) ;
+-- SDA_via8_2x1_HV
+-+ RECT metal8 ( -320 -250 ) ( 320 250 )
+-+ RECT via8 ( -75 -225 ) ( 75 -75 )
+-+ RECT via8 ( -75 75 ) ( 75 225 )
+-+ RECT metal9 ( -100 -265 ) ( 100 265 ) ;
+-- SDA_via8_2x1_HV_0
+-+ RECT metal8 ( -320 -100 ) ( 320 400 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT via8 ( -75 225 ) ( 75 375 )
+-+ RECT metal9 ( -100 -115 ) ( 100 415 ) ;
+-- SDA_via8_2x1_HV_1
+-+ RECT metal8 ( -100 -400 ) ( 100 100 )
+-+ RECT via8 ( -75 -375 ) ( 75 -225 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -100 -415 ) ( 100 115 ) ;
+-- SDA_via8_2x1_HV_E_0
+-+ RECT metal8 ( -100 -100 ) ( 156 400 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT via8 ( -75 225 ) ( 75 375 )
+-+ RECT metal9 ( -100 -115 ) ( 100 415 ) ;
+-- SDA_via8_2x1_HV_H
+-+ RECT metal8 ( -128 -250 ) ( 128 250 )
+-+ RECT via8 ( -75 -225 ) ( 75 -75 )
+-+ RECT via8 ( -75 75 ) ( 75 225 )
+-+ RECT metal9 ( -100 -265 ) ( 100 265 ) ;
+-- SDA_via8_2x1_HV_V
+-+ RECT metal8 ( -100 -320 ) ( 100 320 )
+-+ RECT via8 ( -75 -225 ) ( 75 -75 )
+-+ RECT via8 ( -75 75 ) ( 75 225 )
+-+ RECT metal9 ( -100 -265 ) ( 100 265 ) ;
+-- SDA_via8_2x1_HV_W_1
+-+ RECT metal8 ( -156 -400 ) ( 100 100 )
+-+ RECT via8 ( -75 -375 ) ( 75 -225 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -100 -415 ) ( 100 115 ) ;
+-- SDA_via8_2x2_HV
+-+ RECT metal8 ( -470 -250 ) ( 470 250 )
+-+ RECT via8 ( -225 -225 ) ( -75 -75 )
+-+ RECT via8 ( -225 75 ) ( -75 225 )
+-+ RECT via8 ( 75 -225 ) ( 225 -75 )
+-+ RECT via8 ( 75 75 ) ( 225 225 )
+-+ RECT metal9 ( -250 -265 ) ( 250 265 ) ;
+-- SDA_via8_HH
+-+ RECT metal8 ( -320 -100 ) ( 320 100 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -115 -100 ) ( 115 100 ) ;
+-- SDA_via8_HV
+-+ RECT metal8 ( -100 -100 ) ( 100 100 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -100 -115 ) ( 100 115 ) ;
+-- SDA_via8_HV_E
+-+ RECT metal8 ( -100 -100 ) ( 540 100 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -100 -115 ) ( 100 115 ) ;
+-- SDA_via8_HV_H
+-+ RECT metal8 ( -320 -100 ) ( 320 100 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -100 -115 ) ( 100 115 ) ;
+-- SDA_via8_HV_W
+-+ RECT metal8 ( -540 -100 ) ( 100 100 )
+-+ RECT via8 ( -75 -75 ) ( 75 75 )
+-+ RECT metal9 ( -100 -115 ) ( 100 115 ) ;
++VIAS 33 ;
+ - SDA_via8_VH
+ + RECT metal8 ( -100 -320 ) ( 100 320 )
+ + RECT via8 ( -75 -75 ) ( 75 75 )

@@ -1,0 +1,12 @@
+--- /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue12__ours_k32/out.def
++++ /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue12__ours_k32/or_run/fixed.def
+@@ -2310,8 +2310,7 @@
+ TRACKS Y 58 DO 10360 STEP 200 LAYER metal6 ;
+ TRACKS Y 258 DO 5180 STEP 400 LAYER metal8 ;
+ TRACKS X 120 DO 3552 STEP 400 LAYER metal9 ;
+-VIAS 303 ;
+-
++VIAS 297 ;
+ - SDA_via1_1x2_HH
+ + RECT metal1 ( -105 -25 ) ( 105 25 )
+ + RECT via1 ( -91 -25 ) ( -41 25 )
