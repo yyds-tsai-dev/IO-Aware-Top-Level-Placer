@@ -24,7 +24,7 @@
 | M0 / M1 | 完成(已在 `main`) | foundations、evaluator、reweighting 閉環 | `m0-baseline-report.md`、`m1-reweight-report.md` |
 | M2 | 完成 | 可微分 IO 項;`ours@M2` 是後續所有臂的基準 | `m2-differentiable-io-report.md` |
 | M3 | **收案為 exit FAIL(誠實紀錄)** | 可微分 FT:E1/E5/E6 FAIL、E7 PASS;Phase B ft-reweight 為 null result(<0.6σ)。**`ours@M3` 臂不得進入任何 M4 表格** | `m3-differentiable-ft-report.md` |
-| M4 | **內容定稿;E1/E3/E5 PASS、E2 PASS(T6B 替代路徑)、E4 部分判定;M4-G8 形式未了結** | 命題成立:GP 在 10M 級不是瓶頸,evaluator 記憶體與 IO op 的 K-pass runtime 才是 | `m4-scale-up-report.md` |
+| M4 | **T11 完成(2026-08-19);E1/E3/E5 PASS、E2 PASS(T6B 替代路徑)、E4 部分判定;M4-G8 已了結(§3.C)** | 命題成立:GP 在 10M 級不是瓶頸,evaluator 記憶體與 IO op 的 K-pass runtime 才是 | `m4-scale-up-report.md` |
 | Stage 2 | **完成,但降級為 OpenROAD-only ground truth** | G1 觸發(Innovus license 三台皆 `No route to host`);頭條發現是 **OpenROAD DR 的規模天花板 ~150k cells** | `stage2-calibration-report.md` |
 
 關鍵數字(細節見各報告,勿在此處引用以外的數字):
@@ -42,7 +42,7 @@
 | Session | 範圍 | 收尾狀態 |
 |---|---|---|
 | `add feedthrough objective` | M3 全生命週期、M4 design 與 T0–T6/T8a、Stage 2 規劃 v1(`66d0934..1b3671c`,35 commits) | 已停機待命。工作樹 **零未提交修改**、**零 background process** |
-| `comple M4 & stage2` | M4 T6 二次裁決之後全部、T8b/T9/T10/T11、Stage 2 S0–S10 | 已停機待命。未提交的只有實驗產出檔(本次一併處理)、**零 background process**;唯一懸案是 backfill 裁決(見 §3.C) |
+| `comple M4 & stage2` | M4 T6 二次裁決之後全部、T8b/T9/T10/T11、Stage 2 S0–S10 | 已停機待命。未提交的只有實驗產出檔(本次一併處理)、**零 background process**;原懸案 backfill 裁決已由使用者裁 A 並執行(見 §3.C) |
 | 本 session(收尾線) | gitignore 整理、產出檔歸檔、本文件、commit + merge | 本次完成 |
 
 **Background 全停確認**:`ps` 實測,repo 相關的 route / lifetime / T9 / extract chain 全部結束,無 `run_placement` / `openroad` / probe / rent 行程存活,無 cron、無排程 gate 待觸發。機器上殘留的 `wandb` / `vscode` / MCP 行程屬其他專案。
@@ -71,16 +71,16 @@
 5. **M3 P0c pilot**(S4a-star in-loop,post-registration):規格在 S4 裁決書 §D 與報告 7.3,4 臂 `adaptec1`。
 6. **M3 N1–N8 未決項**:P2 home-churn 探針、T0-P3 `boundary_demand` 欄位(S7 重開 gate 目前不可判)、`bigblue4` reweight 臂缺口等,已在 M3 報告逐項列出。
 
-### C. 待**使用者裁決**(唯一卡住的決策,非技術問題)
+### C. M4-G8 / linter backfill —— **已了結(2026-08-19,使用者裁決 A)**
 
-**M4-G8 / linter backfill 裁決**——`scripts/m4_report_lint.py --strict` 實跑 24 errors:§5.3/§5.4 引用的 24 個 profile JSON 缺少「後定義」的欄位(16 個 quality run 缺 `workload_status`、8 個 synthetic run 缺 `generator_verified`)。這是 driver 輸出 schema 缺口,**不是表格寫法或數字問題,報告內容本身完備**。兩個選項:
+`scripts/m4_report_lint.py --strict` 原本實跑 24 errors:§5.3/§5.4 引用的 24 個 profile JSON 缺少「後定義」的欄位(16 個 quality run 缺 `workload_status`、8 個 synthetic run 缺 `generator_verified`)。**使用者裁決採 A(批准可稽核的 backfill)**,已於 commit `2fd3ed4` 執行:
 
-- **A(批准 backfill)**:跑一支 audited 腳本,把 `workload_status="completed"` / `generator_verified=false` 與 `schema_backfill_note` 補進那 24 個檔 → linter `--strict` 0 error → T11 可標記完成。
-- **B(維持現狀)**:報告維持「T11 內容完成、M4-G8 形式未了結」的誠實記述,不動既有 artifact。
+- `scripts/m4_backfill_result_gate_fields.py` 的目標集合**不是手寫的** —— 它 import `m4_report_lint`,用 linter 自己的表格分類與列解析取檔,因此只碰得到 linter 引用的檔案(解析出 24 筆,與 24 個 error 一對一)。
+- **只新增不覆寫**;`workload_status="completed"` 需要正面完成證據(`status=ok` + driver 最後才寫出的收尾欄位;evaluate-only run 用其評估量),拿不出證據就 `refuse` 並整體非零退出。`generator_verified=false` 是事實值,寫 `false` 讓裁決 §7-1 的強制揭露句在 linter rule 3 下持續為必要。
+- 事後以 `git show HEAD:<path>` 逐鍵驗證 24 個檔案:**無 key 被刪除、無既有值被改變**;稽核檔 `results/m4/backfill/2026-08-19-result-gate-backfill.json` 記錄逐檔 sha256 前後值。
+- 結果:linter `--strict` 轉為 `0 error, 0 warning`,**M4-G8 了結、T11 標記完成**。報告 §9 與附錄 A.4 同時保留 08-18 觸發與 08-19 了結的逐字紀錄。**任何數字、任何 E/G 判定都未改變。**
 
-前一條 session 嘗試執行 backfill 時被權限分類器擋下(修改既有實驗 artifact),**至今未裁決、未執行**。本收尾 session 同樣不代為執行——這是「事後改實驗產出檔」的決策,必須由使用者明示。
-
----
+**遺留(同源缺陷,轉入 §3.B)**:那 8 個 synthetic run 的 `benchmark_kind` 值仍是 `"real"` 而非 `"synthetic"`(driver 呼叫時未帶 `--benchmark-kind synthetic`)。backfill 的「不覆寫既有值」規則讓它沒被動到;根治要在 driver 端補欄位寫出邏輯。不 gating(linter rule 2 只單向禁止 quality 表引用 synthetic run)。
 
 ## 4. 搬遷清單
 
