@@ -1,0 +1,16 @@
+{
+ "no_refresh": {
+  "err_vs_new": 522.9970703125,
+  "err_vs_old": 0.0,
+  "alpha_before": 0.4463554918766022,
+  "alpha_after": 4.0363662265008315e-05,
+  "obj_evals_in_step": 3
+ },
+ "with_refresh": {
+  "err_vs_new": 0.0,
+  "err_vs_old": 522.9970703125,
+  "alpha_before": 0.009802968241274357,
+  "alpha_after": 0.009807251393795013,
+  "obj_evals_in_step": 1
+ }
+}

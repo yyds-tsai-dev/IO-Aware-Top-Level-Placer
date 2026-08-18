@@ -1,0 +1,123 @@
+{
+ "flat": {
+  "config": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/install/test/ispd2005/adaptec1.json",
+  "k": 16,
+  "rtype": "grid",
+  "seed": 0,
+  "run_kwargs": {
+   "rho_max": 0.0,
+   "rho_margin": 0.0,
+   "every": 50,
+   "dp_seed": 1000,
+   "deterministic": 1
+  },
+  "reference_npz": "results/m2/noise/flat_det1_rep0.json.npz",
+  "bit_exact_vs_m2_x": true,
+  "bit_exact_vs_m2_y": true,
+  "snapshots": [
+   {
+    "iteration": 300,
+    "tau_rel": 0.22421744407423327,
+    "overflow": 0.7950449585914612,
+    "sha256": "73cfc053d349e8e24f0f282ef382d2335d3ac8c77c5a418c3a10890d1742b172",
+    "path": "results/m3/snapshots/flat/it0300.npz"
+   },
+   {
+    "iteration": 350,
+    "tau_rel": 0.17919520943286235,
+    "overflow": 0.7142502665519714,
+    "sha256": "d9217aff4def1b88569a366dfcb8b7493a00bf9e083a8856353f64ab57a255e0",
+    "path": "results/m3/snapshots/flat/it0350.npz"
+   },
+   {
+    "iteration": 400,
+    "tau_rel": 0.13204437959239554,
+    "overflow": 0.6041868925094604,
+    "sha256": "beac7fe751b0864990ebe79dcccb5ba07f5ff05d8e7d9838099a395d5ac126c0",
+    "path": "results/m3/snapshots/flat/it0400.npz"
+   },
+   {
+    "iteration": 450,
+    "tau_rel": 0.09128703449488723,
+    "overflow": 0.471128910779953,
+    "sha256": "1aade53ab291f0e70a2e2eb9a755799132271e9ee0e9e123773795a349b17fd4",
+    "path": "results/m3/snapshots/flat/it0450.npz"
+   },
+   {
+    "iteration": 500,
+    "tau_rel": 0.058823198449801765,
+    "overflow": 0.31271472573280334,
+    "sha256": "30df9ca344937a6a0ef4f938dd0799103315adf7baf39602afc8ae5ada048639",
+    "path": "results/m3/snapshots/flat/it0500.npz"
+   },
+   {
+    "iteration": 550,
+    "tau_rel": 0.042006594276826396,
+    "overflow": 0.19134286046028137,
+    "sha256": "e10fcbc09b95e68db9cd207dc8b28eb2190a2c1ee4175e5e2d63481b7b6e5822",
+    "path": "results/m3/snapshots/flat/it0550.npz"
+   }
+  ]
+ },
+ "m2best": {
+  "config": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/install/test/ispd2005/adaptec1.json",
+  "k": 16,
+  "rtype": "grid",
+  "seed": 0,
+  "run_kwargs": {
+   "rho_max": 0.4,
+   "tau_hi": 0.3,
+   "tau_lo": 0.03,
+   "every": 50,
+   "dp_seed": 1000,
+   "deterministic": 1
+  },
+  "reference_npz": "results/m2/sweep/adaptec1_k16_rho0.40_annealed.json.npz",
+  "bit_exact_vs_m2_x": true,
+  "bit_exact_vs_m2_y": true,
+  "snapshots": [
+   {
+    "iteration": 300,
+    "tau_rel": 0.22595579677721048,
+    "overflow": 0.7978288531303406,
+    "sha256": "dcde906337b9b162a888c2da1889fc88b7588032e8b38e52cccb34f3afda0457",
+    "path": "results/m3/snapshots/m2best/it0300.npz"
+   },
+   {
+    "iteration": 350,
+    "tau_rel": 0.18194265986918795,
+    "overflow": 0.7197350263595581,
+    "sha256": "b929622eb375f240c40e378329e9ba8b12f7b36774c183c92c9ac4aac517c3fd",
+    "path": "results/m3/snapshots/m2best/it0350.npz"
+   },
+   {
+    "iteration": 400,
+    "tau_rel": 0.13718764549148535,
+    "overflow": 0.6179608106613159,
+    "sha256": "7a09ea1e65ba1f9496e2dedcc2d15efecbd15b43acbe15eba03a717034310707",
+    "path": "results/m3/snapshots/m2best/it0400.npz"
+   },
+   {
+    "iteration": 450,
+    "tau_rel": 0.09621365398255718,
+    "overflow": 0.49007582664489746,
+    "sha256": "cd58595e9cf85c2449d0814fcf83b5847f8b42b24a62b62807954411e5cda049",
+    "path": "results/m3/snapshots/m2best/it0450.npz"
+   },
+   {
+    "iteration": 500,
+    "tau_rel": 0.06455085291633231,
+    "overflow": 0.34620800614356995,
+    "sha256": "53f9b7cc331462504c278d785d99b3c20806ce8687f41af7cef35bf3bdc75fc5",
+    "path": "results/m3/snapshots/m2best/it0500.npz"
+   },
+   {
+    "iteration": 550,
+    "tau_rel": 0.04215519192694272,
+    "overflow": 0.19261574745178223,
+    "sha256": "74a9402c62e444e7887f1528715d6fe32fe5f31587a61a4ca49ab2adda844b22",
+    "path": "results/m3/snapshots/m2best/it0550.npz"
+   }
+  ]
+ }
+}

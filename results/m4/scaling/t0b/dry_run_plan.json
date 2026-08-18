@@ -1,0 +1,114 @@
+[
+ {
+  "config_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/_scratch_configs/group__bins1024__td0.70.json",
+  "design_point": "bins_density",
+  "meta": {
+   "num_bins": 1024,
+   "target_density": 0.7
+  },
+  "out_json": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/group__bins1024__td0.70.json",
+  "tag": "group__bins1024__td0.70"
+ },
+ {
+  "config_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/_scratch_configs/group__bins1024__td0.835.json",
+  "design_point": "bins_density",
+  "meta": {
+   "num_bins": 1024,
+   "target_density": 0.835
+  },
+  "out_json": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/group__bins1024__td0.835.json",
+  "tag": "group__bins1024__td0.835"
+ },
+ {
+  "config_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/_scratch_configs/group__bins1024__td0.90.json",
+  "design_point": "bins_density",
+  "meta": {
+   "num_bins": 1024,
+   "target_density": 0.9
+  },
+  "out_json": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/group__bins1024__td0.90.json",
+  "tag": "group__bins1024__td0.90"
+ },
+ {
+  "config_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/_scratch_configs/group__bins2048__td0.70.json",
+  "design_point": "bins_density",
+  "meta": {
+   "num_bins": 2048,
+   "target_density": 0.7
+  },
+  "out_json": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/group__bins2048__td0.70.json",
+  "tag": "group__bins2048__td0.70"
+ },
+ {
+  "config_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/_scratch_configs/group__bins2048__td0.835.json",
+  "design_point": "bins_density",
+  "meta": {
+   "num_bins": 2048,
+   "target_density": 0.835
+  },
+  "out_json": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/group__bins2048__td0.835.json",
+  "tag": "group__bins2048__td0.835"
+ },
+ {
+  "config_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/_scratch_configs/group__bins2048__td0.90.json",
+  "design_point": "bins_density",
+  "meta": {
+   "num_bins": 2048,
+   "target_density": 0.9
+  },
+  "out_json": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/group__bins2048__td0.90.json",
+  "tag": "group__bins2048__td0.90"
+ },
+ {
+  "config_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/_scratch_configs/group__bins4096__td0.70.json",
+  "design_point": "bins_density",
+  "meta": {
+   "num_bins": 4096,
+   "target_density": 0.7
+  },
+  "out_json": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/group__bins4096__td0.70.json",
+  "tag": "group__bins4096__td0.70"
+ },
+ {
+  "config_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/_scratch_configs/group__bins4096__td0.835.json",
+  "design_point": "bins_density",
+  "meta": {
+   "num_bins": 4096,
+   "target_density": 0.835
+  },
+  "out_json": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/group__bins4096__td0.835.json",
+  "tag": "group__bins4096__td0.835"
+ },
+ {
+  "config_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/_scratch_configs/group__bins4096__td0.90.json",
+  "design_point": "bins_density",
+  "meta": {
+   "num_bins": 4096,
+   "target_density": 0.9
+  },
+  "out_json": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/group__bins4096__td0.90.json",
+  "tag": "group__bins4096__td0.90"
+ },
+ {
+  "config_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/_scratch_configs/group__netdrop25__seed0.json",
+  "design_point": "net_drop",
+  "meta": {
+   "drop_fraction": 0.25,
+   "net_drop_prefix": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/netdrop/mempool_group__drop0.25__seed0",
+   "net_drop_seed": 0
+  },
+  "out_json": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/group__netdrop25__seed0.json",
+  "tag": "group__netdrop25__seed0"
+ },
+ {
+  "config_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/_scratch_configs/group__netdrop50__seed0.json",
+  "design_point": "net_drop",
+  "meta": {
+   "drop_fraction": 0.5,
+   "net_drop_prefix": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/netdrop/mempool_group__drop0.50__seed0",
+   "net_drop_seed": 0
+  },
+  "out_json": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/t0b/group__netdrop50__seed0.json",
+  "tag": "group__netdrop50__seed0"
+ }
+]

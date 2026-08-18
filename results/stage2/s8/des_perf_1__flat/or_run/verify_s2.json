@@ -1,0 +1,37 @@
+{
+ "generated_at": "2026-08-18T14:32:06.050224",
+ "def_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__flat/or_run/routed.def",
+ "lef_paths": [
+  "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/benchmarks/ispd2015/mgc_des_perf_1/tech.lef",
+  "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/benchmarks/ispd2015/mgc_des_perf_1/cells.lef"
+ ],
+ "junction_unvalidated": false,
+ "check1_wire_length": {
+  "ours_dbu": 1353561700,
+  "ours_um": 1353561.7,
+  "dbwire_native_dbu": 1389402220,
+  "dbwire_native_um": 1389402.22,
+  "rect_term_dbu": 36277470,
+  "recon_dbu": 1389839170,
+  "recon_um": 1389839.17,
+  "err_vs_dbwire_native_recon_pct": 0.031448776582493156,
+  "definitional_delta_pct": 2.5795640372591313,
+  "report_wire_length_drt_total_um": 1389402.2500000326,
+  "err_vs_report_wire_length_pct": 2.57956614076534,
+  "pass_lt_1pct": true
+ },
+ "check2_odb_vs_text_parser": {
+  "sample_requested": 0,
+  "seed": 0,
+  "routed_net_count": 112878,
+  "n_sampled": 112878,
+  "n_checked": 112878,
+  "n_match": 112878,
+  "n_mismatch": 0,
+  "n_mismatch_rect_only": 0,
+  "n_mismatch_other": 0,
+  "n_missing_from_text": 0,
+  "pass_n_mismatch_eq_0": true
+ },
+ "overall_pass": true
+}

@@ -1,0 +1,36 @@
+{
+ "case": "adaptec1",
+ "k": 16,
+ "taus": [
+  {
+   "tau_rel": 0.2,
+   "nan_count": 0,
+   "g_loo_l1": 206.80221557617188,
+   "g_clampnaive_l1": 206.80221557617188,
+   "rel_l1_diff": 1.647343594868289e-07,
+   "cells_naive0_loo_nonzero": 0,
+   "loo_bwd_ms": 40.036678314208984,
+   "peak_mb": 465.03662109375
+  },
+  {
+   "tau_rel": 0.05,
+   "nan_count": 14674,
+   "g_loo_l1": 229.04876708984375,
+   "g_clampnaive_l1": 229.0487823486328,
+   "rel_l1_diff": 1.8835839910025243e-07,
+   "cells_naive0_loo_nonzero": 0,
+   "loo_bwd_ms": 33.48946571350098,
+   "peak_mb": 469.87646484375
+  },
+  {
+   "tau_rel": 0.02,
+   "nan_count": 193798,
+   "g_loo_l1": 209.67428588867188,
+   "g_clampnaive_l1": 209.67431640625,
+   "rel_l1_diff": 2.7880130915036716e-07,
+   "cells_naive0_loo_nonzero": 0,
+   "loo_bwd_ms": 33.8129997253418,
+   "peak_mb": 469.87646484375
+  }
+ ]
+}

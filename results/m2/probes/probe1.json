@@ -1,0 +1,53 @@
+{
+ "K": 16,
+ "cases": [
+  {
+   "dtype": "torch.float32",
+   "d": 2,
+   "deep": 1,
+   "tau": 50.0,
+   "p_max": 1.0,
+   "S0": -Infinity,
+   "exp_S0": 0.0,
+   "naive_grad_nan": true,
+   "naive_g_abs_max": NaN,
+   "loo_max": 1.0
+  },
+  {
+   "dtype": "torch.float32",
+   "d": 4,
+   "deep": 1,
+   "tau": 50.0,
+   "p_max": 1.0,
+   "S0": -Infinity,
+   "exp_S0": 0.0,
+   "naive_grad_nan": true,
+   "naive_g_abs_max": NaN,
+   "loo_max": 1.0
+  },
+  {
+   "dtype": "torch.float32",
+   "d": 8,
+   "deep": 4,
+   "tau": 50.0,
+   "p_max": 1.0,
+   "S0": -Infinity,
+   "exp_S0": 0.0,
+   "naive_grad_nan": true,
+   "naive_g_abs_max": NaN,
+   "loo_max": 1.0
+  },
+  {
+   "dtype": "torch.float32",
+   "d": 32,
+   "deep": 16,
+   "tau": 50.0,
+   "p_max": 1.0,
+   "S0": -Infinity,
+   "exp_S0": 0.0,
+   "naive_grad_nan": true,
+   "naive_g_abs_max": NaN,
+   "loo_max": 1.0
+  }
+ ]
+}

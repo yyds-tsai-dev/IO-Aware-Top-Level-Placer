@@ -1,0 +1,1435 @@
+{
+ "c1_model_selection": {
+  "reason": "C1 needs rho(io_rg, route) vs rho(io_mst, route) at the per-net level (table 2), which is not_evaluable (no per-net evaluator array persisted). The total-ratio half of the rule can be computed as supplementary evidence only -- it alone cannot satisfy C1's AND condition.",
+  "supplementary_ratio_evidence": {
+   "R_io_mst": 0.5969898396243806,
+   "R_io_rg": 0.6868824233955485,
+   "closer_to_1": "io_rg",
+   "note": "|R_io_rg-1|=0.3131 vs |R_io_mst-1|=0.4030; pooled total ratio alone favors the io_rg model, but this is not a C1 verdict (per-net rho is required and unavailable)."
+  },
+  "verdict": "not_evaluable"
+ },
+ "c2_regression_calibration": {
+  "action": "E3 failed -- io_calibrated column added",
+  "e3_pass": false,
+  "io_calibrated": [
+   {
+    "io_calibrated": 5781.311727514863,
+    "residual": 234.68827248513662,
+    "route_actual": 6016,
+    "sample_id": "des_perf_1__flat"
+   },
+   {
+    "io_calibrated": 5058.776147818664,
+    "residual": 255.22385218133604,
+    "route_actual": 5314,
+    "sample_id": "des_perf_1__ours_k16"
+   },
+   {
+    "io_calibrated": 8588.120919151133,
+    "residual": 148.87908084886658,
+    "route_actual": 8737,
+    "sample_id": "des_perf_1__ours_k32"
+   },
+   {
+    "io_calibrated": 10376.537435119408,
+    "residual": -207.53743511940775,
+    "route_actual": 10169,
+    "sample_id": "mempool_tile_wrap__flat"
+   },
+   {
+    "io_calibrated": 8569.48895318156,
+    "residual": 338.51104681843935,
+    "route_actual": 8908,
+    "sample_id": "mempool_tile_wrap__ours_k16"
+   },
+   {
+    "io_calibrated": 16199.518735301084,
+    "residual": -288.51873530108423,
+    "route_actual": 15911,
+    "sample_id": "mempool_tile_wrap__ours_k32"
+   }
+  ],
+  "pooled_ratios": {
+   "R_io_mst": 0.5969898396243806,
+   "R_io_rg": 0.6868824233955485,
+   "R_lam_minus_1": 0.7568633920347534
+  }
+ },
+ "c3_kappa_ft": {
+  "alpha_hat": 0.6518217335982248,
+  "beta_hat": 0.9660759943891841,
+  "kappa_ft": 1.4821168804178935,
+  "note": "kappa_ft <- beta_hat/alpha_hat per spec sec 8.4 C3 -- the real-router feed-through-to-necessary-crossing cost ratio, to replace M3's kappa_ft=1.0 default."
+ },
+ "c4_sign_invariance": {
+  "any_sign_flip": false,
+  "rows": [
+   {
+    "design": "des_perf_1",
+    "from_arm": "flat",
+    "post_route_delta": -702,
+    "post_route_metric": "route_cross_dw",
+    "pre_route_delta": -1356,
+    "pre_route_metric": "hard_lambda_sum",
+    "sign_flip": false,
+    "to_arm": "ours_k16"
+   },
+   {
+    "design": "des_perf_1",
+    "from_arm": "ours_k16",
+    "post_route_delta": 3423,
+    "post_route_metric": "route_cross_dw",
+    "pre_route_delta": 3184,
+    "pre_route_metric": "hard_lambda_sum",
+    "sign_flip": false,
+    "to_arm": "ours_k32"
+   },
+   {
+    "design": "mempool_tile_wrap",
+    "from_arm": "flat",
+    "post_route_delta": -1261,
+    "post_route_metric": "route_cross_dw",
+    "pre_route_delta": -2839,
+    "pre_route_metric": "hard_lambda_sum",
+    "sign_flip": false,
+    "to_arm": "ours_k16"
+   },
+   {
+    "design": "mempool_tile_wrap",
+    "from_arm": "ours_k16",
+    "post_route_delta": 7003,
+    "post_route_metric": "route_cross_dw",
+    "pre_route_delta": 8863,
+    "pre_route_metric": "hard_lambda_sum",
+    "sign_flip": false,
+    "to_arm": "ours_k32"
+   }
+  ],
+  "verdict": "sign_invariant"
+ },
+ "c5_transfer_cv": {
+  "n_designs_available": 2,
+  "n_designs_required": 3,
+  "reason": "C5 needs >= 3 design with valid routed samples to compute a coefficient of variation across their (alpha_hat, beta_hat, gamma_hat); this corpus has 2 (des_perf_1, mempool_tile_wrap). Per-design fits are reported as informational only (see per_design_regression), not a CV verdict.",
+  "verdict": "not_evaluable"
+ },
+ "g4_raw_vs_dw2_drift": {
+  "drift_pct": 54.30751067114703,
+  "note": "only delta in {0(raw),2} was extracted for S8 -- the spec's full delta scan {0,1,2,4} (sec 7.4/L-Q4-a) was not run; re-deriving delta=1/4 from segments.npz would need re-invoking route_eval.route_crossings, out of scope for this read-existing-artifacts pass.",
+  "route_cross_dw2_total": 55055,
+  "route_cross_raw_total": 84954,
+  "triggered": true
+ },
+ "per_design_regression_informational": {
+  "des_perf_1": {
+   "alpha": 0.6934791064043151,
+   "beta": 0.8531753939118963,
+   "dof": 0,
+   "gamma": 0.0,
+   "n_samples": 3,
+   "note": "exact fit (0 residual dof) -- purely informational"
+  },
+  "mempool_tile_wrap": {
+   "alpha": 0.0,
+   "beta": 0.8890662999620701,
+   "dof": 0,
+   "gamma": 3.1416104900344393,
+   "n_samples": 3,
+   "note": "exact fit (0 residual dof) -- purely informational"
+  }
+ },
+ "regression": {
+  "coefficients": {
+   "alpha": {
+    "ci95_hi": 0.7227388192269651,
+    "ci95_lo": 0.32474973996951584,
+    "value": 0.6518217335982248
+   },
+   "beta": {
+    "ci95_hi": 2.8755068102747376,
+    "ci95_lo": 0.3052845346304428,
+    "value": 0.9660759943891841
+   },
+   "gamma": {
+    "ci95_hi": 0.9700510786447996,
+    "ci95_lo": 0.0,
+    "value": 0.0
+   }
+  },
+  "dof": 3,
+  "n_bootstrap_requested": 2000,
+  "n_bootstrap_successful": 1958,
+  "n_regressors": 3,
+  "n_samples": 6,
+  "per_sample": [
+   {
+    "relative_residual": 0.039010683591279356,
+    "residual": 234.68827248513662,
+    "sample_id": "des_perf_1__flat",
+    "y_actual": 6016.0,
+    "y_pred": 5781.311727514863
+   },
+   {
+    "relative_residual": 0.04802857587153482,
+    "residual": 255.22385218133604,
+    "sample_id": "des_perf_1__ours_k16",
+    "y_actual": 5314.0,
+    "y_pred": 5058.776147818664
+   },
+   {
+    "relative_residual": 0.01704006877061538,
+    "residual": 148.87908084886658,
+    "sample_id": "des_perf_1__ours_k32",
+    "y_actual": 8737.0,
+    "y_pred": 8588.120919151133
+   },
+   {
+    "relative_residual": -0.020408834213728758,
+    "residual": -207.53743511940775,
+    "sample_id": "mempool_tile_wrap__flat",
+    "y_actual": 10169.0,
+    "y_pred": 10376.537435119408
+   },
+   {
+    "relative_residual": 0.03800079106628192,
+    "residual": 338.51104681843935,
+    "sample_id": "mempool_tile_wrap__ours_k16",
+    "y_actual": 8908.0,
+    "y_pred": 8569.48895318156
+   },
+   {
+    "relative_residual": -0.018133287367298363,
+    "residual": -288.51873530108423,
+    "sample_id": "mempool_tile_wrap__ours_k32",
+    "y_actual": 15911.0,
+    "y_pred": 16199.518735301084
+   }
+  ],
+  "r_squared": 0.9946401969431693,
+  "regressor_definitions": {
+   "x1": "lam_minus_1 = hard_lambda_sum = sum(lambda_e - 1)",
+   "x2": "ft_rg = io_rg - hard_lambda_sum = sum(ST_e - (lambda_e - 1))",
+   "x3": "mst_excess = io_mst - io_rg = sum(io_mst_e - ST_e)",
+   "y": "route_cross_dw(delta=2), matched K"
+  },
+  "reliability_note": "n=6 samples, 3 free (non-negative) coefficients, 3 residual dof -- this is a small-n fit at the per-sample-TOTAL level (not per-net, see module docstring), and the 95% CIs above are bootstrap-over-6-rows, which is itself weak with only 6 rows to resample. Report per spec sec 8.3's instruction to disclose the n=6 limitation honestly rather than overstate precision.",
+  "residual_sum_squares": 383287.35709253664
+ },
+ "s8_dir": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8",
+ "sample_list_table": {
+  "rows": [
+   {
+    "arm": "flat",
+    "design": "des_perf_1",
+    "drc_final_violations": 206867,
+    "drc_rpt_violation_lines": 23671,
+    "k_placement": 16,
+    "other_k": 32,
+    "route_cross_dw_matched_k": 6016,
+    "route_cross_dw_other_k": 10236,
+    "route_done": true,
+    "route_elapsed_s": 9555,
+    "sample_id": "des_perf_1__flat",
+    "verify_s2_overall_pass": true
+   },
+   {
+    "arm": "ours_k16",
+    "design": "des_perf_1",
+    "drc_final_violations": 202875,
+    "drc_rpt_violation_lines": 23773,
+    "k_placement": 16,
+    "other_k": 32,
+    "route_cross_dw_matched_k": 5314,
+    "route_cross_dw_other_k": 9599,
+    "route_done": true,
+    "route_elapsed_s": 9554,
+    "sample_id": "des_perf_1__ours_k16",
+    "verify_s2_overall_pass": true
+   },
+   {
+    "arm": "ours_k32",
+    "design": "des_perf_1",
+    "drc_final_violations": 209940,
+    "drc_rpt_violation_lines": 23726,
+    "k_placement": 32,
+    "other_k": 16,
+    "route_cross_dw_matched_k": 8737,
+    "route_cross_dw_other_k": 5379,
+    "route_done": true,
+    "route_elapsed_s": 9668,
+    "sample_id": "des_perf_1__ours_k32",
+    "verify_s2_overall_pass": true
+   },
+   {
+    "arm": "flat",
+    "design": "mempool_tile_wrap",
+    "drc_final_violations": 41387,
+    "drc_rpt_violation_lines": 20041,
+    "k_placement": 16,
+    "other_k": 32,
+    "route_cross_dw_matched_k": 10169,
+    "route_cross_dw_other_k": 16597,
+    "route_done": true,
+    "route_elapsed_s": 4566,
+    "sample_id": "mempool_tile_wrap__flat",
+    "verify_s2_overall_pass": true
+   },
+   {
+    "arm": "ours_k16",
+    "design": "mempool_tile_wrap",
+    "drc_final_violations": 43651,
+    "drc_rpt_violation_lines": 20055,
+    "k_placement": 16,
+    "other_k": 32,
+    "route_cross_dw_matched_k": 8908,
+    "route_cross_dw_other_k": 15615,
+    "route_done": true,
+    "route_elapsed_s": 4649,
+    "sample_id": "mempool_tile_wrap__ours_k16",
+    "verify_s2_overall_pass": true
+   },
+   {
+    "arm": "ours_k32",
+    "design": "mempool_tile_wrap",
+    "drc_final_violations": 42750,
+    "drc_rpt_violation_lines": 20062,
+    "k_placement": 32,
+    "other_k": 16,
+    "route_cross_dw_matched_k": 15911,
+    "route_cross_dw_other_k": 9946,
+    "route_done": true,
+    "route_elapsed_s": 4681,
+    "sample_id": "mempool_tile_wrap__ours_k32",
+    "verify_s2_overall_pass": true
+   }
+  ]
+ },
+ "spec": "docs/superpowers/specs/2026-08-13-stage2-innovus-calibration-plan.md sec 8/10 S9",
+ "table1_total_ratio": {
+  "per_net": {
+   "not_evaluable": true,
+   "reason": "no per-net evaluator array (per_net_crossings/per_net_steiner) is persisted in metrics.json or metrics.json.npz for any S8 sample; recomputing it needs evaluate_gpu on the post-route placement, which needs a GPU (out of scope for S9's CPU-only analysis)"
+  },
+  "pooled": {
+   "R_io_mst": 0.5969898396243806,
+   "R_io_rg": 0.6868824233955485,
+   "R_lam_minus_1": 0.7568633920347534
+  },
+  "rows": [
+   {
+    "R_io_mst": 0.6478569890157226,
+    "R_io_rg": 0.6996162344458658,
+    "R_lam_minus_1": 0.7484448867877581,
+    "io_mst": 9286,
+    "io_rg": 8599,
+    "lam_minus_1": 8038,
+    "route_cross_dw": 6016,
+    "route_cross_raw": 9860,
+    "sample_id": "des_perf_1__flat"
+   },
+   {
+    "R_io_mst": 0.6718927803767859,
+    "R_io_rg": 0.7171390013495277,
+    "R_lam_minus_1": 0.7952708769829392,
+    "io_mst": 7909,
+    "io_rg": 7410,
+    "lam_minus_1": 6682,
+    "route_cross_dw": 5314,
+    "route_cross_raw": 8709,
+    "sample_id": "des_perf_1__ours_k16"
+   },
+   {
+    "R_io_mst": 0.6742552863096157,
+    "R_io_rg": 0.7221257955202909,
+    "R_lam_minus_1": 0.88556659233732,
+    "io_mst": 12958,
+    "io_rg": 12099,
+    "lam_minus_1": 9866,
+    "route_cross_dw": 8737,
+    "route_cross_raw": 14172,
+    "sample_id": "des_perf_1__ours_k32"
+   },
+   {
+    "R_io_mst": 0.5432158119658119,
+    "R_io_rg": 0.6511493884869053,
+    "R_lam_minus_1": 0.6783855903935957,
+    "io_mst": 18720,
+    "io_rg": 15617,
+    "lam_minus_1": 14990,
+    "route_cross_dw": 10169,
+    "route_cross_raw": 15666,
+    "sample_id": "mempool_tile_wrap__flat"
+   },
+   {
+    "R_io_mst": 0.5781787499188681,
+    "R_io_rg": 0.6946892302893238,
+    "R_lam_minus_1": 0.7331083861410583,
+    "io_mst": 15407,
+    "io_rg": 12823,
+    "lam_minus_1": 12151,
+    "route_cross_dw": 8908,
+    "route_cross_raw": 13170,
+    "sample_id": "mempool_tile_wrap__ours_k16"
+   },
+   {
+    "R_io_mst": 0.5694499123152357,
+    "R_io_rg": 0.6740806642941874,
+    "R_lam_minus_1": 0.7571618920719521,
+    "io_mst": 27941,
+    "io_rg": 23604,
+    "lam_minus_1": 21014,
+    "route_cross_dw": 15911,
+    "route_cross_raw": 23377,
+    "sample_id": "mempool_tile_wrap__ours_k32"
+   }
+  ]
+ },
+ "table2_per_net_correlation": {
+  "not_evaluable": true,
+  "reason": "per-net evaluator arrays (per_net_crossings, per_net_steiner) are not persisted anywhere in S8's output -- see module docstring point 1. Pearson/Spearman between per_net_crossings and per_net_route_cross_dw cannot be computed without a GPU evaluator rerun on each routed.def, which is out of scope for S9."
+ },
+ "table3_degree_bucket": {
+  "not_evaluable": true,
+  "reason": "net degree (pin count) is not persisted in any S8 artifact -- netmap.json only has {net_index: net_name}, crossings_k*.json's per-net arrays carry no degree field. Recovering it needs reloading placedb via DREAMPlace's C++ place_io reader, which this module does not do (S9 is read-existing-artifacts-only, no re-invocation of the placement/DP pipeline)."
+ },
+ "table4_lambda_route_bucket": {
+  "degraded": true,
+  "degraded_reason": "bucketed on route-side Lambda_route only (per_net_lambda_route in crossings_k*.json); no evaluator-side per-net Lambda is persisted (same cause as table 2), so this is NOT a route-vs-evaluator matched bucket table -- it only shows how route-side crossing counts distribute across route-observed Lambda_route.",
+  "rows": [
+   {
+    "lambda_route_bucket": "1",
+    "mean_route_cross_dw": 0.0,
+    "n_nets": 108092,
+    "sample_id": "des_perf_1__flat",
+    "sum_route_cross_dw": 0,
+    "sum_route_wl": 825119000
+   },
+   {
+    "lambda_route_bucket": "2",
+    "mean_route_cross_dw": 1.026832298136646,
+    "n_nets": 4025,
+    "sample_id": "des_perf_1__flat",
+    "sum_route_cross_dw": 4133,
+    "sum_route_wl": 297247800
+   },
+   {
+    "lambda_route_bucket": "3",
+    "mean_route_cross_dw": 2.0300884955752214,
+    "n_nets": 565,
+    "sample_id": "des_perf_1__flat",
+    "sum_route_cross_dw": 1147,
+    "sum_route_wl": 124496800
+   },
+   {
+    "lambda_route_bucket": "4-8",
+    "mean_route_cross_dw": 3.4381443298969074,
+    "n_nets": 194,
+    "sample_id": "des_perf_1__flat",
+    "sum_route_cross_dw": 667,
+    "sum_route_wl": 77881200
+   },
+   {
+    "lambda_route_bucket": ">8",
+    "mean_route_cross_dw": 34.5,
+    "n_nets": 2,
+    "sample_id": "des_perf_1__flat",
+    "sum_route_cross_dw": 69,
+    "sum_route_wl": 28816900
+   },
+   {
+    "lambda_route_bucket": "1",
+    "mean_route_cross_dw": 0.0,
+    "n_nets": 108861,
+    "sample_id": "des_perf_1__ours_k16",
+    "sum_route_cross_dw": 0,
+    "sum_route_wl": 858101000
+   },
+   {
+    "lambda_route_bucket": "2",
+    "mean_route_cross_dw": 1.0203825650674192,
+    "n_nets": 3189,
+    "sample_id": "des_perf_1__ours_k16",
+    "sum_route_cross_dw": 3254,
+    "sum_route_wl": 264221100
+   },
+   {
+    "lambda_route_bucket": "3",
+    "mean_route_cross_dw": 2.057877813504823,
+    "n_nets": 622,
+    "sample_id": "des_perf_1__ours_k16",
+    "sum_route_cross_dw": 1280,
+    "sum_route_wl": 132195400
+   },
+   {
+    "lambda_route_bucket": "4-8",
+    "mean_route_cross_dw": 3.4754901960784315,
+    "n_nets": 204,
+    "sample_id": "des_perf_1__ours_k16",
+    "sum_route_cross_dw": 709,
+    "sum_route_wl": 77412600
+   },
+   {
+    "lambda_route_bucket": ">8",
+    "mean_route_cross_dw": 35.5,
+    "n_nets": 2,
+    "sample_id": "des_perf_1__ours_k16",
+    "sum_route_cross_dw": 71,
+    "sum_route_wl": 28466500
+   },
+   {
+    "lambda_route_bucket": "1",
+    "mean_route_cross_dw": 0.0,
+    "n_nets": 107166,
+    "sample_id": "des_perf_1__ours_k32",
+    "sum_route_cross_dw": 0,
+    "sum_route_wl": 761433600
+   },
+   {
+    "lambda_route_bucket": "2",
+    "mean_route_cross_dw": 1.0198211264201111,
+    "n_nets": 4137,
+    "sample_id": "des_perf_1__ours_k32",
+    "sum_route_cross_dw": 4219,
+    "sum_route_wl": 241806000
+   },
+   {
+    "lambda_route_bucket": "3",
+    "mean_route_cross_dw": 2.036303630363036,
+    "n_nets": 909,
+    "sample_id": "des_perf_1__ours_k32",
+    "sum_route_cross_dw": 1851,
+    "sum_route_wl": 127646600
+   },
+   {
+    "lambda_route_bucket": "4-8",
+    "mean_route_cross_dw": 3.8064024390243905,
+    "n_nets": 656,
+    "sample_id": "des_perf_1__ours_k32",
+    "sum_route_cross_dw": 2497,
+    "sum_route_wl": 191874900
+   },
+   {
+    "lambda_route_bucket": ">8",
+    "mean_route_cross_dw": 17.0,
+    "n_nets": 10,
+    "sample_id": "des_perf_1__ours_k32",
+    "sum_route_cross_dw": 170,
+    "sum_route_wl": 34614100
+   },
+   {
+    "lambda_route_bucket": "1",
+    "mean_route_cross_dw": 0.0,
+    "n_nets": 123836,
+    "sample_id": "mempool_tile_wrap__flat",
+    "sum_route_cross_dw": 0,
+    "sum_route_wl": 4861944200
+   },
+   {
+    "lambda_route_bucket": "2",
+    "mean_route_cross_dw": 1.0488159232892633,
+    "n_nets": 6883,
+    "sample_id": "mempool_tile_wrap__flat",
+    "sum_route_cross_dw": 7219,
+    "sum_route_wl": 2158621560
+   },
+   {
+    "lambda_route_bucket": "3",
+    "mean_route_cross_dw": 2.0616686819830714,
+    "n_nets": 827,
+    "sample_id": "mempool_tile_wrap__flat",
+    "sum_route_cross_dw": 1705,
+    "sum_route_wl": 577695370
+   },
+   {
+    "lambda_route_bucket": "4-8",
+    "mean_route_cross_dw": 3.6257861635220126,
+    "n_nets": 318,
+    "sample_id": "mempool_tile_wrap__flat",
+    "sum_route_cross_dw": 1153,
+    "sum_route_wl": 339059050
+   },
+   {
+    "lambda_route_bucket": ">8",
+    "mean_route_cross_dw": 92.0,
+    "n_nets": 1,
+    "sample_id": "mempool_tile_wrap__flat",
+    "sum_route_cross_dw": 92,
+    "sum_route_wl": 116907880
+   },
+   {
+    "lambda_route_bucket": "1",
+    "mean_route_cross_dw": 0.0,
+    "n_nets": 124749,
+    "sample_id": "mempool_tile_wrap__ours_k16",
+    "sum_route_cross_dw": 0,
+    "sum_route_wl": 5114470470
+   },
+   {
+    "lambda_route_bucket": "2",
+    "mean_route_cross_dw": 1.0729434447300772,
+    "n_nets": 6224,
+    "sample_id": "mempool_tile_wrap__ours_k16",
+    "sum_route_cross_dw": 6678,
+    "sum_route_wl": 2197968900
+   },
+   {
+    "lambda_route_bucket": "3",
+    "mean_route_cross_dw": 2.0611961057023644,
+    "n_nets": 719,
+    "sample_id": "mempool_tile_wrap__ours_k16",
+    "sum_route_cross_dw": 1482,
+    "sum_route_wl": 489744400
+   },
+   {
+    "lambda_route_bucket": "4-8",
+    "mean_route_cross_dw": 3.686046511627907,
+    "n_nets": 172,
+    "sample_id": "mempool_tile_wrap__ours_k16",
+    "sum_route_cross_dw": 634,
+    "sum_route_wl": 194472100
+   },
+   {
+    "lambda_route_bucket": ">8",
+    "mean_route_cross_dw": 114.0,
+    "n_nets": 1,
+    "sample_id": "mempool_tile_wrap__ours_k16",
+    "sum_route_cross_dw": 114,
+    "sum_route_wl": 116167630
+   },
+   {
+    "lambda_route_bucket": "1",
+    "mean_route_cross_dw": 0.0,
+    "n_nets": 120745,
+    "sample_id": "mempool_tile_wrap__ours_k32",
+    "sum_route_cross_dw": 0,
+    "sum_route_wl": 4171875650
+   },
+   {
+    "lambda_route_bucket": "2",
+    "mean_route_cross_dw": 1.0481770833333333,
+    "n_nets": 8448,
+    "sample_id": "mempool_tile_wrap__ours_k32",
+    "sum_route_cross_dw": 8855,
+    "sum_route_wl": 2027419820
+   },
+   {
+    "lambda_route_bucket": "3",
+    "mean_route_cross_dw": 2.083894355256344,
+    "n_nets": 1931,
+    "sample_id": "mempool_tile_wrap__ours_k32",
+    "sum_route_cross_dw": 4024,
+    "sum_route_wl": 1124202590
+   },
+   {
+    "lambda_route_bucket": "4-8",
+    "mean_route_cross_dw": 3.843243243243243,
+    "n_nets": 740,
+    "sample_id": "mempool_tile_wrap__ours_k32",
+    "sum_route_cross_dw": 2844,
+    "sum_route_wl": 723894810
+   },
+   {
+    "lambda_route_bucket": ">8",
+    "mean_route_cross_dw": 188.0,
+    "n_nets": 1,
+    "sample_id": "mempool_tile_wrap__ours_k32",
+    "sum_route_cross_dw": 188,
+    "sum_route_wl": 116410700
+   }
+  ]
+ },
+ "table5_three_value_decomposition": {
+  "rows": [
+   {
+    "K": 16,
+    "arm": "flat",
+    "design": "des_perf_1",
+    "io_mst_minus_route": 3270,
+    "mst_excess": 687,
+    "route_minus_io_rg": -2583,
+    "router": "OR",
+    "sum_io_mst": 9286,
+    "sum_io_rg": 8599,
+    "sum_lam_minus_1": 8038,
+    "sum_route": 6016
+   },
+   {
+    "K": 16,
+    "arm": "ours_k16",
+    "design": "des_perf_1",
+    "io_mst_minus_route": 2595,
+    "mst_excess": 499,
+    "route_minus_io_rg": -2096,
+    "router": "OR",
+    "sum_io_mst": 7909,
+    "sum_io_rg": 7410,
+    "sum_lam_minus_1": 6682,
+    "sum_route": 5314
+   },
+   {
+    "K": 32,
+    "arm": "ours_k32",
+    "design": "des_perf_1",
+    "io_mst_minus_route": 4221,
+    "mst_excess": 859,
+    "route_minus_io_rg": -3362,
+    "router": "OR",
+    "sum_io_mst": 12958,
+    "sum_io_rg": 12099,
+    "sum_lam_minus_1": 9866,
+    "sum_route": 8737
+   },
+   {
+    "K": 16,
+    "arm": "flat",
+    "design": "mempool_tile_wrap",
+    "io_mst_minus_route": 8551,
+    "mst_excess": 3103,
+    "route_minus_io_rg": -5448,
+    "router": "OR",
+    "sum_io_mst": 18720,
+    "sum_io_rg": 15617,
+    "sum_lam_minus_1": 14990,
+    "sum_route": 10169
+   },
+   {
+    "K": 16,
+    "arm": "ours_k16",
+    "design": "mempool_tile_wrap",
+    "io_mst_minus_route": 6499,
+    "mst_excess": 2584,
+    "route_minus_io_rg": -3915,
+    "router": "OR",
+    "sum_io_mst": 15407,
+    "sum_io_rg": 12823,
+    "sum_lam_minus_1": 12151,
+    "sum_route": 8908
+   },
+   {
+    "K": 32,
+    "arm": "ours_k32",
+    "design": "mempool_tile_wrap",
+    "io_mst_minus_route": 12030,
+    "mst_excess": 4337,
+    "route_minus_io_rg": -7693,
+    "router": "OR",
+    "sum_io_mst": 27941,
+    "sum_io_rg": 23604,
+    "sum_lam_minus_1": 21014,
+    "sum_route": 15911
+   }
+  ]
+ },
+ "table6_ft_three_value": {
+  "route_ft_not_evaluable": true,
+  "route_ft_not_evaluable_reason": "per_net_route_ft is the -1 'not computed' sentinel for every net in every S8 sample (ioplace/route_eval/route_crossings.py:373: a net missing from the pin_regions argument to evaluate_route gets route_ft=-1); S8's extraction call never supplied pin_regions, so route_ft was never actually computed for this corpus.",
+  "rows": [
+   {
+    "ft_mst": 622,
+    "ft_rg": 561,
+    "route_ft": null,
+    "sample_id": "des_perf_1__flat"
+   },
+   {
+    "ft_mst": 795,
+    "ft_rg": 728,
+    "route_ft": null,
+    "sample_id": "des_perf_1__ours_k16"
+   },
+   {
+    "ft_mst": 2360,
+    "ft_rg": 2233,
+    "route_ft": null,
+    "sample_id": "des_perf_1__ours_k32"
+   },
+   {
+    "ft_mst": 733,
+    "ft_rg": 627,
+    "route_ft": null,
+    "sample_id": "mempool_tile_wrap__flat"
+   },
+   {
+    "ft_mst": 719,
+    "ft_rg": 672,
+    "route_ft": null,
+    "sample_id": "mempool_tile_wrap__ours_k16"
+   },
+   {
+    "ft_mst": 2678,
+    "ft_rg": 2590,
+    "route_ft": null,
+    "sample_id": "mempool_tile_wrap__ours_k32"
+   }
+  ]
+ },
+ "table7_boundary_pair_demand": {
+  "not_evaluable": true,
+  "reason": "route_pair_demand is persisted per sample (crossings_k*.json), but EvalResult.boundary_pair_demand (the evaluator-side counterpart) is never serialized anywhere in S8's output -- metrics.json has no such field. Recomputing it needs the same GPU evaluator rerun table 2 needs."
+ },
+ "unevaluable_sample_table": {
+  "rows": [
+   {
+    "arm": "flat",
+    "design": "matrix_mult_1",
+    "failure_mode": "congestion_plateau_timeout",
+    "note": "detailed_route capped at -droute_end_iter 5; violations plateaued at ~544k across the 5 capped iterations and the uncapped continuation iteration, never dropping meaningfully; route.tcl was killed by the 14400s (4h) wall-clock timeout before write_def ran (last recorded: 544,931 violations at 40% of the post-cap iteration, elapsed 26:47).",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/matrix_mult_1__flat/or_run/openroad_route.log",
+    "out_def_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/matrix_mult_1__flat/out.def",
+    "parsed_log": {
+     "cpu_s": 30413,
+     "done_route": false,
+     "elapsed_s": 4158,
+     "final_dr_violations": 544931
+    },
+    "route_chain_logs": [
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/route_chain.log",
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/extract_chain.log"
+    ],
+    "sample_id": "matrix_mult_1__flat"
+   },
+   {
+    "arm": "ours_k16",
+    "design": "matrix_mult_1",
+    "failure_mode": "congestion_plateau_timeout",
+    "note": "same pattern as flat; last recorded 528,897 violations at 50% completion, elapsed 30:59, before the 4h timeout kill.",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/matrix_mult_1__ours_k16/or_run/openroad_route.log",
+    "out_def_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/matrix_mult_1__ours_k16/out.def",
+    "parsed_log": {
+     "cpu_s": 29876,
+     "done_route": false,
+     "elapsed_s": 3975,
+     "final_dr_violations": 528897
+    },
+    "route_chain_logs": [
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/route_chain.log",
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/extract_chain.log"
+    ],
+    "sample_id": "matrix_mult_1__ours_k16"
+   },
+   {
+    "arm": "ours_k32",
+    "design": "matrix_mult_1",
+    "failure_mode": "congestion_plateau_timeout",
+    "note": "same pattern; last recorded 532,973 violations at 50% completion, elapsed 30:17, before the 4h timeout kill.",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/matrix_mult_1__ours_k32/or_run/openroad_route.log",
+    "out_def_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/matrix_mult_1__ours_k32/out.def",
+    "parsed_log": {
+     "cpu_s": 29952,
+     "done_route": false,
+     "elapsed_s": 3991,
+     "final_dr_violations": 532973
+    },
+    "route_chain_logs": [
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/route_chain.log",
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/extract_chain.log"
+    ],
+    "sample_id": "matrix_mult_1__ours_k32"
+   },
+   {
+    "arm": "flat",
+    "design": "superblue19",
+    "failure_mode": "congestion_plateau_timeout",
+    "note": "0th optimization iteration alone ran past 3h with violations escalating (124,751 at 10% -> 2,199,855 at 50%, elapsed 3:06:13); killed by the 4h wall-clock timeout mid-iteration.",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue19__flat/or_run/openroad_route.log",
+    "out_def_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue19__flat/out.def",
+    "parsed_log": {
+     "cpu_s": 7,
+     "done_route": false,
+     "elapsed_s": 7,
+     "final_dr_violations": null
+    },
+    "route_chain_logs": [
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/route_chain_sb19.log",
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/extract_chain.log"
+    ],
+    "sample_id": "superblue19__flat"
+   },
+   {
+    "arm": "ours_k16",
+    "design": "superblue19",
+    "failure_mode": "congestion_plateau_timeout",
+    "note": "same pattern; 2,317,033 violations at 50% completion of the 0th iteration, elapsed 3:08:34, before the timeout kill.",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue19__ours_k16/or_run/openroad_route.log",
+    "out_def_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue19__ours_k16/out.def",
+    "parsed_log": {
+     "cpu_s": 5,
+     "done_route": false,
+     "elapsed_s": 5,
+     "final_dr_violations": null
+    },
+    "route_chain_logs": [
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/route_chain_sb19.log",
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/extract_chain.log"
+    ],
+    "sample_id": "superblue19__ours_k16"
+   },
+   {
+    "arm": "ours_k32",
+    "design": "superblue19",
+    "failure_mode": "dr_0th_iteration_timeout",
+    "note": "log ends immediately at 'Start 0th optimization iteration' with zero 'Completing X%' progress lines logged at all -- the 4h budget was consumed before the first progress checkpoint of detailed route.",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue19__ours_k32/or_run/openroad_route.log",
+    "out_def_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue19__ours_k32/out.def",
+    "parsed_log": {
+     "cpu_s": 6,
+     "done_route": false,
+     "elapsed_s": 6,
+     "final_dr_violations": null
+    },
+    "route_chain_logs": [
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/route_chain_sb19.log",
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/extract_chain.log"
+    ],
+    "sample_id": "superblue19__ours_k32"
+   },
+   {
+    "arm": "flat",
+    "design": "superblue12",
+    "failure_mode": "route_not_attempted_queue_exhausted",
+    "note": "no or_run/ directory exists at all for this arm. superblue12__flat's out.def (169,029,018 bytes) is the single largest file in the whole S8 corpus, and stage2_s8_route.sh routes smallest-file-first with concurrency=1 -- results/stage2/s8/extract_chain.log confirms: '[FAIL] superblue12__flat: no routed.def (route not run yet?)'. This is not a route failure; the batch simply never reached this arm within its wall-clock budget.",
+    "openroad_route_log": null,
+    "out_def_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue12__flat/out.def",
+    "parsed_log": null,
+    "route_chain_logs": [
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/extract_chain.log"
+    ],
+    "sample_id": "superblue12__flat"
+   },
+   {
+    "arm": "ours_k16",
+    "design": "superblue12",
+    "failure_mode": "dr_0th_iteration_timeout",
+    "note": "same as superblue19 ours_k32: log ends at 'Start 0th optimization iteration', no progress lines at all before the timeout kill.",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue12__ours_k16/or_run/openroad_route.log",
+    "out_def_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue12__ours_k16/out.def",
+    "parsed_log": {
+     "cpu_s": 18,
+     "done_route": false,
+     "elapsed_s": 18,
+     "final_dr_violations": null
+    },
+    "route_chain_logs": [
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/route_chain_sb12.log",
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/extract_chain.log"
+    ],
+    "sample_id": "superblue12__ours_k16"
+   },
+   {
+    "arm": "ours_k32",
+    "design": "superblue12",
+    "failure_mode": "killed_during_global_route_setup",
+    "note": "log (2.8KB) ends mid-setup, right after the 'Timing is not available' GRT-0300 warning, well before any global_route progress or detailed_route start -- weaker evidence than the other rows (no explicit [FAIL] line was ever written for this arm in route_chain_sb12.log, consistent with the outer batch script itself being interrupted mid-attempt rather than route.tcl completing and failing cleanly).",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue12__ours_k32/or_run/openroad_route.log",
+    "out_def_path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/superblue12__ours_k32/out.def",
+    "parsed_log": {
+     "cpu_s": null,
+     "done_route": false,
+     "elapsed_s": null,
+     "final_dr_violations": null
+    },
+    "route_chain_logs": [
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/route_chain_sb12.log",
+     "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/extract_chain.log"
+    ],
+    "sample_id": "superblue12__ours_k32"
+   }
+  ]
+ },
+ "valid_samples": [
+  {
+   "arm": "flat",
+   "delta": 2,
+   "design": "des_perf_1",
+   "drc_final_violations_log": 206867,
+   "drc_rpt_violation_lines": 23671,
+   "ft_mst": 622,
+   "ft_rg": 561,
+   "hpwl": 5621969.190673113,
+   "io_mst": 9286,
+   "io_mst_minus_route": 3270,
+   "io_rg": 8599,
+   "k_placement": 16,
+   "lam_minus_1": 8038,
+   "lambda_route_stats": {
+    "max": 16,
+    "mean": 1.0516043870373324,
+    "median": 1.0,
+    "min": 1
+   },
+   "mst_excess": 687,
+   "num_nets": 112878,
+   "num_unmatched_nets": 0,
+   "other_k": 32,
+   "other_k_route_cross_dw": 10236,
+   "other_k_route_cross_raw": 16307,
+   "route_cross_dw": 6016,
+   "route_cross_raw": 9860,
+   "route_done_route": true,
+   "route_elapsed_s": 9555,
+   "route_ft_evaluable": false,
+   "route_ft_total": null,
+   "route_minus_io_rg": -2583,
+   "route_pair_demand": {
+    "0,1": 309,
+    "0,4": 186,
+    "1,2": 403,
+    "1,5": 476,
+    "10,11": 478,
+    "10,14": 470,
+    "11,15": 260,
+    "12,13": 338,
+    "13,14": 341,
+    "14,15": 330,
+    "2,3": 394,
+    "2,6": 424,
+    "3,7": 251,
+    "4,5": 406,
+    "4,8": 308,
+    "5,6": 567,
+    "5,9": 658,
+    "6,10": 687,
+    "6,7": 410,
+    "7,11": 294,
+    "8,12": 242,
+    "8,9": 461,
+    "9,10": 733,
+    "9,13": 434
+   },
+   "route_wl": 1353561700,
+   "router": "OR",
+   "sample_id": "des_perf_1__flat",
+   "source_paths": {
+    "crossings_matched": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__flat/crossings_k16.json",
+    "crossings_other": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__flat/crossings_k32.json",
+    "drc_rpt": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__flat/or_run/drc.rpt",
+    "metrics": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__flat/metrics.json",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__flat/or_run/openroad_route.log",
+    "verify_s2": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__flat/or_run/verify_s2.json"
+   },
+   "tree_wl": 6188873.765380025,
+   "verify_s2_overall_pass": true
+  },
+  {
+   "arm": "ours_k16",
+   "delta": 2,
+   "design": "des_perf_1",
+   "drc_final_violations_log": 202875,
+   "drc_rpt_violation_lines": 23773,
+   "ft_mst": 795,
+   "ft_rg": 728,
+   "hpwl": 5653736.390672922,
+   "io_mst": 7909,
+   "io_mst_minus_route": 2595,
+   "io_rg": 7410,
+   "k_placement": 16,
+   "lam_minus_1": 6682,
+   "lambda_route_stats": {
+    "max": 16,
+    "mean": 1.0454738744485197,
+    "median": 1.0,
+    "min": 1
+   },
+   "mst_excess": 499,
+   "num_nets": 112878,
+   "num_unmatched_nets": 0,
+   "other_k": 32,
+   "other_k_route_cross_dw": 9599,
+   "other_k_route_cross_raw": 15210,
+   "route_cross_dw": 5314,
+   "route_cross_raw": 8709,
+   "route_done_route": true,
+   "route_elapsed_s": 9554,
+   "route_ft_evaluable": false,
+   "route_ft_total": null,
+   "route_minus_io_rg": -2096,
+   "route_pair_demand": {
+    "0,1": 296,
+    "0,4": 228,
+    "1,2": 343,
+    "1,5": 442,
+    "10,11": 427,
+    "10,14": 459,
+    "11,15": 186,
+    "12,13": 226,
+    "13,14": 249,
+    "14,15": 282,
+    "2,3": 301,
+    "2,6": 392,
+    "3,7": 202,
+    "4,5": 400,
+    "4,8": 236,
+    "5,6": 504,
+    "5,9": 667,
+    "6,10": 642,
+    "6,7": 341,
+    "7,11": 190,
+    "8,12": 192,
+    "8,9": 427,
+    "9,10": 649,
+    "9,13": 428
+   },
+   "route_wl": 1360396600,
+   "router": "OR",
+   "sample_id": "des_perf_1__ours_k16",
+   "source_paths": {
+    "crossings_matched": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__ours_k16/crossings_k16.json",
+    "crossings_other": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__ours_k16/crossings_k32.json",
+    "drc_rpt": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__ours_k16/or_run/drc.rpt",
+    "metrics": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__ours_k16/metrics.json",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__ours_k16/or_run/openroad_route.log",
+    "verify_s2": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__ours_k16/or_run/verify_s2.json"
+   },
+   "tree_wl": 6218098.1401844025,
+   "verify_s2_overall_pass": true
+  },
+  {
+   "arm": "ours_k32",
+   "delta": 2,
+   "design": "des_perf_1",
+   "drc_final_violations_log": 209940,
+   "drc_rpt_violation_lines": 23726,
+   "ft_mst": 2360,
+   "ft_rg": 2233,
+   "hpwl": 5653917.390672922,
+   "io_mst": 12958,
+   "io_mst_minus_route": 4221,
+   "io_rg": 12099,
+   "k_placement": 32,
+   "lam_minus_1": 9866,
+   "lambda_route_stats": {
+    "max": 32,
+    "mean": 1.0755771718138167,
+    "median": 1.0,
+    "min": 1
+   },
+   "mst_excess": 859,
+   "num_nets": 112878,
+   "num_unmatched_nets": 0,
+   "other_k": 16,
+   "other_k_route_cross_dw": 5379,
+   "other_k_route_cross_raw": 8864,
+   "route_cross_dw": 8737,
+   "route_cross_raw": 14172,
+   "route_done_route": true,
+   "route_elapsed_s": 9668,
+   "route_ft_evaluable": false,
+   "route_ft_total": null,
+   "route_minus_io_rg": -3362,
+   "route_pair_demand": {
+    "0,1": 234,
+    "0,8": 71,
+    "1,2": 324,
+    "1,9": 119,
+    "10,11": 487,
+    "10,18": 363,
+    "11,12": 536,
+    "11,19": 299,
+    "12,13": 506,
+    "12,20": 330,
+    "13,14": 404,
+    "13,21": 350,
+    "14,15": 288,
+    "14,22": 108,
+    "15,23": 90,
+    "16,17": 258,
+    "16,24": 98,
+    "17,18": 442,
+    "17,25": 124,
+    "18,19": 622,
+    "18,26": 222,
+    "19,20": 656,
+    "19,27": 211,
+    "2,10": 246,
+    "2,3": 355,
+    "20,21": 710,
+    "20,28": 231,
+    "21,22": 436,
+    "21,29": 223,
+    "22,23": 243,
+    "22,30": 110,
+    "23,31": 138,
+    "24,25": 172,
+    "25,26": 240,
+    "26,27": 268,
+    "27,28": 256,
+    "28,29": 251,
+    "29,30": 309,
+    "3,11": 165,
+    "3,4": 310,
+    "30,31": 169,
+    "4,12": 178,
+    "4,5": 302,
+    "5,13": 210,
+    "5,6": 284,
+    "6,14": 123,
+    "6,7": 195,
+    "7,15": 78,
+    "8,16": 97,
+    "8,9": 248,
+    "9,10": 362,
+    "9,17": 121
+   },
+   "route_wl": 1357375200,
+   "router": "OR",
+   "sample_id": "des_perf_1__ours_k32",
+   "source_paths": {
+    "crossings_matched": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__ours_k32/crossings_k32.json",
+    "crossings_other": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__ours_k32/crossings_k16.json",
+    "drc_rpt": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__ours_k32/or_run/drc.rpt",
+    "metrics": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__ours_k32/metrics.json",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__ours_k32/or_run/openroad_route.log",
+    "verify_s2": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/des_perf_1__ours_k32/or_run/verify_s2.json"
+   },
+   "tree_wl": 6213060.515428662,
+   "verify_s2_overall_pass": true
+  },
+  {
+   "arm": "flat",
+   "delta": 2,
+   "design": "mempool_tile_wrap",
+   "drc_final_violations_log": 41387,
+   "drc_rpt_violation_lines": 20041,
+   "ft_mst": 733,
+   "ft_rg": 627,
+   "hpwl": 20622801.698851407,
+   "io_mst": 18720,
+   "io_mst_minus_route": 8551,
+   "io_rg": 15617,
+   "k_placement": 16,
+   "lam_minus_1": 14990,
+   "lambda_route_stats": {
+    "max": 16,
+    "mean": 0.9712409591383965,
+    "median": 1.0,
+    "min": 0
+   },
+   "mst_excess": 3103,
+   "num_nets": 145589,
+   "num_unmatched_nets": 2,
+   "other_k": 32,
+   "other_k_route_cross_dw": 16597,
+   "other_k_route_cross_raw": 25181,
+   "route_cross_dw": 10169,
+   "route_cross_raw": 15666,
+   "route_done_route": true,
+   "route_elapsed_s": 4566,
+   "route_ft_evaluable": false,
+   "route_ft_total": null,
+   "route_minus_io_rg": -5448,
+   "route_pair_demand": {
+    "0,1": 701,
+    "0,4": 403,
+    "1,2": 712,
+    "1,5": 621,
+    "10,11": 443,
+    "10,14": 743,
+    "11,15": 628,
+    "12,13": 524,
+    "13,14": 290,
+    "14,15": 359,
+    "2,3": 490,
+    "2,6": 634,
+    "3,7": 730,
+    "4,5": 812,
+    "4,8": 450,
+    "5,6": 641,
+    "5,9": 614,
+    "6,10": 566,
+    "6,7": 762,
+    "7,11": 531,
+    "8,12": 741,
+    "8,9": 1290,
+    "9,10": 956,
+    "9,13": 1025
+   },
+   "route_wl": 8054228060,
+   "router": "OR",
+   "sample_id": "mempool_tile_wrap__flat",
+   "source_paths": {
+    "crossings_matched": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__flat/crossings_k16.json",
+    "crossings_other": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__flat/crossings_k32.json",
+    "drc_rpt": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__flat/or_run/drc.rpt",
+    "metrics": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__flat/metrics.json",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__flat/or_run/openroad_route.log",
+    "verify_s2": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__flat/or_run/verify_s2.json"
+   },
+   "tree_wl": 25380600.92235464,
+   "verify_s2_overall_pass": true
+  },
+  {
+   "arm": "ours_k16",
+   "delta": 2,
+   "design": "mempool_tile_wrap",
+   "drc_final_violations_log": 43651,
+   "drc_rpt_violation_lines": 20055,
+   "ft_mst": 719,
+   "ft_rg": 672,
+   "hpwl": 20676318.836712718,
+   "io_mst": 15407,
+   "io_mst_minus_route": 6499,
+   "io_rg": 12823,
+   "k_placement": 16,
+   "lam_minus_1": 12151,
+   "lambda_route_stats": {
+    "max": 16,
+    "mean": 0.9622361579514936,
+    "median": 1.0,
+    "min": 0
+   },
+   "mst_excess": 2584,
+   "num_nets": 145589,
+   "num_unmatched_nets": 2,
+   "other_k": 32,
+   "other_k_route_cross_dw": 15615,
+   "other_k_route_cross_raw": 23137,
+   "route_cross_dw": 8908,
+   "route_cross_raw": 13170,
+   "route_done_route": true,
+   "route_elapsed_s": 4649,
+   "route_ft_evaluable": false,
+   "route_ft_total": null,
+   "route_minus_io_rg": -3915,
+   "route_pair_demand": {
+    "0,1": 587,
+    "0,4": 386,
+    "1,2": 661,
+    "1,5": 602,
+    "10,11": 293,
+    "10,14": 703,
+    "11,15": 401,
+    "12,13": 484,
+    "13,14": 286,
+    "14,15": 293,
+    "2,3": 341,
+    "2,6": 601,
+    "3,7": 545,
+    "4,5": 630,
+    "4,8": 402,
+    "5,6": 611,
+    "5,9": 577,
+    "6,10": 404,
+    "6,7": 572,
+    "7,11": 320,
+    "8,12": 575,
+    "8,9": 1240,
+    "9,10": 769,
+    "9,13": 887
+   },
+   "route_wl": 8112823500,
+   "router": "OR",
+   "sample_id": "mempool_tile_wrap__ours_k16",
+   "source_paths": {
+    "crossings_matched": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__ours_k16/crossings_k16.json",
+    "crossings_other": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__ours_k16/crossings_k32.json",
+    "drc_rpt": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__ours_k16/or_run/drc.rpt",
+    "metrics": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__ours_k16/metrics.json",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__ours_k16/or_run/openroad_route.log",
+    "verify_s2": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__ours_k16/or_run/verify_s2.json"
+   },
+   "tree_wl": 25545303.354380846,
+   "verify_s2_overall_pass": true
+  },
+  {
+   "arm": "ours_k32",
+   "delta": 2,
+   "design": "mempool_tile_wrap",
+   "drc_final_violations_log": 42750,
+   "drc_rpt_violation_lines": 20062,
+   "ft_mst": 2678,
+   "ft_rg": 2590,
+   "hpwl": 20757478.475016773,
+   "io_mst": 27941,
+   "io_mst_minus_route": 12030,
+   "io_rg": 23604,
+   "k_placement": 32,
+   "lam_minus_1": 21014,
+   "lambda_route_stats": {
+    "max": 31,
+    "mean": 1.0082767242030648,
+    "median": 1.0,
+    "min": 0
+   },
+   "mst_excess": 4337,
+   "num_nets": 145589,
+   "num_unmatched_nets": 2,
+   "other_k": 16,
+   "other_k_route_cross_dw": 9946,
+   "other_k_route_cross_raw": 14924,
+   "route_cross_dw": 15911,
+   "route_cross_raw": 23377,
+   "route_done_route": true,
+   "route_elapsed_s": 4681,
+   "route_ft_evaluable": false,
+   "route_ft_total": null,
+   "route_minus_io_rg": -7693,
+   "route_pair_demand": {
+    "0,1": 248,
+    "0,8": 123,
+    "1,2": 624,
+    "1,9": 268,
+    "10,11": 579,
+    "10,18": 370,
+    "11,12": 603,
+    "11,19": 209,
+    "12,13": 793,
+    "12,20": 247,
+    "13,14": 821,
+    "13,21": 321,
+    "14,15": 486,
+    "14,22": 289,
+    "15,23": 217,
+    "16,17": 638,
+    "16,24": 170,
+    "17,18": 1276,
+    "17,25": 493,
+    "18,19": 850,
+    "18,26": 623,
+    "19,20": 957,
+    "19,27": 290,
+    "2,10": 334,
+    "2,3": 507,
+    "20,21": 526,
+    "20,28": 449,
+    "21,22": 358,
+    "21,29": 271,
+    "22,23": 650,
+    "22,30": 252,
+    "23,31": 175,
+    "24,25": 183,
+    "25,26": 511,
+    "26,27": 148,
+    "27,28": 308,
+    "28,29": 297,
+    "29,30": 328,
+    "3,11": 312,
+    "3,4": 706,
+    "30,31": 720,
+    "4,12": 231,
+    "4,5": 557,
+    "5,13": 374,
+    "5,6": 501,
+    "6,14": 271,
+    "6,7": 609,
+    "7,15": 458,
+    "8,16": 297,
+    "8,9": 662,
+    "9,10": 706,
+    "9,17": 181
+   },
+   "route_wl": 8163803570,
+   "router": "OR",
+   "sample_id": "mempool_tile_wrap__ours_k32",
+   "source_paths": {
+    "crossings_matched": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__ours_k32/crossings_k32.json",
+    "crossings_other": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__ours_k32/crossings_k16.json",
+    "drc_rpt": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__ours_k32/or_run/drc.rpt",
+    "metrics": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__ours_k32/metrics.json",
+    "openroad_route_log": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__ours_k32/or_run/openroad_route.log",
+    "verify_s2": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/mempool_tile_wrap__ours_k32/or_run/verify_s2.json"
+   },
+   "tree_wl": 25680320.0433079,
+   "verify_s2_overall_pass": true
+  }
+ ]
+}

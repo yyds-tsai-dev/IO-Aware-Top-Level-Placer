@@ -1,0 +1,130 @@
+{
+ "cluster": {
+  "backend": "mtkahypar",
+  "levels": [
+   {
+    "avg_block_size": 11312103.0,
+    "avg_terminals": 0.0,
+    "level": 0,
+    "n_blocks": 1
+   },
+   {
+    "avg_block_size": 5656051.5,
+    "avg_terminals": 14200.0,
+    "level": 1,
+    "n_blocks": 2
+   },
+   {
+    "avg_block_size": 2828025.75,
+    "avg_terminals": 11029.5,
+    "level": 2,
+    "n_blocks": 4
+   },
+   {
+    "avg_block_size": 1414012.875,
+    "avg_terminals": 12643.125,
+    "level": 3,
+    "n_blocks": 8
+   },
+   {
+    "avg_block_size": 707006.4375,
+    "avg_terminals": 8841.5,
+    "level": 4,
+    "n_blocks": 16
+   },
+   {
+    "avg_block_size": 353503.21875,
+    "avg_terminals": 6142.0,
+    "level": 5,
+    "n_blocks": 32
+   },
+   {
+    "avg_block_size": 176751.609375,
+    "avg_terminals": 3886.75,
+    "level": 6,
+    "n_blocks": 64
+   },
+   {
+    "avg_block_size": 88375.8046875,
+    "avg_terminals": 2440.7890625,
+    "level": 7,
+    "n_blocks": 128
+   },
+   {
+    "avg_block_size": 44187.90234375,
+    "avg_terminals": 1469.42578125,
+    "level": 8,
+    "n_blocks": 256
+   },
+   {
+    "avg_block_size": 22093.951171875,
+    "avg_terminals": 1051.0859375,
+    "level": 9,
+    "n_blocks": 512
+   },
+   {
+    "avg_block_size": 11046.9755859375,
+    "avg_terminals": 805.943359375,
+    "level": 10,
+    "n_blocks": 1024
+   },
+   {
+    "avg_block_size": 5523.48779296875,
+    "avg_terminals": 655.26318359375,
+    "level": 11,
+    "n_blocks": 2048
+   },
+   {
+    "avg_block_size": 2761.743896484375,
+    "avg_terminals": 480.828857421875,
+    "level": 12,
+    "n_blocks": 4096
+   },
+   {
+    "avg_block_size": 1380.8719482421875,
+    "avg_terminals": 340.0723876953125,
+    "level": 13,
+    "n_blocks": 8192
+   },
+   {
+    "avg_block_size": 690.4359741210938,
+    "avg_terminals": 233.5223388671875,
+    "level": 14,
+    "n_blocks": 16384
+   }
+  ],
+  "levels_used": [
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13
+  ],
+  "meta": {
+   "n_nets": 12712800,
+   "n_physical": 11312103,
+   "n_pins": 43944352,
+   "t_components_s": 95.48366284370422,
+   "t_nets_s": 43.01711106300354
+  },
+  "n_bootstrap": 200,
+  "net_degrees_max": 1081189,
+  "num_nets": 12712800,
+  "num_physical": 11312103,
+  "p": 0.5221238882469156,
+  "p_ci_hi": 0.5458806066876787,
+  "p_ci_lo": 0.5001453406768185
+ },
+ "provenance": {
+  "adjudication_doc": "docs/results/2026-08-15-m4-t6-holdout-adjudication.md sec 8 item 1",
+  "migration_date": "2026-08-15",
+  "note": "migrated from /tmp rescue 2026-08-15",
+  "repo_commit_at_migration": "3405b9d42e4f3800cb375ca1e53e915a13262e5f",
+  "source": "results/m4/bench/rescue/rent_{synthetic,cluster}_result.json"
+ }
+}

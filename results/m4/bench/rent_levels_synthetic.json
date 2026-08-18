@@ -1,0 +1,557 @@
+{
+ "arrays": {
+  "1x1_source": {
+   "backend": "mtkahypar",
+   "levels": [
+    {
+     "avg_block_size": 3089411.0,
+     "avg_terminals": 0.0,
+     "level": 0,
+     "n_blocks": 1
+    },
+    {
+     "avg_block_size": 1544705.5,
+     "avg_terminals": 7192.0,
+     "level": 1,
+     "n_blocks": 2
+    },
+    {
+     "avg_block_size": 772352.75,
+     "avg_terminals": 6610.5,
+     "level": 2,
+     "n_blocks": 4
+    },
+    {
+     "avg_block_size": 386176.375,
+     "avg_terminals": 5148.875,
+     "level": 3,
+     "n_blocks": 8
+    },
+    {
+     "avg_block_size": 193088.1875,
+     "avg_terminals": 3350.5625,
+     "level": 4,
+     "n_blocks": 16
+    },
+    {
+     "avg_block_size": 96544.09375,
+     "avg_terminals": 2218.90625,
+     "level": 5,
+     "n_blocks": 32
+    },
+    {
+     "avg_block_size": 48272.046875,
+     "avg_terminals": 1431.59375,
+     "level": 6,
+     "n_blocks": 64
+    },
+    {
+     "avg_block_size": 24136.0234375,
+     "avg_terminals": 1068.4296875,
+     "level": 7,
+     "n_blocks": 128
+    },
+    {
+     "avg_block_size": 12068.01171875,
+     "avg_terminals": 826.9375,
+     "level": 8,
+     "n_blocks": 256
+    },
+    {
+     "avg_block_size": 6034.005859375,
+     "avg_terminals": 661.912109375,
+     "level": 9,
+     "n_blocks": 512
+    },
+    {
+     "avg_block_size": 3017.0029296875,
+     "avg_terminals": 489.767578125,
+     "level": 10,
+     "n_blocks": 1024
+    },
+    {
+     "avg_block_size": 1508.50146484375,
+     "avg_terminals": 349.234375,
+     "level": 11,
+     "n_blocks": 2048
+    },
+    {
+     "avg_block_size": 754.250732421875,
+     "avg_terminals": 239.59423828125,
+     "level": 12,
+     "n_blocks": 4096
+    }
+   ],
+   "levels_used": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "n_bootstrap": 200,
+   "net_degrees_max": 342429,
+   "num_nets": 3503988,
+   "num_physical": 3089411,
+   "p": 0.4747492621188062,
+   "p_ci_hi": 0.4928172504061182,
+   "p_ci_lo": 0.4480801846706355
+  },
+  "1x2_n1": {
+   "backend": "mtkahypar",
+   "levels": [
+    {
+     "avg_block_size": 6178822.0,
+     "avg_terminals": 0.0,
+     "level": 0,
+     "n_blocks": 1
+    },
+    {
+     "avg_block_size": 3089411.0,
+     "avg_terminals": 4413.0,
+     "level": 1,
+     "n_blocks": 2
+    },
+    {
+     "avg_block_size": 1544705.5,
+     "avg_terminals": 9067.5,
+     "level": 2,
+     "n_blocks": 4
+    },
+    {
+     "avg_block_size": 772352.75,
+     "avg_terminals": 7402.0,
+     "level": 3,
+     "n_blocks": 8
+    },
+    {
+     "avg_block_size": 386176.375,
+     "avg_terminals": 5594.75,
+     "level": 4,
+     "n_blocks": 16
+    },
+    {
+     "avg_block_size": 193088.1875,
+     "avg_terminals": 3594.6875,
+     "level": 5,
+     "n_blocks": 32
+    },
+    {
+     "avg_block_size": 96544.09375,
+     "avg_terminals": 2323.03125,
+     "level": 6,
+     "n_blocks": 64
+    },
+    {
+     "avg_block_size": 48272.046875,
+     "avg_terminals": 1455.953125,
+     "level": 7,
+     "n_blocks": 128
+    },
+    {
+     "avg_block_size": 24136.0234375,
+     "avg_terminals": 1068.1796875,
+     "level": 8,
+     "n_blocks": 256
+    },
+    {
+     "avg_block_size": 12068.01171875,
+     "avg_terminals": 831.908203125,
+     "level": 9,
+     "n_blocks": 512
+    },
+    {
+     "avg_block_size": 6034.005859375,
+     "avg_terminals": 673.240234375,
+     "level": 10,
+     "n_blocks": 1024
+    },
+    {
+     "avg_block_size": 3017.0029296875,
+     "avg_terminals": 493.8681640625,
+     "level": 11,
+     "n_blocks": 2048
+    },
+    {
+     "avg_block_size": 1508.50146484375,
+     "avg_terminals": 352.096923828125,
+     "level": 12,
+     "n_blocks": 4096
+    },
+    {
+     "avg_block_size": 754.250732421875,
+     "avg_terminals": 240.8150634765625,
+     "level": 13,
+     "n_blocks": 8192
+    }
+   ],
+   "levels_used": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "n_bootstrap": 200,
+   "net_degrees_max": 342429,
+   "num_nets": 7012389,
+   "num_physical": 6178822,
+   "p": 0.49110713791267374,
+   "p_ci_hi": 0.5058783742885421,
+   "p_ci_lo": 0.47834283391639276
+  },
+  "1x2_n2": {
+   "backend": "mtkahypar",
+   "levels": [
+    {
+     "avg_block_size": 6178822.0,
+     "avg_terminals": 0.0,
+     "level": 0,
+     "n_blocks": 1
+    },
+    {
+     "avg_block_size": 3089411.0,
+     "avg_terminals": 13276.0,
+     "level": 1,
+     "n_blocks": 2
+    },
+    {
+     "avg_block_size": 1544705.5,
+     "avg_terminals": 13736.5,
+     "level": 2,
+     "n_blocks": 4
+    },
+    {
+     "avg_block_size": 772352.75,
+     "avg_terminals": 9919.375,
+     "level": 3,
+     "n_blocks": 8
+    },
+    {
+     "avg_block_size": 386176.375,
+     "avg_terminals": 6681.125,
+     "level": 4,
+     "n_blocks": 16
+    },
+    {
+     "avg_block_size": 193088.1875,
+     "avg_terminals": 4177.4375,
+     "level": 5,
+     "n_blocks": 32
+    },
+    {
+     "avg_block_size": 96544.09375,
+     "avg_terminals": 2599.34375,
+     "level": 6,
+     "n_blocks": 64
+    },
+    {
+     "avg_block_size": 48272.046875,
+     "avg_terminals": 1590.65625,
+     "level": 7,
+     "n_blocks": 128
+    },
+    {
+     "avg_block_size": 24136.0234375,
+     "avg_terminals": 1147.94921875,
+     "level": 8,
+     "n_blocks": 256
+    },
+    {
+     "avg_block_size": 12068.01171875,
+     "avg_terminals": 865.55859375,
+     "level": 9,
+     "n_blocks": 512
+    },
+    {
+     "avg_block_size": 6034.005859375,
+     "avg_terminals": 689.7841796875,
+     "level": 10,
+     "n_blocks": 1024
+    },
+    {
+     "avg_block_size": 3017.0029296875,
+     "avg_terminals": 502.69921875,
+     "level": 11,
+     "n_blocks": 2048
+    },
+    {
+     "avg_block_size": 1508.50146484375,
+     "avg_terminals": 356.8251953125,
+     "level": 12,
+     "n_blocks": 4096
+    },
+    {
+     "avg_block_size": 754.250732421875,
+     "avg_terminals": 243.1697998046875,
+     "level": 13,
+     "n_blocks": 8192
+    }
+   ],
+   "levels_used": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "n_bootstrap": 200,
+   "net_degrees_max": 342429,
+   "num_nets": 7021183,
+   "num_physical": 6178822,
+   "p": 0.5304291288343453,
+   "p_ci_hi": 0.5411531456807107,
+   "p_ci_lo": 0.5175416815186575
+  },
+  "2x2_n1": {
+   "backend": "mtkahypar",
+   "levels": [
+    {
+     "avg_block_size": 12357644.0,
+     "avg_terminals": 0.0,
+     "level": 0,
+     "n_blocks": 1
+    },
+    {
+     "avg_block_size": 6178822.0,
+     "avg_terminals": 17171.0,
+     "level": 1,
+     "n_blocks": 2
+    },
+    {
+     "avg_block_size": 3089411.0,
+     "avg_terminals": 13021.5,
+     "level": 2,
+     "n_blocks": 4
+    },
+    {
+     "avg_block_size": 1544705.5,
+     "avg_terminals": 13684.5,
+     "level": 3,
+     "n_blocks": 8
+    },
+    {
+     "avg_block_size": 772352.75,
+     "avg_terminals": 9951.3125,
+     "level": 4,
+     "n_blocks": 16
+    },
+    {
+     "avg_block_size": 386176.375,
+     "avg_terminals": 6733.53125,
+     "level": 5,
+     "n_blocks": 32
+    },
+    {
+     "avg_block_size": 193088.1875,
+     "avg_terminals": 4207.984375,
+     "level": 6,
+     "n_blocks": 64
+    },
+    {
+     "avg_block_size": 96544.09375,
+     "avg_terminals": 2605.4453125,
+     "level": 7,
+     "n_blocks": 128
+    },
+    {
+     "avg_block_size": 48272.046875,
+     "avg_terminals": 1594.5078125,
+     "level": 8,
+     "n_blocks": 256
+    },
+    {
+     "avg_block_size": 24136.0234375,
+     "avg_terminals": 1139.6953125,
+     "level": 9,
+     "n_blocks": 512
+    },
+    {
+     "avg_block_size": 12068.01171875,
+     "avg_terminals": 862.5849609375,
+     "level": 10,
+     "n_blocks": 1024
+    },
+    {
+     "avg_block_size": 6034.005859375,
+     "avg_terminals": 686.494140625,
+     "level": 11,
+     "n_blocks": 2048
+    },
+    {
+     "avg_block_size": 3017.0029296875,
+     "avg_terminals": 500.842041015625,
+     "level": 12,
+     "n_blocks": 4096
+    },
+    {
+     "avg_block_size": 1508.50146484375,
+     "avg_terminals": 355.957763671875,
+     "level": 13,
+     "n_blocks": 8192
+    },
+    {
+     "avg_block_size": 754.250732421875,
+     "avg_terminals": 242.478271484375,
+     "level": 14,
+     "n_blocks": 16384
+    }
+   ],
+   "levels_used": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+   ],
+   "n_bootstrap": 200,
+   "net_degrees_max": 342429,
+   "num_nets": 14041986,
+   "num_physical": 12357644,
+   "p": 0.5323419231577977,
+   "p_ci_hi": 0.5400695956874859,
+   "p_ci_lo": 0.5247332862431374
+  },
+  "2x2_n2": {
+   "backend": "mtkahypar",
+   "levels": [
+    {
+     "avg_block_size": 12357644.0,
+     "avg_terminals": 0.0,
+     "level": 0,
+     "n_blocks": 1
+    },
+    {
+     "avg_block_size": 6178822.0,
+     "avg_terminals": 17532.0,
+     "level": 1,
+     "n_blocks": 2
+    },
+    {
+     "avg_block_size": 3089411.0,
+     "avg_terminals": 13249.0,
+     "level": 2,
+     "n_blocks": 4
+    },
+    {
+     "avg_block_size": 1544705.5,
+     "avg_terminals": 13592.5,
+     "level": 3,
+     "n_blocks": 8
+    },
+    {
+     "avg_block_size": 772352.75,
+     "avg_terminals": 9653.5,
+     "level": 4,
+     "n_blocks": 16
+    },
+    {
+     "avg_block_size": 386176.375,
+     "avg_terminals": 6505.53125,
+     "level": 5,
+     "n_blocks": 32
+    },
+    {
+     "avg_block_size": 193088.1875,
+     "avg_terminals": 4094.6875,
+     "level": 6,
+     "n_blocks": 64
+    },
+    {
+     "avg_block_size": 96544.09375,
+     "avg_terminals": 2570.8671875,
+     "level": 7,
+     "n_blocks": 128
+    },
+    {
+     "avg_block_size": 48272.046875,
+     "avg_terminals": 1584.2421875,
+     "level": 8,
+     "n_blocks": 256
+    },
+    {
+     "avg_block_size": 24136.0234375,
+     "avg_terminals": 1134.328125,
+     "level": 9,
+     "n_blocks": 512
+    },
+    {
+     "avg_block_size": 12068.01171875,
+     "avg_terminals": 865.572265625,
+     "level": 10,
+     "n_blocks": 1024
+    },
+    {
+     "avg_block_size": 6034.005859375,
+     "avg_terminals": 687.0302734375,
+     "level": 11,
+     "n_blocks": 2048
+    },
+    {
+     "avg_block_size": 3017.0029296875,
+     "avg_terminals": 500.51904296875,
+     "level": 12,
+     "n_blocks": 4096
+    },
+    {
+     "avg_block_size": 1508.50146484375,
+     "avg_terminals": 355.6700439453125,
+     "level": 13,
+     "n_blocks": 8192
+    },
+    {
+     "avg_block_size": 754.250732421875,
+     "avg_terminals": 242.41448974609375,
+     "level": 14,
+     "n_blocks": 16384
+    }
+   ],
+   "levels_used": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+   ],
+   "n_bootstrap": 200,
+   "net_degrees_max": 342429,
+   "num_nets": 14042293,
+   "num_physical": 12357644,
+   "p": 0.5262620430080364,
+   "p_ci_hi": 0.5339373810900718,
+   "p_ci_lo": 0.5160677416536326
+  }
+ },
+ "provenance": {
+  "adjudication_doc": "docs/results/2026-08-15-m4-t6-holdout-adjudication.md sec 8 item 1",
+  "migration_date": "2026-08-15",
+  "note": "migrated from /tmp rescue 2026-08-15",
+  "repo_commit_at_migration": "3405b9d42e4f3800cb375ca1e53e915a13262e5f",
+  "source": "results/m4/bench/rescue/rent_{synthetic,cluster}_result.json"
+ }
+}

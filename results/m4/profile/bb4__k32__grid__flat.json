@@ -1,0 +1,54 @@
+{
+ "mode": "evaluate_only",
+ "npz": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/bb4__k16__grid__flat.json.npz",
+ "config": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd2005_bigblue4_m4.json",
+ "k": 32,
+ "rtype": "grid",
+ "seed": 2000,
+ "io_count": 159947,
+ "io_gp": null,
+ "ft_count": 19193,
+ "hard_lambda_sum": 121276,
+ "tree_wl": 857812489.0,
+ "hpwl": 748432433.0,
+ "io_rg": 140088,
+ "ft_rg": 18812,
+ "runtime_s": 524.1824312210083,
+ "evaluate_only": true,
+ "source_npz": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/bb4__k16__grid__flat.json.npz",
+ "source_npz_sha256": "2cd42122580d31dc83337c320bffe3cf2f672d651dd880fdd7d12f0edf1c5027",
+ "run_id": "3286a58f-0e8e-4ecb-b882-95f315b17b8c",
+ "status": "ok",
+ "schema_version": 3,
+ "repo_commit": "daf4e465bd4b357a8c8e562eeeac85704711804a",
+ "input_sha256": {
+  "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd2005_bigblue4_m4.json": "0e76b049e912f8346e5089a0adb526a6da4371fad41e36aadcd65a01c48c1daf"
+ },
+ "env": {
+  "torch_version": "2.8.0+cu128",
+  "cuda_version": "12.8",
+  "gpu_name": "NVIDIA L4",
+  "numpy_version": "1.26.4",
+  "ioplace_commit": "daf4e465bd4b357a8c8e562eeeac85704711804a",
+  "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
+  "input_sha256": {
+   "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd2005_bigblue4_m4.json": "0e76b049e912f8346e5089a0adb526a6da4371fad41e36aadcd65a01c48c1daf"
+  }
+ },
+ "command": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/drivers/evaluate_placement.py --npz /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/bb4__k16__grid__flat.json.npz --config /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd2005_bigblue4_m4.json --k 32 --rtype grid --seed 2000 --out /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/bb4__k32__grid__flat.json",
+ "hostname": "NVL5",
+ "benchmark_kind": "real",
+ "device_baseline_gb": 0.0,
+ "workload_status": "completed",
+ "schema_backfill_note": {
+  "added_fields": [
+   "workload_status"
+  ],
+  "added_utc": "2026-08-18T19:41:02Z",
+  "added_by": "scripts/m4_backfill_result_gate_fields.py",
+  "ruling": "user ruling A, 2026-08-19: approve an audited backfill of the post-hoc RESULT GATE fields",
+  "reason": "field was defined after this run executed and the driver never emitted it",
+  "evidence": "status=ok; evaluate_only run carries its evaluated quantities (hpwl/io_count/ft_count/runtime_s)",
+  "invariant": "no measured value was read, recomputed or altered"
+ }
+}

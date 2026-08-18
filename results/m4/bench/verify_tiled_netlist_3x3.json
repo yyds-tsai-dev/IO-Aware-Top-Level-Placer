@@ -1,0 +1,16 @@
+{
+ "mode": "full",
+ "ok": true,
+ "errors": [],
+ "n_checked_nodes": 27804699,
+ "n_mismatched_nodes": 0,
+ "n_checked_pl": 27804699,
+ "n_mismatched_pl": 0,
+ "n_checked_nets": 31595252,
+ "n_mismatched_nets": 0,
+ "n_checked_pins": 108354439,
+ "n_mismatched_pins": 0,
+ "n_checked_glue_nets": 59360,
+ "n_mismatched_glue_nets": 0,
+ "elapsed_s": 324.5166075229645
+}

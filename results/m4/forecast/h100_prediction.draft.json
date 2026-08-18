@@ -1,0 +1,148 @@
+{
+ "schema_version": 1,
+ "task": "T10",
+ "status": "draft",
+ "generated_at": "2026-08-15T20:44:27.257295+00:00",
+ "generator": "scripts/m4_forecast.py",
+ "generator_commit": "717c6c4976c074ccd21da2e209f5d23172c9cff3",
+ "sku": {
+  "name": "H100 SXM5 80GB HBM3",
+  "peak_memory_bandwidth_GBps": 3350.0,
+  "sm_arch": "sm_90",
+  "cuda_version": "12.8",
+  "persistence_mode": "on",
+  "mig": false,
+  "clocks": "default (not locked/boosted)",
+  "note": "sec 6.3 E5 \u767b\u9304\u5167\u5bb9: \u82e5\u5be6\u969b\u6a5f\u5668\u4e0d\u540c(SKU/\u6642\u8108/CUDA build)\u21d2\u9810\u6e2c\u7121\u6548,\u9808\u91cd\u767b\u9304\u800c\u975e\u4e8b\u5f8c\u653e\u5bec"
+ },
+ "l4_reference": {
+  "name": "NVIDIA L4",
+  "note": "the L4 device the three input measurements below were taken on"
+ },
+ "inputs": {
+  "cluster_flat_l4": {
+   "path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/t8b/cluster__k16__grid__flat.json",
+   "sha256": "5c7d5e78d843619dd0fe3e0928c2303cee800ef8f26be67b32d80b64f2215c8a"
+  },
+  "count_freeze_30m": {
+   "path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/count_freeze_30m.json",
+   "sha256": "601fb8321a4dd85fb59a4e36db9248ff0a6fee5d986fe5240cf0b35f526ec625"
+  },
+  "probe_gp_memory": {
+   "path": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/probes/probe_gp_memory__mempool_cluster_probe2500.json",
+   "sha256": "63f7fc0bc0f7cc3415ac867ab800a4bc2afbd7b5bdc82433293d96ebccca99ee"
+  }
+ },
+ "scale_ratios": {
+  "node_ratio": 2.4572127508849775,
+  "net_ratio": 2.4853102384997796,
+  "pin_ratio": 2.4655262893406276,
+  "basis": "count_freeze_30m.json's {base_n_nodes, total_n_nets, total_n_pins} (27.7M, T7b-frozen actual counts incl. glue) divided by probe_gp_memory's {num_physical, num_nets, num_pins} (11.31M mempool_cluster) -- same netlist family, same-GPU size extrapolation only (no H100 assumption here, see PHASE_S_BAND for that)",
+  "unvalidated": true
+ },
+ "wall_time_forecast": {
+  "unit": "seconds",
+  "phases": {
+   "read": {
+    "t_l4_measured_s": 9250.89381071506,
+    "count_scale_ratio": 2.4572127508849775,
+    "count_scale_basis": "node_ratio",
+    "t_l4_extrapolated_27m_s": 22731.414228771966,
+    "s_p_lo": 1.0,
+    "s_p_hi": 1.0,
+    "s_p_basis": "s_p=1.0: CPU-only single-threaded parser, unaffected by GPU generation",
+    "t_h100_fast_s": 22731.414228771966,
+    "t_h100_slow_s": 22731.414228771966
+   },
+   "gp": {
+    "t_l4_measured_s": 406.0516406609677,
+    "count_scale_ratio": 2.4572127508849775,
+    "count_scale_basis": "node_ratio",
+    "t_l4_extrapolated_27m_s": 997.7552689498948,
+    "s_p_lo": 2.5,
+    "s_p_hi": 5.0,
+    "s_p_basis": "s_p in [2.5, 5.0]: memory-bandwidth-ratio / FP32-throughput-ratio band (A100/H100 vs L4, common range) -- \u672a\u9a57\u8b49\u5047\u8a2d, task instructions",
+    "t_h100_fast_s": 199.55105378997897,
+    "t_h100_slow_s": 399.10210757995793
+   },
+   "lg": {
+    "t_l4_measured_s": 83.99643518822268,
+    "count_scale_ratio": 2.4572127508849775,
+    "count_scale_basis": "node_ratio",
+    "t_l4_extrapolated_27m_s": 206.39711157338436,
+    "s_p_lo": 1.0,
+    "s_p_hi": 1.0,
+    "s_p_basis": "s_p=1.0: legalization is mostly CPU + small kernels",
+    "t_h100_fast_s": 206.39711157338436,
+    "t_h100_slow_s": 206.39711157338436
+   },
+   "eval": {
+    "t_l4_measured_s": 2183.2374241789803,
+    "count_scale_ratio": 2.4655262893406276,
+    "count_scale_basis": "pin_ratio",
+    "t_l4_extrapolated_27m_s": 5382.829265185591,
+    "s_p_lo": 2.5,
+    "s_p_hi": 5.0,
+    "s_p_basis": "s_p in [2.5, 5.0]: same band as gp (lattice walk + scatter, memory-bandwidth/FP32-throughput-bound) -- \u672a\u9a57\u8b49\u5047\u8a2d, task instructions",
+    "t_h100_fast_s": 1076.5658530371181,
+    "t_h100_slow_s": 2153.1317060742363
+   }
+  },
+  "total_fast_s": 24213.928247172447,
+  "total_slow_s": 25490.045153999545,
+  "total_fast_h": 6.726091179770124,
+  "total_slow_h": 7.080568098333207,
+  "interval_type": "hardware-assumption sensitivity band (NOT a statistical prediction interval -- design draft sec 6.3 E5(ii): \"\u9996\u8dd1\u4e0d\u7522\u751f prediction interval\")",
+  "unvalidated": true
+ },
+ "gpu_memory_forecast": {
+  "unit": "GB",
+  "components": {
+   "gp": {
+    "l4_peak_alloc_gb": 6.210755825042725,
+    "l4_peak_reserved_gb": 6.818359375,
+    "count_scale_ratio": 2.4572127508849775,
+    "count_scale_basis": "node_ratio",
+    "scaled_alloc_gb": 15.26114840592813,
+    "scaled_reserved_gb": 16.754159596366126
+   },
+   "eval": {
+    "l4_peak_alloc_gb": 10.600590229034424,
+    "l4_peak_reserved_gb": 11.994140625,
+    "count_scale_ratio": 2.4655262893406276,
+    "count_scale_basis": "pin_ratio",
+    "scaled_alloc_gb": 26.136033892211756,
+    "scaled_reserved_gb": 29.571869028985926
+   }
+  },
+  "dominant_component": "eval",
+  "lower_bound_gb": 26.136033892211756,
+  "lower_bound_basis": "scaled peak_alloc_gb of the dominant component (eval) -- an analytic resident-tensor account substitute (design draft sec 6.3 E5(i)'s resident_tensors term), not a full per-tensor dtype x shape rebuild",
+  "max_phase_transient_gb": 15.26114840592813,
+  "allocator_reserve_gb": 3.4358351367741697,
+  "cuda_context_gb": 0.38519287109375,
+  "cuda_context_basis": "L4-measured device_baseline_gb used as a placeholder for the (unmeasured) H100 constant -- T14's first run should replace this",
+  "upper_bound_gb": 45.218210306007805,
+  "formula": "design draft sec 6.3 E5(i): upper_bound = lower_bound + max_p transient_p + allocator_reserve + cuda_context (\u89e3\u6790\u4e0a\u4e0b\u754c,\u4e0d\u662f\u7d71\u8a08\u5340\u9593)",
+  "unvalidated": true
+ },
+ "host_rss_forecast": {
+  "unit": "GB",
+  "model_status": "unfit: design draft sec 1.1's 3-coefficient PlaceDB.read host RSS model (N_nodes/N_raw_pins fitting set) has not been fit yet -- results/m4/scaling/count_freeze_small.json's host_rss_three_coefficient_model.status == \"pending_t0b\"",
+  "l4_host_peak_rss_gb": 68.71809005737305,
+  "count_scale_ratio": 2.4572127508849775,
+  "count_scale_basis": "node_ratio (proxy only -- the eventual model also depends on N_raw_pins, not represented here)",
+  "point_estimate_gb": 168.85496710543924,
+  "interval": null,
+  "h100_min_host_ram_gb_contract": 192.0,
+  "note": "design draft sec 6.3 E5(iii): \"\u50c5\u5728 \u00a71.1 \u7684\u6a21\u578b\u901a\u904e\u8fa8\u8b58\u9580\u6abb\u6642\u7d66 95% PI;\u5426\u5247\u53ea\u7d66\u89e3\u6790\u4f30\u8a08\u8207\u5176\u5047\u8a2d\" -- this is the \"\u5426\u5247\" branch: point estimate only, no prediction interval.",
+  "unvalidated": true
+ },
+ "t14_check_protocol": "design draft sec 6.3 E5 (T14 \u9996\u8dd1\u7684\u5224\u5b9a): \u6aa2\u5b9a\u5047\u8a2d,\u4e0d\u662f\u6aa2\u5b9a\u5340\u9593 -- \u9010 phase \u6bd4\u8f03\u5be6\u6e2c T_H100,p \u8207 T_L4,p/s_p,\u5831\u51fa\u6bcf\u500b phase \u7684\u5be6\u969b s_p^obs;\u4e3b\u7dda\u5047\u8a2d\u88ab\u5224\u70ba\u6210\u7acb\u50c5\u7576\u6bcf\u500b phase \u7684 s_p^obs \u8207\u5ba3\u544a\u503c\u540c\u5e8f(\u76f8\u5c0d\u8aa4\u5dee <= 50%)\u4e14\u7e3d\u6642\u9593\u843d\u5728\u672c\u6a94wall_time_forecast \u7684 [total_fast_s, total_slow_s] \u4e4b\u9593\u3002\u8a18\u61b6\u9ad4\u5247\u76f4\u63a5\u6bd4\u5c0d\u662f\u5426\u843d\u5728 gpu_memory_forecast \u7684 [lower_bound_gb, upper_bound_gb] \u89e3\u6790\u754c\u5167\u3002\u9996\u8dd1\u4e0d\u7522\u751f\u65b0\u7684 prediction interval\u3002",
+ "refit_on_miss_note": "design draft T14 row: \u4efb\u4e00\u843d\u5916 \u21d2 \u5728\u5831\u544a\u767c\u8868\u91cd\u64ec\u5408\u6a21\u578b\u8207\u6b78\u56e0,\u4e0d\u5f97\u4e8b\u5f8c\u653e\u5bec\u5340\u9593\u3002(see scripts/m4_check_prediction.py)",
+ "provenance": {
+  "repo_commit": "717c6c4976c074ccd21da2e209f5d23172c9cff3",
+  "hostname": "NVL5",
+  "spec_doc": "docs/superpowers/specs/2026-08-13-m4-scale-up-design-draft.md"
+ }
+}

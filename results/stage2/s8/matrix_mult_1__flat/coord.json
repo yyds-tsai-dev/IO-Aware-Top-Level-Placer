@@ -1,0 +1,12 @@
+{
+ "shift_factor": [
+  0.0,
+  0.0
+ ],
+ "scale_factor": 0.005,
+ "def_units_per_micron": 1000,
+ "xl": 0.0,
+ "yl": 0.0,
+ "xh": 2750.0,
+ "yh": 2750.0
+}

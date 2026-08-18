@@ -1,0 +1,36 @@
+violation type: Horizontal congestion
+	srcs: net:ispd_clk net:u0_uk_K_r_52 net:n_9633 net:n_9451 net:n_8382 net:n_11673 net:n_11642 net:n_11533 net:n_11532 net:g298779_p net:g297910_p
+	comment: capacity:11 usage:12 overflow:1
+	bbox = (132.0000, 339.0000) - (135.0000, 342.0000) on Layer -
+violation type: Horizontal congestion
+	srcs: net:ispd_clk net:u0_uk_K_r_97 net:u0_uk_K_r_52 net:u0_uk_K_r_15 net:n_9633 net:n_9451 net:n_8422 net:n_8382 net:n_11673 net:n_11642 net:n_10169
+	comment: capacity:11 usage:12 overflow:1
+	bbox = (135.0000, 339.0000) - (138.0000, 342.0000) on Layer -
+violation type: Horizontal congestion
+	srcs: net:ispd_clk net:u2_L8_2_ net:u2_uk_K_r_738 net:n_96858 net:n_96829 net:n_19655 net:n_18139 net:n_18011 net:n_17891 net:n_16379 net:FE_OFN4039_n_6658
+	comment: capacity:11 usage:12 overflow:1
+	bbox = (165.0000, 87.0000) - (168.0000, 90.0000) on Layer -
+violation type: Horizontal congestion
+	srcs: net:ispd_clk net:u1_uk_K_r_501 net:u1_uk_K_r_446 net:n_8576 net:n_6485 net:n_6378 net:n_362 net:n_20 net:n_12018 net:FE_OFN4417_decrypt net:FE_OFN2615_n_14295
+	comment: capacity:11 usage:12 overflow:1
+	bbox = (177.0000, 213.0000) - (180.0000, 216.0000) on Layer -
+violation type: Horizontal congestion
+	srcs: net:ispd_clk net:u1_uk_K_r_560 net:u1_uk_K_r_556 net:u1_uk_K_r_501 net:n_8576 net:n_6485 net:n_6378 net:n_362 net:n_20 net:n_12018 net:FE_OFN2615_n_14295
+	comment: capacity:11 usage:12 overflow:1
+	bbox = (180.0000, 213.0000) - (183.0000, 216.0000) on Layer -
+violation type: Horizontal congestion
+	srcs: net:ispd_clk net:u2_key_r_42_ net:u2_uk_K_r_392 net:u2_uk_K_r_229 net:n_3512 net:n_14988 net:n_14783 net:n_1292 net:n_11996 net:g288217_p net:FE_OFN2229_n_82887
+	comment: capacity:11 usage:12 overflow:1
+	bbox = (336.0000, 87.0000) - (339.0000, 90.0000) on Layer -
+violation type: Horizontal congestion
+	srcs: net:ispd_clk net:n_79783 net:n_79780 net:n_79461 net:n_79146 net:n_78950 net:n_78876 net:n_75896 net:n_13428 net:n_13383 net:g219748_p
+	comment: capacity:11 usage:12 overflow:1
+	bbox = (366.0000, 129.0000) - (369.0000, 132.0000) on Layer -
+violation type: Horizontal congestion
+	srcs: net:ispd_clk net:u0_L1_reg_24__Q net:u0_L1_30_ net:n_7430 net:n_17451 net:n_17392 net:n_17389 net:n_14951 net:n_14076 net:n_13494 net:n_116776
+	comment: capacity:11 usage:12 overflow:1
+	bbox = (375.0000, 339.0000) - (378.0000, 342.0000) on Layer -
+violation type: Vertical congestion
+	srcs: net:ispd_clk net:u1_uk_K_r_485 net:u1_uk_K_r_437 net:u1_uk_K_r_359 net:u1_uk_K_r_249 net:n_7164 net:n_3112 net:g296293_p net:g294791_p net:FE_OFN4527_n_10187 net:FE_OFN4249_n_9782
+	comment: capacity:11 usage:12 overflow:1
+	bbox = (123.0000, 258.0000) - (126.0000, 261.0000) on Layer -

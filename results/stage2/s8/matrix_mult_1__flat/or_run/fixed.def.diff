@@ -1,0 +1,41 @@
+--- /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/matrix_mult_1__flat/out.def
++++ /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/stage2/s8/matrix_mult_1__flat/or_run/fixed.def
+@@ -291,37 +291,7 @@
+ 
+ TRACKS Y 0 DO 2752 STEP 200 LAYER metal1 metal3 metal5 ;
+ TRACKS X 100 DO 2750 STEP 200 LAYER metal2 metal4 ;
+-VIAS 12 ;
+-- VIA23_2cut_E
+-+ RECT metal2 ( -50 -90 ) ( 250 90 )
+-+ RECT via2 ( -50 -50 ) ( 50 50 )
+-+ RECT via2 ( 150 -50 ) ( 250 50 )
+-+ RECT metal3 ( -90 -50 ) ( 290 50 ) ;
+-- VIA23_2cut_N
+-+ RECT metal2 ( -50 -90 ) ( 50 290 )
+-+ RECT via2 ( -50 -50 ) ( 50 50 )
+-+ RECT via2 ( -50 150 ) ( 50 250 )
+-+ RECT metal3 ( -90 -50 ) ( 90 250 ) ;
+-- VIA23_2cut_S
+-+ RECT metal2 ( -50 -290 ) ( 50 90 )
+-+ RECT via2 ( -50 -250 ) ( 50 -150 )
+-+ RECT via2 ( -50 -50 ) ( 50 50 )
+-+ RECT metal3 ( -90 -250 ) ( 90 50 ) ;
+-- VIA23_2cut_W
+-+ RECT metal2 ( -250 -90 ) ( 50 90 )
+-+ RECT via2 ( -250 -50 ) ( -150 50 )
+-+ RECT via2 ( -50 -50 ) ( 50 50 )
+-+ RECT metal3 ( -290 -50 ) ( 90 50 ) ;
+-- VIA34_2cut_N
+-+ RECT metal3 ( -90 -50 ) ( 90 250 )
+-+ RECT via3 ( -50 -50 ) ( 50 50 )
+-+ RECT via3 ( -50 150 ) ( 50 250 )
+-+ RECT metal4 ( -50 -90 ) ( 50 290 ) ;
+-- VIA34_2cut_W
+-+ RECT metal3 ( -290 -50 ) ( 90 50 )
+-+ RECT via3 ( -250 -50 ) ( -150 50 )
+-+ RECT via3 ( -50 -50 ) ( 50 50 )
+-+ RECT metal4 ( -250 -90 ) ( 50 90 ) ;
++VIAS 6 ;
+ - VIAGEN12_SDA_UNIQ_1
+ + RECT metal1 ( -290 -250 ) ( 290 250 )
+ + RECT via1 ( -250 -250 ) ( -150 -150 )

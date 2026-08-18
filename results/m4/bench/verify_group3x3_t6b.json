@@ -1,0 +1,526 @@
+{
+ "checks": {
+  "B0_v0_structural": {
+   "arrays": {
+    "3x3_n2": {
+     "checks": {
+      "all_nodes_referenced_or_declared_unconnected": true,
+      "aux_files_exist": true,
+      "aux_readable": true,
+      "degree_le1_fraction": 0.06486385992426963,
+      "degree_le1_not_worse_than_source": true,
+      "matches_manifest": true,
+      "nets_header_matches_body": true,
+      "nodes_header_matches_body": true,
+      "rows_no_overlap_no_gap": true,
+      "self_loop_fraction": 0.04941856453621576,
+      "self_loop_fraction_not_worse_than_source": true,
+      "source_self_loop_fraction": 0.04951158508533705,
+      "source_unreferenced_count": 2,
+      "unreferenced_count": 18
+     },
+     "elapsed_s": 171.77853274345398,
+     "errors": [],
+     "status": "ok"
+    },
+    "3x3_noglue": {
+     "checks": {
+      "all_nodes_referenced_or_declared_unconnected": true,
+      "aux_files_exist": true,
+      "aux_readable": true,
+      "degree_le1_fraction": 0.06498595314824138,
+      "degree_le1_not_worse_than_source": true,
+      "matches_manifest": true,
+      "nets_header_matches_body": true,
+      "nodes_header_matches_body": true,
+      "rows_no_overlap_no_gap": true,
+      "self_loop_fraction": 0.04951158508533705,
+      "self_loop_fraction_not_worse_than_source": true,
+      "source_self_loop_fraction": 0.04951158508533705,
+      "source_unreferenced_count": 2,
+      "unreferenced_count": 18
+     },
+     "elapsed_s": 162.6446340084076,
+     "errors": [],
+     "status": "ok"
+    }
+   },
+   "metric": "B0_v0_structural",
+   "status": "ok"
+  },
+  "B1_rent_invariance_did": {
+   "status": "ok",
+   "metric": "B1_rent_invariance_did",
+   "delta_glue_3x3": 0.059143808509904194,
+   "delta_glue_2x2": 0.055745649176860756,
+   "did": 0.003398159333043438,
+   "threshold": 0.03,
+   "inputs": {
+    "p_3x3_glue": {
+     "value": 0.5390929368242663,
+     "source": "results/m4/probes/probe_rent_arrays__3x3_n2.json",
+     "measured": "2026-08-16"
+    },
+    "p_3x3_noglue": {
+     "value": 0.4799491283143621,
+     "source": "results/m4/probes/probe_rent_arrays__3x3_noglue.json"
+    },
+    "p_2x2_glue": {
+     "value": 0.526262,
+     "source": "on-file (T6 2x2 N2 measurement)"
+    },
+    "p_2x2_noglue": {
+     "value": 0.47051635082313925,
+     "source": "results/m4/probes/probe_rent_arrays__2x2_noglue.json"
+    }
+   },
+   "preregistered_prediction": {
+    "p_3x3_n2_seed0": "0.530 +/- 0.008",
+    "band": [
+     0.522,
+     0.538
+    ],
+    "measured": 0.5390929368242663,
+    "outside_band_by": 0.0010929368242663,
+    "note": "measured p exceeds the preregistered prediction band upper edge by 0.0011; the prediction is a registered forecast, NOT the B-1 criterion (DiD<=0.03) - disclosed without verdict change per adjudication sec 4.3"
+   },
+   "runtime_s": {
+    "3x3_n2": 2843.0,
+    "3x3_noglue": 2882.0,
+    "2x2_noglue": 1183.6
+   },
+   "abort_conditions": "none triggered (all runs << 4h wall / 100GB RSS preregistered caps)"
+  },
+  "B2_h5_matched_resolution": {
+   "status": "fail",
+   "metric": "B2_H5_k_grid_lambda_ratio_matched_resolution",
+   "ratio": 1.5823632884134173,
+   "band": [
+    0.7,
+    1.4
+   ],
+   "lambda_synthetic": 0.014085520078522788,
+   "lambda_real": 0.008901571580724592,
+   "resolution": {
+    "synthetic": {
+     "k": 16,
+     "grid": "make_grid_regions(die_2x2, 4, 4)",
+     "regions_per_tile": "2x2"
+    },
+    "real": {
+     "k": 4,
+     "grid": "make_grid_regions(die_group, 2, 2)",
+     "regions_per_tile": "2x2"
+    }
+   },
+   "diagnostic_mismatched_resolution": {
+    "ratio": 0.6360571850211726,
+    "real_k": 16,
+    "note": "both sides K=16 -- resolution-mismatched (real's per-tile resolution is 4x the synthetic array's at the same raw K), diagnostic only, does not gate status"
+   },
+   "inputs": {
+    "synthetic_2x2_k16": {
+     "hard_lambda_sum": 197793,
+     "n_nets": 14042293,
+     "source": "results/m4/profile/synthetic_2x2_n2__k16__grid__flat.json (seed B)"
+    },
+    "real_group_k4": {
+     "hard_lambda_sum": 31191,
+     "n_nets": 3503988,
+     "source": "results/m4/bench/group__k4__grid__flat_eval_b2.json (evaluate-only on seed-A flat npz)"
+    },
+    "real_group_k16_diagnostic": {
+     "hard_lambda_sum": 77596,
+     "source": "results/m4/t8b/group__k16__grid__flat.json"
+    }
+   },
+   "adjudication_note": "per 2026-08-15 adjudication sec 4.1 B-2 row: fail is published and disclosed, does NOT gate scaling usage; the mismatched both-K16 diagnostic ratio 0.636 flips direction, confirming sec 4.4 resolution-effect prediction"
+  },
+  "B3_h3prime_degree_ks": {
+   "bucket_rel_tol": 0.2,
+   "ks": 0.0006257187918640161,
+   "max_degree_real": 342429.0,
+   "max_degree_synthetic": 342429.0,
+   "metric": "H3_degree_ks",
+   "n_nets": {
+    "3x3_n2": 31595252,
+    "mempool_group_source": 3503988
+   },
+   "per_bucket": {
+    "16-31": {
+     "ok": true,
+     "real_frac": 0.015849083958050084,
+     "rel_err": 0.0018787633027898961,
+     "synthetic_frac": 0.015819307280726863
+    },
+    "2": {
+     "ok": true,
+     "real_frac": 0.6669517703827753,
+     "rel_err": 0.0009381769711847457,
+     "synthetic_frac": 0.6675774891746393
+    },
+    "3": {
+     "ok": true,
+     "real_frac": 0.17087815369230716,
+     "rel_err": 0.0018787633027899289,
+     "synthetic_frac": 0.17055711408790156
+    },
+    "32-63": {
+     "ok": true,
+     "real_frac": 0.00990271656181471,
+     "rel_err": 0.0018787633027900182,
+     "synthetic_frac": 0.009884111701340442
+    },
+    "4-7": {
+     "ok": true,
+     "real_frac": 0.11264422138431981,
+     "rel_err": 0.0018787633027899993,
+     "synthetic_frac": 0.1124325895549116
+    },
+    "64-99": {
+     "ok": true,
+     "real_frac": 0.0006349907591007732,
+     "rel_err": 0.0018787633027900468,
+     "synthetic_frac": 0.0006337977617649639
+    },
+    "8-15": {
+     "ok": true,
+     "real_frac": 0.023063720537855725,
+     "rel_err": 0.0018787633027900047,
+     "synthetic_frac": 0.023020389266083397
+    },
+    ">=100": {
+     "ok": true,
+     "real_frac": 7.534272377645129e-05,
+     "rel_err": 0.001878763302789859,
+     "synthetic_frac": 7.520117263188786e-05
+    }
+   },
+   "scan_elapsed_s": {
+    "3x3_n2": 85.1492908000946,
+    "mempool_group_source": 5.014815807342529
+   },
+   "status": "ok",
+   "threshold": 0.05
+  },
+  "B4_h4prime_interface_self_consistency": {
+   "glue_mean": 0.1363997111447584,
+   "ks": 0.010308423195837468,
+   "method": "same as T6 2x2 H4 (/tmp/compute_h4.py, rescued to results/m4/bench/rescue/h4_result.json), applied fresh to 3x3 tile t0_0 with a new rng(seed=0) (sec 4.1 B-4 row)",
+   "metric": "H4_interface_dist_ks",
+   "n_glue_endpoints": 13261,
+   "n_missing_lookup": 0,
+   "n_reference_sample": 265220,
+   "reference_mean": 0.13462292812096008,
+   "seed": 0,
+   "status": "ok",
+   "threshold": 0.1,
+   "tile": "t0_0"
+  },
+  "B5_h5prime_arithmetic_self_check": {
+   "main_3x3_n2": {
+    "B5a_recipe_arithmetic": {
+     "metric": "B5a_recipe_arithmetic",
+     "normalization": "n2",
+     "ref_total": 59228.73599934972,
+     "rel_err": 1.242638961147286e-05,
+     "rounded_total": 59228,
+     "status": "ok",
+     "tol": 0.001,
+     "unrounded_total": 59228.73601249903
+    },
+    "B5b_manifest_fidelity": {
+     "expected_n_pins": 118720,
+     "glue_n_nets": 59360,
+     "glue_n_pins": 118720,
+     "metric": "B5b_manifest_fidelity",
+     "nets_match": true,
+     "pins_match": true,
+     "status": "ok",
+     "sum_sampled_pair_counts": 59360
+    },
+    "B5c_sampling_noise": {
+     "actual": 59360,
+     "expected_total": 59228.73601249903,
+     "metric": "B5c_sampling_noise",
+     "note": "disclosure only, does not gate status (Appendix A.3)",
+     "status": "reported",
+     "z": 0.5393607768769209
+    },
+    "status": "ok",
+    "variant": "3x3_n2 (K1 main, built array, alpha=0.10230633302323285)"
+   },
+   "metric": "B5_h5prime_arithmetic_self_check",
+   "status": "ok",
+   "superseded_by_recompute": {
+    "main_3x3_n2": {
+     "actual": 59360,
+     "expected": 151259.29218546872,
+     "implied_cross_tile_share": 0.004773521317543352,
+     "rel_err": 0.6075612999218925,
+     "status": "fail",
+     "tol": 0.001,
+     "variant": "3x3_n2 (K1 main, built array, alpha=0.10230633302323285)"
+    },
+    "metric": "B5_h5prime_arithmetic_self_check",
+    "status": "fail",
+    "variants": {
+     "K1_alpha0_flat": {
+      "actual": 59220,
+      "expected": 157943.29599826594,
+      "implied_cross_tile_share": 0.0049834074836063854,
+      "kernel": "power_law",
+      "note": "actual = deterministic N2/Sinkhorn total for this kernel/alpha (mode=\"expected\": sum of rounded per-pair n2_pair_counts_sinkhorn counts), recipe-only (sec 5.3), not a materialized array; see this function's docstring for why a mismatch here is the known N1-formula category, not a new bug",
+      "rel_err": 0.625055310985468,
+      "sinkhorn_diagnostics": {
+       "n2_iters": 16,
+       "n2_max_rel_dev": 8.328724144493333e-10
+      },
+      "status": "fail",
+      "tol": 0.001,
+      "variant": "K1_alpha0_flat"
+     },
+     "K1_alpha1915_optimistic": {
+      "actual": 59228,
+      "expected": 86416.87901252267,
+      "implied_cross_tile_share": 0.0027327820793590714,
+      "kernel": "power_law",
+      "note": "actual = deterministic N2/Sinkhorn total for this kernel/alpha (mode=\"expected\": sum of rounded per-pair n2_pair_counts_sinkhorn counts), recipe-only (sec 5.3), not a materialized array; see this function's docstring for why a mismatch here is the known N1-formula category, not a new bug",
+      "rel_err": 0.31462463494640586,
+      "sinkhorn_diagnostics": {
+       "n2_iters": 15,
+       "n2_max_rel_dev": 1.1887995906848879e-10
+      },
+      "status": "fail",
+      "tol": 0.001,
+      "variant": "K1_alpha1915_optimistic"
+     },
+     "K3_truncated": {
+      "actual": 59224,
+      "expected": 151259.29218546872,
+      "implied_cross_tile_share": 0.004773521317543352,
+      "kernel": "truncated",
+      "note": "actual = deterministic N2/Sinkhorn total for this kernel/alpha (mode=\"expected\": sum of rounded per-pair n2_pair_counts_sinkhorn counts), recipe-only (sec 5.3), not a materialized array; see this function's docstring for why a mismatch here is the known N1-formula category, not a new bug",
+      "rel_err": 0.6084604182374352,
+      "sinkhorn_diagnostics": {
+       "n2_iters": 56,
+       "n2_max_rel_dev": 7.941036652570685e-10
+      },
+      "status": "fail",
+      "tol": 0.001,
+      "variant": "K3_truncated"
+     }
+    }
+   },
+   "variants": {
+    "K1_alpha0_flat": {
+     "B5a_recipe_arithmetic": {
+      "metric": "B5a_recipe_arithmetic",
+      "normalization": "n2",
+      "ref_total": 59228.73599934972,
+      "rel_err": 0.00014749596124791353,
+      "rounded_total": 59220,
+      "status": "ok",
+      "tol": 0.001,
+      "unrounded_total": 59228.73601075965
+     },
+     "kernel": "power_law",
+     "note": "recipe-only (Appendix A.3/5.3), not a materialized array -- only B-5a applies (no actual sampled net count exists for B-5b/B-5c to compare against)",
+     "sinkhorn_diagnostics": {
+      "n2_iters": 16,
+      "n2_max_rel_dev": 8.328724144493333e-10
+     },
+     "status": "ok",
+     "variant": "K1_alpha0_flat"
+    },
+    "K1_alpha1915_optimistic": {
+     "B5a_recipe_arithmetic": {
+      "metric": "B5a_recipe_arithmetic",
+      "normalization": "n2",
+      "ref_total": 59228.73599934972,
+      "rel_err": 1.242638961147286e-05,
+      "rounded_total": 59228,
+      "status": "ok",
+      "tol": 0.001,
+      "unrounded_total": 59228.73599734992
+     },
+     "kernel": "power_law",
+     "note": "recipe-only (Appendix A.3/5.3), not a materialized array -- only B-5a applies (no actual sampled net count exists for B-5b/B-5c to compare against)",
+     "sinkhorn_diagnostics": {
+      "n2_iters": 15,
+      "n2_max_rel_dev": 1.1887995906848879e-10
+     },
+     "status": "ok",
+     "variant": "K1_alpha1915_optimistic"
+    },
+    "K3_truncated": {
+     "B5a_recipe_arithmetic": {
+      "metric": "B5a_recipe_arithmetic",
+      "normalization": "n2",
+      "ref_total": 59228.73599934972,
+      "rel_err": 7.99611754296932e-05,
+      "rounded_total": 59224,
+      "status": "ok",
+      "tol": 0.001,
+      "unrounded_total": 59228.736001095225
+     },
+     "kernel": "truncated",
+     "note": "recipe-only (Appendix A.3/5.3), not a materialized array -- only B-5a applies (no actual sampled net count exists for B-5b/B-5c to compare against)",
+     "sinkhorn_diagnostics": {
+      "n2_iters": 56,
+      "n2_max_rel_dev": 7.941036652570685e-10
+     },
+     "status": "ok",
+     "variant": "K3_truncated"
+    }
+   }
+  },
+  "B6_glue_budget_identity": {
+   "B": 13161.941333188828,
+   "budget_pairs": 3.0,
+   "kernels": {
+    "K1_alpha0_flat": {
+     "alpha": 0.0,
+     "kernel": "power_law",
+     "max_rel_err_vs_B": 8.328724144493333e-10,
+     "per_tile_sum": {
+      "0_0": 13161.941344151046,
+      "0_1": 13161.941342566086,
+      "0_2": 13161.941339268482,
+      "1_0": 13161.941335633728,
+      "1_1": 13161.941332742745,
+      "1_2": 13161.94133117123,
+      "2_0": 13161.94133097525,
+      "2_1": 13161.941331821903,
+      "2_2": 13161.94133318883
+     },
+     "sinkhorn_diagnostics": {
+      "n2_iters": 16,
+      "n2_max_rel_dev": 8.328724144493333e-10
+     },
+     "status": "ok"
+    },
+    "K1_alpha1915_optimistic": {
+     "alpha": 1.915,
+     "kernel": "power_law",
+     "max_rel_err_vs_B": 1.1887995906848879e-10,
+     "per_tile_sum": {
+      "0_0": 13161.941334364721,
+      "0_1": 13161.941332833414,
+      "0_2": 13161.941331736567,
+      "1_0": 13161.941331624137,
+      "1_1": 13161.941332282166,
+      "1_2": 13161.94133274026,
+      "2_0": 13161.941332942575,
+      "2_1": 13161.941332987164,
+      "2_2": 13161.941333188832
+     },
+     "sinkhorn_diagnostics": {
+      "n2_iters": 15,
+      "n2_max_rel_dev": 1.1887995906848879e-10
+     },
+     "status": "ok"
+    },
+    "K1_main": {
+     "alpha": 0.10230633302323285,
+     "kernel": "power_law",
+     "max_rel_err_vs_B": 8.116876303349682e-10,
+     "per_tile_sum": {
+      "0_0": 13161.941343872213,
+      "0_1": 13161.941342957569,
+      "0_2": 13161.941339826044,
+      "1_0": 13161.941336436652,
+      "1_1": 13161.941333563022,
+      "1_2": 13161.941331807873,
+      "2_0": 13161.941331393957,
+      "2_1": 13161.941331951906,
+      "2_2": 13161.94133318883
+     },
+     "sinkhorn_diagnostics": {
+      "n2_iters": 16,
+      "n2_max_rel_dev": 8.116876303349682e-10
+     },
+     "status": "ok"
+    },
+    "K3_truncated": {
+     "alpha": 0.10230633302323285,
+     "kernel": "truncated",
+     "max_rel_err_vs_B": 7.941036652570685e-10,
+     "per_tile_sum": {
+      "0_0": 13161.941343640774,
+      "0_1": 13161.941330338846,
+      "0_2": 13161.941338029294,
+      "1_0": 13161.941330026846,
+      "1_1": 13161.941330111309,
+      "1_2": 13161.941330723243,
+      "2_0": 13161.941335971,
+      "2_1": 13161.941330160313,
+      "2_2": 13161.941333188828
+     },
+     "sinkhorn_diagnostics": {
+      "n2_iters": 56,
+      "n2_max_rel_dev": 7.941036652570685e-10
+     },
+     "status": "ok"
+    }
+   },
+   "lambda_0_tile": 4387.31377772961,
+   "metric": "B6_glue_budget_identity",
+   "status": "ok",
+   "threshold_rel_err": 1e-09
+  },
+  "H1_H2_H3_H4_H6_at_1x2_2x2": {
+   "reason": "T6 already evaluated H1/H2/H3/H4/H6 on 1x2/2x2 -- one pre-registered metric per artifact, evaluated exactly once (sec 4.0): frozen, not re-run here",
+   "reference_files": [
+    "results/m4/bench/verify_group2x2_n1.json",
+    "results/m4/bench/verify_group2x2_n2.json",
+    "results/m4/bench/t6_summary.json"
+   ],
+   "status": "already_evaluated_T6"
+  },
+  "H1_rent_shape": {
+   "metric": "H1_rent_shape",
+   "reason": "27.7M has no same-scale real reference to band against (sec 4.1 table's H1/H2 row)",
+   "status": "not_applicable"
+  },
+  "H2_cut_histogram": {
+   "metric": "H2_cut_histogram",
+   "reason": "same as H1 -- no same-scale real reference (sec 4.1 table's H1/H2 row)",
+   "status": "not_applicable"
+  },
+  "V1_dreamplace_readable": {
+   "metric": "V1_dreamplace_readable",
+   "reason": "DREAMPlace's own PlaceDB.read_pl uses a hardcoded \\w+ node-name regex that cannot match this project's hierarchical (./[]/-containing) instance names -- confirmed on mempool_group itself, independent of any tiler/T6B-specific construction; see rent.py module docstring's M4 T6 finding. Diagnostic-only per adjudication doc sec 4 (does not gate T6/T6B/T7).",
+   "status": "infrastructure_blocked"
+  }
+ },
+ "gating_check_status": {
+  "B0_v0_structural": "ok",
+  "B3_h3prime_degree_ks": "ok",
+  "B4_h4prime_interface_self_consistency": "ok",
+  "B5_h5prime_arithmetic_self_check": "ok",
+  "B6_glue_budget_identity": "ok"
+ },
+ "generator_verified": false,
+ "generator_verified_note": "T6 holdout \u5224\u5b9a\u70ba FAIL(2026-08-15)\uff1bB-5 \u4f9d\u9644\u9304 A \u91cd\u7b97\u8f49\u6b63\u4e0d\u6539\u8b8a\u6b64\u7d50\u8ad6\u3002\u6c38\u4e45\u4e0d\u5f97\u7528\u65bc\u4efb\u4f55\u54c1\u8cea\u5ba3\u7a31(quality_claims_prohibited=true)\u3002",
+ "normalization": "n2",
+ "provenance": {
+  "alpha_main": 0.10230633302323285,
+  "arrays_root": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/arrays",
+  "basis_doc": "docs/results/2026-08-15-m4-t6-holdout-adjudication.md sec 4.1 (B-0..B-6 table), sec 6.1 (count freeze)",
+  "date": "2026-08-15",
+  "lambda_0_tile": 4387.31377772961,
+  "n2_budget_pairs": 3.0,
+  "n2_rule": "sinkhorn",
+  "repo_commit": "fc484e15a0e8c592a499bd0f7394120cac66a3b8",
+  "source_prefix": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/mempool_group_export/mempool_group"
+ },
+ "quality_claims_prohibited": true,
+ "scaling_usable": true,
+ "scaling_usable_note": "sec 4.1: \"B-0 \u8207 B-3\u2026B-6 \u5168\u7da0 \u21d2 3\u00d73 bench \u53ef\u7528\u65bc scaling(\u4e14\u6c38\u4e45\u4e0d\u5f97\u7528\u65bc\u54c1\u8cea\u5ba3\u7a31)\u3002B-1\u3001B-2 \u7684\u7d50\u679c\u4e00\u5f8b\u767c\u8868,\u5176\u5224\u5b9a\u5beb\u5165\u5831\u544a\u4f46\u4e0d\u963b\u64cb scaling \u7528\u9014\"",
+ "shape": "3x3",
+ "non_gating_results": {
+  "B1_rent_invariance_did": "ok",
+  "B2_h5_matched_resolution": "fail"
+ }
+}

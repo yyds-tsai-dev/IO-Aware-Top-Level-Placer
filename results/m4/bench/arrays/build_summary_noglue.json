@@ -1,0 +1,45 @@
+{
+ "2x2": {
+  "C": 2,
+  "R": 2,
+  "base": {
+   "n_nets": 14015952,
+   "n_nodes": 12357644,
+   "n_pins": 48104764,
+   "n_rows": 128956,
+   "n_terminals": 46968,
+   "source_n_nets": 3503988,
+   "source_n_nodes": 3089411,
+   "source_n_pins": 12026191,
+   "source_n_rows": 32239,
+   "source_n_terminals": 11742
+  },
+  "glue": null,
+  "no_glue": true,
+  "output_sha256": {
+   "nets": "8df4bd0b73531384add5b9829f7ddd6f3995ec0f88976da18b0f6b2e85c3779a",
+   "nodes": "64da01b0f926305dba5362f10b098e1912e89e826e0ae14b0645d61a662500ef",
+   "pl": "5980cfaf5e0175be5c760076d1872c38ee09cc7442ec0c0d39a7854e529b91ff",
+   "scl": "902e0b94ffb06318a5e048c4ae07580ddd32ba539f0f6938c312cd87be019a53",
+   "wts": "bd900238f1c8e315a9a55c04ab4e7bd11195be474df75e486902d6a047a7b562"
+  },
+  "seed": 0,
+  "source_prefix": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/mempool_group_export/mempool_group",
+  "source_sha256": {
+   "nets": "42c5a9d6b641248856e171dd7ea1aa6c01275c38f6792d6ba697e909511e3e0c",
+   "nodes": "36613f1a9923197a7555d91ceed4f978e33713b020c3e15e04810bf0c3c83b21",
+   "pl": "82dd06e3f6606342191db384dd1f94f18e68cfbb84e122226f77213947dcd199",
+   "scl": "08b84fe8ca39e36d101a96e2b8482d76362ab8655ef952726da9413d732bd380",
+   "wts": "bd900238f1c8e315a9a55c04ab4e7bd11195be474df75e486902d6a047a7b562"
+  },
+  "t6": {
+   "no_glue": true,
+   "normalization": null,
+   "primary_seed": 0,
+   "shape": "2x2",
+   "t_tile_s": 119.21612691879272
+  },
+  "tile_height": 6742400,
+  "tile_width": 6746520
+ }
+}

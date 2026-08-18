@@ -1,0 +1,152 @@
+{
+ "bin_density_cosine_matrix": [
+  [
+   1.0000000000000002,
+   0.027438781049007988,
+   0.006182804969872152,
+   0.015054135310668853
+  ],
+  [
+   0.027438781049007988,
+   1.0000000000000002,
+   0.0018354431245554022,
+   0.006907056434992278
+  ],
+  [
+   0.006182804969872152,
+   0.0018354431245554022,
+   1.0,
+   0.012986445165976234
+  ],
+  [
+   0.015054135310668853,
+   0.006907056434992278,
+   0.012986445165976234,
+   1.0
+  ]
+ ],
+ "bin_dominance": {
+  "mass_frac_above_dominance_threshold": {
+   "0.4": 0.9999592865156586,
+   "0.5": 0.9974463794560466,
+   "0.7": 0.9652043091151827,
+   "0.9": 0.9145863846319695
+  },
+  "mean_max_share": 0.9684628924912652,
+  "uniform_mix_share": 0.25
+ },
+ "centroid_distance_matrix": [
+  [
+   0.0,
+   0.121574,
+   0.549148,
+   0.438832
+  ],
+  [
+   0.121574,
+   0.0,
+   0.554147,
+   0.547729
+  ],
+  [
+   0.549148,
+   0.554147,
+   0.0,
+   0.533587
+  ],
+  [
+   0.438832,
+   0.547729,
+   0.533587,
+   0.0
+  ]
+ ],
+ "def_path": "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/visible/mempool_cluster/mempool_cluster.def",
+ "die_bbox": [
+  0.0,
+  0.0,
+  13335720.0,
+  13336400.0
+ ],
+ "die_extent": 13336400.0,
+ "env": {
+  "command": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/diagnostics/probes_m4/probe_group_mass_layout.py",
+  "hostname": "NVL5",
+  "input_sha256": {
+   "/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/ISPD2025_benchmarks/visible/mempool_cluster/mempool_cluster.def": "e4a51ba37e9554b660441452ac5d88b624ab39181ea9cfbc7ed7501aeca374d5"
+  },
+  "python_executable": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/.venv312/bin/python",
+  "python_version": "3.12.13",
+  "repo_commit": "d1c57eeefdfc221a7d5aeb4ddc8cca417d0dd423",
+  "utc_timestamp": "2026-08-14T19:13:40.704893+00:00"
+ },
+ "grid": 64,
+ "per_group": [
+  {
+   "cells": 2844400,
+   "mean_u": 0.304832021140674,
+   "mean_v": 0.4811881984412605,
+   "prefix": "gen_groups\\[2\\].i_group",
+   "std_u": 0.20875778314373877,
+   "std_v": 0.26673887022611015
+  },
+  {
+   "cells": 2824555,
+   "mean_u": 0.25955018015691633,
+   "mean_v": 0.594015192466123,
+   "prefix": "gen_groups\\[1\\].i_group",
+   "std_u": 0.140944036952831,
+   "std_v": 0.2727176228794268
+  },
+  {
+   "cells": 2818397,
+   "mean_u": 0.7990761735607618,
+   "mean_v": 0.72058564685251,
+   "prefix": "gen_groups\\[3\\].i_group",
+   "std_u": 0.12772604557846387,
+   "std_v": 0.18571530390585206
+  },
+  {
+   "cells": 2811116,
+   "mean_u": 0.6487585221575142,
+   "mean_v": 0.20860737228202386,
+   "prefix": "gen_groups\\[0\\].i_group",
+   "std_u": 0.24092733216695944,
+   "std_v": 0.16543038010555391
+  }
+ ],
+ "quadrant_mass_frac_fixed_midline": {
+  "gen_groups\\[0\\].i_group": [
+   0.24096266393845006,
+   0.0036949738111127397,
+   0.6924868984417577,
+   0.06285546380867954
+  ],
+  "gen_groups\\[1\\].i_group": [
+   0.3077514865173452,
+   0.6679579615196022,
+   0.002933205407577477,
+   0.02135734655547511
+  ],
+  "gen_groups\\[2\\].i_group": [
+   0.45567606525101956,
+   0.29200288285754467,
+   0.15296793699901562,
+   0.0993531148924202
+  ],
+  "gen_groups\\[3\\].i_group": [
+   0.0004818341773710375,
+   0.002182446262893411,
+   0.17222662385746224,
+   0.8251090957022733
+  ]
+ },
+ "scan_s": 13.536061763763428,
+ "top_n": 4,
+ "top_prefixes": [
+  "gen_groups\\[2\\].i_group",
+  "gen_groups\\[1\\].i_group",
+  "gen_groups\\[3\\].i_group",
+  "gen_groups\\[0\\].i_group"
+ ]
+}

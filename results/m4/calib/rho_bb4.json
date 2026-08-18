@@ -1,0 +1,92 @@
+{
+ "calibration_run_ids": [
+  "3728496e-7de1-4682-a01d-412401b17166",
+  "89df200b-e07f-4f7d-800b-d71d29f2a95f",
+  "7aff161c-3268-42b5-8cbe-191f57205c13",
+  "5917bf9a-14da-481b-ad16-530eb5112d5b",
+  "0d7dd6f7-1eb2-4b01-9e2c-971fa1f1c06c"
+ ],
+ "case": "bb4",
+ "flat_ref": {
+  "dhpwl_pct": 0.0,
+  "final_overflow": 0.06370985507965088,
+  "ft_count": 6935,
+  "gp_iterations_run": 846,
+  "hpwl": 748520918.0,
+  "io_count": 100333,
+  "legalization_status": "success",
+  "num_unplaced_cells": 0,
+  "repo_commit": "b458bdca6e2e0c5f7f60bee7a084872b5e126693",
+  "rho_max": 0.0,
+  "run_id": "3728496e-7de1-4682-a01d-412401b17166",
+  "seed": 1000
+ },
+ "grid": [
+  {
+   "dhpwl_pct": 0.19135831284811203,
+   "final_overflow": 0.06579531729221344,
+   "ft_count": 7215,
+   "gp_iterations_run": 843,
+   "hpwl": 749953275.0,
+   "io_count": 89638,
+   "legalization_status": "success",
+   "num_unplaced_cells": 0,
+   "repo_commit": "b458bdca6e2e0c5f7f60bee7a084872b5e126693",
+   "rho_max": 0.05,
+   "run_id": "89df200b-e07f-4f7d-800b-d71d29f2a95f",
+   "seed": 1000
+  },
+  {
+   "dhpwl_pct": 1.214866783455743,
+   "final_overflow": 0.06968265771865845,
+   "ft_count": 7796,
+   "gp_iterations_run": 839,
+   "hpwl": 757614450.0,
+   "io_count": 78268,
+   "legalization_status": "success",
+   "num_unplaced_cells": 0,
+   "repo_commit": "b458bdca6e2e0c5f7f60bee7a084872b5e126693",
+   "rho_max": 0.1,
+   "run_id": "7aff161c-3268-42b5-8cbe-191f57205c13",
+   "seed": 1000
+  },
+  {
+   "dhpwl_pct": 3.252417589751313,
+   "final_overflow": 0.06964737176895142,
+   "ft_count": 8184,
+   "gp_iterations_run": 927,
+   "hpwl": 772865944.0,
+   "io_count": 66222,
+   "legalization_status": "success",
+   "num_unplaced_cells": 0,
+   "repo_commit": "b458bdca6e2e0c5f7f60bee7a084872b5e126693",
+   "rho_max": 0.15,
+   "run_id": "5917bf9a-14da-481b-ad16-530eb5112d5b",
+   "seed": 1000
+  },
+  {
+   "dhpwl_pct": 4.615887969078774,
+   "final_overflow": 0.0692232996225357,
+   "ft_count": 8918,
+   "gp_iterations_run": 944,
+   "hpwl": 783071805.0,
+   "io_count": 64901,
+   "legalization_status": "success",
+   "num_unplaced_cells": 0,
+   "repo_commit": "b458bdca6e2e0c5f7f60bee7a084872b5e126693",
+   "rho_max": 0.2,
+   "run_id": "0d7dd6f7-1eb2-4b01-9e2c-971fa1f1c06c",
+   "seed": 1000
+  }
+ ],
+ "k": 16,
+ "rho_star": 0.2,
+ "rho_star_at_grid_boundary": true,
+ "rtype": "grid",
+ "seed_B": 2000,
+ "seed_B_note": "seed B never numerically preregistered; fixed to 2000 by cross-session agreement 2026-08-16 BEFORE any seed-B report run started; requirement satisfied: fixed, documented, not in calibration set",
+ "seed_a": 1000,
+ "seed_b_registered": 2000,
+ "selection_rule": "largest rho on fixed grid ['0.05', '0.10', '0.15', '0.20'] with dhpwl <= +5.0% vs own flat (seed A), legalization success and 0 unplaced; constraint-based, \u0394io never consulted (winner-bias control). Grid may not be extended post hoc (M4-G2).",
+ "task": "m4-t8b"
+}

@@ -1,0 +1,206 @@
+{
+ "host_rss_three_coefficient_model": {
+  "reason": "design draft sec 1.1's three-coefficient PlaceDB.read host RSS model (fitting set: adaptec1/bigblue4/group-BS/1x2/net-drop variants, 2x2 held out) has not been fit/reproduced in this task's scope (a T0b product); this file's rows carry actual net/pin counts only, not host RSS predictions -- 2x2 remains holdout-only, never enters fitting, per T6b's task row",
+  "status": "pending_t0b"
+ },
+ "m4_l12_note": "design draft M4-L12 (glue treated as 0 in sec 2.1's benchmark ladder) is resolved by this file's actual g/gp values (sec 6.1: \"\u4fee\u6b63\u91cf < 0.2%\")",
+ "provenance": {
+  "basis_doc": "docs/results/2026-08-15-m4-t6-holdout-adjudication.md sec 6.1",
+  "benchmark_kind": "synthetic",
+  "generator_verified": false,
+  "glue_provenance": "recipe_A_prime_uncertified",
+  "n2_rule": "sinkhorn",
+  "normalization": "n2",
+  "quality_claims_prohibited": true,
+  "spec_doc": "docs/superpowers/specs/2026-08-13-m4-scale-up-design-draft.md sec 2.1/sec 8",
+  "t6_fail_mechanism": [
+   "H1_band_estimator_mismatch",
+   "H6_1x1_leg_zero_glue_baseline"
+  ],
+  "t6_verdict": "FAIL"
+ },
+ "rejected_alternative": {
+  "1x2": {
+   "g_n1": 4413,
+   "gp_n1": 8826,
+   "normalization": "n1",
+   "reason": "N1 rejected by T6 adjudication (selected_normalization=n2); listed for scale-of-choice comparison only, sec 6.1: \"N1 \u7684\u8a08\u6578 ... \u4ee5 rejected_alternative \u6b04\u4f4d\u4f75\u5217,\u4f9b\u8b80\u8005\u6aa2\u6838\u6b63\u898f\u5316\u9078\u64c7\u7684\u91cf\u7d1a\u5f8c\u679c\"",
+   "total_n_nets_n1": 7012389,
+   "total_n_pins_n1": 24061208
+  },
+  "2x2": {
+   "g_n1": 26034,
+   "gp_n1": 52068,
+   "normalization": "n1",
+   "reason": "N1 rejected by T6 adjudication (selected_normalization=n2); listed for scale-of-choice comparison only, sec 6.1: \"N1 \u7684\u8a08\u6578 ... \u4ee5 rejected_alternative \u6b04\u4f4d\u4f75\u5217,\u4f9b\u8b80\u8005\u6aa2\u6838\u6b63\u898f\u5316\u9078\u64c7\u7684\u91cf\u7d1a\u5f8c\u679c\"",
+   "total_n_nets_n1": 14041986,
+   "total_n_pins_n1": 48156832
+  }
+ },
+ "rows": {
+  "1x2": {
+   "base_n_nets": 7007976,
+   "base_n_pins": 24052382,
+   "g_n2": 13207,
+   "glue_share_nets": 0.0018810220442908269,
+   "glue_share_pins": 0.0010969817593869727,
+   "gp_n2": 26414,
+   "int_headroom": {
+    "composite_key_net_times_64_plus_rid": {
+     "int32": {
+      "capacity": 33554431,
+      "capacity_label": "floor((2**31-1)/64)",
+      "count": 7021183,
+      "field": "n_nets (composite key capacity)",
+      "fits": true,
+      "headroom_frac": 3.779028121044559,
+      "headroom_pct": 377.9028121044559,
+      "warning_headroom_lt_20pct": false
+     },
+     "int64": {
+      "capacity": 144115188075855871,
+      "capacity_label": "floor((2**63-1)/64)",
+      "count": 7021183,
+      "field": "n_nets (composite key capacity)",
+      "fits": true,
+      "headroom_frac": 20525770097.266327,
+      "headroom_pct": 2052577009726.6328,
+      "warning_headroom_lt_20pct": false
+     }
+    },
+    "formula": "design draft sec 2.1 Codex #4: composite key = net_id*64+rid; n_nets <= floor((2**31-1)/64) = 33,554,431 for a signed int32 composite key; headroom_frac = (capacity - count) / count (relative to the count already committed, matching sec 2.1's own worked 6.40% example)",
+    "nets": {
+     "int32": {
+      "capacity": 2147483647,
+      "capacity_label": "2**31-1",
+      "count": 7021183,
+      "field": "n_nets",
+      "fits": true,
+      "headroom_frac": 304.85780871969865,
+      "headroom_pct": 30485.780871969866,
+      "warning_headroom_lt_20pct": false
+     },
+     "int64": {
+      "capacity": 9223372036854775807,
+      "capacity_label": "2**63-1",
+      "count": 7021183,
+      "field": "n_nets",
+      "fits": true,
+      "headroom_frac": 1313649286288.045,
+      "headroom_pct": 131364928628804.5,
+      "warning_headroom_lt_20pct": false
+     }
+    },
+    "pins": {
+     "int32": {
+      "capacity": 2147483647,
+      "capacity_label": "2**31-1",
+      "count": 24078796,
+      "field": "n_pins",
+      "fits": true,
+      "headroom_frac": 88.18567386010497,
+      "headroom_pct": 8818.567386010496,
+      "warning_headroom_lt_20pct": false
+     },
+     "int64": {
+      "capacity": 9223372036854775807,
+      "capacity_label": "2**63-1",
+      "count": 24078796,
+      "field": "n_pins",
+      "fits": true,
+      "headroom_frac": 383049552678.24426,
+      "headroom_pct": 38304955267824.43,
+      "warning_headroom_lt_20pct": false
+     }
+    }
+   },
+   "scale_label": "6.2M",
+   "source_manifest": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/arrays/1x2_n2/1x2_n2.manifest.json",
+   "total_n_nets": 7021183,
+   "total_n_pins": 24078796
+  },
+  "2x2": {
+   "base_n_nets": 14015952,
+   "base_n_pins": 48104764,
+   "g_n2": 26341,
+   "glue_share_nets": 0.0018758332417647175,
+   "glue_share_pins": 0.00109395336289221,
+   "gp_n2": 52682,
+   "int_headroom": {
+    "composite_key_net_times_64_plus_rid": {
+     "int32": {
+      "capacity": 33554431,
+      "capacity_label": "floor((2**31-1)/64)",
+      "count": 14042293,
+      "field": "n_nets (composite key capacity)",
+      "fits": true,
+      "headroom_frac": 1.3895264826050846,
+      "headroom_pct": 138.95264826050845,
+      "warning_headroom_lt_20pct": false
+     },
+     "int64": {
+      "capacity": 144115188075855871,
+      "capacity_label": "floor((2**63-1)/64)",
+      "count": 14042293,
+      "field": "n_nets (composite key capacity)",
+      "fits": true,
+      "headroom_frac": 10262938400.57415,
+      "headroom_pct": 1026293840057.415,
+      "warning_headroom_lt_20pct": false
+     }
+    },
+    "formula": "design draft sec 2.1 Codex #4: composite key = net_id*64+rid; n_nets <= floor((2**31-1)/64) = 33,554,431 for a signed int32 composite key; headroom_frac = (capacity - count) / count (relative to the count already committed, matching sec 2.1's own worked 6.40% example)",
+    "nets": {
+     "int32": {
+      "capacity": 2147483647,
+      "capacity_label": "2**31-1",
+      "count": 14042293,
+      "field": "n_nets",
+      "fits": true,
+      "headroom_frac": 151.92969937317218,
+      "headroom_pct": 15192.969937317219,
+      "warning_headroom_lt_20pct": false
+     },
+     "int64": {
+      "capacity": 9223372036854775807,
+      "capacity_label": "2**63-1",
+      "count": 14042293,
+      "field": "n_nets",
+      "fits": true,
+      "headroom_frac": 656828057699.7456,
+      "headroom_pct": 65682805769974.56,
+      "warning_headroom_lt_20pct": false
+     }
+    },
+    "pins": {
+     "int32": {
+      "capacity": 2147483647,
+      "capacity_label": "2**31-1",
+      "count": 48157446,
+      "field": "n_pins",
+      "fits": true,
+      "headroom_frac": 43.592972123147895,
+      "headroom_pct": 4359.297212314789,
+      "warning_headroom_lt_20pct": false
+     },
+     "int64": {
+      "capacity": 9223372036854775807,
+      "capacity_label": "2**63-1",
+      "count": 48157446,
+      "field": "n_pins",
+      "fits": true,
+      "headroom_frac": 191525356988.54584,
+      "headroom_pct": 19152535698854.582,
+      "warning_headroom_lt_20pct": false
+     }
+    }
+   },
+   "scale_label": "12.3M",
+   "source_manifest": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/arrays/2x2_n2/2x2_n2.manifest.json",
+   "total_n_nets": 14042293,
+   "total_n_pins": 48157446
+  }
+ },
+ "scope": "<=12.3M (1x2, 2x2)",
+ "task": "T6b"
+}

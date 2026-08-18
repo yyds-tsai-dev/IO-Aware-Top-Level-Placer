@@ -1,0 +1,509 @@
+{
+ "case_json_paths": [
+  "results/m4/probes/probe_gp_memory__adaptec1.json",
+  "results/m4/probes/probe_gp_memory__mempool_cluster_probe2500.json",
+  "results/m4/scaling/case_points/sb12__flat_k16.json",
+  "results/m4/scaling/case_points/group__flat_k16.json",
+  "results/m4/scaling/case_points/cluster__flat_k16.json"
+ ],
+ "design_matrix": [
+  {
+   "case": "group__bins1024__td0.70",
+   "gp_peak_bytes": 1551984640.0,
+   "n_bins": 1048576.0,
+   "n_iter": 920,
+   "n_pins": 12026191.0,
+   "n_total": 3089411.0,
+   "source_path": "results/m4/scaling/t0b/group__bins1024__td0.70.json",
+   "t_gp_s": 66.40199491893873
+  },
+  {
+   "case": "group__bins1024__td0.835",
+   "gp_peak_bytes": 2914601472.0,
+   "n_bins": 1048576.0,
+   "n_iter": 885,
+   "n_pins": 12026191.0,
+   "n_total": 3722539.0,
+   "source_path": "results/m4/scaling/t0b/group__bins1024__td0.835.json",
+   "t_gp_s": 51.25170375406742
+  },
+  {
+   "case": "group__bins1024__td0.90",
+   "gp_peak_bytes": 4314173440.0,
+   "n_bins": 1048576.0,
+   "n_iter": 867,
+   "n_pins": 12026191.0,
+   "n_total": 4037366.0,
+   "source_path": "results/m4/scaling/t0b/group__bins1024__td0.90.json",
+   "t_gp_s": 81.0475451508537
+  },
+  {
+   "case": "group__bins2048__td0.70",
+   "gp_peak_bytes": 3178947584.0,
+   "n_bins": 4194304.0,
+   "n_iter": 1008,
+   "n_pins": 12026191.0,
+   "n_total": 3089411.0,
+   "source_path": "results/m4/scaling/t0b/group__bins2048__td0.70.json",
+   "t_gp_s": 62.3952472130768
+  },
+  {
+   "case": "group__bins2048__td0.835",
+   "gp_peak_bytes": 4697879552.0,
+   "n_bins": 4194304.0,
+   "n_iter": 957,
+   "n_pins": 12026191.0,
+   "n_total": 3722539.0,
+   "source_path": "results/m4/scaling/t0b/group__bins2048__td0.835.json",
+   "t_gp_s": 64.7886245562695
+  },
+  {
+   "case": "group__bins2048__td0.90",
+   "gp_peak_bytes": 6260625408.0,
+   "n_bins": 4194304.0,
+   "n_iter": 935,
+   "n_pins": 12026191.0,
+   "n_total": 4037366.0,
+   "source_path": "results/m4/scaling/t0b/group__bins2048__td0.90.json",
+   "t_gp_s": 59.31391157209873
+  },
+  {
+   "case": "group__bins4096__td0.70",
+   "gp_peak_bytes": 8702631424.0,
+   "n_bins": 16777216.0,
+   "n_iter": 1538,
+   "n_pins": 12026191.0,
+   "n_total": 3089411.0,
+   "source_path": "results/m4/scaling/t0b/group__bins4096__td0.70.json",
+   "t_gp_s": 136.91848549898714
+  },
+  {
+   "case": "group__bins4096__td0.835",
+   "gp_peak_bytes": 10901708800.0,
+   "n_bins": 16777216.0,
+   "n_iter": 974,
+   "n_pins": 12026191.0,
+   "n_total": 3722539.0,
+   "source_path": "results/m4/scaling/t0b/group__bins4096__td0.835.json",
+   "t_gp_s": 89.38335856003687
+  },
+  {
+   "case": "group__bins4096__td0.90",
+   "gp_peak_bytes": 13139169280.0,
+   "n_bins": 16777216.0,
+   "n_iter": 889,
+   "n_pins": 12026191.0,
+   "n_total": 4037366.0,
+   "source_path": "results/m4/scaling/t0b/group__bins4096__td0.90.json",
+   "t_gp_s": 176.2893355358392
+  },
+  {
+   "case": "group__netdrop25__seed0",
+   "gp_peak_bytes": 3794159104.0,
+   "n_bins": 4194304.0,
+   "n_iter": 883,
+   "n_pins": 8958338.0,
+   "n_total": 3136476.0,
+   "source_path": "results/m4/scaling/t0b/group__netdrop25__seed0.json",
+   "t_gp_s": 53.77903444878757
+  },
+  {
+   "case": "group__netdrop50__seed0",
+   "gp_peak_bytes": 4823957504.0,
+   "n_bins": 4194304.0,
+   "n_iter": 889,
+   "n_pins": 6085071.0,
+   "n_total": 3136476.0,
+   "source_path": "results/m4/scaling/t0b/group__netdrop50__seed0.json",
+   "t_gp_s": 50.98686693795025
+  },
+  {
+   "case": "adaptec1",
+   "gp_peak_bytes": 147603456.0,
+   "n_bins": 262144.0,
+   "n_iter": null,
+   "n_pins": 919701.0,
+   "n_total": 371514.0,
+   "source_path": "results/m4/probes/probe_gp_memory__adaptec1.json",
+   "t_gp_s": 7.091014385223389
+  },
+  {
+   "case": "mempool_cluster_probe2500",
+   "gp_peak_bytes": 6668748288.0,
+   "n_bins": 16777216.0,
+   "n_iter": 1251,
+   "n_pins": 43947793.0,
+   "n_total": 11510791.0,
+   "source_path": "results/m4/probes/probe_gp_memory__mempool_cluster_probe2500.json",
+   "t_gp_s": 329.99344539642334
+  },
+  {
+   "case": "case__sb12__flat_k16",
+   "gp_peak_bytes": 1486744064.0,
+   "n_bins": 1048576.0,
+   "n_iter": 1052,
+   "n_pins": 4772990.0,
+   "n_total": 1933011.0,
+   "source_path": "results/m4/scaling/case_points/sb12__flat_k16.json",
+   "t_gp_s": 75.1919788569212
+  },
+  {
+   "case": "case__group__flat_k16",
+   "gp_peak_bytes": 3182443008.0,
+   "n_bins": 4194304.0,
+   "n_iter": 1000,
+   "n_pins": 12026191.0,
+   "n_total": 3136476.0,
+   "source_path": "results/m4/scaling/case_points/group__flat_k16.json",
+   "t_gp_s": 78.9406845709309
+  },
+  {
+   "case": "case__cluster__flat_k16",
+   "gp_peak_bytes": 11672076800.0,
+   "n_bins": 16777216.0,
+   "n_iter": 1252,
+   "n_pins": 43947793.0,
+   "n_total": 11510791.0,
+   "source_path": "results/m4/scaling/case_points/cluster__flat_k16.json",
+   "t_gp_s": 406.0516406609677
+  }
+ ],
+ "design_matrix_units": {
+  "gp_peak_bytes": "bytes",
+  "n_bins": "count (num_bins_x * num_bins_y)",
+  "n_iter": "count (GP iterations run)",
+  "n_pins": "count",
+  "n_total": "count (movable + filler nodes)",
+  "t_gp_s": "seconds"
+ },
+ "gp_memory_model": {
+  "ci_rel_half_width_threshold": 0.25,
+  "coefficients": {
+   "N_pins": {
+    "ci95_half_width": 462.49060270184225,
+    "ci95_hi": -135.94660868441827,
+    "ci95_lo": -1060.9278140881029,
+    "ci95_rel_half_width": 0.7728306226654884,
+    "value": -598.4372113862605
+   },
+   "N_total": {
+    "ci95_half_width": 1856.1240413776006,
+    "ci95_hi": 4153.37896479358,
+    "ci95_lo": 441.130882038379,
+    "ci95_rel_half_width": 0.8079747800116042,
+    "value": 2297.2549234159796
+   },
+   "intercept": {
+    "ci95_half_width": 1807587806.5227373,
+    "ci95_hi": 2402819941.589216,
+    "ci95_lo": -1212355671.456258,
+    "ci95_rel_half_width": 3.0367779224837292,
+    "value": 595232135.0664792
+   },
+   "n_bins": {
+    "ci95_half_width": 150.8644131487974,
+    "ci95_hi": 682.321978236381,
+    "ci95_lo": 380.59315193878615,
+    "ci95_rel_half_width": 0.28386916107579563,
+    "value": 531.4575650875836
+   }
+  },
+  "dof": 12,
+  "identifiable": false,
+  "kappa_std": 15.085518607714603,
+  "kappa_threshold": 30.0,
+  "loo_residuals": [
+   {
+    "actual": 1551984640.0,
+    "case": "group__bins1024__td0.70",
+    "predicted": 907275865.563633,
+    "relative_residual": 0.4154092494345608,
+    "residual": 644708774.436367
+   },
+   {
+    "actual": 2914601472.0,
+    "case": "group__bins1024__td0.835",
+    "predicted": 2446336031.8448515,
+    "relative_residual": 0.16066191026583976,
+    "residual": 468265440.1551485
+   },
+   {
+    "actual": 4314173440.0,
+    "case": "group__bins1024__td0.90",
+    "predicted": 2985438047.122054,
+    "relative_residual": 0.30799304000117944,
+    "residual": 1328735392.877946
+   },
+   {
+    "actual": 3178947584.0,
+    "case": "group__bins2048__td0.70",
+    "predicted": 2626540348.834654,
+    "relative_residual": 0.17377047609896865,
+    "residual": 552407235.1653461
+   },
+   {
+    "actual": 4697879552.0,
+    "case": "group__bins2048__td0.835",
+    "predicted": 4135567161.0167265,
+    "relative_residual": 0.11969493571709042,
+    "residual": 562312390.9832735
+   },
+   {
+    "actual": 6260625408.0,
+    "case": "group__bins2048__td0.90",
+    "predicted": 4700296603.500406,
+    "relative_residual": 0.24922890331463732,
+    "residual": 1560328804.4995937
+   },
+   {
+    "actual": 8702631424.0,
+    "case": "group__bins4096__td0.70",
+    "predicted": 9950009465.430307,
+    "relative_residual": -0.14333343337858764,
+    "residual": -1247378041.4303074
+   },
+   {
+    "actual": 10901708800.0,
+    "case": "group__bins4096__td0.835",
+    "predicted": 10850171053.473286,
+    "relative_residual": 0.004727492494269735,
+    "residual": 51537746.526714325
+   },
+   {
+    "actual": 13139169280.0,
+    "case": "group__bins4096__td0.90",
+    "predicted": 10731679036.118652,
+    "relative_residual": 0.18323001953753257,
+    "residual": 2407490243.8813477
+   },
+   {
+    "actual": 3794159104.0,
+    "case": "group__netdrop25__seed0",
+    "predicted": 4765061973.646351,
+    "relative_residual": -0.2558940843104799,
+    "residual": -970902869.6463509
+   },
+   {
+    "actual": 4823957504.0,
+    "case": "group__netdrop50__seed0",
+    "predicted": 7448639029.626099,
+    "relative_residual": -0.5440930031928611,
+    "residual": -2624681525.6260986
+   },
+   {
+    "actual": 147603456.0,
+    "case": "adaptec1",
+    "predicted": 1338357808.7250547,
+    "relative_residual": -8.06725252236001,
+    "residual": -1190754352.7250547
+   },
+   {
+    "actual": 6668748288.0,
+    "case": "mempool_cluster_probe2500",
+    "predicted": 12278259180.73801,
+    "relative_residual": -0.8411639861759332,
+    "residual": -5609510892.73801
+   },
+   {
+    "actual": 1486744064.0,
+    "case": "case__sb12__flat_k16",
+    "predicted": 2912013842.0822315,
+    "relative_residual": -0.9586517360947954,
+    "residual": -1425269778.0822315
+   },
+   {
+    "actual": 3182443008.0,
+    "case": "case__group__flat_k16",
+    "predicted": 2765779043.036598,
+    "relative_residual": 0.13092582142586537,
+    "residual": 416663964.9634018
+   },
+   {
+    "actual": 11672076800.0,
+    "case": "case__cluster__flat_k16",
+    "predicted": 7882595402.527096,
+    "relative_residual": 0.3246621370305672,
+    "residual": 3789481397.472904
+   }
+  ],
+  "max_ci95_rel_half_width": 3.0367779224837292,
+  "n_points": 16,
+  "predictor_units": {
+   "n_bins": "count (num_bins_x * num_bins_y)",
+   "n_pins": "count",
+   "n_total": "count (movable + filler nodes)"
+  },
+  "rejection_reasons": [
+   "coefficient 'intercept' 95% CI relative half-width 3.037 > threshold 0.25"
+  ],
+  "response": "gp_peak_bytes",
+  "response_unit": "bytes"
+ },
+ "gp_runtime_model": {
+  "ci_rel_half_width_threshold": 0.25,
+  "coefficients": {
+   "intercept": {
+    "ci95_half_width": 43.993059490874984,
+    "ci95_hi": 32.147517122950724,
+    "ci95_lo": -55.838601858799244,
+    "ci95_rel_half_width": 3.713891531889735,
+    "value": -11.845542367924258
+   },
+   "n_iter*N_pins": {
+    "ci95_half_width": 1.2521296550204348e-08,
+    "ci95_hi": 1.0908750110267768e-08,
+    "ci95_lo": -1.4133842990140928e-08,
+    "ci95_rel_half_width": 7.764921517979227,
+    "value": -1.6125464399365801e-09
+   },
+   "n_iter*N_total": {
+    "ci95_half_width": 4.9769869609172036e-08,
+    "ci95_hi": 7.854377314704668e-08,
+    "ci95_lo": -2.0995966071297398e-08,
+    "ci95_rel_half_width": 1.7296877896202278,
+    "value": 2.877390353787464e-08
+   },
+   "n_iter*n_bins*log(n_bins)": {
+    "ci95_half_width": 1.7651712675354873e-10,
+    "ci95_hi": 3.221681909503856e-10,
+    "ci95_lo": -3.086606255671184e-11,
+    "ci95_rel_half_width": 1.2119178649803657,
+    "value": 1.4565106419683688e-10
+   }
+  },
+  "dof": 11,
+  "excluded_for_missing_n_iter": [
+   "adaptec1"
+  ],
+  "identifiable": false,
+  "intercept_is_T_fixed_seconds": -11.845542367924258,
+  "kappa_std": 23.619157164961244,
+  "kappa_threshold": 30.0,
+  "loo_residuals": [
+   {
+    "actual": 66.40199491893873,
+    "case": "group__bins1024__td0.70",
+    "predicted": 48.68556086064605,
+    "relative_residual": 0.26680575003688206,
+    "residual": 17.716434058292677
+   },
+   {
+    "actual": 51.25170375406742,
+    "case": "group__bins1024__td0.835",
+    "predicted": 69.99720369550835,
+    "relative_residual": -0.36575369340679237,
+    "residual": -18.745499941440926
+   },
+   {
+    "actual": 81.0475451508537,
+    "case": "group__bins1024__td0.90",
+    "predicted": 72.67408136731478,
+    "relative_residual": 0.10331545228116894,
+    "residual": 8.37346378353891
+   },
+   {
+    "actual": 62.3952472130768,
+    "case": "group__bins2048__td0.70",
+    "predicted": 69.32459312504525,
+    "relative_residual": -0.11105566884453663,
+    "residual": -6.929345911968454
+   },
+   {
+    "actual": 64.7886245562695,
+    "case": "group__bins2048__td0.835",
+    "predicted": 82.5521679257534,
+    "relative_residual": -0.2741768866239181,
+    "residual": -17.763543369483898
+   },
+   {
+    "actual": 59.31391157209873,
+    "case": "group__bins2048__td0.90",
+    "predicted": 91.58804555481652,
+    "relative_residual": -0.5441241881929693,
+    "residual": -32.274133982717785
+   },
+   {
+    "actual": 136.91848549898714,
+    "case": "group__bins4096__td0.70",
+    "predicted": 192.64586730579396,
+    "relative_residual": -0.40701138055766084,
+    "residual": -55.72738180680682
+   },
+   {
+    "actual": 89.38335856003687,
+    "case": "group__bins4096__td0.835",
+    "predicted": 120.87656395339869,
+    "relative_residual": -0.3523385773450045,
+    "residual": -31.49320539336182
+   },
+   {
+    "actual": 176.2893355358392,
+    "case": "group__bins4096__td0.90",
+    "predicted": 87.47241277578607,
+    "relative_residual": 0.5038133616539547,
+    "residual": 88.81692276005313
+   },
+   {
+    "actual": 53.77903444878757,
+    "case": "group__netdrop25__seed0",
+    "predicted": 64.37412464851661,
+    "relative_residual": -0.19701153634170362,
+    "residual": -10.595090199729043
+   },
+   {
+    "actual": 50.98686693795025,
+    "case": "group__netdrop50__seed0",
+    "predicted": 78.90700036054695,
+    "relative_residual": -0.5475946081679189,
+    "residual": -27.92013342259669
+   },
+   {
+    "actual": 329.99344539642334,
+    "case": "mempool_cluster_probe2500",
+    "predicted": 398.58966602417996,
+    "relative_residual": -0.20787146406908635,
+    "residual": -68.59622062775662
+   },
+   {
+    "actual": 75.1919788569212,
+    "case": "case__sb12__flat_k16",
+    "predicted": 35.91746133292005,
+    "relative_residual": 0.5223232334227369,
+    "residual": 39.27451752400115
+   },
+   {
+    "actual": 78.9406845709309,
+    "case": "case__group__flat_k16",
+    "predicted": 65.2694930822187,
+    "relative_residual": 0.17318308756783285,
+    "residual": 13.671191488712196
+   },
+   {
+    "actual": 406.0516406609677,
+    "case": "case__cluster__flat_k16",
+    "predicted": 324.7407468405019,
+    "relative_residual": 0.20024766723786297,
+    "residual": 81.31089382046576
+   }
+  ],
+  "max_ci95_rel_half_width": 7.764921517979227,
+  "n_points": 15,
+  "predictor_units": {
+   "n_iter*N_pins": "count * count",
+   "n_iter*N_total": "count * count",
+   "n_iter*n_bins*log(n_bins)": "count * count * dimensionless"
+  },
+  "rejection_reasons": [
+   "coefficient 'n_iter*N_pins' 95% CI relative half-width 7.765 > threshold 0.25"
+  ],
+  "response": "t_gp_s",
+  "response_unit": "seconds"
+ },
+ "identifiable": false,
+ "n_points_used": 16,
+ "notes": [
+  "identifiable=false: this model must not be used for any extrapolation (design draft sec 7.1 T0b acceptance)"
+ ],
+ "skipped": [],
+ "t0b_dir": "results/m4/scaling/t0b"
+}

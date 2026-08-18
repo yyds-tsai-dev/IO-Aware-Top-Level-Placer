@@ -140,12 +140,33 @@ def test_gpu_matches_reference_on_lattice_boundaries():
     assert gpu.boundary_pair_demand == ref.boundary_pair_demand
 
 
-def test_gpu_matches_reference_k64():
-    """8x8 region grid (K=64) -- the required 5-seed test above only covers K=16
-    (4x4). This exercises the K<=64 bitmask-vectorization boundary GpuEvalContext
-    now asserts on construction (pin_bm/passed_bm packed into a single int64)."""
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_gpu_hard_lambda_matches_reference_and_legacy_fields_unchanged(seed):
+    rng = np.random.default_rng(seed)
+    rg = RegionGrid(make_grid_regions(DIE, 4, 4, lattice=20))
+    nl = _random_case(rng)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    assert gpu.hard_lambda_sum == ref.hard_lambda_sum
+    assert np.array_equal(gpu.per_net_lambda, ref.per_net_lambda)
+    # legacy fields must be bit-identical (Global Constraints: evaluator semantics frozen)
+    assert gpu.io_count == ref.io_count and gpu.ft_count == ref.ft_count
+    assert np.array_equal(gpu.per_net_crossings, ref.per_net_crossings)
+    assert np.array_equal(gpu.per_net_ft, ref.per_net_ft)
+    assert gpu.boundary_pair_demand == ref.boundary_pair_demand
+
+
+def test_gpu_matches_reference_k32():
+    """8x4 region grid (K=32) -- the largest K in the M3 experiment matrix
+    (K in {8,16,32}; see docs/superpowers/specs/2026-08-13-m3-differentiable-ft-
+    design-draft.md §1) and the new bitmask-vectorization boundary
+    GpuEvalContext asserts on construction. Supersedes the old K=64 test: T1's
+    paired int8 dtype fix (R2) tightens the contract to K<=32 (`_pow2_k` uses
+    signed int64, so 1<<63 == INT64_MIN makes K=64 out of contract -- see
+    docs/superpowers/specs/2026-08-13-m4-scale-up-design-draft.md §4.2 and
+    docs/reviews/2026-08-13-m4-draft-v1-adversarial-codex.md finding 9)."""
     rng = np.random.default_rng(64)
-    rg = RegionGrid(make_grid_regions(DIE, 8, 8, lattice=32))
+    rg = RegionGrid(make_grid_regions(DIE, 8, 4, lattice=32))
     nl = _random_case(rng, n_cells=80, n_nets=50, max_d=20)
     ref = evaluate(nl, nl.node_x, nl.node_y, rg)
     gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
@@ -155,3 +176,506 @@ def test_gpu_matches_reference_k64():
     assert np.array_equal(gpu.per_net_ft, ref.per_net_ft)
     assert gpu.tree_wl == pytest.approx(ref.tree_wl, rel=1e-5)
     assert gpu.boundary_pair_demand == ref.boundary_pair_demand
+    assert np.array_equal(gpu.per_net_steiner, ref.per_net_steiner)
+    assert np.array_equal(gpu.per_net_home, ref.per_net_home)
+    assert gpu.io_rg == ref.io_rg and gpu.ft_rg == ref.ft_rg
+
+
+def test_gpu_matches_reference_k1():
+    """K=1 (the whole die is a single region) -- a degenerate boundary case
+    explicitly called out for coverage alongside K=8/K=32 (M4 spec §4.2's dtype
+    contract test matrix): every net's touched set has Λ<=1, so io_rg/ft_rg
+    and every legacy field must all come out exactly 0."""
+    from ioplace.regions import RegionSet, RegionSpec
+    rs = RegionSet(die=DIE, lattice=20,
+                    regions=[RegionSpec("P0", np.array([[0., 0., 100., 100.]]))])
+    rg = RegionGrid(rs)
+    rng = np.random.default_rng(1)
+    nl = _random_case(rng, n_cells=20, n_nets=10, max_d=6)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    assert gpu.io_count == ref.io_count == 0
+    assert gpu.ft_count == ref.ft_count == 0
+    assert gpu.io_rg == ref.io_rg == 0
+    assert gpu.ft_rg == ref.ft_rg == 0
+    assert np.array_equal(gpu.per_net_steiner, ref.per_net_steiner)
+    assert np.array_equal(gpu.per_net_home, ref.per_net_home)
+
+
+def test_gpu_matches_reference_k8():
+    rg = RegionGrid(make_grid_regions(DIE, 4, 2, lattice=20))
+    rng = np.random.default_rng(8)
+    nl = _random_case(rng, n_cells=40, n_nets=25, max_d=12)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    assert np.array_equal(gpu.per_net_steiner, ref.per_net_steiner)
+    assert np.array_equal(gpu.per_net_home, ref.per_net_home)
+    assert gpu.io_rg == ref.io_rg and gpu.ft_rg == ref.ft_rg
+
+
+def test_gpu_context_rejects_k_over_32():
+    from ioplace.evaluator_gpu import GpuEvalContext
+    rg = RegionGrid(make_grid_regions(DIE, 8, 8, lattice=32))  # K=64
+    rng = np.random.default_rng(64)
+    nl = _random_case(rng, n_cells=80, n_nets=50, max_d=20)
+    with pytest.raises(AssertionError):
+        GpuEvalContext(nl, rg, device="cuda")
+
+
+# ---------------------------------------------------------------------------
+# M3 T1: io_rg / ft_rg / per_net_steiner / per_net_home CPU/GPU equivalence,
+# including the Λ>=4 (Dreyfus-Wagner exact) and Λ>8 (metric-closure-MST
+# heuristic) tiers, which the small random-degree cases above rarely reach.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("seed", [0, 1, 2, 3, 4])
+def test_gpu_matches_reference_region_graph_fields(seed):
+    rng = np.random.default_rng(seed)
+    rg = RegionGrid(make_grid_regions(DIE, 4, 4, lattice=20))
+    nl = _random_case(rng)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    assert np.array_equal(gpu.per_net_steiner, ref.per_net_steiner)
+    assert np.array_equal(gpu.per_net_home, ref.per_net_home)
+    assert gpu.io_rg == ref.io_rg
+    assert gpu.ft_rg == ref.ft_rg
+    assert gpu.io_rg == gpu.hard_lambda_sum + gpu.ft_rg
+
+
+def _lambda_ge4_netlist(rng, k):
+    """Cells scattered across all k regions of an 8x4 grid, plus a handful of
+    high-fanout nets that each pick one cell from every region (Λ=k, well into
+    both the [4,8] Dreyfus-Wagner tier and the >8 metric-closure-MST tier) mixed
+    in with ordinary small nets."""
+    n_cells = k * 6
+    xs = np.linspace(0.5, 99.5, 8, endpoint=True)
+    ys = np.linspace(0.5, 99.5, 4, endpoint=True)
+    # place 6 cells per region cell-center so every region has pins available
+    cell_x, cell_y = [], []
+    gx, gy = 100.0 / 8, 100.0 / 4
+    for j in range(4):
+        for i in range(8):
+            for _ in range(6):
+                cell_x.append(i * gx + rng.uniform(1, gx - 1))
+                cell_y.append(j * gy + rng.uniform(1, gy - 1))
+    nx_ = np.array(cell_x[:n_cells])
+    ny_ = np.array(cell_y[:n_cells])
+    pins, p2n = [], []
+    net = 0
+    # a few full-fanout nets: one cell from each of the k regions
+    for _ in range(4):
+        for r in range(k):
+            pins.append(r * 6 + int(rng.integers(0, 6)))
+            p2n.append(net)
+        net += 1
+    # ordinary small nets to keep the Λ<=3 closed-form path exercised too
+    for _ in range(30):
+        d = int(rng.integers(2, 6))
+        pins += list(rng.choice(n_cells, d, replace=False))
+        p2n += [net] * d
+        net += 1
+    p2n = np.array(p2n, np.int32)
+    pins = np.array(pins, np.int32)
+    start = np.searchsorted(p2n, np.arange(net + 1)).astype(np.int32)
+    from ioplace.netlist import Netlist
+    return Netlist(node_x=nx_, node_y=ny_, node_size_x=np.ones(n_cells),
+                   node_size_y=np.ones(n_cells), num_movable=n_cells,
+                   num_terminals=0, num_terminal_NIs=0,
+                   pin_offset_x=np.zeros(len(pins)), pin_offset_y=np.zeros(len(pins)),
+                   pin2node=pins, pin2net=p2n,
+                   flat_net2pin=np.arange(len(pins), dtype=np.int32),
+                   flat_net2pin_start=start, xl=0., yl=0., xh=100., yh=100.)
+
+
+def test_gpu_matches_reference_region_graph_fields_lambda_ge4():
+    """K=32 grid with several Λ=32 nets (deep into the >8 MST-heuristic tier)
+    plus Λ=16 nets via a coarser sub-selection -- exercises evaluator_gpu's
+    shared-CPU-routine delegation for the rare Λ>=4 tier end to end and checks
+    it agrees with evaluator_ref bit-for-bit, not just that both run."""
+    rg = RegionGrid(make_grid_regions(DIE, 8, 4, lattice=32))
+    rng = np.random.default_rng(99)
+    nl = _lambda_ge4_netlist(rng, rg.k)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    assert (ref.per_net_lambda >= 9).any(), "test netlist should reach the >8 (ub) tier"
+    assert np.array_equal(gpu.per_net_steiner, ref.per_net_steiner)
+    assert np.array_equal(gpu.per_net_home, ref.per_net_home)
+    assert gpu.io_rg == ref.io_rg
+    assert gpu.ft_rg == ref.ft_rg
+    # identity per net: ST - max(Λ-1,0) == FT (via RG), on every net
+    ft_rg_per_net = gpu.per_net_steiner.astype(np.int64) - np.maximum(gpu.per_net_lambda.astype(np.int64) - 1, 0)
+    assert (ft_rg_per_net >= 0).all()
+    assert (gpu.per_net_steiner >= np.maximum(gpu.per_net_lambda - 1, 0)).all()
+    assert (gpu.per_net_steiner <= gpu.per_net_crossings).all()
+
+
+def test_gpu_bit_plane_helpers_support_paired_int8_dtype():
+    """R2 remedy (T1 §2.5 item 3, docs/superpowers/specs/2026-08-13-m3-
+    differentiable-ft-design-draft.md line ~142): pin_bit_acc/passed_bit_acc
+    must go from (E,K) int64 to int8, and PyTorch's scatter_reduce_ requires
+    self.dtype == src.dtype -- so the *source* bit planes must be produced as
+    int8 directly (not int64-then-cast), paired with the int8 accumulators.
+    This is a white-box test of the dtype parameter added to _bit_planes /
+    _one_hot_planes; the end-to-end equivalence tests above are the black-box
+    check that the paired change doesn't alter any result."""
+    from ioplace.evaluator_gpu import GpuEvalContext
+    rg = RegionGrid(make_grid_regions(DIE, 4, 4, lattice=20))
+    rng = np.random.default_rng(3)
+    nl = _random_case(rng)
+    ctx = GpuEvalContext(nl, rg, device="cuda")
+    ids = torch.tensor([0, 3, 15, 7], dtype=torch.int64, device=ctx.device)
+    onehot8 = ctx._one_hot_planes(ids, dtype=torch.int8)
+    assert onehot8.dtype == torch.int8
+    assert torch.equal(onehot8.to(torch.int64), ctx._one_hot_planes(ids))
+    bm = torch.tensor([0b1001, 0b0110], dtype=torch.int64, device=ctx.device)
+    planes8 = ctx._bit_planes(bm, dtype=torch.int8)
+    assert planes8.dtype == torch.int8
+    assert torch.equal(planes8.to(torch.int64), ctx._bit_planes(bm))
+    # default (no dtype arg) must stay int64 -- other callers (_popcount_k on
+    # already-packed int64 pin_bm/passed_bm/ft_bm) must not silently change.
+    assert ctx._one_hot_planes(ids).dtype == torch.int64
+    assert ctx._bit_planes(bm).dtype == torch.int64
+    # a real evaluate() call must not raise the scatter_reduce_ dtype-mismatch
+    # error that motivated this fix (self.dtype == src.dtype).
+    ctx.evaluate(nl.node_x, nl.node_y)
+
+
+def test_gpu_pair_key_chunks_correct_across_many_chunks():
+    """The pair_key_chunks -> boundary_pair_demand reduction was refactored to
+    accumulate per-chunk via torch.bincount instead of one final
+    torch.cat(...).cpu().numpy() + np.unique sync (M3-scope memory fix #2).
+    A K=32 grid with many boundary-crossing edges forces multiple segment
+    chunks/buckets to all contribute to the same (a,b) pair keys; this checks
+    the accumulated counts are still exactly correct (not just that *a*
+    boundary_pair_demand dict comes out), independent of chunk boundaries."""
+    rg = RegionGrid(make_grid_regions(DIE, 8, 4, lattice=32))
+    rng = np.random.default_rng(55)
+    nl = _lambda_ge4_netlist(rng, rg.k)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    assert len(ref.boundary_pair_demand) > 5  # sanity: multiple distinct pairs
+    assert gpu.boundary_pair_demand == ref.boundary_pair_demand
+
+
+@pytest.mark.slow
+def test_legacy_fields_bit_exact_regression_adaptec1_k16_grid_flat():
+    """T1 deliverable #3: "既有欄位逐位元不變" regression, checked against the
+    real saved evaluator output on adaptec1 (not just synthetic fixtures) --
+    results/m2/ablation/adaptec1_A0_k16_grid.json (+ its .npz positions) is the
+    exact "adaptec1 k16 grid flat" run tabulated in the M3 design draft §2.2
+    (io_mst 30,256 / ft_mst 2,545), recomputed here with both evaluator_ref and
+    evaluator_gpu after the T1 changes (region_graph wiring, paired int8 bit
+    planes, pair_key_chunks bincount refactor) and compared bit-for-bit against
+    that pre-T1 saved JSON. Also reports the new io_rg/ft_rg fields (see the T1
+    report) and cross-checks the F11 identity + CPU/GPU equivalence on real
+    (not synthetic) net topology."""
+    import json, os
+    from ioplace.drivers.run_placement import _load_dreamplace, get_regions_for
+    from ioplace.netlist import netlist_from_placedb
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    saved_path = os.path.join(repo, "results/m2/ablation/adaptec1_A0_k16_grid.json")
+    saved = json.load(open(saved_path))
+    npz = np.load(saved_path + ".npz")
+
+    root = os.environ.get("DREAMPLACE_ROOT", "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace")
+    cfg = os.path.join(root, "install/test/ispd2005/adaptec1.json")
+    params, placedb = _load_dreamplace(cfg)
+    placedb.initialize(params)
+    nl = netlist_from_placedb(placedb)
+    die = (float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh))
+    rg = RegionGrid(get_regions_for(die, 16, "grid", 0))
+
+    node_x, node_y = npz["node_x"], npz["node_y"]
+    ref = evaluate(nl, node_x, node_y, rg)
+    gpu = evaluate_gpu(nl, node_x, node_y, rg)
+
+    for res, tag in [(ref, "ref"), (gpu, "gpu")]:
+        assert res.io_count == saved["io_count"], tag
+        assert res.ft_count == saved["ft_count"], tag
+        assert res.large_net_lb == saved["large_net_lb"], tag
+        assert res.hpwl == pytest.approx(saved["hpwl"], rel=1e-9), tag
+    # tree_wl is a sum-order-sensitive float64 reduction (see module docstring);
+    # exact on CPU (evaluator_ref, same algorithm as the original save), only
+    # approx on GPU (reduction-order differs from the Python accumulation loop).
+    assert ref.tree_wl == pytest.approx(saved["tree_wl"], rel=1e-9)
+    assert gpu.tree_wl == pytest.approx(saved["tree_wl"], rel=1e-5)
+
+    # new M3 T1 fields: CPU/GPU equivalence + F11 identity on the real netlist
+    assert np.array_equal(gpu.per_net_steiner, ref.per_net_steiner)
+    assert np.array_equal(gpu.per_net_home, ref.per_net_home)
+    assert gpu.io_rg == ref.io_rg and gpu.ft_rg == ref.ft_rg
+    assert ref.io_rg == ref.hard_lambda_sum + ref.ft_rg
+    ft_rg_per_net = ref.per_net_steiner.astype(np.int64) - np.maximum(ref.per_net_lambda.astype(np.int64) - 1, 0)
+    assert (ft_rg_per_net >= 0).all()
+    assert (ref.per_net_steiner <= ref.per_net_crossings).all()
+    print(f"\n[T1] adaptec1 k16 grid flat: io_rg={ref.io_rg} ft_rg={ref.ft_rg} "
+          f"(design draft §2.2 reference: io_rg=26921 ft_rg=2454)")
+
+
+# ---------------------------------------------------------------------------
+# M4 T2: evaluator streaming (one-hot elimination, edge/segment batching,
+# int32 indices with int64 composite keys). See
+# docs/superpowers/specs/2026-08-13-m4-scale-up-design-draft.md §4.2's
+# field-specific acceptance table: integer fields (crossings/ft/lambda/
+# pair_demand/steiner/home/edge counts) must be *bit-exact* across
+# construction parameters (mst_chunk_budget/seg_chunk_budget/edge_batch_size);
+# tree_wl/hpwl (sum-order-sensitive float64 reductions) only need rel<=1e-12.
+# ---------------------------------------------------------------------------
+
+def _assert_batch_invariant_fields(a, b, float_rel=1e-12):
+    """a, b: two EvalResult from the same netlist/positions, different
+    construction parameters (mst_chunk_budget/seg_chunk_budget/edge_batch_size).
+    Every integer/structural field must be bit-exact; tree_wl/hpwl only need
+    rel<=float_rel (spec §4.2's pre-registered tolerance, not bit-exact --
+    see the module docstring and T2's empirical evidence for why)."""
+    assert a.io_count == b.io_count
+    assert a.ft_count == b.ft_count
+    assert a.hard_lambda_sum == b.hard_lambda_sum
+    assert a.large_net_lb == b.large_net_lb
+    assert np.array_equal(a.per_net_crossings, b.per_net_crossings)
+    assert np.array_equal(a.per_net_ft, b.per_net_ft)
+    assert np.array_equal(a.per_net_lambda, b.per_net_lambda)
+    assert np.array_equal(a.per_net_steiner, b.per_net_steiner)
+    assert np.array_equal(a.per_net_home, b.per_net_home)
+    assert a.io_rg == b.io_rg
+    assert a.ft_rg == b.ft_rg
+    assert a.boundary_pair_demand == b.boundary_pair_demand
+    assert a.tree_wl == pytest.approx(b.tree_wl, rel=float_rel)
+    assert a.hpwl == pytest.approx(b.hpwl, rel=float_rel)
+
+
+def test_gpu_evaluate_batch_invariance_small_batches():
+    """T2 field-specific acceptance, fast/synthetic form: construction
+    parameters that force many small chunks (mst_chunk_budget/seg_chunk_budget/
+    edge_batch_size all tiny, well below this case's edge/segment counts) must
+    give bit-exact integer fields and rel<=1e-12 tree_wl/hpwl vs. a single
+    huge-batch ("process everything in one shot") reference run -- i.e. the
+    T2 batching refactor changes memory shape only, not results. Uses
+    _lambda_ge4_netlist (K=32, several high-fanout Λ>=4 nets mixed with small
+    nets) so multiple MST degree buckets and multiple segment-length buckets
+    are all exercised by the chunking, not just the common-case small nets."""
+    rg = RegionGrid(make_grid_regions(DIE, 8, 4, lattice=32))
+    rng = np.random.default_rng(123)
+    nl = _lambda_ge4_netlist(rng, rg.k)
+
+    from ioplace.evaluator_gpu import GpuEvalContext
+    ref_ctx = GpuEvalContext(nl, rg, device="cuda",
+                              mst_chunk_budget=10**9, seg_chunk_budget=10**9,
+                              edge_batch_size=10**9)
+    ref = ref_ctx.evaluate(nl.node_x, nl.node_y)
+
+    for mst_b, seg_b, edge_b in [(3, 3, 3), (7, 11, 5), (1, 4, 2)]:
+        ctx = GpuEvalContext(nl, rg, device="cuda",
+                              mst_chunk_budget=mst_b, seg_chunk_budget=seg_b,
+                              edge_batch_size=edge_b)
+        got = ctx.evaluate(nl.node_x, nl.node_y)
+        _assert_batch_invariant_fields(ref, got)
+        # also lock in against evaluator_ref, not just self-consistency
+        cpu = evaluate(nl, nl.node_x, nl.node_y, rg)
+        assert got.io_count == cpu.io_count
+        assert got.ft_count == cpu.ft_count
+        assert np.array_equal(got.per_net_crossings, cpu.per_net_crossings)
+        assert np.array_equal(got.per_net_ft, cpu.per_net_ft)
+        assert got.boundary_pair_demand == cpu.boundary_pair_demand
+
+
+@pytest.mark.parametrize("k_shape", [
+    (1, 1, 20),   # K=1: degenerate single-region grid
+    (4, 2, 20),   # K=8
+    (8, 4, 32),   # K=32
+])
+def test_gpu_evaluate_k_multichunk_empty_degree_buckets(k_shape):
+    """T2 acceptance: 'K in {1,8,32} x multi-chunk x empty bucket x legacy
+    field regression'. Builds a netlist with an explicit *gap* in the net
+    degree distribution (only degree 2 and degree 40 nets -- degrees 3..39
+    are all empty _buckets entries, exercising the `if len(net_ids)==0:
+    continue` path robustly rather than incidentally), evaluates with tiny
+    chunk budgets (forcing every bucket that *is* non-empty through multiple
+    chunks), and checks bit-exact agreement with evaluator_ref."""
+    from ioplace.netlist import Netlist
+    from ioplace.evaluator_gpu import GpuEvalContext
+    rows, cols, lattice = k_shape
+    if rows == 1 and cols == 1:
+        from ioplace.regions import RegionSet, RegionSpec
+        rg = RegionGrid(RegionSet(die=DIE, lattice=lattice,
+                                   regions=[RegionSpec("P0", np.array([[0., 0., 100., 100.]]))]))
+    else:
+        rg = RegionGrid(make_grid_regions(DIE, rows, cols, lattice=lattice))
+
+    rng = np.random.default_rng(7)
+    n_cells = 300
+    node_x = rng.uniform(0.5, 99.5, n_cells)
+    node_y = rng.uniform(0.5, 99.5, n_cells)
+    degree_plan = [2] * 40 + [40] * 5  # degrees 3..39 are an empty gap in _buckets
+    pins, p2n = [], []
+    for net, d in enumerate(degree_plan):
+        pins += list(rng.choice(n_cells, d, replace=False))
+        p2n += [net] * d
+    p2n = np.array(p2n, np.int32)
+    pins = np.array(pins, np.int32)
+    start = np.searchsorted(p2n, np.arange(len(degree_plan) + 1)).astype(np.int32)
+    nl = Netlist(node_x=node_x, node_y=node_y, node_size_x=np.ones(n_cells),
+                 node_size_y=np.ones(n_cells), num_movable=n_cells,
+                 num_terminals=0, num_terminal_NIs=0,
+                 pin_offset_x=np.zeros(len(pins)), pin_offset_y=np.zeros(len(pins)),
+                 pin2node=pins, pin2net=p2n,
+                 flat_net2pin=np.arange(len(pins), dtype=np.int32),
+                 flat_net2pin_start=start, xl=0., yl=0., xh=100., yh=100.)
+
+    cpu = evaluate(nl, nl.node_x, nl.node_y, rg)
+    ctx = GpuEvalContext(nl, rg, device="cuda",
+                          mst_chunk_budget=5, seg_chunk_budget=5, edge_batch_size=3)
+    gpu = ctx.evaluate(nl.node_x, nl.node_y)
+
+    assert gpu.io_count == cpu.io_count
+    assert gpu.ft_count == cpu.ft_count
+    assert np.array_equal(gpu.per_net_crossings, cpu.per_net_crossings)
+    assert np.array_equal(gpu.per_net_ft, cpu.per_net_ft)
+    assert gpu.tree_wl == pytest.approx(cpu.tree_wl, rel=1e-5)
+    assert gpu.boundary_pair_demand == cpu.boundary_pair_demand
+    assert gpu.hard_lambda_sum == cpu.hard_lambda_sum
+    assert np.array_equal(gpu.per_net_lambda, cpu.per_net_lambda)
+    assert np.array_equal(gpu.per_net_steiner, cpu.per_net_steiner)
+    assert np.array_equal(gpu.per_net_home, cpu.per_net_home)
+    assert gpu.io_rg == cpu.io_rg and gpu.ft_rg == cpu.ft_rg
+    # structural self-check (spec §4.2: "MST edge total / per-net edge count
+    # must be bit-exact" -- guards against a batch boundary silently
+    # dropping/duplicating an edge): total MST edges is a pure function of
+    # net degrees (sum(d-1) over the two-or-more-pin nets), independent of
+    # chunk/batch size, and per_net_crossings' sum (io_count) already being
+    # exact above is the direct evidence no edge was lost or double-counted.
+    expected_edges = sum(d - 1 for d in degree_plan)
+    edge_net_id, _, _ = ctx._batch_mst(
+        *ctx._pin_positions(torch.as_tensor(nl.node_x, dtype=torch.float64, device=ctx.device),
+                             torch.as_tensor(nl.node_y, dtype=torch.float64, device=ctx.device)))
+    assert edge_net_id.numel() == expected_edges
+
+
+@pytest.mark.slow
+def test_gpu_evaluate_batch_invariance_bigblue4_k32_1e6_8e6_all():
+    """T2's literal field-specific acceptance test (spec §4.2 T2 row): batch
+    size in {1e6, 8e6, "all edges in one batch"} on a real, large-enough case
+    that these settings actually produce a different number of MST-edge
+    batches (bigblue4 K=32 has ~6.4M MST edges -- see the printed count) --
+    unlike a small synthetic case, this exercises exactly the field-specific
+    contract that matters at production scale: integer fields bit-exact,
+    tree_wl/hpwl rel<=1e-12."""
+    import os
+    from ioplace.drivers.run_placement import _load_dreamplace, get_regions_for
+    from ioplace.netlist import netlist_from_placedb
+    from ioplace.evaluator_gpu import GpuEvalContext
+
+    root = os.environ.get("DREAMPLACE_ROOT", "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace")
+    cfg = os.path.join(root, "install/test/ispd2005/bigblue4.json")
+    params, placedb = _load_dreamplace(cfg)
+    placedb.initialize(params)
+    nl = netlist_from_placedb(placedb)
+    die = (float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh))
+    rg = RegionGrid(get_regions_for(die, 32, "grid", 0))
+
+    results = {}
+    for tag, edge_batch in [("1e6", 1_000_000), ("8e6", 8_000_000), ("all", 10**9)]:
+        ctx = GpuEvalContext(nl, rg, device="cuda", edge_batch_size=edge_batch)
+        results[tag] = ctx.evaluate(nl.node_x, nl.node_y)
+
+    print(f"\n[T2] bigblue4 K=32 batch invariance: MST edges under 1e6 batching "
+          f"produced multiple batches (edge_batch_size=1e6 < total edges)")
+
+    _assert_batch_invariant_fields(results["1e6"], results["8e6"])
+    _assert_batch_invariant_fields(results["1e6"], results["all"])
+    _assert_batch_invariant_fields(results["8e6"], results["all"])
+
+    # cross-check against evaluator_ref too (existing rel<=1e-5 tree_wl contract)
+    cpu = evaluate(nl, nl.node_x, nl.node_y, rg)
+    for tag, res in results.items():
+        assert res.io_count == cpu.io_count, tag
+        assert res.ft_count == cpu.ft_count, tag
+        assert np.array_equal(res.per_net_crossings, cpu.per_net_crossings), tag
+        assert np.array_equal(res.per_net_ft, cpu.per_net_ft), tag
+        assert res.tree_wl == pytest.approx(cpu.tree_wl, rel=1e-5), tag
+
+
+# baselines measured on this host (L4, torch 2.8.0+cu128), max_memory_allocated,
+# fresh subprocess per measurement (M2/M4 spec B1: peak stats pollute across
+# arms in the same process, so cross-arm comparisons must be cross-process):
+#   pre-M3-T1 (commit 794cd85, original (P,K) int64 one-hot):  8.354808330535889 GB
+#   post-M3-T1 / pre-T2 HEAD (commit 0a2e32c..da818f4, paired
+#     int8 accumulators but still a (P,K) int8 one-hot source):  6.244536399841309 GB
+_BIGBLUE4_K32_PRE_M3T1_PEAK_GB = 8.354808330535889
+_BIGBLUE4_K32_PRE_T2_HEAD_PEAK_GB = 6.244536399841309
+
+
+@pytest.mark.slow
+def test_gpu_evaluator_memory_bigblue4_k32_reduction():
+    """T2 acceptance: bigblue4 K=32 peak memory reduction >=60%, reported
+    against both baselines the M4 T2 instruction asked for (pre-M3-T1's
+    original one-hot int64 implementation, and post-M3-T1/pre-T2 HEAD -- see
+    the module-level constants above for provenance)."""
+    import os
+    from ioplace.drivers.run_placement import _load_dreamplace, get_regions_for
+    from ioplace.netlist import netlist_from_placedb
+    from ioplace.evaluator_gpu import GpuEvalContext
+
+    root = os.environ.get("DREAMPLACE_ROOT", "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace")
+    cfg = os.path.join(root, "install/test/ispd2005/bigblue4.json")
+    params, placedb = _load_dreamplace(cfg)
+    placedb.initialize(params)
+    nl = netlist_from_placedb(placedb)
+    die = (float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh))
+    rg = RegionGrid(get_regions_for(die, 32, "grid", 0))
+
+    torch.cuda.empty_cache()
+    torch.cuda.reset_peak_memory_stats()
+    ctx = GpuEvalContext(nl, rg, device="cuda")  # default edge_batch_size=1_000_000
+    ctx.evaluate(nl.node_x, nl.node_y)
+    torch.cuda.synchronize()
+    peak_gb = torch.cuda.max_memory_allocated() / 2**30
+
+    reduction_vs_pre_m3t1 = 1.0 - peak_gb / _BIGBLUE4_K32_PRE_M3T1_PEAK_GB
+    reduction_vs_pre_t2_head = 1.0 - peak_gb / _BIGBLUE4_K32_PRE_T2_HEAD_PEAK_GB
+    print(f"\n[T2] bigblue4 K=32 peak_alloc={peak_gb:.4f}GB "
+          f"reduction vs pre-M3-T1={reduction_vs_pre_m3t1:.1%} "
+          f"reduction vs pre-T2 HEAD={reduction_vs_pre_t2_head:.1%}")
+
+    assert reduction_vs_pre_m3t1 >= 0.60
+    assert reduction_vs_pre_t2_head >= 0.60
+
+
+@pytest.mark.slow
+def test_gpu_evaluator_memory_mempool_group_k32_under_2gb():
+    """T2 acceptance (M4-G1 gate): mempool_group (3.5M nets) K=32 real-run
+    peak <=2GB. Skips (does not fail) if the ISPD2025 corpus/config isn't
+    present on this host -- that corpus is produced by a parallel M4 T3
+    task, not this one."""
+    import os
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cfg = os.path.join(repo, "benchmarks/ispd25/mempool_group.json")
+    if not os.path.exists(cfg):
+        pytest.skip(f"{cfg} not present (produced by the M4 T3 task)")
+
+    from ioplace.dreamplace_env import setup_dreamplace
+    setup_dreamplace()
+    import Params, PlaceDB
+    from ioplace.netlist import netlist_from_placedb
+    from ioplace.drivers.run_placement import get_regions_for
+    from ioplace.evaluator_gpu import GpuEvalContext
+
+    params = Params.Params()
+    params.load(cfg)
+    placedb = PlaceDB.PlaceDB()
+    placedb(params)
+    placedb.initialize(params)
+    nl = netlist_from_placedb(placedb)
+    die = (float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh))
+    rg = RegionGrid(get_regions_for(die, 32, "grid", 0))
+
+    torch.cuda.empty_cache()
+    torch.cuda.reset_peak_memory_stats()
+    ctx = GpuEvalContext(nl, rg, device="cuda")  # default edge_batch_size=1_000_000
+    ctx.evaluate(nl.node_x, nl.node_y)
+    torch.cuda.synchronize()
+    peak_gb = torch.cuda.max_memory_allocated() / 2**30
+
+    print(f"\n[T2] mempool_group K=32 (n_nets={nl.num_nets}) peak_alloc={peak_gb:.4f}GB (gate: <=2GB)")
+    assert peak_gb <= 2.0

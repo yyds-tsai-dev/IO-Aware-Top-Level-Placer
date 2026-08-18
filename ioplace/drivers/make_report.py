@@ -68,5 +68,75 @@ def main():
     with open(a.out, "w") as f:
         f.write(md)
 
+# ---------------------------------------------------------------------------
+# Task 8 Step 3: M2 ablation/report table (design v2 sec 8.2)
+# ---------------------------------------------------------------------------
+
+# Column label -> JSON key, in the exact order of design v2 sec 8.2's header
+# row. Every key here is looked up with a plain dict .get() against (a) the
+# parsed run JSON, for keys the run schema actually writes (checked against
+# results/m2/sweep/*.json and results/m2/noise/*.json -- both use the
+# run_placement_io.run_io schema, including for their "flat" baselines, which
+# T6/T7 generate via rho_max=0 observer-mode `io` runs, not `run_flat`), or
+# (b) the row dict this module computes (the "case"/Δ% keys below). A label
+# with no matching key anywhere (only "margin" -- the schema only ever has
+# "rho_margin"/"margin_m", never a field literally named "margin") always
+# renders "—"; this module never guesses a mapping for it.
+M2_TABLE_SPEC = [
+    ("case", "case"), ("mode", "mode"), ("k", "k"), ("rtype", "rtype"),
+    ("det", "det"), ("dp_seed", "dp_seed"), ("io_count", "io_count"),
+    ("io_gp", "io_gp"), ("ft_count", "ft_count"),
+    ("hard_lambda_sum", "hard_lambda_sum"), ("tree_wl", "tree_wl"), ("hpwl", "hpwl"),
+    ("Δio%", "d_io_pct"), ("Δio_gp%", "d_io_gp_pct"), ("Δhpwl%", "d_hpwl_pct"),
+    ("lg_loss", "lg_loss"), ("runtime_s", "runtime_s"), ("peak_mem_mb", "peak_mem_mb"),
+    ("rho_max", "rho_max"), ("tau_hi", "tau_hi"), ("tau_lo", "tau_lo"),
+    ("alpha_io", "alpha_io"), ("w_mode", "w_mode"), ("d_max", "d_max"),
+    ("margin", "margin"), ("lambda_io_final", "lambda_io_final"),
+    ("spearman_rho", "spearman_rho"),
+]
+
+def _delta_pct(value, baseline):
+    """(value - baseline) / baseline * 100, or None if either side is missing
+    or baseline is 0 (division by a flat baseline of 0 is meaningless, not
+    infinite) -- None renders as the table's "—" placeholder, never 0 or NaN."""
+    if value is None or baseline is None or baseline == 0:
+        return None
+    return (value - baseline) / baseline * 100.0
+
+def _fmt_or_dash(v):
+    return "—" if v is None else _fmt(v)
+
+def build_m2_table(result_jsons, flat_baselines):
+    """Task 8 Step 3 / design v2 sec 8.2: render the ablation/report table.
+
+    Args:
+      result_jsons: list of paths to run JSON files (the A0-A7 schema written
+        by run_flat/run_reweight/run_io).
+      flat_baselines: dict keyed (case, k, rtype) -> {"io_count", "io_gp",
+        "hpwl"} holding the flat mean each of Δio%/Δio_gp%/Δhpwl% is computed
+        against (design v2 sec 8.2: "同 case/同 k/同 rtype/同 det regime 的
+        flat 平均值"; the det-regime split is the caller's responsibility --
+        pass a baselines dict already restricted to the run's det regime).
+        A missing (case,k,rtype) key, or a missing metric within it, renders
+        that Δ% cell "—" rather than guessing a value.
+
+    Returns a single Markdown table (header + one row per result_jsons entry,
+    in input order) as a string.
+    """
+    lines = ["| " + " | ".join(h for h, _ in M2_TABLE_SPEC) + " |",
+             "|" + "---|" * len(M2_TABLE_SPEC)]
+    for p in result_jsons:
+        r = json.load(open(p))
+        case = os.path.basename(r["config"]).replace(".json", "")
+        base = flat_baselines.get((case, r.get("k"), r.get("rtype")), {})
+        row = dict(r)
+        row["case"] = case
+        row["d_io_pct"] = _delta_pct(r.get("io_count"), base.get("io_count"))
+        row["d_io_gp_pct"] = _delta_pct(r.get("io_gp"), base.get("io_gp"))
+        row["d_hpwl_pct"] = _delta_pct(r.get("hpwl"), base.get("hpwl"))
+        lines.append("| " + " | ".join(_fmt_or_dash(row.get(key))
+                                       for _, key in M2_TABLE_SPEC) + " |")
+    return "\n".join(lines) + "\n"
+
 if __name__ == "__main__":
     main()

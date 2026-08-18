@@ -1,0 +1,36 @@
+{
+ "aux_input": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/arrays/1x2_n2/alias/synA.aux",
+ "gpu": 1,
+ "num_bins_x": 4096,
+ "num_bins_y": 2048,
+ "global_place_stages": [
+  {
+   "num_bins_x": 4096,
+   "num_bins_y": 2048,
+   "iteration": 2000,
+   "learning_rate": 0.01,
+   "wirelength": "weighted_average",
+   "optimizer": "nesterov"
+  }
+ ],
+ "target_density": 0.714,
+ "density_weight": 8e-05,
+ "gamma": 4.0,
+ "random_seed": 1000,
+ "scale_factor": 1.0,
+ "deterministic_flag": 1,
+ "ignore_net_degree": 100,
+ "enable_fillers": 1,
+ "gp_noise_ratio": 0.025,
+ "global_place_flag": 1,
+ "legalize_flag": 1,
+ "detailed_place_flag": 0,
+ "stop_overflow": 0.07,
+ "dtype": "float32",
+ "plot_flag": 0,
+ "random_center_init_flag": 1,
+ "gift_init_flag": 0,
+ "sort_nets_by_degree": 0,
+ "num_threads": 16,
+ "_aux_alias_note": "aux_input points at a letter-prefixed symlink alias: DREAMPlace bookshelf lexer cannot parse digit-leading filenames (1x2_n2.aux:1.21 syntax error) - the cause of T6B V1 infrastructure_blocked. Symlinks reference the original verified arrays; content unchanged."
+}

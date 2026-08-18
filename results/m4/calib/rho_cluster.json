@@ -1,0 +1,65 @@
+{
+ "case": "cluster",
+ "flat": {
+  "final_overflow": 0.06976862251758575,
+  "gp_iterations_run": 1252,
+  "hpwl": 2095445937.019219,
+  "io_count": 219316,
+  "run_id": "b60324cc-c06c-4cd5-9253-db590454c800"
+ },
+ "grid": {
+  "0.05": {
+   "d_hpwl_pct": -0.005088995251265464,
+   "d_io_pct": -2.5593207973882435,
+   "final_overflow": 0.0694294199347496,
+   "gp_iterations_run": 1281,
+   "hpwl": 2095339299.8749912,
+   "io_count": 213703,
+   "run_id": "09bc5d56-89ea-4c80-9727-b940789b3db6",
+   "runtime_s": 6690.835847616196,
+   "stop_overflow_reached": true
+  },
+  "0.10": {
+   "d_hpwl_pct": 0.28391841271686313,
+   "d_io_pct": -6.108081489722592,
+   "final_overflow": 0.06988196820020676,
+   "gp_iterations_run": 1277,
+   "hpwl": 2101395293.862944,
+   "io_count": 205920,
+   "run_id": "e965846e-f2c9-4d67-8c4a-4bd6cf9c0ffd",
+   "runtime_s": 6715.354465961456,
+   "stop_overflow_reached": true
+  },
+  "0.15": {
+   "d_hpwl_pct": 0.791177636453273,
+   "d_io_pct": -9.451658793704063,
+   "final_overflow": 0.0696701928973198,
+   "gp_iterations_run": 1293,
+   "hpwl": 2112024636.6568837,
+   "io_count": 198587,
+   "run_id": "9c8a5ba8-48d9-4089-b6ad-a4369aaacef2",
+   "runtime_s": 6740.032137870789,
+   "stop_overflow_reached": true
+  },
+  "0.20": {
+   "d_hpwl_pct": 1.5446747557467118,
+   "d_io_pct": -13.063798354885188,
+   "final_overflow": 0.06934311985969543,
+   "gp_iterations_run": 1304,
+   "hpwl": 2127813761.428675,
+   "io_count": 190665,
+   "run_id": "8a81eeff-d6e7-4176-a3fb-2cc8b59dee67",
+   "runtime_s": 6795.150600671768,
+   "stop_overflow_reached": true
+  }
+ },
+ "iteration_budget": 2000,
+ "k": 16,
+ "note": "grid boundary: 0.20 is the largest preregistered candidate; M4-G2 forbids ad-hoc grid extension",
+ "repo_commit": "8873e00d1d1715c8f63096cd15665a02a30b3967",
+ "rho_star": "0.20",
+ "rtype": "grid",
+ "seed_A": 1000,
+ "seed_B": 2000,
+ "selection_rule": "preregistered selection (M4 spec 7.1 T8b): largest rho with d_hpwl <= +5% vs flat on seed A(=1000); report runs use seed B(=2000); Delta io is NOT used for selection (winner-bias control)"
+}

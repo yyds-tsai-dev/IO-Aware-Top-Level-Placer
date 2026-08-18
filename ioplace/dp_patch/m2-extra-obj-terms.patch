@@ -1,0 +1,72 @@
+From d971880a15ef684c4a90bccd2c65d62ae7e33297 Mon Sep 17 00:00:00 2001
+From: yyds-tsai-dev <0979030@gmail.com>
+Date: Mon, 10 Aug 2026 11:29:16 +0800
+Subject: [PATCH] io-aware: per-instance extra objective terms + expose
+ optimizer/model
+
+---
+ dreamplace/NonLinearPlace.py | 4 ++++
+ dreamplace/Params.py         | 4 +++-
+ dreamplace/PlaceObj.py       | 9 +++++++++
+ 3 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/dreamplace/NonLinearPlace.py b/dreamplace/NonLinearPlace.py
+index 58afdfa..241f89c 100644
+--- a/dreamplace/NonLinearPlace.py
++++ b/dreamplace/NonLinearPlace.py
+@@ -230,6 +230,10 @@ class NonLinearPlace(BasicPlace.BasicPlace):
+                                "Every training epoch calls the function 'step(closure)'." % (optimizer_name))
+ 
+                 logging.info("use %s optimizer" % (optimizer_name))
++                # io-aware: expose optimizer/model so the iteration callback can refresh
++                # objective-dependent optimizer state (design sec 6.4)
++                self.optimizer = optimizer
++                self.model = model
+                 model.train()
+                 # defining evaluation ops
+                 eval_ops = {
+diff --git a/dreamplace/Params.py b/dreamplace/Params.py
+index d9c42ee..1117cf0 100644
+--- a/dreamplace/Params.py
++++ b/dreamplace/Params.py
+@@ -112,7 +112,9 @@ class Params:
+         """
+         data = {}
+         for key, value in self.__dict__.items():
+-            if key != 'params_dict': 
++            # io-aware: skip runtime-only attachments (e.g. _extra_obj_terms, which
++            # holds python callables and is not JSON-serializable)
++            if key != 'params_dict' and not key.startswith('_'):
+                 data[key] = value
+         return data
+ 
+diff --git a/dreamplace/PlaceObj.py b/dreamplace/PlaceObj.py
+index c1d45e2..1e429a2 100644
+--- a/dreamplace/PlaceObj.py
++++ b/dreamplace/PlaceObj.py
+@@ -290,6 +290,11 @@ class PlaceObj(nn.Module):
+             self.routability_Lsub_iteration = self.Lsub_iteration
+         self.start_fence_region_density = False
+ 
++        # io-aware: runtime-attached extra objective terms (see IO-Aware-Top-Level-Placer
++        # docs/superpowers/specs/2026-08-06-m2-differentiable-io-design.md sec 6.2).
++        # Carried on `params` so each run gets its own list -- no global mutation.
++        self.extra_obj_terms = list(getattr(params, "_extra_obj_terms", []))
++
+     def obj_fn(self, pos):
+         """
+         @brief Compute objective.
+@@ -317,6 +322,10 @@ class PlaceObj(nn.Module):
+         else:
+             result = torch.add(self.wirelength, self.density, alpha=(self.density_factor * self.density_weight).item())
+ 
++        # io-aware: extra objective terms (added per-instance, see __init__)
++        for term in self.extra_obj_terms:
++            result = result + term(pos)
++
+         return result
+ 
+     def obj_and_grad_fn_old(self, pos_w, pos_g=None, admm_multiplier=None):
+-- 
+2.34.1
+

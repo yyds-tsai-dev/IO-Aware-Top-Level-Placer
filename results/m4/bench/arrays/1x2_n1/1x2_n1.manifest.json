@@ -1,0 +1,68 @@
+{
+ "C": 2,
+ "R": 1,
+ "base": {
+  "n_nets": 7007976,
+  "n_nodes": 6178822,
+  "n_pins": 24052382,
+  "n_rows": 64478,
+  "n_terminals": 23484,
+  "source_n_nets": 3503988,
+  "source_n_nodes": 3089411,
+  "source_n_pins": 12026191,
+  "source_n_rows": 32239,
+  "source_n_terminals": 11742
+ },
+ "glue": {
+  "alpha": 0.10230633302323285,
+  "kernel": "power_law",
+  "lambda_0": 4387.31377772961,
+  "n_nets": 4413,
+  "n_pins": 8826,
+  "seed": 0
+ },
+ "output_sha256": {
+  "nets": "96e951addab9da91c78033922e151aecb82fe8b5c13a000528c1b7e9d01c9fb0",
+  "nodes": "ca60340818d1a83c47c18db9761206652e13e6a10ea57b01469dde63170a42e3",
+  "pl": "5b7cab1f242178cd24f24b8c962b220f463c1924d81ed69ca39133d1aabd818b",
+  "scl": "392d0f2024d58eb3180eda720ef324cb12ae2750d3f22ee72fdc802a1685b4c5",
+  "wts": "bd900238f1c8e315a9a55c04ab4e7bd11195be474df75e486902d6a047a7b562"
+ },
+ "seed": 0,
+ "source_prefix": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/mempool_group_export/mempool_group",
+ "source_sha256": {
+  "nets": "42c5a9d6b641248856e171dd7ea1aa6c01275c38f6792d6ba697e909511e3e0c",
+  "nodes": "36613f1a9923197a7555d91ceed4f978e33713b020c3e15e04810bf0c3c83b21",
+  "pl": "82dd06e3f6606342191db384dd1f94f18e68cfbb84e122226f77213947dcd199",
+  "scl": "08b84fe8ca39e36d101a96e2b8482d76362ab8655ef952726da9413d732bd380",
+  "wts": "bd900238f1c8e315a9a55c04ab4e7bd11195be474df75e486902d6a047a7b562"
+ },
+ "t6": {
+  "alpha": 0.10230633302323285,
+  "expected_pair_counts": {
+   "(0, 0)|(0, 1)": 4387.31377772961
+  },
+  "known_simplification": "degree-2-only glue nets; uniform (not boundary-biased or iface_dist-calibrated) candidate interface-cell sampling -- see module docstring",
+  "lambda_0_tile": 4387.31377772961,
+  "n_glue_nets": 4413,
+  "n_glue_pins": 8826,
+  "normalization": "n1",
+  "primary_seed": 0,
+  "sampled_pair_counts": {
+   "(0, 0)|(0, 1)": 4413
+  },
+  "seed_reproduction_trajectory_sha256": {
+   "0": "459aa53b77ceb4074e894d9ca86a55d5526611833966fc2eef8d8ad771145030",
+   "1": "c3911c292f76d4405af037feeef0caf374855c6309745514d3af00447f663b7a",
+   "2": "8d35099eec116657dd3c251cabdf24e4bcf8bae12f31b84b526b6474ce0c24cf",
+   "3": "30bfd405fdcc872f0b3ac9da2fbefc6082e22bf6e9d46325870957cab0ebc425",
+   "4": "f16eb932284d4b27674117987836137bafd5949b371d03c07ac1f6fec8f72fcb"
+  },
+  "seed_trajectory_note": "sha256 of the deterministic (sampled pair counts + glue net endpoint list) recipe per seed, not of a re-materialized Bookshelf file -- see module docstring's efficiency note; only primary_seed's array is on disk",
+  "shape": "1x2",
+  "t_glue_s": 34.895227670669556,
+  "t_tile_s": 37.02030682563782
+ },
+ "tile_height": 6742400,
+ "tile_width": 6746520
+}

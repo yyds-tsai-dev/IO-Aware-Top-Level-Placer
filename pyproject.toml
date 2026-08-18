@@ -5,4 +5,7 @@ requires-python = ">=3.9"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["slow: integration tests that run real placements"]
+markers = [
+    "slow: integration tests that run real placements",
+    "gpu: tests that require a CUDA device (M4 T2b: not run while the GPU is busy)",
+]

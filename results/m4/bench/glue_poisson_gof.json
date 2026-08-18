@@ -1,0 +1,99 @@
+{
+ "conclusion": "Disclosure only, no action taken (Appendix A.5: \"\u53ea\u63ed\u9732,\u4e0d\u5224\u5b9a,\u4e0d\u63a1\u53d6\u884c\u52d5\"). Pooled across all 50 qualifying pairs (expected >= 42) from the 5 built glue arrays: 33 positive / 17 negative / 0 tied residuals (sampled - expected); two-sided exact binomial sign-test p=0.0328 (mildly significant at 0.05 -- consistent with Appendix A.5's disclosed all-5-arrays-positive z-scores, but the Poisson goodness-of-fit test below (which would flag a real generative bias in the per-pair variance structure) does not corroborate it). Poisson goodness-of-fit chi2=52.34, df=50, p=0.3834 -- no evidence against the per-pair Poisson means used to build these arrays. Appendix A.5's conditional (\"\u82e5 per-pair \u4e5f\u7cfb\u7d71\u6027\u504f\u6b63,\u518d\u67e5 sample_glue_net_count_from_expected\") is technically triggered by the sign test's mild significance; per this task's scope (\"\u7167\u5be6\u8a18\", disclosure only), that follow-up investigation is not performed here and is left open for whoever picks it up next.",
+ "per_array": {
+  "1x2_n1": {
+   "goodness_of_fit": {
+    "chi2_p_value": 0.6981686162473059,
+    "chi2_stat": 0.15038405000185012,
+    "df": 1
+   },
+   "min_expected": 42,
+   "n_negative": 0,
+   "n_pairs_filtered_ge_min_expected": 1,
+   "n_pairs_total": 1,
+   "n_positive": 1,
+   "n_tied": 0,
+   "sign_test_p_value": 1.0
+  },
+  "1x2_n2": {
+   "goodness_of_fit": {
+    "chi2_p_value": 0.6945026886170693,
+    "chi2_stat": 0.15425410305398396,
+    "df": 1
+   },
+   "min_expected": 42,
+   "n_negative": 0,
+   "n_pairs_filtered_ge_min_expected": 1,
+   "n_pairs_total": 1,
+   "n_positive": 1,
+   "n_tied": 0,
+   "sign_test_p_value": 1.0
+  },
+  "2x2_n1": {
+   "goodness_of_fit": {
+    "chi2_p_value": 0.17793265731042762,
+    "chi2_stat": 8.923389482736898,
+    "df": 6
+   },
+   "min_expected": 42,
+   "n_negative": 1,
+   "n_pairs_filtered_ge_min_expected": 6,
+   "n_pairs_total": 6,
+   "n_positive": 5,
+   "n_tied": 0,
+   "sign_test_p_value": 0.21875
+  },
+  "2x2_n2": {
+   "goodness_of_fit": {
+    "chi2_p_value": 0.17971403087194548,
+    "chi2_stat": 8.892511041727486,
+    "df": 6
+   },
+   "min_expected": 42,
+   "n_negative": 1,
+   "n_pairs_filtered_ge_min_expected": 6,
+   "n_pairs_total": 6,
+   "n_positive": 5,
+   "n_tied": 0,
+   "sign_test_p_value": 0.21875
+  },
+  "3x3_n2": {
+   "goodness_of_fit": {
+    "chi2_p_value": 0.5536827575089076,
+    "chi2_stat": 34.214807288301664,
+    "df": 36
+   },
+   "min_expected": 42,
+   "n_negative": 15,
+   "n_pairs_filtered_ge_min_expected": 36,
+   "n_pairs_total": 36,
+   "n_positive": 21,
+   "n_tied": 0,
+   "sign_test_p_value": 0.4050322461407632
+  }
+ },
+ "pooled": {
+  "goodness_of_fit": {
+   "chi2_p_value": 0.3834357276946738,
+   "chi2_stat": 52.33534596582189,
+   "df": 50
+  },
+  "min_expected": 42,
+  "n_negative": 17,
+  "n_pairs": 50,
+  "n_positive": 33,
+  "n_tied": 0,
+  "sign_test_p_value": 0.032839137564268484
+ },
+ "provenance": {
+  "arrays_root": "results/m4/bench/arrays",
+  "basis_doc": "docs/results/2026-08-15-m4-t6-holdout-adjudication.md Appendix A.5",
+  "glue_arrays": [
+   "1x2_n1",
+   "1x2_n2",
+   "2x2_n1",
+   "2x2_n2",
+   "3x3_n2"
+  ]
+ }
+}

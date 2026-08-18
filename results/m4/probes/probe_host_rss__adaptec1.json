@@ -1,0 +1,37 @@
+{
+ "config": "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/install/test/ispd2005/adaptec1.json",
+ "read_s": 3.4155433177948,
+ "init_s": 0.009068727493286133,
+ "rss_before_gb": 0.4833221435546875,
+ "rss_after_read_gb": 1.2509498596191406,
+ "rss_after_init_gb": 1.2577857971191406,
+ "num_physical": 211447,
+ "num_movable": 210904,
+ "num_terminals": 543,
+ "num_terminal_NIs": 0,
+ "num_nets": 221142,
+ "num_pins": 919701,
+ "num_filler": 160067,
+ "die": [
+  0.0,
+  0.0,
+  10692.0,
+  10680.0
+ ],
+ "row_height": 12.0,
+ "site_width": 1.0,
+ "total_movable_area": 37286292.0,
+ "total_fixed_area": 49164072.0,
+ "area_util": 0.5734015959773193,
+ "env": {
+  "torch_version": "2.8.0+cu128",
+  "cuda_version": "12.8",
+  "gpu_name": "NVIDIA L4",
+  "numpy_version": "1.26.4",
+  "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
+  "ioplace_commit": "e418de06c2ba7763e12b2887410d154ee0329db7",
+  "input_sha256": {
+   "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace/install/test/ispd2005/adaptec1.json": "1ebeff13e321ac66b8dfe5b562bcc7c008a01f084a488a145fab35fac33d79b3"
+  }
+ }
+}

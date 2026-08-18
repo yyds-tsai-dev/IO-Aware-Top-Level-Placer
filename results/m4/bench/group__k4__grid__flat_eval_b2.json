@@ -1,0 +1,42 @@
+{
+ "mode": "evaluate_only",
+ "npz": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/t8b/group__k16__grid__flat.json.npz",
+ "config": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_group.json",
+ "k": 4,
+ "rtype": "grid",
+ "seed": 1000,
+ "io_count": 36377,
+ "io_gp": null,
+ "ft_count": 793,
+ "hard_lambda_sum": 31191,
+ "tree_wl": 560434423.0286608,
+ "hpwl": 485485070.8171754,
+ "io_rg": 31979,
+ "ft_rg": 788,
+ "runtime_s": 659.5481779575348,
+ "evaluate_only": true,
+ "source_npz": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/t8b/group__k16__grid__flat.json.npz",
+ "source_npz_sha256": "fab86b05d9ba2ec864496f40d1dfdccd5806606928f81b6f90d5719f8cec61c5",
+ "run_id": "0fb0f404-49f0-4632-8ce0-41eefadad950",
+ "status": "ok",
+ "schema_version": 3,
+ "repo_commit": "10ee228ebe5fefa34a4d8886652a1cf60fd9076a",
+ "input_sha256": {
+  "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_group.json": "fccc19b1dfc8bef6f922cdc67456339825295ec5a39a21f5654b0c9846a2bafd"
+ },
+ "env": {
+  "torch_version": "2.8.0+cu128",
+  "cuda_version": "12.8",
+  "gpu_name": "NVIDIA L4",
+  "numpy_version": "1.26.4",
+  "ioplace_commit": "10ee228ebe5fefa34a4d8886652a1cf60fd9076a",
+  "dp_commit": "d971880a15ef684c4a90bccd2c65d62ae7e33297",
+  "input_sha256": {
+   "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_group.json": "fccc19b1dfc8bef6f922cdc67456339825295ec5a39a21f5654b0c9846a2bafd"
+  }
+ },
+ "command": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/drivers/evaluate_placement.py --npz /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/t8b/group__k16__grid__flat.json.npz --config /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_group.json --k 4 --rtype grid --seed 1000 --out /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/group__k4__grid__flat_eval_b2.json",
+ "hostname": "NVL5",
+ "benchmark_kind": "real",
+ "device_baseline_gb": 0.0
+}

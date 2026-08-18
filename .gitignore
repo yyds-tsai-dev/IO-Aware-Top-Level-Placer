@@ -4,4 +4,29 @@ results/**/*.pl
 results/**/*.def
 results/**/*.log
 results/**/*.npz
+results/**/*.nodes
+results/**/*.nets
+results/**/*.scl
+results/**/*.shapes
+results/**/*.route
+results/**/*.aux
+results/**/*.wts
 .superpowers/
+results/**/*.npy
+
+# --- local tooling / editor state (not part of the research record) ---
+.claude/worktrees/
+.claude/settings.local.json
+.claude/RESUME.md
+.vscode/
+
+# --- Stage2 bulk route artifacts: regenerable from out.def + the route run,
+#     far too large for git. The small evidence files next to them
+#     (metrics.json, regions.json, coord.json, verify_s2.json,
+#     crossings_k*.json, congestion.rpt, *.tcl, *.diff) ARE tracked. ---
+results/**/*.guide
+results/**/netmap.json
+results/**/segments.json
+results/**/drc.rpt
+results/**/verify_wire_length.rpt
+results/**/.*.partial.json

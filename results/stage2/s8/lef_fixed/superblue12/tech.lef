@@ -1,0 +1,3081 @@
+VERSION 5.7 ;
+BUSBITCHARS "[]" ;
+DIVIDERCHAR "/" ;
+CLEARANCEMEASURE EUCLIDEAN ;
+USEMINSPACING OBS OFF ;
+
+UNITS
+  DATABASE MICRONS 1000 ;
+END UNITS
+
+MANUFACTURINGGRID 0.001 ;
+
+PROPERTYDEFINITIONS
+ 
+  LAYER LEF57_MINSTEP STRING ;
+  LAYER LEF57_SPACING STRING ;
+  MACRO LEF57_EDGETYPE STRING ;
+  LIBRARY LEF57_CELLEDGESPACINGTABLE STRING "CELLEDGESPACINGTABLE
+   EDGETYPE 1 1 0.000
+   EDGETYPE 1 2 0.100
+   EDGETYPE 2 1 0.100
+   EDGETYPE 2 2 0.100 ;" ;
+
+END PROPERTYDEFINITIONS
+
+SITE core
+ CLASS CORE ;
+ SIZE 0.100 BY 0.900 ;
+ SYMMETRY X Y ;
+END core
+
+LAYER metal1
+  TYPE ROUTING ;
+  DIRECTION VERTICAL ;
+  WIDTH 0.05 ;	                                                
+  MAXWIDTH 5.500 ;	                                        
+  PITCH 0.100 0.100 ;
+  AREA 0.008 ;	                                                
+  MINENCLOSEDAREA 0.050 ;	                                
+  PROPERTY LEF57_MINSTEP "MINSTEP 0.048 MAXEDGES 1 ;" ;       
+ 
+  MINIMUMCUT 2 WIDTH 0.190 FROMABOVE ;
+  MINIMUMCUT 3 WIDTH 0.340 FROMABOVE ;
+  MINIMUMCUT 4 WIDTH 0.470 FROMABOVE ; 
+ 
+   PROPERTY LEF57_SPACING "SPACING 0.065 ENDOFLINE 0.056 WITHIN 0.045 PARALLELEDGE 0.11 WITHIN 0.11 ;" ;
+			        
+  SPACINGTABLE TWOWIDTHS
+		###	width=	0.000	0.074	0.158	0.212	0.704   1.600
+		###	prl=	none	0.000	0.000	0.302	0.704   1.600
+		###	---------------------------------------------------------------------         					
+    WIDTH 0.000 	        0.050	0.050   0.064   0.094   0.164	0.502
+    WIDTH 0.074 PRL 0.000       0.050   0.050   0.074	0.104	0.174	0.502
+    WIDTH 0.158 PRL 0.000	0.064	0.074	0.080	0.112	0.182	0.502
+    WIDTH 0.212 PRL 0.302	0.094	0.104	0.112 	0.142	0.208	0.502
+    WIDTH 0.704 PRL 0.704	0.164	0.174	0.182	0.208	0.282	0.502
+    WIDTH 1.600 PRL 1.600	0.502	0.502	0.502	0.502	0.502	0.502 ;
+ 
+END metal1
+
+LAYER via1
+  TYPE CUT ;
+  WIDTH 0.05 ;
+  
+  SPACING 0.132 CENTERTOCENTER ;      
+ 
+  ENCLOSURE BELOW 0.014 0.000 ;
+  ENCLOSURE ABOVE 0.030 0.000 ;
+                          
+END via1
+
+LAYER metal2
+  TYPE ROUTING ;
+  DIRECTION HORIZONTAL ;
+  PITCH 0.100 0.100 ;
+  WIDTH 0.050 ;                                                 
+  MAXWIDTH 5.500 ;                                             
+  AREA 0.010 ;
+#  PROPERTY LEF57_MINSTEP "MINSTEP 0.049 MAXEDGES 1 ;"  ;                                       
+  PROPERTY LEF57_MINSTEP "MINSTEP 0.050 MAXEDGES 1 ;" ;      
+  MINENCLOSEDAREA 0.060 ;	                               
+ 
+  MINIMUMCUT 2 WIDTH 0.190  ;
+  MINIMUMCUT 3 WIDTH 0.340  ;
+  MINIMUMCUT 4 WIDTH 0.470  ; 
+ 
+   PROPERTY LEF57_SPACING "SPACING 0.065 ENDOFLINE 0.056 WITHIN 0.045 PARALLELEDGE 0.11 WITHIN 0.11 ;" ;
+ 		       
+  SPACINGTABLE TWOWIDTHS         			
+    WIDTH 0.000 	        0.050	0.050   0.064   0.094   0.164	0.502
+    WIDTH 0.074 PRL 0.000       0.050   0.050   0.074	0.104	0.174	0.502
+    WIDTH 0.158 PRL 0.000	0.064	0.074	0.080	0.112	0.182	0.502
+    WIDTH 0.212 PRL 0.302	0.094	0.104	0.112 	0.142	0.208	0.502
+    WIDTH 0.704 PRL 0.704	0.164	0.174	0.182	0.208	0.282	0.502
+    WIDTH 1.600 PRL 1.600	0.502	0.502	0.502	0.502	0.502	0.502 ;
+
+END metal2
+
+LAYER via2
+  TYPE CUT ;
+  WIDTH 0.05 ;
+  
+  SPACING 0.132 CENTERTOCENTER ;
+ 
+  ENCLOSURE BELOW 0.016 0.000 ;
+  ENCLOSURE ABOVE 0.030 0.000 ;
+                
+END via2
+
+LAYER metal3
+  TYPE ROUTING ;
+  DIRECTION VERTICAL ;
+  PITCH 0.100 0.100 ;                                             
+  WIDTH 0.050 ;                                              
+  MAXWIDTH 5.500 ;                                           
+  AREA 0.010 ;	                                             
+
+  PROPERTY LEF57_MINSTEP "MINSTEP 0.050 MAXEDGES 1 ;" ;      
+  MINENCLOSEDAREA 0.060 ;	                               
+ 
+  MINIMUMCUT 2 WIDTH 0.190  ;
+  MINIMUMCUT 3 WIDTH 0.340  ;
+  MINIMUMCUT 4 WIDTH 0.470  ; 
+
+   PROPERTY LEF57_SPACING "SPACING 0.065 ENDOFLINE 0.056 WITHIN 0.045 PARALLELEDGE 0.11 WITHIN 0.11 ;" ;
+ 		       
+  SPACINGTABLE TWOWIDTHS         			
+    WIDTH 0.000 	        0.050	0.050   0.064   0.094   0.164	0.502
+    WIDTH 0.074 PRL 0.000       0.050   0.050   0.074	0.104	0.174	0.502
+    WIDTH 0.158 PRL 0.000	0.064	0.074	0.080	0.112	0.182	0.502
+    WIDTH 0.212 PRL 0.302	0.094	0.104	0.112 	0.142	0.208	0.502
+    WIDTH 0.704 PRL 0.704	0.164	0.174	0.182	0.208	0.282	0.502
+    WIDTH 1.600 PRL 1.600	0.502	0.502	0.502	0.502	0.502	0.502 ;
+
+END metal3
+
+LAYER via3
+  TYPE CUT ;
+  WIDTH 0.05 ;
+  
+  SPACING 0.132 CENTERTOCENTER ;
+   
+  ENCLOSURE BELOW 0.016 0.000 ;
+  ENCLOSURE ABOVE 0.030 0.000 ;
+                            
+END via3
+
+LAYER metal4
+  TYPE ROUTING ;
+  DIRECTION HORIZONTAL ;
+  PITCH 0.100 0.100 ;
+  OFFSET 0 ;                                                                              
+  WIDTH 0.050 ;                                             
+  MAXWIDTH 5.500 ;                                     
+  AREA 0.010 ;	                                        
+  PROPERTY LEF57_MINSTEP "MINSTEP 0.050 MAXEDGES 1 ;" ;      
+  MINENCLOSEDAREA 0.060 ;	                               
+ 
+  MINIMUMCUT 2 WIDTH 0.190  ;
+  MINIMUMCUT 3 WIDTH 0.340  ;
+  MINIMUMCUT 4 WIDTH 0.470  ; 
+ 
+   PROPERTY LEF57_SPACING "SPACING 0.065 ENDOFLINE 0.056 WITHIN 0.045 PARALLELEDGE 0.11 WITHIN 0.11 ;" ;
+ 		       
+  SPACINGTABLE TWOWIDTHS         			
+    WIDTH 0.000 	        0.050	0.050   0.064   0.094   0.164	0.502
+    WIDTH 0.074 PRL 0.000       0.050   0.050   0.074	0.104	0.174	0.502
+    WIDTH 0.158 PRL 0.000	0.064	0.074	0.080	0.112	0.182	0.502
+    WIDTH 0.212 PRL 0.302	0.094	0.104	0.112 	0.142	0.208	0.502
+    WIDTH 0.704 PRL 0.704	0.164	0.174	0.182	0.208	0.282	0.502
+    WIDTH 1.600 PRL 1.600	0.502	0.502	0.502	0.502	0.502	0.502 ;
+
+END metal4
+
+LAYER via4
+  TYPE CUT ;
+  WIDTH 0.1 ;
+	                 		
+  SPACING 0.10 SAMENET ;	                
+  SPACING 0.22 CENTERTOCENTER ;       		  
+
+  ENCLOSURE BELOW 0.000 0.039 ;
+  ENCLOSURE ABOVE 0.000 0.039 ;
+
+END via4
+
+LAYER metal5
+  TYPE ROUTING ;
+  DIRECTION VERTICAL ;
+  PITCH 0.2 0.2 ;
+  WIDTH 0.1 ;                                                 
+  MAXWIDTH 14 ;                                              
+  AREA 0.039 ;	                                               
+  PROPERTY LEF57_MINSTEP "MINSTEP 0.100 MAXEDGES 1 ; " ;       
+  MINENCLOSEDAREA 0.138 ;	                           
+ 
+  MINIMUMCUT 2 WIDTH 0.348 ; 
+  MINIMUMCUT 3 WIDTH 0.548 ;
+  MINIMUMCUT 4 WIDTH 0.746 ;
+ 
+  SPACINGTABLE TWOWIDTHS
+		###	width=	0.000	0.316	1.002	1.502	4.510
+		###	prl=	none	0.000	0.000	1.502	4.510
+		###	---------------------------------------------------------------------         				
+    WIDTH 0.000 	        0.100	0.146   0.248   0.248   0.248
+    WIDTH 0.316 PRL 0.000       0.146   0.200   0.299	0.299	0.299
+    WIDTH 1.002 PRL 0.000	0.248	0.299	0.398	0.398	0.398
+    WIDTH 1.502 PRL 1.502	0.248	0.299	0.398 	0.498	0.498
+    WIDTH 4.510 PRL 4.510	0.248	0.299	0.398	0.498	1.502 ;
+ 
+END metal5
+
+LAYER via5
+  TYPE CUT ;
+  WIDTH 0.1 ;	                 		
+  
+  SPACING 0.10 SAMENET ;	              
+  SPACING 0.22 CENTERTOCENTER ;       	  
+  
+  ENCLOSURE BELOW 0.000 0.039 ;
+  ENCLOSURE ABOVE 0.000 0.039 ;
+ 
+END  via5
+
+LAYER metal6
+  TYPE ROUTING ;
+  DIRECTION HORIZONTAL ;
+  PITCH 0.2 0.2 ;
+  OFFSET 0 ;                                                  
+  WIDTH 0.1 ;                                                 
+  WIDTH 0.1 ;                                                 
+  MAXWIDTH 14 ;                                              
+  AREA 0.039 ;	                                               
+  PROPERTY LEF57_MINSTEP "MINSTEP 0.100 MAXEDGES 1 ; " ;       
+  MINENCLOSEDAREA 0.138 ;	                           
+ 
+  MINIMUMCUT 2 WIDTH 0.348 ; 
+  MINIMUMCUT 3 WIDTH 0.548 ;
+  MINIMUMCUT 4 WIDTH 0.746 ;
+ 
+  SPACINGTABLE TWOWIDTHS         				
+    WIDTH 0.000 	        0.100	0.146   0.248   0.248   0.248
+    WIDTH 0.316 PRL 0.000       0.146   0.200   0.299	0.299	0.299
+    WIDTH 1.002 PRL 0.000	0.248	0.299	0.398	0.398	0.398
+    WIDTH 1.502 PRL 1.502	0.248	0.299	0.398 	0.498	0.498
+    WIDTH 4.510 PRL 4.510	0.248	0.299	0.398	0.498	1.502 ;
+
+END metal6
+
+LAYER via6
+  TYPE CUT ;
+  WIDTH 0.1 ;	                 		
+  
+  SPACING 0.10 SAMENET ;	                
+  SPACING 0.22 CENTERTOCENTER ;       		  
+      
+  ENCLOSURE BELOW 0.000 0.039 ;
+  ENCLOSURE ABOVE 0.000 0.039 ;
+ 
+END  via6
+
+LAYER metal7
+  TYPE ROUTING ;
+  DIRECTION VERTICAL ;
+  PITCH 0.2 0.2 ;
+  OFFSET 0.05 ;                                                  
+  WIDTH 0.1 ;                                                 
+  MAXWIDTH 14 ;                                             
+  AREA 0.039 ;	                                                
+  PROPERTY LEF57_MINSTEP "MINSTEP 0.100 MAXEDGES 1 ; " ;      
+  MINENCLOSEDAREA 0.138 ;	                           
+
+  MINIMUMCUT 2 WIDTH 0.348 FROMBELOW ; 
+  MINIMUMCUT 3 WIDTH 0.548 FROMBELOW ;
+  MINIMUMCUT 4 WIDTH 0.746 FROMBELOW ;
+  MINIMUMCUT 2 WIDTH 0.502 FROMABOVE ;   
+  MINIMUMCUT 3 WIDTH 0.804 FROMABOVE ;
+  MINIMUMCUT 4 WIDTH 1.110 FROMABOVE ;
+ 
+  SPACINGTABLE TWOWIDTHS         		
+    WIDTH 0.000 	        0.100	0.146   0.248   0.248   0.248
+    WIDTH 0.316 PRL 0.000       0.146   0.200   0.299	0.299	0.299
+    WIDTH 1.002 PRL 0.000	0.248	0.299	0.398	0.398	0.398
+    WIDTH 1.502 PRL 1.502	0.248	0.299	0.398 	0.498	0.498
+    WIDTH 4.510 PRL 4.510	0.248	0.299	0.398	0.498	1.502 ;
+ 
+END metal7
+
+LAYER via7
+  TYPE CUT ;
+  WIDTH 0.15 ;
+	                 	
+  SPACING 0.15 SAMENET ;	              
+  SPACING 0.364 CENTERTOCENTER ;       		  
+
+  ENCLOSURE  BELOW 0.000 0.013 ;
+  ENCLOSURE  ABOVE 0.040 0.025 ;
+ 
+END via7
+
+LAYER metal8
+  TYPE ROUTING ;
+  DIRECTION HORIZONTAL ;
+  PITCH 0.4 0.4 ;
+  WIDTH 0.2 ;                                                 
+  MAXWIDTH 16 ;                                              
+  AREA 0.128 ;	                                           
+  MINENCLOSEDAREA 0.400 ;	                          
+
+  MINIMUMCUT 2 WIDTH 0.502 FROMBELOW ; 
+  MINIMUMCUT 3 WIDTH 0.804 FROMBELOW ;
+  MINIMUMCUT 4 WIDTH 1.110 FROMBELOW ;
+  MINIMUMCUT 2 WIDTH 1.402 FROMABOVE ; 
+  MINIMUMCUT 3 WIDTH 2.204 FROMABOVE ; 
+  MINIMUMCUT 4 WIDTH 3.366 FROMABOVE ; 
+
+  SPACINGTABLE TWOWIDTHS         		
+    WIDTH 0.000 	        0.200	0.302   0.498
+    WIDTH 1.002 PRL 0.000	0.302	0.400	0.598
+    WIDTH 2.002 PRL 0.000	0.498	0.598	0.800 ;
+
+END metal8
+
+LAYER via8
+  TYPE CUT ;
+  WIDTH 0.15 ;
+	                 	
+  SPACING 0.15 SAMENET ;	              
+  SPACING 0.364 CENTERTOCENTER ;       		  
+
+  ENCLOSURE  BELOW 0.025 0.025 ;
+  ENCLOSURE  ABOVE 0.040 0.025 ;
+                        
+END via8
+
+LAYER metal9
+  TYPE ROUTING ;
+  DIRECTION VERTICAL ;
+  PITCH 0.4 0.4 ;
+  WIDTH 0.2 ;                                                 
+  MAXWIDTH 16 ;                                              
+  AREA 0.128 ;	                                           
+  MINENCLOSEDAREA 0.400 ;	                          
+
+  MINIMUMCUT 2 WIDTH 1.402 FROMBELOW ; 
+  MINIMUMCUT 3 WIDTH 2.204 FROMBELOW ; 
+  MINIMUMCUT 4 WIDTH 3.366 FROMBELOW ; 
+
+  SPACINGTABLE TWOWIDTHS         		
+    WIDTH 0.000 	        0.200	0.302   0.498
+    WIDTH 1.002 PRL 0.000	0.302	0.400	0.598
+    WIDTH 2.002 PRL 0.000	0.498	0.598	0.800 ;
+ 
+END metal9
+
+VIA SDA_via1_VH
+  LAYER metal1 ;
+    RECT -0.025 -0.039 0.025 0.039  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.025 0.055 0.025  ;
+END SDA_via1_VH
+
+VIA SDA_via1_HH
+  LAYER metal1 ;
+    RECT -0.039 -0.025 0.039 0.025  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.025 0.055 0.025  ;
+END SDA_via1_HH
+
+VIA SDA_via1_VV
+  LAYER metal1 ;
+    RECT -0.025 -0.039 0.025 0.039  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.025 -0.055 0.025 0.055  ;
+END SDA_via1_VV
+
+VIA SDA_via1_HV
+  LAYER metal1 ;
+    RECT -0.039 -0.025 0.039 0.025  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.025 -0.055 0.025 0.055  ;
+END SDA_via1_HV
+
+VIA SDA_via1_VH_V
+  LAYER metal1 ;
+    RECT -0.025 -0.08 0.025 0.08  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.025 0.055 0.025  ;
+END SDA_via1_VH_V
+
+VIA SDA_via1_VH_N
+  LAYER metal1 ;
+    RECT -0.025 -0.039 0.025 0.121  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.025 0.055 0.025  ;
+END SDA_via1_VH_N
+
+VIA SDA_via1_VH_S
+  LAYER metal1 ;
+    RECT -0.025 -0.121 0.025 0.039  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.025 0.055 0.025  ;
+END SDA_via1_VH_S
+
+VIA SDA_via1_1x2_HH
+  LAYER metal1 ;
+    RECT -0.105 -0.025 0.105 0.025  ;
+  LAYER via1 ;
+    RECT -0.091 -0.025 -0.041 0.025  ;
+    RECT 0.041 -0.025 0.091 0.025  ;
+  LAYER metal2 ;
+    RECT -0.121 -0.025 0.121 0.025  ;
+END SDA_via1_1x2_HH
+
+VIA SDA_via1_2x1_VV
+  LAYER metal1 ;
+    RECT -0.025 -0.105 0.025 0.105  ;
+  LAYER via1 ;
+    RECT -0.025 -0.091 0.025 -0.041  ;
+    RECT -0.025 0.041 0.025 0.091  ;
+  LAYER metal2 ;
+    RECT -0.025 -0.121 0.025 0.121  ;
+END SDA_via1_2x1_VV
+
+VIA SDA_via1_1x2_HH_0
+  LAYER metal1 ;
+    RECT -0.039 -0.025 0.171 0.025  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT 0.107 -0.025 0.157 0.025  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.025 0.187 0.025  ;
+END SDA_via1_1x2_HH_0
+
+VIA SDA_via1_1x2_HH_1
+  LAYER metal1 ;
+    RECT -0.171 -0.025 0.039 0.025  ;
+  LAYER via1 ;
+    RECT -0.157 -0.025 -0.107 0.025  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.187 -0.025 0.055 0.025  ;
+END SDA_via1_1x2_HH_1
+
+VIA SDA_via1_2x1_VV_0
+  LAYER metal1 ;
+    RECT -0.025 -0.039 0.025 0.171  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT -0.025 0.107 0.025 0.157  ;
+  LAYER metal2 ;
+    RECT -0.025 -0.055 0.025 0.187  ;
+END SDA_via1_2x1_VV_0
+
+VIA SDA_via1_2x1_VV_1
+  LAYER metal1 ;
+    RECT -0.025 -0.171 0.025 0.039  ;
+  LAYER via1 ;
+    RECT -0.025 -0.157 0.025 -0.107  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.025 -0.187 0.025 0.055  ;
+END SDA_via1_2x1_VV_1
+
+VIA SDA_via1_1x2_VH
+  LAYER metal1 ;
+    RECT -0.091 -0.039 0.091 0.039  ;
+  LAYER via1 ;
+    RECT -0.091 -0.025 -0.041 0.025  ;
+    RECT 0.041 -0.025 0.091 0.025  ;
+  LAYER metal2 ;
+    RECT -0.121 -0.025 0.121 0.025  ;
+END SDA_via1_1x2_VH
+
+VIA SDA_via1_2x1_HV
+  LAYER metal1 ;
+    RECT -0.039 -0.091 0.039 0.091  ;
+  LAYER via1 ;
+    RECT -0.025 -0.091 0.025 -0.041  ;
+    RECT -0.025 0.041 0.025 0.091  ;
+  LAYER metal2 ;
+    RECT -0.025 -0.121 0.025 0.121  ;
+END SDA_via1_2x1_HV
+
+VIA SDA_via1_1x2_VH_0
+  LAYER metal1 ;
+    RECT -0.025 -0.039 0.157 0.039  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT 0.107 -0.025 0.157 0.025  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.025 0.187 0.025  ;
+END SDA_via1_1x2_VH_0
+
+VIA SDA_via1_1x2_VH_1
+  LAYER metal1 ;
+    RECT -0.157 -0.039 0.025 0.039  ;
+  LAYER via1 ;
+    RECT -0.157 -0.025 -0.107 0.025  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.187 -0.025 0.055 0.025  ;
+END SDA_via1_1x2_VH_1
+
+VIA SDA_via1_2x1_HV_0
+  LAYER metal1 ;
+    RECT -0.039 -0.025 0.039 0.157  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT -0.025 0.107 0.025 0.157  ;
+  LAYER metal2 ;
+    RECT -0.025 -0.055 0.025 0.187  ;
+END SDA_via1_2x1_HV_0
+
+VIA SDA_via1_2x1_HV_1
+  LAYER metal1 ;
+    RECT -0.039 -0.157 0.039 0.025  ;
+  LAYER via1 ;
+    RECT -0.025 -0.157 0.025 -0.107  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.025 -0.187 0.025 0.055  ;
+END SDA_via1_2x1_HV_1
+
+VIA SDA_via1_2x1_VH
+  LAYER metal1 ;
+    RECT -0.025 -0.105 0.025 0.105  ;
+  LAYER via1 ;
+    RECT -0.025 -0.091 0.025 -0.041  ;
+    RECT -0.025 0.041 0.025 0.091  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.091 0.055 0.091  ;
+END SDA_via1_2x1_VH
+
+VIA SDA_via1_1x2_HV
+  LAYER metal1 ;
+    RECT -0.105 -0.025 0.105 0.025  ;
+  LAYER via1 ;
+    RECT -0.091 -0.025 -0.041 0.025  ;
+    RECT 0.041 -0.025 0.091 0.025  ;
+  LAYER metal2 ;
+    RECT -0.091 -0.055 0.091 0.055  ;
+END SDA_via1_1x2_HV
+
+VIA SDA_via1_2x1_VH_0
+  LAYER metal1 ;
+    RECT -0.025 -0.039 0.025 0.171  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT -0.025 0.107 0.025 0.157  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.025 0.055 0.157  ;
+END SDA_via1_2x1_VH_0
+
+VIA SDA_via1_2x1_VH_1
+  LAYER metal1 ;
+    RECT -0.025 -0.171 0.025 0.039  ;
+  LAYER via1 ;
+    RECT -0.025 -0.157 0.025 -0.107  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.157 0.055 0.025  ;
+END SDA_via1_2x1_VH_1
+
+VIA SDA_via1_1x2_HV_0
+  LAYER metal1 ;
+    RECT -0.039 -0.025 0.171 0.025  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT 0.107 -0.025 0.157 0.025  ;
+  LAYER metal2 ;
+    RECT -0.025 -0.055 0.157 0.055  ;
+END SDA_via1_1x2_HV_0
+
+VIA SDA_via1_1x2_HV_1
+  LAYER metal1 ;
+    RECT -0.171 -0.025 0.039 0.025  ;
+  LAYER via1 ;
+    RECT -0.157 -0.025 -0.107 0.025  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.157 -0.055 0.025 0.055  ;
+END SDA_via1_1x2_HV_1
+
+VIA SDA_via1_2x1_HH
+  LAYER metal1 ;
+    RECT -0.039 -0.091 0.039 0.091  ;
+  LAYER via1 ;
+    RECT -0.025 -0.091 0.025 -0.041  ;
+    RECT -0.025 0.041 0.025 0.091  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.091 0.055 0.091  ;
+END SDA_via1_2x1_HH
+
+VIA SDA_via1_1x2_VV
+  LAYER metal1 ;
+    RECT -0.091 -0.039 0.091 0.039  ;
+  LAYER via1 ;
+    RECT -0.091 -0.025 -0.041 0.025  ;
+    RECT 0.041 -0.025 0.091 0.025  ;
+  LAYER metal2 ;
+    RECT -0.091 -0.055 0.091 0.055  ;
+END SDA_via1_1x2_VV
+
+VIA SDA_via1_2x1_HH_0
+  LAYER metal1 ;
+    RECT -0.039 -0.025 0.039 0.157  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT -0.025 0.107 0.025 0.157  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.025 0.055 0.157  ;
+END SDA_via1_2x1_HH_0
+
+VIA SDA_via1_2x1_HH_1
+  LAYER metal1 ;
+    RECT -0.039 -0.157 0.039 0.025  ;
+  LAYER via1 ;
+    RECT -0.025 -0.157 0.025 -0.107  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.055 -0.157 0.055 0.025  ;
+END SDA_via1_2x1_HH_1
+
+VIA SDA_via1_1x2_VV_0
+  LAYER metal1 ;
+    RECT -0.025 -0.039 0.157 0.039  ;
+  LAYER via1 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT 0.107 -0.025 0.157 0.025  ;
+  LAYER metal2 ;
+    RECT -0.025 -0.055 0.157 0.055  ;
+END SDA_via1_1x2_VV_0
+
+VIA SDA_via1_1x2_VV_1
+  LAYER metal1 ;
+    RECT -0.157 -0.039 0.025 0.039  ;
+  LAYER via1 ;
+    RECT -0.157 -0.025 -0.107 0.025  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal2 ;
+    RECT -0.157 -0.055 0.025 0.055  ;
+END SDA_via1_1x2_VV_1
+
+VIA SDA_via1_2x2_VH
+  LAYER metal1 ;
+    RECT -0.091 -0.105 0.091 0.105  ;
+  LAYER via1 ;
+    RECT -0.091 -0.091 -0.041 -0.041  ;
+    RECT -0.091 0.041 -0.041 0.091  ;
+    RECT 0.041 -0.091 0.091 -0.041  ;
+    RECT 0.041 0.041 0.091 0.091  ;
+  LAYER metal2 ;
+    RECT -0.121 -0.091 0.121 0.091  ;
+END SDA_via1_2x2_VH
+
+VIA SDA_via2_HV
+  LAYER metal2 ;
+    RECT -0.041 -0.025 0.041 0.025  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.055 0.025 0.055  ;
+END SDA_via2_HV
+
+VIA SDA_via2_VV
+  LAYER metal2 ;
+    RECT -0.025 -0.041 0.025 0.041  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.055 0.025 0.055  ;
+END SDA_via2_VV
+
+VIA SDA_via2_HH
+  LAYER metal2 ;
+    RECT -0.041 -0.025 0.041 0.025  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.055 -0.025 0.055 0.025  ;
+END SDA_via2_HH
+
+VIA SDA_via2_VH
+  LAYER metal2 ;
+    RECT -0.025 -0.041 0.025 0.041  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.055 -0.025 0.055 0.025  ;
+END SDA_via2_VH
+
+VIA SDA_via2_HV_H
+  LAYER metal2 ;
+    RECT -0.1 -0.025 0.1 0.025  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.055 0.025 0.055  ;
+END SDA_via2_HV_H
+
+VIA SDA_via2_HV_E
+  LAYER metal2 ;
+    RECT -0.041 -0.025 0.159 0.025  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.055 0.025 0.055  ;
+END SDA_via2_HV_E
+
+VIA SDA_via2_HV_W
+  LAYER metal2 ;
+    RECT -0.159 -0.025 0.041 0.025  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.055 0.025 0.055  ;
+END SDA_via2_HV_W
+
+VIA SDA_via2_2x1_VV
+  LAYER metal2 ;
+    RECT -0.025 -0.107 0.025 0.107  ;
+  LAYER via2 ;
+    RECT -0.025 -0.091 0.025 -0.041  ;
+    RECT -0.025 0.041 0.025 0.091  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.121 0.025 0.121  ;
+END SDA_via2_2x1_VV
+
+VIA SDA_via2_1x2_HH
+  LAYER metal2 ;
+    RECT -0.107 -0.025 0.107 0.025  ;
+  LAYER via2 ;
+    RECT -0.091 -0.025 -0.041 0.025  ;
+    RECT 0.041 -0.025 0.091 0.025  ;
+  LAYER metal3 ;
+    RECT -0.121 -0.025 0.121 0.025  ;
+END SDA_via2_1x2_HH
+
+VIA SDA_via2_2x1_VV_0
+  LAYER metal2 ;
+    RECT -0.025 -0.041 0.025 0.173  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT -0.025 0.107 0.025 0.157  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.055 0.025 0.187  ;
+END SDA_via2_2x1_VV_0
+
+VIA SDA_via2_2x1_VV_1
+  LAYER metal2 ;
+    RECT -0.025 -0.173 0.025 0.041  ;
+  LAYER via2 ;
+    RECT -0.025 -0.157 0.025 -0.107  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.187 0.025 0.055  ;
+END SDA_via2_2x1_VV_1
+
+VIA SDA_via2_1x2_HH_0
+  LAYER metal2 ;
+    RECT -0.041 -0.025 0.173 0.025  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT 0.107 -0.025 0.157 0.025  ;
+  LAYER metal3 ;
+    RECT -0.055 -0.025 0.187 0.025  ;
+END SDA_via2_1x2_HH_0
+
+VIA SDA_via2_1x2_HH_1
+  LAYER metal2 ;
+    RECT -0.173 -0.025 0.041 0.025  ;
+  LAYER via2 ;
+    RECT -0.157 -0.025 -0.107 0.025  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.187 -0.025 0.055 0.025  ;
+END SDA_via2_1x2_HH_1
+
+VIA SDA_via2_2x1_HV
+  LAYER metal2 ;
+    RECT -0.041 -0.091 0.041 0.091  ;
+  LAYER via2 ;
+    RECT -0.025 -0.091 0.025 -0.041  ;
+    RECT -0.025 0.041 0.025 0.091  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.121 0.025 0.121  ;
+END SDA_via2_2x1_HV
+
+VIA SDA_via2_1x2_VH
+  LAYER metal2 ;
+    RECT -0.091 -0.041 0.091 0.041  ;
+  LAYER via2 ;
+    RECT -0.091 -0.025 -0.041 0.025  ;
+    RECT 0.041 -0.025 0.091 0.025  ;
+  LAYER metal3 ;
+    RECT -0.121 -0.025 0.121 0.025  ;
+END SDA_via2_1x2_VH
+
+VIA SDA_via2_2x1_HV_0
+  LAYER metal2 ;
+    RECT -0.041 -0.025 0.041 0.157  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT -0.025 0.107 0.025 0.157  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.055 0.025 0.187  ;
+END SDA_via2_2x1_HV_0
+
+VIA SDA_via2_2x1_HV_1
+  LAYER metal2 ;
+    RECT -0.041 -0.157 0.041 0.025  ;
+  LAYER via2 ;
+    RECT -0.025 -0.157 0.025 -0.107  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.187 0.025 0.055  ;
+END SDA_via2_2x1_HV_1
+
+VIA SDA_via2_1x2_VH_0
+  LAYER metal2 ;
+    RECT -0.025 -0.041 0.157 0.041  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT 0.107 -0.025 0.157 0.025  ;
+  LAYER metal3 ;
+    RECT -0.055 -0.025 0.187 0.025  ;
+END SDA_via2_1x2_VH_0
+
+VIA SDA_via2_1x2_VH_1
+  LAYER metal2 ;
+    RECT -0.157 -0.041 0.025 0.041  ;
+  LAYER via2 ;
+    RECT -0.157 -0.025 -0.107 0.025  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.187 -0.025 0.055 0.025  ;
+END SDA_via2_1x2_VH_1
+
+VIA SDA_via2_1x2_HV
+  LAYER metal2 ;
+    RECT -0.107 -0.025 0.107 0.025  ;
+  LAYER via2 ;
+    RECT -0.091 -0.025 -0.041 0.025  ;
+    RECT 0.041 -0.025 0.091 0.025  ;
+  LAYER metal3 ;
+    RECT -0.091 -0.055 0.091 0.055  ;
+END SDA_via2_1x2_HV
+
+VIA SDA_via2_2x1_VH
+  LAYER metal2 ;
+    RECT -0.025 -0.107 0.025 0.107  ;
+  LAYER via2 ;
+    RECT -0.025 -0.091 0.025 -0.041  ;
+    RECT -0.025 0.041 0.025 0.091  ;
+  LAYER metal3 ;
+    RECT -0.055 -0.091 0.055 0.091  ;
+END SDA_via2_2x1_VH
+
+VIA SDA_via2_1x2_HV_0
+  LAYER metal2 ;
+    RECT -0.041 -0.025 0.173 0.025  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT 0.107 -0.025 0.157 0.025  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.055 0.157 0.055  ;
+END SDA_via2_1x2_HV_0
+
+VIA SDA_via2_1x2_HV_1
+  LAYER metal2 ;
+    RECT -0.173 -0.025 0.041 0.025  ;
+  LAYER via2 ;
+    RECT -0.157 -0.025 -0.107 0.025  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.157 -0.055 0.025 0.055  ;
+END SDA_via2_1x2_HV_1
+
+VIA SDA_via2_2x1_VH_0
+  LAYER metal2 ;
+    RECT -0.025 -0.041 0.025 0.173  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT -0.025 0.107 0.025 0.157  ;
+  LAYER metal3 ;
+    RECT -0.055 -0.025 0.055 0.157  ;
+END SDA_via2_2x1_VH_0
+
+VIA SDA_via2_2x1_VH_1
+  LAYER metal2 ;
+    RECT -0.025 -0.173 0.025 0.041  ;
+  LAYER via2 ;
+    RECT -0.025 -0.157 0.025 -0.107  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.055 -0.157 0.055 0.025  ;
+END SDA_via2_2x1_VH_1
+
+VIA SDA_via2_1x2_VV
+  LAYER metal2 ;
+    RECT -0.091 -0.041 0.091 0.041  ;
+  LAYER via2 ;
+    RECT -0.091 -0.025 -0.041 0.025  ;
+    RECT 0.041 -0.025 0.091 0.025  ;
+  LAYER metal3 ;
+    RECT -0.091 -0.055 0.091 0.055  ;
+END SDA_via2_1x2_VV
+
+VIA SDA_via2_2x1_HH
+  LAYER metal2 ;
+    RECT -0.041 -0.091 0.041 0.091  ;
+  LAYER via2 ;
+    RECT -0.025 -0.091 0.025 -0.041  ;
+    RECT -0.025 0.041 0.025 0.091  ;
+  LAYER metal3 ;
+    RECT -0.055 -0.091 0.055 0.091  ;
+END SDA_via2_2x1_HH
+
+VIA SDA_via2_1x2_VV_0
+  LAYER metal2 ;
+    RECT -0.025 -0.041 0.157 0.041  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT 0.107 -0.025 0.157 0.025  ;
+  LAYER metal3 ;
+    RECT -0.025 -0.055 0.157 0.055  ;
+END SDA_via2_1x2_VV_0
+
+VIA SDA_via2_1x2_VV_1
+  LAYER metal2 ;
+    RECT -0.157 -0.041 0.025 0.041  ;
+  LAYER via2 ;
+    RECT -0.157 -0.025 -0.107 0.025  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.157 -0.055 0.025 0.055  ;
+END SDA_via2_1x2_VV_1
+
+VIA SDA_via2_2x1_HH_0
+  LAYER metal2 ;
+    RECT -0.041 -0.025 0.041 0.157  ;
+  LAYER via2 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT -0.025 0.107 0.025 0.157  ;
+  LAYER metal3 ;
+    RECT -0.055 -0.025 0.055 0.157  ;
+END SDA_via2_2x1_HH_0
+
+VIA SDA_via2_2x1_HH_1
+  LAYER metal2 ;
+    RECT -0.041 -0.157 0.041 0.025  ;
+  LAYER via2 ;
+    RECT -0.025 -0.157 0.025 -0.107  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal3 ;
+    RECT -0.055 -0.157 0.055 0.025  ;
+END SDA_via2_2x1_HH_1
+
+VIA SDA_via2_2x2_HV
+  LAYER metal2 ;
+    RECT -0.107 -0.091 0.107 0.091  ;
+  LAYER via2 ;
+    RECT -0.091 -0.091 -0.041 -0.041  ;
+    RECT -0.091 0.041 -0.041 0.091  ;
+    RECT 0.041 -0.091 0.091 -0.041  ;
+    RECT 0.041 0.041 0.091 0.091  ;
+  LAYER metal3 ;
+    RECT -0.091 -0.121 0.091 0.121  ;
+END SDA_via2_2x2_HV
+
+VIA SDA_via3_VH
+  LAYER metal3 ;
+    RECT -0.025 -0.041 0.025 0.041  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.025 0.055 0.025  ;
+END SDA_via3_VH
+
+VIA SDA_via3_HH
+  LAYER metal3 ;
+    RECT -0.041 -0.025 0.041 0.025  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.025 0.055 0.025  ;
+END SDA_via3_HH
+
+VIA SDA_via3_VV
+  LAYER metal3 ;
+    RECT -0.025 -0.041 0.025 0.041  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.025 -0.055 0.025 0.055  ;
+END SDA_via3_VV
+
+VIA SDA_via3_HV
+  LAYER metal3 ;
+    RECT -0.041 -0.025 0.041 0.025  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.025 -0.055 0.025 0.055  ;
+END SDA_via3_HV
+
+VIA SDA_via3_VH_V
+  LAYER metal3 ;
+    RECT -0.025 -0.1 0.025 0.1  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.025 0.055 0.025  ;
+END SDA_via3_VH_V
+
+VIA SDA_via3_VH_N
+  LAYER metal3 ;
+    RECT -0.025 -0.041 0.025 0.159  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.025 0.055 0.025  ;
+END SDA_via3_VH_N
+
+VIA SDA_via3_VH_S
+  LAYER metal3 ;
+    RECT -0.025 -0.159 0.025 0.041  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.025 0.055 0.025  ;
+END SDA_via3_VH_S
+
+VIA SDA_via3_1x2_HH
+  LAYER metal3 ;
+    RECT -0.107 -0.025 0.107 0.025  ;
+  LAYER via3 ;
+    RECT -0.091 -0.025 -0.041 0.025  ;
+    RECT 0.041 -0.025 0.091 0.025  ;
+  LAYER metal4 ;
+    RECT -0.121 -0.025 0.121 0.025  ;
+END SDA_via3_1x2_HH
+
+VIA SDA_via3_2x1_VV
+  LAYER metal3 ;
+    RECT -0.025 -0.107 0.025 0.107  ;
+  LAYER via3 ;
+    RECT -0.025 -0.091 0.025 -0.041  ;
+    RECT -0.025 0.041 0.025 0.091  ;
+  LAYER metal4 ;
+    RECT -0.025 -0.121 0.025 0.121  ;
+END SDA_via3_2x1_VV
+
+VIA SDA_via3_1x2_HH_0
+  LAYER metal3 ;
+    RECT -0.041 -0.025 0.173 0.025  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT 0.107 -0.025 0.157 0.025  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.025 0.187 0.025  ;
+END SDA_via3_1x2_HH_0
+
+VIA SDA_via3_1x2_HH_1
+  LAYER metal3 ;
+    RECT -0.173 -0.025 0.041 0.025  ;
+  LAYER via3 ;
+    RECT -0.157 -0.025 -0.107 0.025  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.187 -0.025 0.055 0.025  ;
+END SDA_via3_1x2_HH_1
+
+VIA SDA_via3_2x1_VV_0
+  LAYER metal3 ;
+    RECT -0.025 -0.041 0.025 0.173  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT -0.025 0.107 0.025 0.157  ;
+  LAYER metal4 ;
+    RECT -0.025 -0.055 0.025 0.187  ;
+END SDA_via3_2x1_VV_0
+
+VIA SDA_via3_2x1_VV_1
+  LAYER metal3 ;
+    RECT -0.025 -0.173 0.025 0.041  ;
+  LAYER via3 ;
+    RECT -0.025 -0.157 0.025 -0.107  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.025 -0.187 0.025 0.055  ;
+END SDA_via3_2x1_VV_1
+
+VIA SDA_via3_1x2_VH
+  LAYER metal3 ;
+    RECT -0.091 -0.041 0.091 0.041  ;
+  LAYER via3 ;
+    RECT -0.091 -0.025 -0.041 0.025  ;
+    RECT 0.041 -0.025 0.091 0.025  ;
+  LAYER metal4 ;
+    RECT -0.121 -0.025 0.121 0.025  ;
+END SDA_via3_1x2_VH
+
+VIA SDA_via3_2x1_HV
+  LAYER metal3 ;
+    RECT -0.041 -0.091 0.041 0.091  ;
+  LAYER via3 ;
+    RECT -0.025 -0.091 0.025 -0.041  ;
+    RECT -0.025 0.041 0.025 0.091  ;
+  LAYER metal4 ;
+    RECT -0.025 -0.121 0.025 0.121  ;
+END SDA_via3_2x1_HV
+
+VIA SDA_via3_1x2_VH_0
+  LAYER metal3 ;
+    RECT -0.025 -0.041 0.157 0.041  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT 0.107 -0.025 0.157 0.025  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.025 0.187 0.025  ;
+END SDA_via3_1x2_VH_0
+
+VIA SDA_via3_1x2_VH_1
+  LAYER metal3 ;
+    RECT -0.157 -0.041 0.025 0.041  ;
+  LAYER via3 ;
+    RECT -0.157 -0.025 -0.107 0.025  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.187 -0.025 0.055 0.025  ;
+END SDA_via3_1x2_VH_1
+
+VIA SDA_via3_2x1_HV_0
+  LAYER metal3 ;
+    RECT -0.041 -0.025 0.041 0.157  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT -0.025 0.107 0.025 0.157  ;
+  LAYER metal4 ;
+    RECT -0.025 -0.055 0.025 0.187  ;
+END SDA_via3_2x1_HV_0
+
+VIA SDA_via3_2x1_HV_1
+  LAYER metal3 ;
+    RECT -0.041 -0.157 0.041 0.025  ;
+  LAYER via3 ;
+    RECT -0.025 -0.157 0.025 -0.107  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.025 -0.187 0.025 0.055  ;
+END SDA_via3_2x1_HV_1
+
+VIA SDA_via3_2x1_VH
+  LAYER metal3 ;
+    RECT -0.025 -0.107 0.025 0.107  ;
+  LAYER via3 ;
+    RECT -0.025 -0.091 0.025 -0.041  ;
+    RECT -0.025 0.041 0.025 0.091  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.091 0.055 0.091  ;
+END SDA_via3_2x1_VH
+
+VIA SDA_via3_1x2_HV
+  LAYER metal3 ;
+    RECT -0.107 -0.025 0.107 0.025  ;
+  LAYER via3 ;
+    RECT -0.091 -0.025 -0.041 0.025  ;
+    RECT 0.041 -0.025 0.091 0.025  ;
+  LAYER metal4 ;
+    RECT -0.091 -0.055 0.091 0.055  ;
+END SDA_via3_1x2_HV
+
+VIA SDA_via3_2x1_VH_0
+  LAYER metal3 ;
+    RECT -0.025 -0.041 0.025 0.173  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT -0.025 0.107 0.025 0.157  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.025 0.055 0.157  ;
+END SDA_via3_2x1_VH_0
+
+VIA SDA_via3_2x1_VH_1
+  LAYER metal3 ;
+    RECT -0.025 -0.173 0.025 0.041  ;
+  LAYER via3 ;
+    RECT -0.025 -0.157 0.025 -0.107  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.157 0.055 0.025  ;
+END SDA_via3_2x1_VH_1
+
+VIA SDA_via3_1x2_HV_0
+  LAYER metal3 ;
+    RECT -0.041 -0.025 0.173 0.025  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT 0.107 -0.025 0.157 0.025  ;
+  LAYER metal4 ;
+    RECT -0.025 -0.055 0.157 0.055  ;
+END SDA_via3_1x2_HV_0
+
+VIA SDA_via3_1x2_HV_1
+  LAYER metal3 ;
+    RECT -0.173 -0.025 0.041 0.025  ;
+  LAYER via3 ;
+    RECT -0.157 -0.025 -0.107 0.025  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.157 -0.055 0.025 0.055  ;
+END SDA_via3_1x2_HV_1
+
+VIA SDA_via3_2x1_HH
+  LAYER metal3 ;
+    RECT -0.041 -0.091 0.041 0.091  ;
+  LAYER via3 ;
+    RECT -0.025 -0.091 0.025 -0.041  ;
+    RECT -0.025 0.041 0.025 0.091  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.091 0.055 0.091  ;
+END SDA_via3_2x1_HH
+
+VIA SDA_via3_1x2_VV
+  LAYER metal3 ;
+    RECT -0.091 -0.041 0.091 0.041  ;
+  LAYER via3 ;
+    RECT -0.091 -0.025 -0.041 0.025  ;
+    RECT 0.041 -0.025 0.091 0.025  ;
+  LAYER metal4 ;
+    RECT -0.091 -0.055 0.091 0.055  ;
+END SDA_via3_1x2_VV
+
+VIA SDA_via3_2x1_HH_0
+  LAYER metal3 ;
+    RECT -0.041 -0.025 0.041 0.157  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT -0.025 0.107 0.025 0.157  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.025 0.055 0.157  ;
+END SDA_via3_2x1_HH_0
+
+VIA SDA_via3_2x1_HH_1
+  LAYER metal3 ;
+    RECT -0.041 -0.157 0.041 0.025  ;
+  LAYER via3 ;
+    RECT -0.025 -0.157 0.025 -0.107  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.055 -0.157 0.055 0.025  ;
+END SDA_via3_2x1_HH_1
+
+VIA SDA_via3_1x2_VV_0
+  LAYER metal3 ;
+    RECT -0.025 -0.041 0.157 0.041  ;
+  LAYER via3 ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+    RECT 0.107 -0.025 0.157 0.025  ;
+  LAYER metal4 ;
+    RECT -0.025 -0.055 0.157 0.055  ;
+END SDA_via3_1x2_VV_0
+
+VIA SDA_via3_1x2_VV_1
+  LAYER metal3 ;
+    RECT -0.157 -0.041 0.025 0.041  ;
+  LAYER via3 ;
+    RECT -0.157 -0.025 -0.107 0.025  ;
+    RECT -0.025 -0.025 0.025 0.025  ;
+  LAYER metal4 ;
+    RECT -0.157 -0.055 0.025 0.055  ;
+END SDA_via3_1x2_VV_1
+
+VIA SDA_via3_2x2_VH
+  LAYER metal3 ;
+    RECT -0.091 -0.107 0.091 0.107  ;
+  LAYER via3 ;
+    RECT -0.091 -0.091 -0.041 -0.041  ;
+    RECT -0.091 0.041 -0.041 0.091  ;
+    RECT 0.041 -0.091 0.091 -0.041  ;
+    RECT 0.041 0.041 0.091 0.091  ;
+  LAYER metal4 ;
+    RECT -0.121 -0.091 0.121 0.091  ;
+END SDA_via3_2x2_VH
+
+VIA SDA_via4_HV
+  LAYER metal4 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+  LAYER via4 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+END SDA_via4_HV
+
+VIA SDA_via4_VV
+  LAYER metal4 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+  LAYER via4 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+END SDA_via4_VV
+
+VIA SDA_via4_HH
+  LAYER metal4 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+  LAYER via4 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal5 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+END SDA_via4_HH
+
+VIA SDA_via4_VH
+  LAYER metal4 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+  LAYER via4 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal5 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+END SDA_via4_VH
+
+VIA SDA_via4_2x1_VV
+  LAYER metal4 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+  LAYER via4 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal5 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+END SDA_via4_2x1_VV
+
+VIA SDA_via4_1x2_HH
+  LAYER metal4 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+  LAYER via4 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal5 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+END SDA_via4_1x2_HH
+
+VIA SDA_via4_2x1_VV_0
+  LAYER metal4 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+  LAYER via4 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+END SDA_via4_2x1_VV_0
+
+VIA SDA_via4_2x1_VV_1
+  LAYER metal4 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+  LAYER via4 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal5 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+END SDA_via4_2x1_VV_1
+
+VIA SDA_via4_1x2_HH_0
+  LAYER metal4 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+  LAYER via4 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal5 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+END SDA_via4_1x2_HH_0
+
+VIA SDA_via4_1x2_HH_1
+  LAYER metal4 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+  LAYER via4 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal5 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+END SDA_via4_1x2_HH_1
+
+VIA SDA_via4_2x1_HV
+  LAYER metal4 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+  LAYER via4 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal5 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+END SDA_via4_2x1_HV
+
+VIA SDA_via4_1x2_HV
+  LAYER metal4 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+  LAYER via4 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal5 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+END SDA_via4_1x2_HV
+
+VIA SDA_via4_2x1_VH
+  LAYER metal4 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+  LAYER via4 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal5 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+END SDA_via4_2x1_VH
+
+VIA SDA_via4_1x2_VH
+  LAYER metal4 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+  LAYER via4 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal5 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+END SDA_via4_1x2_VH
+
+VIA SDA_via4_2x1_HV_0
+  LAYER metal4 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+  LAYER via4 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+END SDA_via4_2x1_HV_0
+
+VIA SDA_via4_2x1_HV_1
+  LAYER metal4 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+  LAYER via4 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal5 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+END SDA_via4_2x1_HV_1
+
+VIA SDA_via4_1x2_HV_0
+  LAYER metal4 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+  LAYER via4 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+END SDA_via4_1x2_HV_0
+
+VIA SDA_via4_1x2_HV_1
+  LAYER metal4 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+  LAYER via4 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal5 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+END SDA_via4_1x2_HV_1
+
+VIA SDA_via4_2x1_VH_0
+  LAYER metal4 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+  LAYER via4 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal5 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+END SDA_via4_2x1_VH_0
+
+VIA SDA_via4_2x1_VH_1
+  LAYER metal4 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+  LAYER via4 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal5 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+END SDA_via4_2x1_VH_1
+
+VIA SDA_via4_1x2_VH_0
+  LAYER metal4 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+  LAYER via4 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal5 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+END SDA_via4_1x2_VH_0
+
+VIA SDA_via4_1x2_VH_1
+  LAYER metal4 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+  LAYER via4 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal5 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+END SDA_via4_1x2_VH_1
+
+VIA SDA_via4_2x1_HH
+  LAYER metal4 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+  LAYER via4 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal5 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+END SDA_via4_2x1_HH
+
+VIA SDA_via4_1x2_VV
+  LAYER metal4 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+  LAYER via4 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal5 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+END SDA_via4_1x2_VV
+
+VIA SDA_via4_2x1_HH_0
+  LAYER metal4 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+  LAYER via4 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal5 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+END SDA_via4_2x1_HH_0
+
+VIA SDA_via4_2x1_HH_1
+  LAYER metal4 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+  LAYER via4 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal5 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+END SDA_via4_2x1_HH_1
+
+VIA SDA_via4_1x2_VV_0
+  LAYER metal4 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+  LAYER via4 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+END SDA_via4_1x2_VV_0
+
+VIA SDA_via4_1x2_VV_1
+  LAYER metal4 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+  LAYER via4 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal5 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+END SDA_via4_1x2_VV_1
+
+VIA SDA_via4_2x2_HV
+  LAYER metal4 ;
+    RECT -0.189 -0.15 0.189 0.15  ;
+  LAYER via4 ;
+    RECT -0.15 -0.15 -0.05 -0.05  ;
+    RECT -0.15 0.05 -0.05 0.15  ;
+    RECT 0.05 -0.15 0.15 -0.05  ;
+    RECT 0.05 0.05 0.15 0.15  ;
+  LAYER metal5 ;
+    RECT -0.15 -0.189 0.15 0.189  ;
+END SDA_via4_2x2_HV
+
+VIA SDA_via5_VH
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+END SDA_via5_VH
+
+VIA SDA_via5_HH
+  LAYER metal5 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+END SDA_via5_HH
+
+VIA SDA_via5_VV
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+END SDA_via5_VV
+
+VIA SDA_via5_HV
+  LAYER metal5 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+END SDA_via5_HV
+
+VIA SDA_via5_VH_V
+  LAYER metal5 ;
+    RECT -0.05 -0.195 0.05 0.195  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+END SDA_via5_VH_V
+
+VIA SDA_via5_VH_N
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.05 0.301  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+END SDA_via5_VH_N
+
+VIA SDA_via5_VH_S
+  LAYER metal5 ;
+    RECT -0.05 -0.301 0.05 0.089  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+END SDA_via5_VH_S
+
+VIA SDA_via5_1x2_HH
+  LAYER metal5 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+  LAYER via5 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal6 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+END SDA_via5_1x2_HH
+
+VIA SDA_via5_2x1_VV
+  LAYER metal5 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+  LAYER via5 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+END SDA_via5_2x1_VV
+
+VIA SDA_via5_1x2_HH_0
+  LAYER metal5 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+END SDA_via5_1x2_HH_0
+
+VIA SDA_via5_1x2_HH_1
+  LAYER metal5 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+  LAYER via5 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+END SDA_via5_1x2_HH_1
+
+VIA SDA_via5_2x1_VV_0
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+END SDA_via5_2x1_VV_0
+
+VIA SDA_via5_2x1_VV_1
+  LAYER metal5 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+  LAYER via5 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+END SDA_via5_2x1_VV_1
+
+VIA SDA_via5_2x1_VV_V
+  LAYER metal5 ;
+    RECT -0.05 -0.195 0.05 0.195  ;
+  LAYER via5 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+END SDA_via5_2x1_VV_V
+
+VIA SDA_via5_2x1_VV_S_1
+  LAYER metal5 ;
+    RECT -0.05 -0.301 0.05 0.089  ;
+  LAYER via5 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+END SDA_via5_2x1_VV_S_1
+
+VIA SDA_via5_2x1_VV_N_0
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.05 0.301  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+END SDA_via5_2x1_VV_N_0
+
+VIA SDA_via5_1x2_VH
+  LAYER metal5 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+  LAYER via5 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal6 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+END SDA_via5_1x2_VH
+
+VIA SDA_via5_2x1_VH
+  LAYER metal5 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+  LAYER via5 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+END SDA_via5_2x1_VH
+
+VIA SDA_via5_1x2_HV
+  LAYER metal5 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+  LAYER via5 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal6 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+END SDA_via5_1x2_HV
+
+VIA SDA_via5_2x1_HV
+  LAYER metal5 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+  LAYER via5 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+END SDA_via5_2x1_HV
+
+VIA SDA_via5_1x2_VH_0
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+END SDA_via5_1x2_VH_0
+
+VIA SDA_via5_1x2_VH_1
+  LAYER metal5 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+  LAYER via5 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+END SDA_via5_1x2_VH_1
+
+VIA SDA_via5_2x1_VH_0
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+END SDA_via5_2x1_VH_0
+
+VIA SDA_via5_2x1_VH_1
+  LAYER metal5 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+  LAYER via5 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+END SDA_via5_2x1_VH_1
+
+VIA SDA_via5_1x2_HV_0
+  LAYER metal5 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+END SDA_via5_1x2_HV_0
+
+VIA SDA_via5_1x2_HV_1
+  LAYER metal5 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+  LAYER via5 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+END SDA_via5_1x2_HV_1
+
+VIA SDA_via5_2x1_HV_0
+  LAYER metal5 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+END SDA_via5_2x1_HV_0
+
+VIA SDA_via5_2x1_HV_1
+  LAYER metal5 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+  LAYER via5 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+END SDA_via5_2x1_HV_1
+
+VIA SDA_via5_2x1_VH_V
+  LAYER metal5 ;
+    RECT -0.05 -0.195 0.05 0.195  ;
+  LAYER via5 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+END SDA_via5_2x1_VH_V
+
+VIA SDA_via5_2x1_VH_S_1
+  LAYER metal5 ;
+    RECT -0.05 -0.301 0.05 0.089  ;
+  LAYER via5 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+END SDA_via5_2x1_VH_S_1
+
+VIA SDA_via5_2x1_VH_N_0
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.05 0.301  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+END SDA_via5_2x1_VH_N_0
+
+VIA SDA_via5_1x2_VV
+  LAYER metal5 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+  LAYER via5 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal6 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+END SDA_via5_1x2_VV
+
+VIA SDA_via5_2x1_HH
+  LAYER metal5 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+  LAYER via5 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+END SDA_via5_2x1_HH
+
+VIA SDA_via5_1x2_VV_0
+  LAYER metal5 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+END SDA_via5_1x2_VV_0
+
+VIA SDA_via5_1x2_VV_1
+  LAYER metal5 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+  LAYER via5 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+END SDA_via5_1x2_VV_1
+
+VIA SDA_via5_2x1_HH_0
+  LAYER metal5 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+  LAYER via5 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+END SDA_via5_2x1_HH_0
+
+VIA SDA_via5_2x1_HH_1
+  LAYER metal5 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+  LAYER via5 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal6 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+END SDA_via5_2x1_HH_1
+
+VIA SDA_via5_2x2_VH
+  LAYER metal5 ;
+    RECT -0.15 -0.189 0.15 0.189  ;
+  LAYER via5 ;
+    RECT -0.15 -0.15 -0.05 -0.05  ;
+    RECT -0.15 0.05 -0.05 0.15  ;
+    RECT 0.05 -0.15 0.15 -0.05  ;
+    RECT 0.05 0.05 0.15 0.15  ;
+  LAYER metal6 ;
+    RECT -0.189 -0.15 0.189 0.15  ;
+END SDA_via5_2x2_VH
+
+VIA SDA_via6_HV
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+END SDA_via6_HV
+
+VIA SDA_via6_VV
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+END SDA_via6_VV
+
+VIA SDA_via6_HH
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+END SDA_via6_HH
+
+VIA SDA_via6_VH
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.089 -0.05 0.089 0.05  ;
+END SDA_via6_VH
+
+VIA SDA_via6_HV_H
+  LAYER metal6 ;
+    RECT -0.195 -0.05 0.195 0.05  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+END SDA_via6_HV_H
+
+VIA SDA_via6_HV_E
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.301 0.05  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+END SDA_via6_HV_E
+
+VIA SDA_via6_HV_W
+  LAYER metal6 ;
+    RECT -0.301 -0.05 0.089 0.05  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.089 0.05 0.089  ;
+END SDA_via6_HV_W
+
+VIA SDA_via6_2x1_VV
+  LAYER metal6 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+  LAYER via6 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+END SDA_via6_2x1_VV
+
+VIA SDA_via6_1x2_HH
+  LAYER metal6 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+  LAYER via6 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal7 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+END SDA_via6_1x2_HH
+
+VIA SDA_via6_2x1_VV_0
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+END SDA_via6_2x1_VV_0
+
+VIA SDA_via6_2x1_VV_1
+  LAYER metal6 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+  LAYER via6 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+END SDA_via6_2x1_VV_1
+
+VIA SDA_via6_1x2_HH_0
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal7 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+END SDA_via6_1x2_HH_0
+
+VIA SDA_via6_1x2_HH_1
+  LAYER metal6 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+  LAYER via6 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+END SDA_via6_1x2_HH_1
+
+VIA SDA_via6_1x2_HH_H
+  LAYER metal6 ;
+    RECT -0.195 -0.05 0.195 0.05  ;
+  LAYER via6 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal7 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+END SDA_via6_1x2_HH_H
+
+VIA SDA_via6_1x2_HH_W_1
+  LAYER metal6 ;
+    RECT -0.301 -0.05 0.089 0.05  ;
+  LAYER via6 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+END SDA_via6_1x2_HH_W_1
+
+VIA SDA_via6_1x2_HH_E_0
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.301 0.05  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal7 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+END SDA_via6_1x2_HH_E_0
+
+VIA SDA_via6_2x1_HV
+  LAYER metal6 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+  LAYER via6 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+END SDA_via6_2x1_HV
+
+VIA SDA_via6_1x2_HV
+  LAYER metal6 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+  LAYER via6 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal7 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+END SDA_via6_1x2_HV
+
+VIA SDA_via6_2x1_VH
+  LAYER metal6 ;
+    RECT -0.05 -0.189 0.05 0.189  ;
+  LAYER via6 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal7 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+END SDA_via6_2x1_VH
+
+VIA SDA_via6_1x2_VH
+  LAYER metal6 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+  LAYER via6 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal7 ;
+    RECT -0.189 -0.05 0.189 0.05  ;
+END SDA_via6_1x2_VH
+
+VIA SDA_via6_2x1_HV_0
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+END SDA_via6_2x1_HV_0
+
+VIA SDA_via6_2x1_HV_1
+  LAYER metal6 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+  LAYER via6 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+END SDA_via6_2x1_HV_1
+
+VIA SDA_via6_1x2_HV_0
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+END SDA_via6_1x2_HV_0
+
+VIA SDA_via6_1x2_HV_1
+  LAYER metal6 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+  LAYER via6 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+END SDA_via6_1x2_HV_1
+
+VIA SDA_via6_2x1_VH_0
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.05 0.289  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal7 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+END SDA_via6_2x1_VH_0
+
+VIA SDA_via6_2x1_VH_1
+  LAYER metal6 ;
+    RECT -0.05 -0.289 0.05 0.089  ;
+  LAYER via6 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+END SDA_via6_2x1_VH_1
+
+VIA SDA_via6_1x2_VH_0
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal7 ;
+    RECT -0.089 -0.05 0.289 0.05  ;
+END SDA_via6_1x2_VH_0
+
+VIA SDA_via6_1x2_VH_1
+  LAYER metal6 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+  LAYER via6 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.289 -0.05 0.089 0.05  ;
+END SDA_via6_1x2_VH_1
+
+VIA SDA_via6_1x2_HV_H
+  LAYER metal6 ;
+    RECT -0.195 -0.05 0.195 0.05  ;
+  LAYER via6 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal7 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+END SDA_via6_1x2_HV_H
+
+VIA SDA_via6_1x2_HV_W_1
+  LAYER metal6 ;
+    RECT -0.301 -0.05 0.089 0.05  ;
+  LAYER via6 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+END SDA_via6_1x2_HV_W_1
+
+VIA SDA_via6_1x2_HV_E_0
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.301 0.05  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+END SDA_via6_1x2_HV_E_0
+
+VIA SDA_via6_2x1_HH
+  LAYER metal6 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+  LAYER via6 ;
+    RECT -0.05 -0.15 0.05 -0.05  ;
+    RECT -0.05 0.05 0.05 0.15  ;
+  LAYER metal7 ;
+    RECT -0.089 -0.15 0.089 0.15  ;
+END SDA_via6_2x1_HH
+
+VIA SDA_via6_1x2_VV
+  LAYER metal6 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+  LAYER via6 ;
+    RECT -0.15 -0.05 -0.05 0.05  ;
+    RECT 0.05 -0.05 0.15 0.05  ;
+  LAYER metal7 ;
+    RECT -0.15 -0.089 0.15 0.089  ;
+END SDA_via6_1x2_VV
+
+VIA SDA_via6_2x1_HH_0
+  LAYER metal6 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT -0.05 0.15 0.05 0.25  ;
+  LAYER metal7 ;
+    RECT -0.089 -0.05 0.089 0.25  ;
+END SDA_via6_2x1_HH_0
+
+VIA SDA_via6_2x1_HH_1
+  LAYER metal6 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+  LAYER via6 ;
+    RECT -0.05 -0.25 0.05 -0.15  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.089 -0.25 0.089 0.05  ;
+END SDA_via6_2x1_HH_1
+
+VIA SDA_via6_1x2_VV_0
+  LAYER metal6 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+  LAYER via6 ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+    RECT 0.15 -0.05 0.25 0.05  ;
+  LAYER metal7 ;
+    RECT -0.05 -0.089 0.25 0.089  ;
+END SDA_via6_1x2_VV_0
+
+VIA SDA_via6_1x2_VV_1
+  LAYER metal6 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+  LAYER via6 ;
+    RECT -0.25 -0.05 -0.15 0.05  ;
+    RECT -0.05 -0.05 0.05 0.05  ;
+  LAYER metal7 ;
+    RECT -0.25 -0.089 0.05 0.089  ;
+END SDA_via6_1x2_VV_1
+
+VIA SDA_via6_2x2_HV
+  LAYER metal6 ;
+    RECT -0.189 -0.15 0.189 0.15  ;
+  LAYER via6 ;
+    RECT -0.15 -0.15 -0.05 -0.05  ;
+    RECT -0.15 0.05 -0.05 0.15  ;
+    RECT 0.05 -0.15 0.15 -0.05  ;
+    RECT 0.05 0.05 0.15 0.15  ;
+  LAYER metal7 ;
+    RECT -0.15 -0.189 0.15 0.189  ;
+END SDA_via6_2x2_HV
+
+VIA SDA_via7_VH
+  LAYER metal7 ;
+    RECT -0.075 -0.088 0.075 0.088  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.1 0.115 0.1  ;
+END SDA_via7_VH
+
+VIA SDA_via7_HH
+  LAYER metal7 ;
+    RECT -0.088 -0.075 0.088 0.075  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.1 0.115 0.1  ;
+END SDA_via7_HH
+
+VIA SDA_via7_VV
+  LAYER metal7 ;
+    RECT -0.075 -0.088 0.075 0.088  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.1 -0.115 0.1 0.115  ;
+END SDA_via7_VV
+
+VIA SDA_via7_HV
+  LAYER metal7 ;
+    RECT -0.088 -0.075 0.088 0.075  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.1 -0.115 0.1 0.115  ;
+END SDA_via7_HV
+
+VIA SDA_via7_VH_V
+  LAYER metal7 ;
+    RECT -0.075 -0.13 0.075 0.13  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.1 0.115 0.1  ;
+END SDA_via7_VH_V
+
+VIA SDA_via7_VH_N
+  LAYER metal7 ;
+    RECT -0.075 -0.088 0.075 0.172  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.1 0.115 0.1  ;
+END SDA_via7_VH_N
+
+VIA SDA_via7_VH_S
+  LAYER metal7 ;
+    RECT -0.075 -0.172 0.075 0.088  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.1 0.115 0.1  ;
+END SDA_via7_VH_S
+
+VIA SDA_via7_1x2_HH
+  LAYER metal7 ;
+    RECT -0.238 -0.075 0.238 0.075  ;
+  LAYER via7 ;
+    RECT -0.225 -0.075 -0.075 0.075  ;
+    RECT 0.075 -0.075 0.225 0.075  ;
+  LAYER metal8 ;
+    RECT -0.265 -0.1 0.265 0.1  ;
+END SDA_via7_1x2_HH
+
+VIA SDA_via7_2x1_VV
+  LAYER metal7 ;
+    RECT -0.075 -0.238 0.075 0.238  ;
+  LAYER via7 ;
+    RECT -0.075 -0.225 0.075 -0.075  ;
+    RECT -0.075 0.075 0.075 0.225  ;
+  LAYER metal8 ;
+    RECT -0.1 -0.265 0.1 0.265  ;
+END SDA_via7_2x1_VV
+
+VIA SDA_via7_1x2_HH_0
+  LAYER metal7 ;
+    RECT -0.088 -0.075 0.388 0.075  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT 0.225 -0.075 0.375 0.075  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.1 0.415 0.1  ;
+END SDA_via7_1x2_HH_0
+
+VIA SDA_via7_1x2_HH_1
+  LAYER metal7 ;
+    RECT -0.388 -0.075 0.088 0.075  ;
+  LAYER via7 ;
+    RECT -0.375 -0.075 -0.225 0.075  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.415 -0.1 0.115 0.1  ;
+END SDA_via7_1x2_HH_1
+
+VIA SDA_via7_2x1_VV_0
+  LAYER metal7 ;
+    RECT -0.075 -0.088 0.075 0.388  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT -0.075 0.225 0.075 0.375  ;
+  LAYER metal8 ;
+    RECT -0.1 -0.115 0.1 0.415  ;
+END SDA_via7_2x1_VV_0
+
+VIA SDA_via7_2x1_VV_1
+  LAYER metal7 ;
+    RECT -0.075 -0.388 0.075 0.088  ;
+  LAYER via7 ;
+    RECT -0.075 -0.375 0.075 -0.225  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.1 -0.415 0.1 0.115  ;
+END SDA_via7_2x1_VV_1
+
+VIA SDA_via7_1x2_VH
+  LAYER metal7 ;
+    RECT -0.225 -0.088 0.225 0.088  ;
+  LAYER via7 ;
+    RECT -0.225 -0.075 -0.075 0.075  ;
+    RECT 0.075 -0.075 0.225 0.075  ;
+  LAYER metal8 ;
+    RECT -0.265 -0.1 0.265 0.1  ;
+END SDA_via7_1x2_VH
+
+VIA SDA_via7_2x1_HV
+  LAYER metal7 ;
+    RECT -0.088 -0.225 0.088 0.225  ;
+  LAYER via7 ;
+    RECT -0.075 -0.225 0.075 -0.075  ;
+    RECT -0.075 0.075 0.075 0.225  ;
+  LAYER metal8 ;
+    RECT -0.1 -0.265 0.1 0.265  ;
+END SDA_via7_2x1_HV
+
+VIA SDA_via7_1x2_VH_0
+  LAYER metal7 ;
+    RECT -0.075 -0.088 0.375 0.088  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT 0.225 -0.075 0.375 0.075  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.1 0.415 0.1  ;
+END SDA_via7_1x2_VH_0
+
+VIA SDA_via7_1x2_VH_1
+  LAYER metal7 ;
+    RECT -0.375 -0.088 0.075 0.088  ;
+  LAYER via7 ;
+    RECT -0.375 -0.075 -0.225 0.075  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.415 -0.1 0.115 0.1  ;
+END SDA_via7_1x2_VH_1
+
+VIA SDA_via7_2x1_HV_0
+  LAYER metal7 ;
+    RECT -0.088 -0.075 0.088 0.375  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT -0.075 0.225 0.075 0.375  ;
+  LAYER metal8 ;
+    RECT -0.1 -0.115 0.1 0.415  ;
+END SDA_via7_2x1_HV_0
+
+VIA SDA_via7_2x1_HV_1
+  LAYER metal7 ;
+    RECT -0.088 -0.375 0.088 0.075  ;
+  LAYER via7 ;
+    RECT -0.075 -0.375 0.075 -0.225  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.1 -0.415 0.1 0.115  ;
+END SDA_via7_2x1_HV_1
+
+VIA SDA_via7_2x1_VH
+  LAYER metal7 ;
+    RECT -0.075 -0.238 0.075 0.238  ;
+  LAYER via7 ;
+    RECT -0.075 -0.225 0.075 -0.075  ;
+    RECT -0.075 0.075 0.075 0.225  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.25 0.115 0.25  ;
+END SDA_via7_2x1_VH
+
+VIA SDA_via7_1x2_HV
+  LAYER metal7 ;
+    RECT -0.238 -0.075 0.238 0.075  ;
+  LAYER via7 ;
+    RECT -0.225 -0.075 -0.075 0.075  ;
+    RECT 0.075 -0.075 0.225 0.075  ;
+  LAYER metal8 ;
+    RECT -0.25 -0.115 0.25 0.115  ;
+END SDA_via7_1x2_HV
+
+VIA SDA_via7_2x1_VH_0
+  LAYER metal7 ;
+    RECT -0.075 -0.088 0.075 0.388  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT -0.075 0.225 0.075 0.375  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.1 0.115 0.4  ;
+END SDA_via7_2x1_VH_0
+
+VIA SDA_via7_2x1_VH_1
+  LAYER metal7 ;
+    RECT -0.075 -0.388 0.075 0.088  ;
+  LAYER via7 ;
+    RECT -0.075 -0.375 0.075 -0.225  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.4 0.115 0.1  ;
+END SDA_via7_2x1_VH_1
+
+VIA SDA_via7_1x2_HV_0
+  LAYER metal7 ;
+    RECT -0.088 -0.075 0.388 0.075  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT 0.225 -0.075 0.375 0.075  ;
+  LAYER metal8 ;
+    RECT -0.1 -0.115 0.4 0.115  ;
+END SDA_via7_1x2_HV_0
+
+VIA SDA_via7_1x2_HV_1
+  LAYER metal7 ;
+    RECT -0.388 -0.075 0.088 0.075  ;
+  LAYER via7 ;
+    RECT -0.375 -0.075 -0.225 0.075  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.4 -0.115 0.1 0.115  ;
+END SDA_via7_1x2_HV_1
+
+VIA SDA_via7_2x1_HH
+  LAYER metal7 ;
+    RECT -0.088 -0.225 0.088 0.225  ;
+  LAYER via7 ;
+    RECT -0.075 -0.225 0.075 -0.075  ;
+    RECT -0.075 0.075 0.075 0.225  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.25 0.115 0.25  ;
+END SDA_via7_2x1_HH
+
+VIA SDA_via7_1x2_VV
+  LAYER metal7 ;
+    RECT -0.225 -0.088 0.225 0.088  ;
+  LAYER via7 ;
+    RECT -0.225 -0.075 -0.075 0.075  ;
+    RECT 0.075 -0.075 0.225 0.075  ;
+  LAYER metal8 ;
+    RECT -0.25 -0.115 0.25 0.115  ;
+END SDA_via7_1x2_VV
+
+VIA SDA_via7_2x1_HH_0
+  LAYER metal7 ;
+    RECT -0.088 -0.075 0.088 0.375  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT -0.075 0.225 0.075 0.375  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.1 0.115 0.4  ;
+END SDA_via7_2x1_HH_0
+
+VIA SDA_via7_2x1_HH_1
+  LAYER metal7 ;
+    RECT -0.088 -0.375 0.088 0.075  ;
+  LAYER via7 ;
+    RECT -0.075 -0.375 0.075 -0.225  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.115 -0.4 0.115 0.1  ;
+END SDA_via7_2x1_HH_1
+
+VIA SDA_via7_1x2_VV_0
+  LAYER metal7 ;
+    RECT -0.075 -0.088 0.375 0.088  ;
+  LAYER via7 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT 0.225 -0.075 0.375 0.075  ;
+  LAYER metal8 ;
+    RECT -0.1 -0.115 0.4 0.115  ;
+END SDA_via7_1x2_VV_0
+
+VIA SDA_via7_1x2_VV_1
+  LAYER metal7 ;
+    RECT -0.375 -0.088 0.075 0.088  ;
+  LAYER via7 ;
+    RECT -0.375 -0.075 -0.225 0.075  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal8 ;
+    RECT -0.4 -0.115 0.1 0.115  ;
+END SDA_via7_1x2_VV_1
+
+VIA SDA_via7_2x2_VH
+  LAYER metal7 ;
+    RECT -0.225 -0.238 0.225 0.238  ;
+  LAYER via7 ;
+    RECT -0.225 -0.225 -0.075 -0.075  ;
+    RECT -0.225 0.075 -0.075 0.225  ;
+    RECT 0.075 -0.225 0.225 -0.075  ;
+    RECT 0.075 0.075 0.225 0.225  ;
+  LAYER metal8 ;
+    RECT -0.265 -0.25 0.265 0.25  ;
+END SDA_via7_2x2_VH
+
+VIA SDA_via8_HV
+  LAYER metal8 ;
+    RECT -0.1 -0.1 0.1 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.115 0.1 0.115  ;
+END SDA_via8_HV
+
+VIA SDA_via8_HH
+  LAYER metal8 ;
+    RECT -0.1 -0.1 0.1 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.1 0.115 0.1  ;
+END SDA_via8_HH
+
+VIA SDA_via8_HV_H
+  LAYER metal8 ;
+    RECT -0.32 -0.1 0.32 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.115 0.1 0.115  ;
+END SDA_via8_HV_H
+
+VIA SDA_via8_HV_E
+  LAYER metal8 ;
+    RECT -0.1 -0.1 0.54 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.115 0.1 0.115  ;
+END SDA_via8_HV_E
+
+VIA SDA_via8_HV_W
+  LAYER metal8 ;
+    RECT -0.54 -0.1 0.1 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.115 0.1 0.115  ;
+END SDA_via8_HV_W
+
+VIA SDA_via8_2x1_HV_H
+  LAYER metal8 ;
+    RECT -0.128 -0.25 0.128 0.25  ;
+  LAYER via8 ;
+    RECT -0.075 -0.225 0.075 -0.075  ;
+    RECT -0.075 0.075 0.075 0.225  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.265 0.1 0.265  ;
+END SDA_via8_2x1_HV_H
+
+VIA SDA_via8_1x2_HH_H
+  LAYER metal8 ;
+    RECT -0.32 -0.1 0.32 0.1  ;
+  LAYER via8 ;
+    RECT -0.225 -0.075 -0.075 0.075  ;
+    RECT 0.075 -0.075 0.225 0.075  ;
+  LAYER metal9 ;
+    RECT -0.265 -0.1 0.265 0.1  ;
+END SDA_via8_1x2_HH_H
+
+VIA SDA_via8_2x1_HV_V
+  LAYER metal8 ;
+    RECT -0.1 -0.32 0.1 0.32  ;
+  LAYER via8 ;
+    RECT -0.075 -0.225 0.075 -0.075  ;
+    RECT -0.075 0.075 0.075 0.225  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.265 0.1 0.265  ;
+END SDA_via8_2x1_HV_V
+
+VIA SDA_via8_2x1_HV_W_1
+  LAYER metal8 ;
+    RECT -0.156 -0.4 0.1 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.375 0.075 -0.225  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.415 0.1 0.115  ;
+END SDA_via8_2x1_HV_W_1
+
+VIA SDA_via8_2x1_HV_E_0
+  LAYER metal8 ;
+    RECT -0.1 -0.1 0.156 0.4  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT -0.075 0.225 0.075 0.375  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.115 0.1 0.415  ;
+END SDA_via8_2x1_HV_E_0
+
+VIA SDA_via8_1x2_HH_W_1
+  LAYER metal8 ;
+    RECT -0.54 -0.1 0.1 0.1  ;
+  LAYER via8 ;
+    RECT -0.375 -0.075 -0.225 0.075  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.415 -0.1 0.115 0.1  ;
+END SDA_via8_1x2_HH_W_1
+
+VIA SDA_via8_1x2_HH_E_0
+  LAYER metal8 ;
+    RECT -0.1 -0.1 0.54 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT 0.225 -0.075 0.375 0.075  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.1 0.415 0.1  ;
+END SDA_via8_1x2_HH_E_0
+
+VIA SDA_via8_1x2_HV_H
+  LAYER metal8 ;
+    RECT -0.32 -0.1 0.32 0.1  ;
+  LAYER via8 ;
+    RECT -0.225 -0.075 -0.075 0.075  ;
+    RECT 0.075 -0.075 0.225 0.075  ;
+  LAYER metal9 ;
+    RECT -0.25 -0.115 0.25 0.115  ;
+END SDA_via8_1x2_HV_H
+
+VIA SDA_via8_2x1_HH_H
+  LAYER metal8 ;
+    RECT -0.128 -0.25 0.128 0.25  ;
+  LAYER via8 ;
+    RECT -0.075 -0.225 0.075 -0.075  ;
+    RECT -0.075 0.075 0.075 0.225  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.25 0.115 0.25  ;
+END SDA_via8_2x1_HH_H
+
+VIA SDA_via8_1x2_HV_W_1
+  LAYER metal8 ;
+    RECT -0.54 -0.1 0.1 0.1  ;
+  LAYER via8 ;
+    RECT -0.375 -0.075 -0.225 0.075  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.4 -0.115 0.1 0.115  ;
+END SDA_via8_1x2_HV_W_1
+
+VIA SDA_via8_1x2_HV_E_0
+  LAYER metal8 ;
+    RECT -0.1 -0.1 0.54 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT 0.225 -0.075 0.375 0.075  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.115 0.4 0.115  ;
+END SDA_via8_1x2_HV_E_0
+
+VIA SDA_via8_2x1_HH_W_1
+  LAYER metal8 ;
+    RECT -0.156 -0.4 0.1 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.375 0.075 -0.225  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.4 0.115 0.1  ;
+END SDA_via8_2x1_HH_W_1
+
+VIA SDA_via8_2x1_HH_E_0
+  LAYER metal8 ;
+    RECT -0.1 -0.1 0.156 0.4  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT -0.075 0.225 0.075 0.375  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.1 0.115 0.4  ;
+END SDA_via8_2x1_HH_E_0
+
+VIA SDA_via8_1x2_HH
+  LAYER metal8 ;
+    RECT -0.47 -0.1 0.47 0.1  ;
+  LAYER via8 ;
+    RECT -0.225 -0.075 -0.075 0.075  ;
+    RECT 0.075 -0.075 0.225 0.075  ;
+  LAYER metal9 ;
+    RECT -0.265 -0.1 0.265 0.1  ;
+END SDA_via8_1x2_HH
+
+VIA SDA_via8_2x1_VV
+  LAYER metal8 ;
+    RECT -0.1 -0.47 0.1 0.47  ;
+  LAYER via8 ;
+    RECT -0.075 -0.225 0.075 -0.075  ;
+    RECT -0.075 0.075 0.075 0.225  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.265 0.1 0.265  ;
+END SDA_via8_2x1_VV
+
+VIA SDA_via8_1x2_HH_1
+  LAYER metal8 ;
+    RECT -0.62 -0.1 0.32 0.1  ;
+  LAYER via8 ;
+    RECT -0.375 -0.075 -0.225 0.075  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.415 -0.1 0.115 0.1  ;
+END SDA_via8_1x2_HH_1
+
+VIA SDA_via8_1x2_HH_0
+  LAYER metal8 ;
+    RECT -0.32 -0.1 0.62 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT 0.225 -0.075 0.375 0.075  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.1 0.415 0.1  ;
+END SDA_via8_1x2_HH_0
+
+VIA SDA_via8_2x1_VV_1
+  LAYER metal8 ;
+    RECT -0.1 -0.62 0.1 0.32  ;
+  LAYER via8 ;
+    RECT -0.075 -0.375 0.075 -0.225  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.415 0.1 0.115  ;
+END SDA_via8_2x1_VV_1
+
+VIA SDA_via8_2x1_VV_0
+  LAYER metal8 ;
+    RECT -0.1 -0.32 0.1 0.62  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT -0.075 0.225 0.075 0.375  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.115 0.1 0.415  ;
+END SDA_via8_2x1_VV_0
+
+VIA SDA_via8_1x2_HV
+  LAYER metal8 ;
+    RECT -0.47 -0.1 0.47 0.1  ;
+  LAYER via8 ;
+    RECT -0.225 -0.075 -0.075 0.075  ;
+    RECT 0.075 -0.075 0.225 0.075  ;
+  LAYER metal9 ;
+    RECT -0.25 -0.115 0.25 0.115  ;
+END SDA_via8_1x2_HV
+
+VIA SDA_via8_2x1_VH
+  LAYER metal8 ;
+    RECT -0.1 -0.47 0.1 0.47  ;
+  LAYER via8 ;
+    RECT -0.075 -0.225 0.075 -0.075  ;
+    RECT -0.075 0.075 0.075 0.225  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.25 0.115 0.25  ;
+END SDA_via8_2x1_VH
+
+VIA SDA_via8_1x2_HV_1
+  LAYER metal8 ;
+    RECT -0.62 -0.1 0.32 0.1  ;
+  LAYER via8 ;
+    RECT -0.375 -0.075 -0.225 0.075  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.4 -0.115 0.1 0.115  ;
+END SDA_via8_1x2_HV_1
+
+VIA SDA_via8_1x2_HV_0
+  LAYER metal8 ;
+    RECT -0.32 -0.1 0.62 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT 0.225 -0.075 0.375 0.075  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.115 0.4 0.115  ;
+END SDA_via8_1x2_HV_0
+
+VIA SDA_via8_2x1_VH_1
+  LAYER metal8 ;
+    RECT -0.1 -0.62 0.1 0.32  ;
+  LAYER via8 ;
+    RECT -0.075 -0.375 0.075 -0.225  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.4 0.115 0.1  ;
+END SDA_via8_2x1_VH_1
+
+VIA SDA_via8_2x1_VH_0
+  LAYER metal8 ;
+    RECT -0.1 -0.32 0.1 0.62  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT -0.075 0.225 0.075 0.375  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.1 0.115 0.4  ;
+END SDA_via8_2x1_VH_0
+
+VIA SDA_via8_2x1_HV
+  LAYER metal8 ;
+    RECT -0.32 -0.25 0.32 0.25  ;
+  LAYER via8 ;
+    RECT -0.075 -0.225 0.075 -0.075  ;
+    RECT -0.075 0.075 0.075 0.225  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.265 0.1 0.265  ;
+END SDA_via8_2x1_HV
+
+VIA SDA_via8_2x1_HV_1
+  LAYER metal8 ;
+    RECT -0.32 -0.4 0.32 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.375 0.075 -0.225  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.415 0.1 0.115  ;
+END SDA_via8_2x1_HV_1
+
+VIA SDA_via8_2x1_HV_0
+  LAYER metal8 ;
+    RECT -0.32 -0.1 0.32 0.4  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT -0.075 0.225 0.075 0.375  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.115 0.1 0.415  ;
+END SDA_via8_2x1_HV_0
+
+VIA SDA_via8_1x2_VH
+  LAYER metal8 ;
+    RECT -0.25 -0.32 0.25 0.32  ;
+  LAYER via8 ;
+    RECT -0.225 -0.075 -0.075 0.075  ;
+    RECT 0.075 -0.075 0.225 0.075  ;
+  LAYER metal9 ;
+    RECT -0.265 -0.1 0.265 0.1  ;
+END SDA_via8_1x2_VH
+
+VIA SDA_via8_1x2_VH_1
+  LAYER metal8 ;
+    RECT -0.4 -0.32 0.1 0.32  ;
+  LAYER via8 ;
+    RECT -0.375 -0.075 -0.225 0.075  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.415 -0.1 0.115 0.1  ;
+END SDA_via8_1x2_VH_1
+
+VIA SDA_via8_1x2_VH_0
+  LAYER metal8 ;
+    RECT -0.1 -0.32 0.4 0.32  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT 0.225 -0.075 0.375 0.075  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.1 0.415 0.1  ;
+END SDA_via8_1x2_VH_0
+
+VIA SDA_via8_2x1_HH
+  LAYER metal8 ;
+    RECT -0.32 -0.25 0.32 0.25  ;
+  LAYER via8 ;
+    RECT -0.075 -0.225 0.075 -0.075  ;
+    RECT -0.075 0.075 0.075 0.225  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.25 0.115 0.25  ;
+END SDA_via8_2x1_HH
+
+VIA SDA_via8_2x1_HH_1
+  LAYER metal8 ;
+    RECT -0.32 -0.4 0.32 0.1  ;
+  LAYER via8 ;
+    RECT -0.075 -0.375 0.075 -0.225  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.4 0.115 0.1  ;
+END SDA_via8_2x1_HH_1
+
+VIA SDA_via8_2x1_HH_0
+  LAYER metal8 ;
+    RECT -0.32 -0.1 0.32 0.4  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT -0.075 0.225 0.075 0.375  ;
+  LAYER metal9 ;
+    RECT -0.115 -0.1 0.115 0.4  ;
+END SDA_via8_2x1_HH_0
+
+VIA SDA_via8_1x2_VV
+  LAYER metal8 ;
+    RECT -0.25 -0.32 0.25 0.32  ;
+  LAYER via8 ;
+    RECT -0.225 -0.075 -0.075 0.075  ;
+    RECT 0.075 -0.075 0.225 0.075  ;
+  LAYER metal9 ;
+    RECT -0.25 -0.115 0.25 0.115  ;
+END SDA_via8_1x2_VV
+
+VIA SDA_via8_1x2_VV_1
+  LAYER metal8 ;
+    RECT -0.4 -0.32 0.1 0.32  ;
+  LAYER via8 ;
+    RECT -0.375 -0.075 -0.225 0.075  ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+  LAYER metal9 ;
+    RECT -0.4 -0.115 0.1 0.115  ;
+END SDA_via8_1x2_VV_1
+
+VIA SDA_via8_1x2_VV_0
+  LAYER metal8 ;
+    RECT -0.1 -0.32 0.4 0.32  ;
+  LAYER via8 ;
+    RECT -0.075 -0.075 0.075 0.075  ;
+    RECT 0.225 -0.075 0.375 0.075  ;
+  LAYER metal9 ;
+    RECT -0.1 -0.115 0.4 0.115  ;
+END SDA_via8_1x2_VV_0
+
+VIA SDA_via8_2x2_HV
+  LAYER metal8 ;
+    RECT -0.25 -0.25 0.25 0.25  ;
+  LAYER via8 ;
+    RECT -0.225 -0.225 -0.075 -0.075  ;
+    RECT -0.225 0.075 -0.075 0.225  ;
+    RECT 0.075 -0.225 0.225 -0.075  ;
+    RECT 0.075 0.075 0.225 0.225  ;
+  LAYER metal9 ;
+    RECT -0.25 -0.265 0.25 0.265  ;
+END SDA_via8_2x2_HV
+
+END LIBRARY

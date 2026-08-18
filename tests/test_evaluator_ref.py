@@ -153,3 +153,100 @@ def test_evaluate_large_net_lower_bound():
     assert res.tree_wl == 0.0
     assert res.boundary_pair_demand == {}
     assert res.hpwl == pytest.approx(160.0)        # (90-10)+(90-10)
+
+def test_hard_lambda_fields_on_tiny_netlist():
+    rg = _rg22()
+    nl = make_tiny_netlist()
+    # n0={c0,c1} both in P0 -> lambda=1 ; n1={c1,c2,f3} in P0,P1,P3 -> lambda=3
+    res = evaluate(nl, nl.node_x, nl.node_y, rg)
+    assert list(res.per_net_lambda) == [1, 3]
+    assert res.hard_lambda_sum == 2
+
+def test_hard_lambda_sum_never_exceeds_io_count():
+    rng = np.random.default_rng(21)
+    rs = make_grid_regions(DIE, 4, 4, lattice=20)
+    rg = RegionGrid(rs)
+    from tests.test_evaluator_gpu import _random_case
+    for s in range(5):
+        nl = _random_case(np.random.default_rng(s))
+        res = evaluate(nl, nl.node_x, nl.node_y, rg)
+        assert res.hard_lambda_sum <= res.io_count
+        assert len(res.per_net_lambda) == nl.num_nets
+
+
+# ---------------------------------------------------------------------------
+# M3 T1: io_rg / ft_rg / per_net_steiner / per_net_home
+# ---------------------------------------------------------------------------
+
+def test_evaluate_region_graph_fields_on_tiny_netlist():
+    rg = _rg22()
+    nl = make_tiny_netlist()
+    # n0={c0,c1} both in P0 -> lambda=1 -> ST=0, FT=0, home=P0
+    # n1={c1,c2,f3} in P0,P1,P3 (c1->P0, c2->P1, f3->P3; see test_evaluate_tiny_netlist)
+    #   -> Steiner branch point is P1 (D[P1,P0]+D[P1,P1]+D[P1,P3] = 1+0+1 = 2) -> ST=2, FT=0
+    #   -> home: 1 pin each in P0/P1/P3, tie -> smallest index P0
+    res = evaluate(nl, nl.node_x, nl.node_y, rg)
+    assert list(res.per_net_steiner) == [0, 2]
+    assert list(res.per_net_home) == [0, 0]
+    assert res.io_rg == 2
+    assert res.ft_rg == 0
+    assert res.io_rg == res.hard_lambda_sum + res.ft_rg
+
+
+def test_evaluate_region_graph_home_breaks_ties_to_smallest_index():
+    rg = _rg22()
+    nl = make_tiny_netlist()
+    # move f3 so net1's three pins land one-each in P0/P1/P2 (all still tied 1-1-1)
+    # and confirm home is always the smallest region id among the tie.
+    node_x = np.array([10., 30., 50., 10.])
+    node_y = np.array([10., 10., 40., 60.])   # f3 now in P2 instead of P3
+    res = evaluate(nl, node_x, node_y, rg)
+    assert res.per_net_home[1] == 0
+
+
+def test_evaluate_region_graph_identity_holds_per_net_random():
+    """ST_e - max(Λ_e-1, 0) == FT_e (via RG) for every net, and the aggregate
+    io_rg = hard_lambda_sum + ft_rg identity, on random small cases -- this is
+    the T1 acceptance criterion "FT = ST + 1 - Λ 每條 net 精確成立"."""
+    rng = np.random.default_rng(101)
+    rs = make_grid_regions(DIE, 4, 4, lattice=20)
+    rg = RegionGrid(rs)
+    from tests.test_evaluator_gpu import _random_case
+    for s in range(6):
+        nl = _random_case(np.random.default_rng(s), n_cells=40, n_nets=25, max_d=12)
+        res = evaluate(nl, nl.node_x, nl.node_y, rg)
+        ft_rg_per_net = res.per_net_steiner - np.maximum(res.per_net_lambda - 1, 0)
+        assert (ft_rg_per_net >= 0).all()
+        assert res.io_rg == int(res.per_net_steiner.sum())
+        assert res.ft_rg == int(ft_rg_per_net.sum())
+        assert res.io_rg == res.hard_lambda_sum + res.ft_rg
+        # Λ-1 <= ST <= io_mst (per-net crossing count from the MST evaluator)
+        lam_minus_1 = np.maximum(res.per_net_lambda - 1, 0)
+        assert (res.per_net_steiner >= lam_minus_1).all()
+        assert (res.per_net_steiner <= res.per_net_crossings).all()
+
+
+def test_evaluate_region_graph_fields_on_large_net_branch():
+    """Large (degree > max_degree) nets skip the MST/tree_wl branch entirely but
+    still get a real per_net_steiner/home (Λ is bounded by K, not by degree)."""
+    rg = _rg22()
+    n_pins = 5
+    node_x = np.array([10., 20., 60., 70., 90.])
+    node_y = np.array([10., 20., 10., 20., 90.])   # P0,P0,P1,P1,P3 -> 3 distinct regions
+    from ioplace.netlist import Netlist
+    nl = Netlist(node_x=node_x, node_y=node_y,
+                 node_size_x=np.ones(n_pins), node_size_y=np.ones(n_pins),
+                 num_movable=n_pins, num_terminals=0, num_terminal_NIs=0,
+                 pin_offset_x=np.zeros(n_pins), pin_offset_y=np.zeros(n_pins),
+                 pin2node=np.arange(n_pins, dtype=np.int32),
+                 pin2net=np.zeros(n_pins, dtype=np.int32),
+                 flat_net2pin=np.arange(n_pins, dtype=np.int32),
+                 flat_net2pin_start=np.array([0, n_pins], dtype=np.int32),
+                 xl=0., yl=0., xh=100., yh=100.)
+    res = evaluate(nl, node_x, node_y, rg, max_degree=2)
+    # touched = {P0, P1, P3}; same branch-point Steiner tree as the tiny-netlist
+    # n1 case above (P1 is the median: D[P1,P0]+D[P1,P1]+D[P1,P3] = 1+0+1 = 2).
+    assert list(res.per_net_steiner) == [2]
+    assert res.per_net_home[0] == 0  # 2 pins in P0, tied with counts elsewhere at 1
+    assert res.io_rg == 2
+    assert res.ft_rg == 0
