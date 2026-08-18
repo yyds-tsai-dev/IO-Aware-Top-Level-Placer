@@ -3,6 +3,7 @@
 - 日期:2026-08-19
 - 分支:`m2-differentiable-io`(收尾時 HEAD `51e8eef`),本次收尾後 merge 進 `main`
 - 動機:**開發機從 L4(hostname `NVL5`)搬到具 H100 的伺服器**。所有 L4 側能做完的事都已做完;剩下的主線工作(27.7M 全流程、E5/T14 假設檢定)在契約上就必須在 H100 上跑。
+- 測試狀態(收尾時實測):`pytest -m "not slow"` **813 passed / 2 skipped**;slow 套件 **35/36 passed**,唯一 FAIL 見 §3.C-0(既有問題,非本次迴歸)。
 - 本文件用途:**單一入口**。把三條並行 session 的狀態收斂成一份「現況 + 未完成事項 + 搬遷清單」,不重述已有報告的內容,只指路。
 
 執行細節在既有文件裡,本文件不複製:
@@ -43,7 +44,7 @@
 |---|---|---|
 | `add feedthrough objective` | M3 全生命週期、M4 design 與 T0–T6/T8a、Stage 2 規劃 v1(`66d0934..1b3671c`,35 commits) | 已停機待命。工作樹 **零未提交修改**、**零 background process** |
 | `comple M4 & stage2` | M4 T6 二次裁決之後全部、T8b/T9/T10/T11、Stage 2 S0–S10 | 已停機待命。未提交的只有實驗產出檔(本次一併處理)、**零 background process**;原懸案 backfill 裁決已由使用者裁 A 並執行(見 §3.C) |
-| 本 session(收尾線) | gitignore 整理、產出檔歸檔、本文件、commit + merge | 本次完成 |
+| 本 session(收尾線) | gitignore 整理、產出檔歸檔、本文件、裁決 A 的 backfill、commit + merge | 本次完成;`main` = `5aa98dd`(`--no-ff` 里程碑 merge) |
 
 **Background 全停確認**:`ps` 實測,repo 相關的 route / lifetime / T9 / extract chain 全部結束,無 `run_placement` / `openroad` / probe / rent 行程存活,無 cron、無排程 gate 待觸發。機器上殘留的 `wandb` / `vscode` / MCP 行程屬其他專案。
 
@@ -70,6 +71,15 @@
 4. **M3 第一順位補格實驗**:「IO 項開 + `ft_rg`→WL `net_weights`」決定性實驗,規格在 M3 報告 §4,`adaptec1` 單臂約 20 分鐘 GPU。
 5. **M3 P0c pilot**(S4a-star in-loop,post-registration):規格在 S4 裁決書 §D 與報告 7.3,4 臂 `adaptec1`。
 6. **M3 N1–N8 未決項**:P2 home-churn 探針、T0-P3 `boundary_demand` 欄位(S7 重開 gate 目前不可判)、`bigblue4` reweight 臂缺口等,已在 M3 報告逐項列出。
+
+### C-0. **新浮現的未決項:T9 replication 與 PlaceDB 的 node-ID 對不齊(2026-08-19 發現)**
+
+`tests/test_bench_bookshelf_netlist.py::test_replication_equals_placedb_read_on_real_1x2_array_movable_first` 在合併後的樹上**仍然 FAIL**,但**失敗原因已經換了一個**,這才是重點:
+
+- 收尾時跑 slow 套件,此測試是唯一的 FAIL,錯誤是 `FileNotFoundError: benchmarks/ispd25/synthetic_1x2_n2.json`。真因是 `ioplace/netlist.py` 的 `load_netlist` 為了解析 config **內部**的相對路徑而 chdir 到 `$DP/install`,卻在 chdir **之後**才 `params.load(config_json)`,於是呼叫端自己傳的 repo 相對路徑也被拿去 `$DP/install` 下解析。其他呼叫端一律傳絕對路徑,所以從沒踩到。已修:commit `4c9bb46`(chdir 前先 `abspath`)。
+- **修掉之後這個測試才第一次真正跑到它要驗的那個斷言,然後掛在斷言上**:`num_movable` / `num_physical` / `num_nets` 三個計數都相等,但逐 net 的 node-ID 集合在第 464,944 個 net 出現差異——`frozenset({6155340})` vs `frozenset({6155980})`,兩邊都是**單 pin net**,且 ID 都 > `num_movable`(6,155,338),也就是**落在 terminal/fixed 區塊**。徵狀指向:replication constructor 與 PlaceDB 對 movable 之後那一段(terminal / terminal_NI / fixed macro)的排序不一致,而測試是用 node ID 比對的。
+- **這個不一致在此之前一直被路徑 bug 遮住**,不是本次收尾造成的迴歸。T9 cache 另有一條獨立驗證(對 Bookshelf source 全量比對 0 mismatch,commit `00f2902`),所以**這不必然是資料錯誤,也可能是測試對 ID 順序的要求超出契約**——兩種可能都沒有被排除。
+- **下一步**(不需 H100,單機 ~8 分鐘可重現):判定到底是 (a) replication 的 terminal 段排序真的錯了(那會影響 T9/T14 的 27.7M 路徑),還是 (b) 測試該改成以 node **name** 而非 ID 比對。**在 H100 上跑 T14 之前應該先結掉這題**,因為 T14 用的正是同一條 replication 路徑。
 
 ### C. M4-G8 / linter backfill —— **已了結(2026-08-19,使用者裁決 A)**
 
