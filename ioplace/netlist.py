@@ -66,7 +66,11 @@ def load_netlist(config_json):
     import Params
     import PlaceDB
 
-    # Save original cwd and change to install directory for relative path resolution
+    # Save original cwd and change to install directory for relative path
+    # resolution. The chdir is for the paths *inside* the config (DREAMPlace
+    # writes those relative to its install dir); `config_json` itself is the
+    # caller's path, so resolve it against the caller's cwd before moving.
+    config_json = os.path.abspath(config_json)
     orig_cwd = os.getcwd()
     root = setup_dreamplace()
     install_dir = os.path.join(root, "install")
