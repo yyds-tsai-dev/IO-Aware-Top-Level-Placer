@@ -155,10 +155,14 @@ extract_one() {
             --def "$routed_def" --report-out "$or_run/verify_wire_length.rpt" \
             --json-out "$verify_json" >"$verify_log" 2>&1
         rc=$?
-        if [ $rc -ne 0 ] || [ ! -f "$verify_json" ]; then
-            echo "[FAIL] $base: verify_routed_def.py exited $rc or produced no $verify_json -- see $verify_log" >&2
+        # `openroad -python` prints a SystemExit traceback and exits non-zero
+        # even on sys.exit(0) (measured 2026-08-18); the JSON artifact is the
+        # authoritative success signal, not the exit code.
+        if [ ! -f "$verify_json" ]; then
+            echo "[FAIL] $base: verify_routed_def.py (rc=$rc) produced no $verify_json -- see $verify_log" >&2
             return 1
         fi
+        [ $rc -ne 0 ] && echo "[note] $base: verify rc=$rc ignored ($verify_json present; openroad-python SystemExit quirk)"
     else
         echo "[skip] $base: $verify_json already exists"
     fi
