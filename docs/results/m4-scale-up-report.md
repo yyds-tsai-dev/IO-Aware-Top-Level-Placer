@@ -1,11 +1,12 @@
-# M4 規模化(1M → 30M)報告(草稿,T11 進行中)
+# M4 規模化(1M → 30M)報告(T11 內容定稿;M4-G8 未了結,見 §9)
 
-- 日期:2026-08-16;分支 `m2-differentiable-io`,報告基準 HEAD `283e1a5`
+- 日期:2026-08-18(內容定稿 pass);分支 `m2-differentiable-io`,報告基準 HEAD `dc9d7de`
 - 環境:`docs/dev-env.md`(`DP=/nashome/NVL4/vdalab/yyds-dev/DREAMPlace`、`$DP/.venv312/bin/python`、torch 2.8.0+cu128、CUDA 12.8、NVIDIA L4、`dp_commit d971880a15ef684c4a90bccd2c65d62ae7e33297`,近期跑於 hostname `NVL5`)
 - 對應設計:`docs/superpowers/specs/2026-08-13-m4-scale-up-design-draft.md`(v2.3)
 - 對應裁決:`docs/results/2026-08-14-m4-t6-adjudication.md`(T6 協定 v2、G-D 撤回、Bug A/B)、`docs/results/2026-08-15-m4-t6-holdout-adjudication.md`(T6 holdout FAIL 維持、N2 選定、T6B 協定 B-0…B-6、B5、附錄 A 的 B-5 重算)
+- 平行交付:Stage 2(commercial-tool 校準)另立報告 `docs/results/stage2-calibration-report.md` — G1 觸發(Innovus license 不通)降級為 OpenROAD-only ground truth;主要新發現:OpenROAD DR 在高利用率 ISPD2015 上的規模天花板 ~150k cells;總量級校準 α̂=0.652 / β̂=0.966(κ_ft 建議 1.482),per-net 級校準待 per-net 陣列落檔後補
 - 前置報告:`docs/results/m3-differentiable-ft-report.md`(M3 exit FAIL——`ours@M3` 臂本報告一律不納入任何表格,只有 `flat`/`ours@M2`)
-- **狀態:草稿。本報告自身尚未走完 T11。** 已齊章節照 M0–M3 慣例寫實;未齊段落一律用 `<!-- PENDING: ... --> `標記其等待的 task/artifact,禁止以推測數字填補。
+- **狀態:內容已定稿——E1/E3/E5 PASS,E2 PASS(依 T6B 替代路徑,非字面 holdout 全綠),E4 部分判定(GP 子模型已重擬合並誠實揭露 `identifiable=false`;evaluator/op 子模型未曾納入 T0b 範圍,見 §7)。全部章節已依現有 artifact 寫實。但 `scripts/m4_report_lint.py --strict` 實跑 **24 error(s)**(§5.3/§5.4 引用的 24 個 profile run 缺 `workload_status`/`generator_verified` 欄位,driver 輸出 schema 缺口,非表格措辭問題;附錄 A.4)——依 **M4-G8 字面規則(§9)「任一違規 ⇒ T11 不得標記完成」,本報告誠實記錄此一未了結項,不自行判定為完成。** 仍有極少數不影響內容判定的收尾項標 `<!-- PENDING: ... -->`,禁止以推測數字填補。
 
 **品質宣稱紅線(design draft §3.4/§6.2;T6 holdout 裁決 §7-1):** 本報告中任何 `benchmark_kind="synthetic"` 的 case(6.2M/12.3M/27.7M 合成陣列)一律不得出現 HPWL/IO/FT 品質欄位或 winner/pareto 宣稱。凡合成表格涉及生成器未認證(`generator_verified=false`),依裁決 §7-1 必須逐字附上:
 
@@ -15,19 +16,17 @@
 
 ## 1. 摘要與 verdict 總表
 
-M4 的核心命題(v1→v2.3 一路存活):**DREAMPlace GP 在 10M 級不是瓶頸,evaluator 記憶體與 IO op 的 K-pass runtime 才是**;而 v1 的推論方式(五點擬合外推、峰值相加判可行、cell-count ratio 當階層證據、10× 容忍帶當預測)全部被 Codex 兩輪對抗性審查與 T3a/T6 的實測推翻,v2.3 把每一個裁決換成「一個能證偽它的實驗 + 一條在證據不足時停下來的規則」。本報告是這條規則的第一次結案:**一個實質的 FAIL→PASS 轉變已經發生(E1 的 overflow 判準),T6 的生成器驗證維持 FAIL 且已誠實揭露其失敗機制,其餘四個 E 判準都卡在尚未執行的 task 上,不以任何理由代填。**
+M4 的核心命題(v1→v2.3 一路存活):**DREAMPlace GP 在 10M 級不是瓶頸,evaluator 記憶體與 IO op 的 K-pass runtime 才是**;而 v1 的推論方式(五點擬合外推、峰值相加判可行、cell-count ratio 當階層證據、10× 容忍帶當預測)全部被 Codex 兩輪對抗性審查與 T3a/T6 的實測推翻,v2.3 把每一個裁決換成「一個能證偽它的實驗 + 一條在證據不足時停下來的規則」。本報告是這條規則的結案 pass:**E1/E3/E5 三個判準已全綠;E2 綠燈但走的是 T6B 替代自洽性路徑,不是字面上的 holdout 全綠;E4 是部分判定——GP 記憶體/runtime 子模型已重擬合並誠實得出 `identifiable=false`,但 exit 文字要求的 evaluator/op 子模型從未被 T0b 的 factorial 設計觸及,此缺口逐字揭露而非代填。**
 
 | # | 判準 | 狀態 | 一句話 |
 |---|---|---|---|
-| **E1** 10M 全流程 | **部分可判** | seed A 上,`mempool_cluster` 的 overflow 判準已從 FAIL(1000-iter 上限,final_overflow=0.327)轉為 PASS(2000-iter,final_overflow=0.0698);完整 §6.3 矩陣(K∈{16,32}×{flat,ours@M2}、seed B)尚未交付,見 §3、§7 |
-| **E2** 30M 測資 | **PENDING** | (a) 27.7M Bookshelf 產出 + V0/H5′ 綠已達成(T6B);(b) 12.3M 的 H1–H5 holdout **未**全綠(T6 holdout FAIL 維持,非懸置而是已判定的 FAIL);(c) 27.7M 元件級 spike(T9)三態終結尚未執行 → 待 T9 |
-| **E3** 全規模對照表 | **PENDING** | `quality_real_cases.md`/`scaling_synthetic_cases.md` 需要 seed B 正式 run;現有只有 seed A 校準/篩選資料(§5)→ 待 T8b 之後的 seed-B T8 |
-| **E4** 記憶體 profile | **PENDING** | B1/B2/B3 三個量測工具 bug 已處置揭露(§2);但 T0b 的 factorial 擬合(`model_fit.json`)尚未執行,6.2M/12.3M holdout 殘差無從談起 → 待 T0b |
-| **E5** H100 forecast | **PENDING(凍結)** | 草稿預測已產出(`results/m4/forecast/h100_prediction.draft.json`,`status="draft"`、`unvalidated=true`),含具體 point estimate;spec 要求的**凍結**版(`h100_prediction.json` + sha256 登錄)尚未執行 → 待 T10 收尾 |
+| **E1** 10M 全流程 | **PASS** | `mempool_cluster` seed-B(seed=2000)六門檻全過:`Δhpwl` +1.44%≤5%、`num_unplaced_cells=0`、`final_overflow=0.0694≤0.07`、`legalization_status=success`、`device_used_gb=13.47≤20GB`、單臂 1.9h≤4h(`results/m4/profile/mempool_cluster__k16__grid__oursM2.json`);K∈{16,32}×{flat,ours@M2} 四格皆已落地,見 §3、§7 |
+| **E2** 30M 測資 | **PASS(依 T6B 替代路徑)** | (a) 27.7M Bookshelf 產出 + T7 3×3 陣列 sha + B-5 重算全綠(T6B);(b) 12.3M 的 H1–H5 holdout 本身**仍 FAIL**(T6 裁決維持,非懸置)——依 M4-G3 轉入 T6B 的 B-0/B-3…B-6 自洽性驗收,全部綠燈,`scaling_usable=true`;(c) 27.7M 元件級 spike(T9)兩情境皆 `feasible_l4_contract`。三支子條件依裁決語意合併判 PASS,**不等於原始 H1–H5 全綠** |
+| **E3** 全規模對照表 | **PASS(內容);M4-G8 linter 未了結** | `quality_real_cases` 格式的真實 case 表 16/16 格(4 case×K{16,32}×{flat,ours@M2})、`scaling_synthetic_cases` 格式的合成表 8/8 格(2 case×K{16,32}×{flat,ours@M2})皆已落地,seed B=2000,見 §5;但 `m4_report_lint.py --strict` 對這 24 格實跑 **24 error(s)**(driver 輸出缺 `workload_status`/`generator_verified` 欄位,非表格寫法問題),依 M4-G8「⇒ T11 不得標記完成」,見 §9/附錄 A.4 |
+| **E4** 記憶體 profile | **部分判定** | B1/B2/B3 三個量測工具 bug 已處置揭露(§2,B1 由 T1b 四臂 A/B probe 定案成因);T0b 16 點 factorial 設計**全部執行**,GP 記憶體/runtime 兩個子模型重擬合完畢、`identifiable=false`(M4-G6 觸發,誠實負結果);但 exit 文字要求的 evaluator/op 子模型**從未被 T0b 觸及**(`model_fit.json` 只有 `gp_memory_model`/`gp_runtime_model` 兩個 key),此缺口逐字記錄,不代填 → 見 §7 E4 |
+| **E5** H100 forecast | **PASS(凍結)** | `results/m4/forecast/h100_prediction.json` 已凍結(`status="frozen"`),sha256 `4eeea5f9132e1a06585ae57e38c6e45b5523ed31ae5454826ff4cff56e045284` 登錄於 §8;T14 首跑比對器(`scripts/m4_check_prediction.py`)已含逐 phase `s_p_obs` 檢定邏輯 |
 
-<!-- PENDING: 本表在 seed-B 全部 report run(T8)+ T0b + T9 + T10 凍結完成後需整表重判,屆時 E1 亦轉為完整判定。 -->
-
-**一句話結論(暫定,待上述 task 補齊後可能改判):** M4 v2.3 的誠實紀律本身站得住——iteration 預算調整是一次性的、方向不利於「ours」的全語料修正(§3),T6 的 FAIL 不因任何事後論證被翻案(§4),T6B 的自洽性驗收全綠(§4);但「30M 全流程數小時內完成」的原始 exit 主張本報告尚不能簽署,因為它依賴的 T0b/T9/T10 三個量測 task 都還沒跑。
+**一句話結論:** M4 v2.3 的誠實紀律站得住到底——iteration 預算調整是一次性的、方向不利於「ours」的全語料修正(§3),T6 的 FAIL 不因任何事後論證被翻案(§4),T6B 的自洽性驗收全綠(§4),E1/E3/E5 三個 exit 判準的**內容**已用 seed-B 正式資料補完(§5、§7)。**兩個未完全兌現的缺口本報告一併逐字揭露,不以任何理由代填:**(1) E4 的 evaluator/op 子模型——T0b 的 factorial 重擬合只覆蓋了 GP 記憶體/runtime,exit 原文點名的另外兩個子模型從未被這輪 T0b 設計納入(§7 E4);(2) **M4-G8 尚未了結**——§5.3/§5.4 的 24 個正式 run 內容完整、規模覆蓋齊全,但其來源 JSON 缺少 linter 要求的 `workload_status`/`generator_verified` 欄位,`m4_report_lint.py --strict` 因此判 24 error,依 spec 字面規則這代表 **T11 尚不能標記為完成**(§9、附錄 A.4)。
 
 ---
 
@@ -39,7 +38,16 @@ M4 的核心命題(v1→v2.3 一路存活):**DREAMPlace GP 在 10M 級不是瓶�
 
 `results/m2/**/*.json` 的 `peak_mem_mb` 受同 process 內先前臂污染:adaptec1 `A0_k8`=140.765625 MiB 與全新 process 的 GP 峰值逐位元相同,其後 k16/k32/slicing = 253.4/366.7/479.3 MiB(每步 +112.6 MiB 定值步進);bigblue4 A2/A3/A4/A6 = 10.58/12.46/14.35/16.23 GB(每步 +1.88 GB 定值步進)。`max_memory_allocated()` 是「歷史最大 active allocation」不會自動相加,v1 的「process 累積 high-water mark」是過度推論;更可能是每臂結束後仍存活的張量(retained tensors / 缺 teardown),**單靠 reset 不會清掉仍存活的 allocation**。
 
-**處置:結論(污染成立、M2/M3 的 `peak_mem_mb` 一律作廢)保留;成因改標「未證」。** 正式的成因裁決(T1b 四臂 A/B probe)本報告範圍內尚未執行。<!-- PENDING: T1b 四臂 subprocess A/B probe(fresh subprocess / same-process / reset-only / explicit teardown+GC)——本報告目前只複述 spec §1.4 B1 的結論段,未新增實測。 -->本報告的 GPU 峰值數字(§5、§6、§7)一律取自**每次 run 各自獨立 process** 產出的 `device_used_gb`/`peak_mem_mb`(schema v3,`peak_mem_mb_reset_semantics=true`),不引用任何 M2/M3 的舊 `peak_mem_mb`。
+**處置:結論(污染成立、M2/M3 的 `peak_mem_mb` 一律作廢)保留;成因由 T1b 四臂 A/B probe 定案。** `results/m4/profile/t1b_arms.json`(adaptec1、100 iterations,四種 protocol 依序在同一 A/B 骨架上跑 arm1→arm2 兩臂):
+
+| protocol | arm2 相對 arm1 baseline 的殘留(`arm2_baseline_delta_gb`) |
+|---|---:|
+| `fresh_subprocess`(每臂各自獨立 process) | **0.0**(無殘留) |
+| `same_process`(同 process 依序跑兩臂) | **0.1106 GB** |
+| `reset_only`(同 process,phase 開頭僅 `reset_peak_memory_stats()`) | **0.1106 GB**(與 same_process 逐位元相同——`reset_only_fixes_baseline=false`) |
+| `teardown_gc`(同 process,顯式釋放張量 + `gc.collect()`) | **0.0**(`teardown_within_2pct_tolerance=true`) |
+
+`judgment.cause = "retained_tensors"`:`reset_only` 不能讓殘留歸零(排除「純粹 high-water mark 累積」的解釋),但顯式 teardown+GC **可以**——這確認 B1 的污染成因是**臂與臂之間仍存活的張量**(而非 allocator 統計本身的性質),與 §1.4 B1 原文「未證」的猜測方向一致,現正式定案。本報告的 GPU 峰值數字(§5、§6、§7)一律取自**每次 run 各自獨立 process** 產出的 `device_used_gb`/`peak_mem_mb`(schema v3,`peak_mem_mb_reset_semantics=true`),不引用任何 M2/M3 的舊 `peak_mem_mb`——這正是 `fresh_subprocess` 這一臂本身已經證明乾淨的量測協定。
 
 ### B2 — diagnostics 每 callback 成本是 `1 + n_nonempty_buckets`,不是固定 8×
 
@@ -178,6 +186,8 @@ primary seed    = 0(全檔落地);seeds 1–4 只存 recipe sha256
 
 **結構性發現(必須寫入報告,裁決 §5.3):在 N2 之下,核的選擇完全不改變 glue 總數**(每 tile 預算固定,核只重新分配),只改變空間局部性——d=1 佔比 33.3%→74.3%(>2×)。⇒ spec §3.2 line 304「三核總數全距 > 20% 才附 K3 變體」在 N2 下恆為 0%,已退化為無資訊觸發條件;K3 因此**照產不因此條件而省略**。
 
+**3×3 N1 = `not_run`(誠實記錄,§4.1 已否證的配方不予落地):** `build_summary.json` 的 `"3x3"."n1"` 欄位記錄了一組**計算出的** glue 統計(`n_nets=151,491`、`n_pins=302,982`,以 N1 的 `Σλ₀φ(d)` 公式算出),但 `results/m4/bench/arrays/` 下**沒有 `3x3_n1` 目錄**——這組統計從未被實際建構成陣列檔案。理由與 §4.1 一致:N1 已被 H6 的形狀不變腿(3×3 vs 2×2)證偽(`|Δp|` 隨陣列規模漂移),T7 的定案配方(上表)自始就只落地 N2 的 K1/K3;`build_summary.json` 裡的這組數字是規劃階段的副產物,不代表 N1 有任何 3×3 級的實測或已建構產物,本報告不引用它做任何比較。
+
 ### 4.4 T6B(3×3 自洽性驗收):B-0/B-3/B-4/B-6 全綠,B-5 重算後全綠
 
 `results/m4/bench/verify_group3x3_t6b.json` + `results/m4/bench/b5_recompute.json`:
@@ -202,9 +212,11 @@ primary seed    = 0(全檔落地);seeds 1–4 只存 recipe sha256
 
 **per-pair 抽樣的同號偏誤(裁決附錄 A.5,揭露不判定,不採取行動):** `b5_recompute.json` 的 `a5_per_pair_signs` 欄與各陣列的 `b5c_sampling_noise.z` 顯示,五個已建陣列(1×2_n1、1×2_n2、2×2_n1、2×2_n2、3×3_n2)的 Poisson 總數偏差 z 值**全部同號為正**:+0.388σ / +0.393σ / +0.098σ / +0.106σ / +0.539σ;**5/5 同號,單尾符號檢定 p ≈ 0.03(= 0.5⁵)**。依附錄 A.5 政策,此為揭露事項,**不觸發任何判準調整或動作**;`a5_per_pair_signs` 欄同時對每個陣列的 per-pair(`min_expected≥42`)偏差各自跑了符號檢定與 Poisson 適合度檢定,結果(§4.7 已引用 3×3_n2 的 `chi2_p=0.554`)不支持系統性生成偏誤——5 陣列層級的同號現象與 per-pair 層級的無顯著偏誤是兩個不同粒度的觀察,皆如實記錄,不相互抵銷或加強對方的判定力。
 
-**B-1(3×3 Rent 形狀不變性 DiD)與 B-2(等解析度 K-grid λ)皆為 `pending_measurement`**——尚未在本報告範圍內執行(B-1 需要 `rent.measure_rent` 在 `3x3_n2`/`3x3_noglue`/`2x2_noglue` 三個陣列上各跑一次,預估 45–60 min/run;B-2 是 T8/T9 產物)。<!-- PENDING: B-1(Rent 形狀不變性 DiD,3×3 vs 2×2 vs 無 glue 對照)——`verify_group3x3_t6b.json` 現況 `status="pending_measurement"`,預先登錄預測 `p(3×3,N2,seed 0)=0.530±0.008`,尚待 `rent.measure_rent` 在三個陣列上執行。B-2(H5 K-grid,等 per-tile 解析度)同樣 `pending_measurement`,待 T8/T9。 -->
+**B-1(3×3 Rent 形狀不變性 DiD)——`ok`,已執行:** `rent.measure_rent` 在 `3x3_n2`/`3x3_noglue`/`2x2_noglue` 三個陣列(+ 沿用 T6 既有的 2×2 N2 量測)上各跑一次,`3x3_n2`/`3x3_noglue`/`2x2_noglue` 分別耗時 2843.0 s / 2882.0 s / 1183.6 s(全部遠低於預先登錄的 4h wall / 100GB RSS 中止上限,未觸發任何中止條件)。DiD 定義為兩層「加 glue 前後的 Rent p 變化量」之差:`Δp(3×3) = p(3x3_n2)−p(3x3_noglue) = 0.53909−0.47995 = 0.05914`;`Δp(2×2) = p(2x2_n2)−p(2x2_noglue) = 0.52626−0.47052 = 0.05575`;**`DiD = |0.05914−0.05575| = 0.003398 ≤ 0.03`(門檻)⇒ B-1 綠燈**——3×3 加 glue 造成的 Rent 躍升幅度與 2×2 幾乎相同,形狀不隨陣列規模系統性漂移。**揭露(不影響判定)**:`p(3x3_n2)=0.53909` 本身落在預先登錄的預測帶 `[0.522, 0.538]` 之外,超出上緣 **0.0011**;此為一個登錄在先的 forecast 落空,不是 B-1 判準(`DiD≤0.03`)本身,依 2026-08-15 裁決 §4.3 逐字揭露、不改判。
 
-依裁決 §4.1 的驗收規則(**B-0 與 B-3…B-6 全綠 ⇒ 3×3 bench 可用於 scaling**),`verify_group3x3_t6b.json` 記 **`scaling_usable=true`**,`generator_verified=false`,`quality_claims_prohibited=true`。
+**B-2(H5 等解析度 K-grid λ)——`fail`,已執行,published/non-gating:** 合成 2×2(K=16,`synthetic_2x2_n2__k16__grid__flat.json`,seed B)`hard_lambda_sum=197,793`(`n_nets=14,042,293`)⇒ `λ_synthetic=0.014086`;真實 `mempool_group` 在**等解析度**(K=4,2×2 grid,`group__k4__grid__flat_eval_b2.json`,對 seed-A flat npz 的 evaluate-only 重新計分)`hard_lambda_sum=31,191`(`n_nets=3,503,988`)⇒ `λ_real=0.008902`;**`ratio = λ_synthetic/λ_real = 1.5824`,落在 `[0.7,1.4]` 門檻之外 ⇒ FAIL**,依裁決發表但**不 gate** scaling 用途(`adjudication_note`:「fail is published and disclosed, does NOT gate scaling usage」)。**反向診斷(揭露,不判定)**:若改用兩邊皆 K=16(解析度不等,合成的 per-tile 解析度只有真實的 1/4)算出的 `ratio=0.6360`,方向由 >1.4 翻轉為 <0.7——與 §4.4 節「解析度效應」的預先登錄預測方向一致,佐證 B-2 fail 的根源是「等解析度」定義本身的敏感度,而非生成器隨機失準。
+
+依裁決 §4.1 的驗收規則(**B-0 與 B-3…B-6 全綠 ⇒ 3×3 bench 可用於 scaling**),`verify_group3x3_t6b.json` 記 **`scaling_usable=true`**,`generator_verified=false`,`quality_claims_prohibited=true`。B-1/B-2 屬**非 gating 的附加揭露項**(裁決 §4.1 的驗收規則本身只點名 B-0/B-3…B-6),兩者皆已執行完畢,不再是 `pending_measurement`;B-1 綠燈進一步支持 3×3 陣列的結構相似性,B-2 fail 已如實發表且不推翻 `scaling_usable=true`。
 
 ### 4.5 V0′ 判準修正(§7-5,逐字)
 
@@ -220,9 +232,9 @@ primary seed    = 0(全檔落地);seeds 1–4 只存 recipe sha256
 
 ---
 
-## 5. T8b 校準(seed A)——**calibration only, not report arms**
+## 5. T8b 校準與 seed-B 正式報表
 
-**這是校準表,不是品質表**:下列格點用於**依預先登錄規則選出 `ρ*`**,不是本報告任何 E3 判準所引用的正式結果;報告用的正式 run 依 T8b 協定一律跑 **seed B**(§9),此處 seed A 的 `run_id` 不得出現在任何最終品質表中。
+§5.1–§5.2 是 **T8b 校準表(seed A),不是品質表**:下列格點用於**依預先登錄規則選出 `ρ*`**,不是本報告任何 E3 判準所引用的正式結果;報告用的正式 run 依 T8b 協定一律跑 **seed B**(附錄 A.3),此處 seed A 的 `run_id` 不得出現在任何最終品質表中——最終品質/合成表見 §5.3/§5.4(seed B,已落地)。
 
 **選取規則(逐字取自 `results/m4/calib/rho_*.json` 的 `selection_rule`)**:取「`Δhpwl ≤ +5.0%` 前提下最大的 `ρ`」(固定格點 `{0.05, 0.10, 0.15, 0.20}`),以約束選、不以 `Δio` 選(winner-bias 控制);**格點不得事後擴充(M4-G2)**。
 
@@ -265,38 +277,58 @@ primary seed    = 0(全檔落地);seeds 1–4 只存 recipe sha256
 
 **`seed_B` 欄位歷史(引用時說明):** 本表與 §5.1 引用的 `seed_B=2000` 均為修正後的值。`group`/`sb12`/`bb4` 三案的 calib 檔在 commit `85c1c59` 一度把 `seed_B` 誤記為 **1001**,依附錄 A.3 的跨 session 協議由 commit `9830ff6` 修正為 **2000**;`rho_cluster.json` 建立於 `9830ff6` 之後(commit `6587682`),自始即為 2000,未經過 1001 這個中間值。
 
-**仍未完成的部分:** (i) K=32 目前只有對 K16 flat placement 的 evaluate-only 重新計分(上表最後一列),不是獨立收斂的 K=32 臂,且完全沒有 K=32 的 `ρ_max>0` 臂;(ii) 上表全部五個 K=16 格點與 K=32 flat 都是 **seed A**(=1000)的校準/篩選性質資料,不是 T8b 協定要求的正式 seed-B report run——§5.3 已有 sb12/bb4/group 三案的正式 seed-B 矩陣,cluster 尚未排入。
+**已完成:** K=32 的獨立 GP+LG `ours@M2` 臂(`results/m4/profile/mempool_cluster__k32__grid__oursM2.json`,`final_overflow=0.0697`、`device_used_gb=14.13GB`,非 evaluate-only)與 cluster 的正式 seed-B(seed=2000)report 矩陣(K∈{16,32}×{flat,ours@M2} 四格)已補齊,見 §5.3 正式表格。上表(本節)維持原樣、不回填——它是 **seed A**(seed=1000)的校準/篩選性質資料,`ρ*` 選取的紀錄本身不需要、也不應該用 seed-B 資料覆寫。
 
-<!-- PENDING: mempool_cluster 的 K=32 獨立 GP+LG `ours@M2` run(目前只有對 K16 flat 的 evaluate-only 重新計分)、以及 cluster 的正式 seed-B report run(K∈{16,32}×{flat,ours@M2} 共 4 格,見 §5.3)——待排入 seed-B 校準佇列。 -->
+### 5.3 品質對照表(`quality_real_cases`,seed B,16/16 格)
 
-### 5.3 Seed-B 品質矩陣(sb12/bb4/group,部分)
+`results/m4/profile/{case}__k{16,32}__grid__{flat,oursM2}.json`(`seed=2000`,附錄 A.3 鎖定的正式 seed B):四個真實 case(superblue12/bigblue4/mempool_group/mempool_cluster)在 K∈{16,32}×{flat, ours@M2(ρ_max=ρ\*=0.20)} 下的完整矩陣已全數落地(16/16 格),對應 E3(§7)。欄名採 spec §6.2 `quality_real_cases.md` 原欄名(`case | cells | nets | pins | K | rtype | arm | io_mst | ft_mst | io_rg | ft_rg | hpwl | Δio% | Δft% | Δhpwl% | num_unplaced_cells | final_overflow | t_total | t_gp | t_op | t_eval | gpu_peak | host_hwm | run_id`)。
 
-`results/m4/profile/{case}__k{16,32}__grid__{flat,oursM2}.json`(`seed=2000`,即附錄 A.3 鎖定的正式 seed B):三個小型真實 case(superblue12/bigblue4/mempool_group)在 K∈{16,32}×{flat, ours@M2(ρ_max=ρ\*=0.20)} 下的完整矩陣已落地,`ours@M2` 一律取各案 §5.1 選定的 ρ\*=0.20。**mempool_cluster 的對應四格尚未排入 seed-B 佇列,標 PENDING(見表後)。**
+| case | cells | nets | pins | K | rtype | arm | io_mst | ft_mst | io_rg | ft_rg | hpwl | Δio% | Δft% | Δhpwl% | num_unplaced_cells | final_overflow | t_total | t_gp | t_op | t_eval | gpu_peak | host_hwm | run_id |
+|---|---:|---:|---:|---:|---|---|---:|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---|
+| sb12(1.3M) | 1,286,948 | 1,293,413 | 4,772,990 | 16 | grid | flat | 62,055 | 3,284 | — | — | 260,669,447 | — | — | — | 0 | 0.0643 | 340.2 | 75.2 | — | 236.0 | 3.09 | 6.53 | `results/m4/profile/sb12__k16__grid__flat.json` |
+| sb12(1.3M) | 1,286,948 | 1,293,413 | 4,772,990 | 16 | grid | ours@M2 | 45,125 | 4,190 | — | — | 267,797,173 | −27.28% | +27.59% | +2.73% | 0 | 0.0664 | 514.1 | 256.3 | — | 228.9 | 2.80 | 6.54 | `results/m4/profile/sb12__k16__grid__oursM2.json` |
+| sb12(1.3M) | 1,286,948 | 1,293,413 | 4,772,990 | 32 | grid | flat† | 106,059 | 9,324 | — | — | 260,669,447 | — | — | — | — | — | 266.9 | — | — | — | — | — | `results/m4/profile/sb12__k32__grid__flat.json` |
+| sb12(1.3M) | 1,286,948 | 1,293,413 | 4,772,990 | 32 | grid | ours@M2 | 80,696 | 11,013 | — | — | 265,249,308 | −23.91%‡ | +18.11%‡ | +1.76%‡ | 0 | 0.0631 | 765.5 | 491.5 | — | 245.9 | 4.43 | 6.55 | `results/m4/profile/sb12__k32__grid__oursM2.json` |
+| bb4(2.2M) | 2,169,183 | 2,229,886 | 8,900,078 | 16 | grid | flat | 99,912 | 6,969 | — | — | 748,432,433 | — | — | — | 0 | 0.0646 | 572.4 | 56.2 | — | 466.5 | 4.06 | 10.22 | `results/m4/profile/bb4__k16__grid__flat.json` |
+| bb4(2.2M) | 2,169,183 | 2,229,886 | 8,900,078 | 16 | grid | ours@M2 | 64,753 | 8,873 | — | — | 782,633,935 | −35.19% | +27.32% | +4.57% | 0 | 0.0697 | 950.0 | 437.1 | — | 464.6 | 4.06 | 10.25 | `results/m4/profile/bb4__k16__grid__oursM2.json` |
+| bb4(2.2M) | 2,169,183 | 2,229,886 | 8,900,078 | 32 | grid | flat† | 159,947 | 19,193 | — | — | 748,432,433 | — | — | — | — | — | 524.2 | — | — | — | — | — | `results/m4/profile/bb4__k32__grid__flat.json` |
+| bb4(2.2M) | 2,169,183 | 2,229,886 | 8,900,078 | 32 | grid | ours@M2 | 118,373 | 21,842 | — | — | 763,011,690 | −25.99%‡ | +13.80%‡ | +1.95%‡ | 0 | 0.0693 | 1262.0 | 739.8 | — | 472.3 | 4.73 | 10.24 | `results/m4/profile/bb4__k32__grid__oursM2.json` |
+| group(3.1M) | 3,077,669 | 3,503,992 | 12,026,191 | 16 | grid | flat | 97,803 | 9,170 | — | — | 485,777,937 | — | — | — | 0 | 0.0698 | 767.2 | 78.9 | — | 585.7 | 4.01 | 18.51 | `results/m4/profile/group__k16__grid__flat.json` |
+| group(3.1M) | 3,077,669 | 3,503,992 | 12,026,191 | 16 | grid | ours@M2 | 89,634 | 10,843 | — | — | 491,191,451 | −8.35% | +18.24% | +1.11% | 0 | 0.0699 | 1363.9 | 686.0 | — | 583.5 | 4.01 | 18.55 | `results/m4/profile/group__k16__grid__oursM2.json` |
+| group(3.1M) | 3,077,669 | 3,503,992 | 12,026,191 | 32 | grid | flat† | 162,479 | 25,472 | — | — | 485,777,937 | — | — | — | — | — | 661.3 | — | — | — | — | — | `results/m4/profile/group__k32__grid__flat.json` |
+| group(3.1M) | 3,077,669 | 3,503,992 | 12,026,191 | 32 | grid | ours@M2 | 143,783 | 27,126 | — | — | 489,615,430 | −11.51%‡ | +6.49%‡ | +0.79%‡ | 0 | 0.0700 | 1982.9 | 1286.3 | — | 598.4 | 6.85 | 18.61 | `results/m4/profile/group__k32__grid__oursM2.json` |
+| cluster(11.3M) | 11,310,807 | 12,712,800 | 43,947,793 | 16 | grid | flat | 221,472 | 11,220 | — | — | 2,095,126,495 | — | — | — | 0 | 0.0698 | 2989.2 | 374.3 | — | 2155.0 | 12.23 | 68.46 | `results/m4/profile/mempool_cluster__k16__grid__flat.json` |
+| cluster(11.3M) | 11,310,807 | 12,712,800 | 43,947,793 | 16 | grid | ours@M2 | 189,663 | 17,910 | — | — | 2,125,310,176 | −14.36% | +59.63% | +1.44% | 0 | 0.0694 | 6808.9 | 4260.1 | — | 2123.7 | 13.47 | 68.61 | `results/m4/profile/mempool_cluster__k16__grid__oursM2.json` |
+| cluster(11.3M) | 11,310,807 | 12,712,800 | 43,947,793 | 32 | grid | flat† | 355,720 | 37,053 | — | — | 2,095,126,495 | — | — | — | — | — | 2508.2 | — | — | — | — | — | `results/m4/profile/mempool_cluster__k32__grid__flat.json` |
+| cluster(11.3M) | 11,310,807 | 12,712,800 | 43,947,793 | 32 | grid | ours@M2 | 314,949 | 46,627 | — | — | 2,118,946,353 | −11.46%‡ | +25.84%‡ | +1.14%‡ | 0 | 0.0697 | 10597.7 | 8045.1 | — | 2133.8 | 14.13 | 68.49 | `results/m4/profile/mempool_cluster__k32__grid__oursM2.json` |
 
-| case | K | arm | io_abs | ft_abs | hpwl_abs | d_io_pct | d_ft_pct | d_hpwl_pct | num_unplaced_cells | final_overflow | t_total_s | t_gp_s | gpu_peak_gb | host_hwm_gb | run_id |
-|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| sb12(1.3M) | 16 | flat | 62,055 | 3,284 | 260,669,447 | 0 | 0 | 0 | 0 | 0.0643 | 340.2 | 75.2 | 3.09 | 6.53 | `2e311be1-dd06-4377-b170-a07ec3eb9550` |
-| sb12(1.3M) | 16 | ours@M2 | 45,125 | 4,190 | 267,797,173 | −27.28% | +27.59% | +2.73% | 0 | 0.0664 | 514.1 | 256.3 | 2.80 | 6.54 | `f4f861e8-6f80-45a6-b9a3-ef2635374e52` |
-| sb12(1.3M) | 32 | flat† | 106,059 | 9,324 | 260,669,447 | — | — | — | — | — | 266.9 | — | — | — | `1a1388d4-bec1-40b5-955c-51d3ae76fa5b` |
-| sb12(1.3M) | 32 | ours@M2 | 80,696 | 11,013 | 265,249,308 | −23.91%‡ | +18.11%‡ | +1.76%‡ | 0 | 0.0631 | 765.5 | 491.5 | 4.43 | 6.55 | `94f20b94-8e89-48c1-bde5-0ddd0d456c79` |
-| bb4(2.2M) | 16 | flat | 99,912 | 6,969 | 748,432,433 | 0 | 0 | 0 | 0 | 0.0646 | 572.4 | 56.2 | 4.06 | 10.22 | `a77e59b8-1f06-4edd-a6c6-1d9c224271f9` |
-| bb4(2.2M) | 16 | ours@M2 | 64,753 | 8,873 | 782,633,935 | −35.19% | +27.32% | +4.57% | 0 | 0.0697 | 950.0 | 437.1 | 4.06 | 10.25 | `ddcf9e53-4844-45fa-8b3c-2dbea195b95e` |
-| bb4(2.2M) | 32 | flat† | 159,947 | 19,193 | 748,432,433 | — | — | — | — | — | 524.2 | — | — | — | `3286a58f-0e8e-4ecb-b882-95f315b17b8c` |
-| bb4(2.2M) | 32 | ours@M2 | 118,373 | 21,842 | 763,011,690 | −25.99%‡ | +13.80%‡ | +1.95%‡ | 0 | 0.0693 | 1262.0 | 739.8 | 4.73 | 10.24 | `95e62992-6aca-41bf-b519-66ce0bf1533a` |
-| group(3.1M) | 16 | flat | 97,803 | 9,170 | 485,777,937 | 0 | 0 | 0 | 0 | 0.0698 | 767.2 | 78.9 | 4.01 | 18.51 | `3f9b9799-0d19-4b67-bdcf-7a18e9438926` |
-| group(3.1M) | 16 | ours@M2 | 89,634 | 10,843 | 491,191,451 | −8.35% | +18.24% | +1.11% | 0 | 0.0699 | 1363.9 | 686.0 | 4.01 | 18.55 | `e5bbb626-1e74-4e7d-890b-7c5e43dc587a` |
-| group(3.1M) | 32 | flat† | 162,479 | 25,472 | 485,777,937 | — | — | — | — | — | 661.3 | — | — | — | `8e117c64-a5cd-40af-90cd-5469a7d0dbe5` |
-| group(3.1M) | 32 | ours@M2 | 143,783 | 27,126 | 489,615,430 | −11.51%‡ | +6.49%‡ | +0.79%‡ | 0 | 0.0700 | 1982.9 | 1286.3 | 6.85 | 18.61 | `7c17b74e-3d4d-4a4c-ad65-ad518c9be2b9` |
+`cells`=corpus `num_movable`;`nets`/`pins`=corpus `num_nets`/`num_pins`(`results/m4/corpus/*.json`,bb4 取自 DREAMPlace 內建 `bigblue4.nodes`/`bigblue4.nets` 的 `NumNodes−NumTerminals`/`NumNets`/`NumPins`)。`io_mst`/`ft_mst` = evaluator 主判準(JSON 的 `io_count`/`ft_count`);`io_rg`/`ft_rg` 全表留空——本表全部 16 個 run 都是 `flat`/`ours@M2`,`ours@M3` 專屬欄位依前言紅線不納入任何一列。`t_op` 留空:本 schema 版本沒有把 IoTerm fwd/bwd 從 `t_gp`(GP 迴圈內呼叫)獨立計時出來,`t_gp` 已含 op 成本。
 
-†:K=32 的 `flat` 是對同案 K=16 `flat` placement 的 **evaluate-only** 重新計分(`mode="evaluate_only"`,重用 K16 flat 的 `.npz`),不是獨立收斂的 K=32 GP+LG 臂——`hpwl_abs` 因此與同案 K=16 `flat` 逐位元相同;`final_overflow`/`t_gp_s`/`gpu_peak_gb`/`host_hwm_gb` 留空,因為 evaluate-only run 沒有這些欄位。
-‡:K=32 的 `d_io_pct`/`d_ft_pct`/`d_hpwl_pct` 是相對於同案**同 K** 的 `flat†`(evaluate-only 重新計分基準),不是相對 K=16 flat;K=32 `ours@M2` 本身是獨立收斂的 GP+LG 臂(`final_overflow`/`gpu_peak_gb` 等欄位齊全,非 evaluate-only)。
+†:K=32 的 `flat` 是對同案 K=16 `flat` placement 的 **evaluate-only** 重新計分(`mode="evaluate_only"`,重用 K16 flat 的 `.npz`),不是獨立收斂的 K=32 GP+LG 臂——`hpwl` 因此與同案 K=16 `flat` 逐位元相同;`final_overflow`/`t_gp`/`t_eval`/`gpu_peak`/`host_hwm` 留空,因為 evaluate-only run 沒有這些欄位。
+‡:K=32 的 `Δio%`/`Δft%`/`Δhpwl%` 是相對於同案**同 K** 的 `flat†`(evaluate-only 重新計分基準),不是相對 K=16 flat;K=32 `ours@M2` 本身是獨立收斂的 GP+LG 臂(`final_overflow`/`gpu_peak` 等欄位齊全,非 evaluate-only)。
 
-`io_abs`/`ft_abs` = evaluator 主判準(JSON 的 `io_count`/`ft_count` 欄位,即 spec §6.2 的 `io_mst`/`ft_mst`);`io_rg`/`ft_rg` 欄位省略——本表六個 `ours@M2` run 皆無此欄位(`ours@M3` 專屬,依前言紅線本報告不納入任何 `ours@M3` 臂)。`ours@M2` 一律 `ρ_max=0.20`(= §5.1 選定的各案 ρ\*)。
+`ours@M2` 一律 `ρ_max=0.20`(= §5.1/§5.2 選定的各案 ρ\*)。本表已走過 §7.0 RESULT GATE / linter 的正式收錄流程(附錄 A.4 記錄實跑結果)。
 
-**此表尚未走過 §7.0 RESULT GATE 的正式收錄流程,不是定稿條目**——資料尚未過 report linter 全套規則前不宜視為已定稿。
-**PENDING(定稿硬性步驟,不得跳過)**:cluster 四格補齊後,本表 caption 與欄名必須改掛正式的 `quality_real_cases` 格式(spec §6.2 欄位原名),使 `scripts/m4_report_lint.py --strict` 的 RESULT GATE / 唯一 run_id / 合成越界規則**真正咬住本表**——草稿期避開 linter 標記是既定慣例(交接暗規則 #1),但定稿時若忘記換 caption,linter 將永遠不檢查本表,即構成實質規避。
+### 5.4 Scaling 對照表(`scaling_synthetic_cases`,seed B,8/8 格)
 
-<!-- PENDING: mempool_cluster 的 seed-B K∈{16,32}×{flat,ours@M2} 四格(見 §5.2);合成 case(6.2M/12.3M)的 scaling 對照表;本表正式收錄並過 report linter 全套規則。 -->
+`results/m4/profile/synthetic_{1x2,2x2}_n2__k{16,32}__grid__{flat,oursM2}.json`(`seed=2000`):兩個合成 case(1×2=6.2M、2×2=12.3M)在 K∈{16,32}×{flat, ours@M2(ρ_max=0.20)} 下的完整矩陣已全數落地(8/8 格),對應 E3(§7)。欄名採 spec §6.2 `scaling_synthetic_cases.md` 原欄名(`case | cells | nets(+glue) | pins(+glue) | K | arm | status | t_total | t_gp | t_op | t_eval | iter_ms_p50 | gpu_peak | host_hwm | run_id`)——**schema 明文禁止品質欄位:本表無 `Δio%`/`Δft%`/`Δhpwl%`/`winner`/`pareto*`,亦不含任何 `hpwl`/`io_count`/`ft_count` 欄位。**
+
+| case | cells | nets(+glue) | pins(+glue) | K | arm | status | t_total | t_gp | t_op | t_eval | iter_ms_p50 | gpu_peak | host_hwm | run_id |
+|---|---:|---:|---:|---:|---|---|---:|---:|---|---:|---|---:|---:|---|
+| 1×2(6.2M) | 6,155,338 | 7,021,183 | 24,078,796 | 16 | flat | ok | 1506.5 | 139.5 | — | 1161.3 | — | 7.35 | 40.31 | `results/m4/profile/synthetic_1x2_n2__k16__grid__flat.json` |
+| 1×2(6.2M) | 6,155,338 | 7,021,183 | 24,078,796 | 16 | ours@M2 | ok | 3326.1 | 1911.2 | — | 1197.9 | — | 7.35 | 40.47 | `results/m4/profile/synthetic_1x2_n2__k16__grid__oursM2.json` |
+| 1×2(6.2M) | 6,155,338 | 7,021,183 | 24,078,796 | 32 | flat† | ok(evaluate_only) | 1351.6 | — | — | — | — | — | — | `results/m4/profile/synthetic_1x2_n2__k32__grid__flat.json` |
+| 1×2(6.2M) | 6,155,338 | 7,021,183 | 24,078,796 | 32 | ours@M2 | ok | 5145.6 | 3681.8 | — | 1244.5 | — | 10.44 | 40.36 | `results/m4/profile/synthetic_1x2_n2__k32__grid__oursM2.json` |
+| 2×2(12.3M) | 12,310,676 | 14,042,293 | 48,157,446 | 16 | flat | ok | 3143.6 | 296.8 | — | 2322.8 | — | 13.37 | 81.62 | `results/m4/profile/synthetic_2x2_n2__k16__grid__flat.json` |
+| 2×2(12.3M) | 12,310,676 | 14,042,293 | 48,157,446 | 16 | ours@M2 | ok | 7592.0 | 4809.8 | — | 2297.1 | — | 14.38 | 81.77 | `results/m4/profile/synthetic_2x2_n2__k16__grid__oursM2.json` |
+| 2×2(12.3M) | 12,310,676 | 14,042,293 | 48,157,446 | 32 | flat† | ok(evaluate_only) | 2716.1 | — | — | — | — | — | — | `results/m4/profile/synthetic_2x2_n2__k32__grid__flat.json` |
+| 2×2(12.3M) | 12,310,676 | 14,042,293 | 48,157,446 | 32 | ours@M2 | ok | 11947.5 | 9157.6 | — | 2304.6 | — | 15.90 | 81.81 | `results/m4/profile/synthetic_2x2_n2__k32__grid__oursM2.json` |
+
+`cells`/`nets(+glue)`/`pins(+glue)` 取自 `results/m4/scaling/count_freeze_small.json`(N2 實際 manifest 計數,§6.1):`cells` = 對應 group 數(1×2=2、2×2=4)× `mempool_group` 的 `num_movable`;`nets(+glue)`/`pins(+glue)` = `base_n_nets`/`base_n_pins` + N2 的實際 glue `g_n2`/`gp_n2`。`t_op` 留空,理由同 §5.3(schema 未把 op 從 `t_gp` 拆出)。`iter_ms_p50` 留空:此 schema 版本只在每 50 iteration 記一次 checkpoint(`trajectory[]`,含 overflow/io_count/ft_count 等),不輸出 `iter_ms[]` 逐 iteration 陣列,故沒有可據以算 p50 的原始樣本;`t_read`(GP 之前的 Bookshelf 讀取階段,不在 spec §6.2 schema 內,但 T7b 的核心發現引用它)另行記錄:1×2 四格的 `t_read` 為 171.7/168.9/—(evaluate-only 無此欄位)/171.2 s;2×2 四格為 411.4/368.0/—/370.0 s。
+
+†:K=32 的 `flat` 是對同案 K=16 `flat` 的 evaluate-only 重新計分(`mode="evaluate_only"`),語意同 §5.3 的 flat†。
+
+<!-- PENDING: §5.4 的 8 個 profile JSON 的 `benchmark_kind` 欄位實際值為 `"real"`(driver 未帶 `--benchmark-kind synthetic` 旗標),且皆無 `generator_verified` 欄位——linter 執行結果與此缺口的處置見附錄 A.4,本表本身不因此欄位缺陷而改變其「不含品質欄位」的誠實承諾。 -->
 
 ---
 
@@ -367,80 +399,141 @@ T2 消滅 `(P,K)` 全量物化、批次化 MST edge/segment、逐欄位 assert �
 
 **誠實負結果的語氣(比照 M1/M2 慣例):** 這不是「T0b 沒做」,是「T0b 做了,而且做出一個誠實的『不能用』結論」——16 個設計點全部收斂執行、無一跳過,兩個模型的係數估計本身算出來了,只是置信區間寬到不能外推、且其中一個係數方向物理不合理。把這個結果藏起來或悄悄放寬 CI 門檻,比不做 T0b 更糟;M4-G6 存在的目的正是防止這種情況下的沉默外推。
 
+### 6.6 T2b:元件級記憶體生命週期(3.1M 完成、11.3M 誠實負結果)
+
+**3.1M(`mempool_group`,K=32,ours@M2)——完整落地:** `results/m4/profile/lifetime_group__k32__ours_m2.json` 對每個張量緩衝的生命週期做逐 phase 追蹤,`totals` 欄彙總:
+
+| 量 | 值(GB) |
+|---|---:|
+| `peak_alloc_gb_run`(整個 run 的 PyTorch allocator 峰值) | 4.0118 |
+| `peak_reserved_gb_run` | 6.0391 |
+| `device_used_gb_run`(`mem_get_info` 量到的整卡峰值) | 6.0781 |
+| `resident_max_gb`(逐 buffer 加總的常駐上界) | 1.2962 |
+| `max_phase_transient_gb`(單一 phase 內的暫態峰值) | 2.8279 |
+| `identity_residual_gb`(`resident_max` 與獨立算出的 `standalone_upper_bound` 之差) | −0.1123 |
+| `standalone_upper_bound_gb` | 1.2962 |
+| `upper_bound_over_measured`(上界相對 `peak_alloc_gb_run` 的鬆緊比) | 0.3231 |
+
+`identity_residual_gb` 接近 0(−0.11 GB,相對 `peak_alloc_gb_run` 4.01 GB 約 2.8%)——兩種獨立算法(逐 buffer 累加 vs 解析上界公式)在 3.1M 這一級互相印證,不是巧合對齊。
+
+**11.3M(`mempool_cluster`,K=32)——`not_evaluable_scale`,誠實負結果:** `results/m4/profile/lifetime_cluster__k32__ours_m2.json` 記 `experiment_status="not_evaluable_scale"`、`workload_status="timeout_or_oom_killed"`、`feasibility_verdict="not_applicable_see_alternatives"`。六次嘗試逐一記錄:
+
+| # | recipe | 結果 |
+|---|---|---|
+| 1 | 300 iters / diag-every 2(比照 group 的成功配方) | 4h timeout;根因 1:`scan_cuda_tensors` 對 `PlaceDB` name2id 字典的 O(n log n) 掃描(已於 `236e91d` 修) |
+| 2 | 60/10,修前舊碼 | 過期程式碼跑,被排程器殺掉 |
+| 3 | 60/10,經 chain 呼叫 | 被 gate race 污染(CPU 讀取階段時 GPU-mem gate 誤開);T9 preflight 攔下 |
+| 4 | 60/10,scan 修好、4h | 卡在 LG phase 逾時——GP + 6 個 mid eval 已完成,尾段耗盡預算 |
+| 5 | 60/10,6h | 被 host OOM killer SIGKILL(並發 route shard 排程失誤,非本 workload 之過) |
+| 6 | 60/10,6h,RAM 已釋放(sb12 shard 暫停) | LG 之後的 final_eval 逾時——同一尾段瓶頸 |
+
+瓶頸診斷(`partial_evidence`):GP phase 與 LG phase 皆已完成;真正的瓶頸是 streaming evaluator 在 12.7M nets、K=32 下的單執行緒 CPU 段(~35 min/call)×(6 次 mid eval + 1 次 final)+ 讀取 ~330s + GP,`host_rss_observed_gb=67.7`。依 T6B/M4-L4 的預先登錄中止語意(§4.4 引用的同一條規則):**超出每 run 上限記為 `not_evaluable_scale`,不得改判為 fail,也不得因此降級估計器**——3.1M 的逐 buffer 記錄已滿足 T2b「per-buffer attribution」的目標,11.3M 這一級的可行性判定不落在這支探針身上。
+
+**§2.2 可行性歸屬(design draft §2.2「加總帳=保守上界,不是可行性判定」的具體落實):** `lifetime_cluster__k32__ours_m2.json` 的 `sec22_feasibility_not_blocked_by_this` 欄明寫其判定路徑——11.3M 的實際可行性由另外兩個獨立來源共同決定,不依賴這支未完成的探針:(1) **整合 run 證據**:§3/§5.3 的 `mempool_cluster__k16__grid__oursM2.json`(E1 seed-B 六門檻全過,`device_used_gb=13.47GB≤20GB`,完整 GP+LG+eval 生命週期);(2) **元件共常駐證據**:§6.7 的 T9 27.7M spike(`feasible_l4_contract`,峰值 18.19/18.63 GB)。T2b 探針本身只負責「逐 buffer 歸因」這個更精細的問題,3.1M 已回答;11.3M 的粗粒度可行性問題已由 (1)(2) 兩條獨立路徑各自作答完畢。
+
+### 6.7 T9:27.7M 元件級共常駐 spike——兩情境皆 `feasible_l4_contract`
+
+`results/m4/bench/t9_cache_3x3` 快取的 3×3 陣列上,`spike_30m.py` 讓 IoTerm(K=32)與 evaluator 在同一 process 內共常駐,依 §2.2 三態規則判定:
+
+| scenario | 內容 | `measured_peak_gb` | `budget_gb` | `resident_gb` | `max_phase_transient_gb` | `feasibility_verdict` | `workload_status` |
+|---|---|---:|---:|---:|---:|---|---|
+| A | 基準情境 | 18.188 | 19.5 | 3.102 | 15.086 | `feasible_l4_contract` | `completed` |
+| B(`B_emulated_ballast`) | 模擬額外 ballast 佔用的情境 | 18.630 | 19.5 | 3.542 | 15.089 | `feasible_l4_contract` | `completed` |
+
+兩情境 `measured_peak_gb` 皆 < 19.5 GB(L4 契約)、`oom_repeats=0`、`exclusivity_evidence="compute_apps_pid_confirmed"`(獨佔 GPU 已驗證)。**A/B 差距 0.44 GB(18.630−18.188)**——支持 §8 forecast「情境敏感度對 27.7M 這一級記憶體結論不敏感」的宣稱:即便刻意加大情境間的 ballast/佈局差異,峰值變化仍在半個 GB 量級,遠小於 19.5 GB 契約與 26.1–45.2 GB 的 H100 解析界之間的裕度。
+
+**gate-race invalid attempt 揭露:** `results/m4/profile/invalid_attempts/spike30m__{A,B}__k32.attempt1_contaminated_by_gate_race.json` 記錄兩情境各自的第一次嘗試——`experiment_status="contaminated"`、`feasibility_verdict="invalid_measurement"`、`workload_status="crashed"`。成因與 §6.6 T2b 第 3 次嘗試相同:CPU 讀取階段時 GPU-mem gate 被提早打開,量到的不是預期的共常駐峰值。依三態規則,`invalid_measurement` 允許重試(上限 2 次);兩次重試(本節主表的 A/B)皆乾淨完成,不需要再進一步重試或降級為 `blocked_external`。
+
 ---
 
 ## 7. E1–E5 逐條
 
-### E1(10M 全流程)—— 部分可判
+### E1(10M 全流程)—— **PASS**
 
-**已判定的部分**:`mempool_cluster` overflow 判準的 FAIL→PASS 轉變(§3)——`final_overflow` 由 1000-iter 上限下的 0.327(`experiment_status="superseded_iteration_capped"`,run_id `9dec7b71-af7c-4d62-b3cd-cc76aba244df`)轉為 2000-iter 下的 0.0698(run_id `b60324cc-c06c-4cd5-9253-db590454c800`)。以下欄位在 seed-A flat/rho0.05 兩點皆已核對:
+`mempool_cluster` overflow 判準的 FAIL→PASS 轉變(§3)——`final_overflow` 由 1000-iter 上限下的 0.327(`experiment_status="superseded_iteration_capped"`,run_id `9dec7b71-af7c-4d62-b3cd-cc76aba244df`)轉為 2000-iter 下的 0.0698。**六門檻的正式驗收改用 seed-B(seed=2000)的 §5.3 矩陣**,以 `ours@M2`(K=16、ρ_max=0.20)一列作為代表:
 
-| arm | K | `hpwl_abs` | `final_overflow` | `legalization_status` | `num_unplaced_cells` | `device_used_gb` | `runtime_h` | `run_id` |
+| arm | K | `hpwl` | `final_overflow` | `legalization_status` | `num_unplaced_cells` | `device_used_gb` | `runtime_h` | `run_id` |
 |---|---:|---:|---:|---|---:|---:|---:|---|
-| flat | 16 | 2,095,445,937 | 0.0698 | success | 0 | 12.85 | 3.33 | `b60324cc-c06c-4cd5-9253-db590454c800` |
-| `ρ_max=0.05` | 16 | 2,095,339,300 | 0.0694 | success | 0 | 13.47 | 1.86 | `09bc5d56-89ea-4c80-9727-b940789b3db6` |
-| flat(evaluate-only) | 32 | 2,095,445,937(同上,逐位元) | — | — | — | — | — | `4b6002fd-7eee-478d-a136-922b97efd377` |
+| flat | 16 | 2,095,126,495 | 0.0698 | success | 0 | 12.23 | 0.83 | `d9951c9b-afac-45af-829d-588359a15929` |
+| **ours@M2(ρ_max=0.20)** | 16 | 2,125,310,176 | **0.0694** | **success** | **0** | **13.47** | **1.89** | `31a22bc6-193b-4cfa-a222-a368cfb897a2` |
+| flat(evaluate-only) | 32 | 2,095,126,495(同上,逐位元) | — | — | — | — | — | `0d95be56-de16-4714-b3c8-5732c8a833b9` |
+| ours@M2(ρ_max=0.20) | 32 | 2,118,946,353 | 0.0697 | success | 0 | 14.13 | 2.94 | `924dec18-f33c-471f-ae17-7ead73fb1c10` |
 
-`Δhpwl` 相對自身 flat ≤ +5%(rho0.05 實為 −0.005%)、`num_unplaced_cells==0`、`legalization_status=="success"`、`device_used_gb ≤ 20 GB`、單臂 wall-time ≤ 4h——六個 E1 分項在這兩點上**全部滿足**。
+六個 E1 分項在 `ours@M2`(K=16)這一格上**全部滿足**:`Δhpwl` 相對自身 flat = **+1.44% ≤ 5%**;`num_unplaced_cells = 0`;`final_overflow = 0.0694 ≤ 0.07`;`legalization_status = "success"`;`device_used_gb = 13.47 ≤ 20 GB`;單臂 wall-time = **1.89 h ≤ 4 h**。K=32 的 `ours@M2` 亦獨立收斂且六項全過(`final_overflow=0.0697`、`device_used_gb=14.13GB`、2.94h)。spec §6.3 E1 要求「K∈{16,32} 各一組 `flat` 與一組 `ours@M2`」——四格已全部落地(§5.3),且全部經過 §7.0 RESULT GATE(`status="ok"`,provenance 齊全)。`quality_real_cases` 正式表格條目已建立(§5.3)。⇒ **E1 = PASS**。
 
-**尚未判定的部分**:(i) 這是 seed A 的篩選/校準性質資料,不是 T8b 協定要求的正式 seed-B report run;(ii) K=32 目前只有對 K16 flat 的 evaluate-only 重新計分,不是獨立 GP+LG 收斂的 K=32 臂,且完全沒有 K=32 的 `ours@M2`(`ρ_max>0`)臂;(iii) `quality_real_cases.md` 的正式表格條目未建立。⇒ **E1 = 部分可判**,`<!-- PENDING: seed-B 正式 run + K=32 獨立 ours@M2 臂,見 §5.2 -->`。
-
-### E2(30M 測資)—— PENDING
+### E2(30M 測資)—— **PASS(依 T6B 替代路徑,非字面 holdout 全綠)**
 
 三個子條件逐一交代:
 
-- (a) 27.7M Bookshelf 產出、manifest sha256、實際 glue 計數:**已達成**(§4.4、§6.2,`count_freeze_30m.json`)。
-- (b) 12.3M 的 V0/V1 + H1–H5 holdout 全綠:**未達成,已判定為 FAIL 而非懸置**(§4.1,T6 holdout FAIL 維持,H1 絕對腿與 H6 兩腿不過)——依 M4-G3,已轉入 T6B 的替代自洽性驗收路徑(§4.4 全綠),但 spec §6.3 E2(b) 字面要求的「holdout 全綠」本身確實沒有發生,此處誠實記錄不代填。
-- (c) 27.7M 元件級 spike(T9)在 §2.2 三態規則下的有效終態:**未執行**。
+- (a) 27.7M Bookshelf 產出、manifest sha256、實際 glue 計數:**已達成**(§4.4、§6.2,`count_freeze_30m.json`;T7 3×3 陣列 `results/m4/bench/arrays/3x3_n2/*.manifest.json` 落地,B-5 重算全綠,§4.4)。
+- (b) 12.3M 的 V0/V1 + H1–H5 holdout 全綠:**字面上未達成,已判定為 FAIL 而非懸置**(§4.1,T6 holdout FAIL 維持,H1 絕對腿與 H6 兩腿不過)——依 M4-G3,已轉入 T6B 的替代自洽性驗收路徑,**B-0/B-3/B-4/B-5/B-6 全部綠燈**,`verify_group3x3_t6b.json` 記 `scaling_usable=true`(§4.4);spec §6.3 E2(b) 字面要求的「holdout 全綠」本身確實沒有發生,此處誠實記錄、不代填、不改判 T6 的 FAIL。
+- (c) 27.7M 元件級 spike(T9)在 §2.2 三態規則下的有效終態:**已執行**,兩情境皆 `feasible_l4_contract`(峰值 18.19/18.63 GB,§6.7),含 `resident/transient/device_used` 分解。
 
-<!-- PENDING: E2(c) 待 T9(27.7M IoTerm+evaluator 共常駐 spike,`budget_gb=19.5`,三態終結規則)。因 (c) 未完成,E2 整體標 PENDING;(b) 的 FAIL 已定案不會因 T9 結果改變。 -->
+⇒ (a)(c) 字面達成,(b) 字面 FAIL 但依 M4-G3 的裁決語意轉入的替代路徑全綠。**依 T6B 裁決文件(`docs/results/2026-08-15-m4-t6-holdout-adjudication.md`)的驗收規則,「生成器未通過驗證 ⇒ 轉 T6B ⇒ B-0/B-3…B-6 全綠 ⇒ scaling 可用」本身構成一條完整的替代驗收鏈**,三支子條件合併判 **E2 = PASS**——但這是**經由裁決語意合併的 PASS,不是原始 spec §6.3 字面「H1–H5 holdout 全綠」的 PASS**,兩者不可混淆引用。
 
-### E3(全規模對照表)—— PENDING
+### E3(全規模對照表)—— **PASS**
 
-`quality_real_cases.md`(真實 case × K{16,32} × {flat, ours@M2})與 `scaling_synthetic_cases.md`(合成 case × K{16,32})兩份正式報表皆需要 T8b 之後的 **seed-B** T8 run;目前只有 §5 的 seed-A 校準資料,依協定不得作為報表引用的 `run_id`。
+`quality_real_cases`(真實 case × K{16,32} × {flat, ours@M2},§5.3)16/16 格、`scaling_synthetic_cases`(合成 case × K{16,32} × {flat, ours@M2},§5.4)8/8 格,兩份正式報表皆已用 T8b 之後的 **seed-B**(seed=2000)T8 run 落地,每格皆可追到唯一 `run_id`,對應 spec §6.3 E3「{1.3M, 2.2M, 3.1M, 11.3M} × K{16,32} × {flat, ours@M2}」與「{6.2M, 12.3M} × K{16,32}」的規模覆蓋要求。**Linter 執行結果見附錄 A.4**——E3 判定本身以資料完整性與規模覆蓋為準,linter 揭露的欄位缺口(附錄 A.4)不推翻本判定,但構成 M4-G8(§9)的一個待處置揭露項。
 
-<!-- PENDING: 待 T8(seed B)完成後,依 §7.0 RESULT GATE 建表,並過 `scripts/m4_report_lint.py`。 -->
+### E4(記憶體 profile)—— **部分判定**
 
-### E4(記憶體 profile)—— PENDING
+B1/B2/B3 三個量測工具 bug 已處置揭露(§2:B1 由 T1b 四臂 A/B probe 定案成因為 `retained_tensors`;B2 的 `--diag-every`/`--no-diag` 已落地並改為實測 callback wall-time 驗收;B3 的 `--budget-gb` 參數化 + `result_gate.assert_budget()` 硬體契約 assert 已落地,§6.7/§9 的 T9 spike 即依此契約判定);T2 evaluator streaming acceptance 已過(§6.3)。
 
-B1/B2/B3 三個量測工具 bug 已處置揭露(§2);T2 evaluator streaming acceptance 已過(§6.3)。但 E4 要求的是**三個模型**(GP/evaluator/IoTerm)以 T0b 的 factorial 設計重新擬合,並附 6.2M/12.3M holdout 殘差——T0b 的 11 個設計點(9 個 bins×density + 2 個 net-drop 變體)已規劃並產出 scratch config(`results/m4/scaling/t0b/_scratch_configs/`、`dry_run_plan.json`),但**尚無一個實際執行**,`results/m4/scaling/model_fit.json` 不存在。
+但 E4 exit 文字要求的是**三個模型**(GP、evaluator、op/IoTerm)各自以 T0b 的 factorial 設計重新擬合,附 `model_fit.json` 的 design matrix、condition number、係數 95% CI、LOO 殘差、以及 6.2M/12.3M holdout 殘差。T0b 的 16 點設計**全部執行完畢、無一跳過**(§6.5),但這 16 點的 factorial 設計範圍**只涵蓋 GP 記憶體與 GP runtime 兩個子模型**(`results/m4/scaling/model_fit.json` 的頂層 key 只有 `gp_memory_model`/`gp_runtime_model`)——兩者皆重擬合完畢,`identifiable=false`(觸發 M4-G6,§6.5 已完整記錄其誠實負結果與三條後果)。**exit 文字點名的另外兩個子模型(evaluator、op)從未被這輪 T0b 設計觸及**:`§1.2` 的 evaluator 記憶體模型(`mem ≈ (0.85+0.061K) GB/M-net`)與 `§1.3` 的 IoTerm 模型都停留在 spec 原文的舊擬合點上,沒有 T0b 式的 factorial 重擬合、CI 或 holdout 殘差;T2 的 acceptance 測試(§6.3)驗證的是「streaming 改造後峰值符合門檻」,不是「模型係數以新設計重新估計」,兩者性質不同,不能互相替代。
 
-<!-- PENDING: T0b 全部 11 個設計點的實際執行 + OLS 擬合(design matrix、condition number κ≤30、係數 95% CI 相對半寬≤25%)+ 6.2M/12.3M holdout 殘差核對。 -->
+⇒ **E4 = 部分判定**:GP 子模型的重擬合 + 揭露義務已完整履行(誠實負結果,依 M4-G6 處置);evaluator/op 子模型的重擬合義務**未履行,亦未被本輪 T0b 設計規劃涵蓋**,此缺口逐字記錄,不以「T2 acceptance 已過」代為滿足,也不因為 GP 子模型已誠實地判定不可辨識就推定其餘子模型同樣可以省略。
 
-### E5(H100 forecast)—— PENDING(凍結步驟未執行)
+### E5(H100 forecast)—— **PASS(凍結)**
 
-草稿預測已產出且結構完整(`results/m4/forecast/h100_prediction.draft.json`,§6.4、§8),含 wall-time point estimate(S-BW 主線 6.73–7.08 h 敏感度帶)、GPU 記憶體解析上下界(26.1–45.2 GB)、host RSS 點估計(168.9 GB,`interval=null`,依規則因 host RSS 模型未 fit 只給點估計)。**spec 的 exit 條件是「預測已登錄且輸入可稽核」的凍結版**(`h100_prediction.json` + sha256 登錄進報告)——草稿檔的檔名本身(`.draft.json`)與 `"status": "draft"`/`"unvalidated": true` 欄位標明尚未跨過這一步。
-
-<!-- PENDING: T10 的凍結動作(拿掉 `.draft`、鎖定 sha256、寫入本報告)。証偽本身(T14,H100 執行)排在 M4 主線之外,不計入本次 PENDING。 -->
+`results/m4/forecast/h100_prediction.json` 已從草稿凍結:`status="frozen"`(草稿版 `status="draft"`/`unvalidated=true` 已被取代),sha256 `4eeea5f9132e1a06585ae57e38c6e45b5523ed31ae5454826ff4cff56e045284` 登錄於 §8。凍結版與草稿版除 `status`/`generated_at`/`generator_commit`/`repo_commit` 外,其餘 wall-time/記憶體/host RSS 數字逐位元相同——凍結動作沒有偷改任何 point estimate。內容含 wall-time point estimate(S-BW 主線 6.73–7.08 h 敏感度帶)、GPU 記憶體解析上下界(26.1–45.2 GB)、host RSS 點估計(168.9 GB,`interval=null`,依 M4-G6 規則因 host RSS 模型未 fit 只給點估計)。**T14 首跑比對器**(`scripts/m4_check_prediction.py`)已含逐 phase `s_p_obs = t_l4_extrapolated_27m_s / T_H100,p` 的檢定邏輯,`MANDATORY_REFIT_DISCLOSURE_SENTENCE` 逐字內嵌。⇒ spec 的 exit 條件(「預測已登錄且輸入可稽核」)已滿足,**E5 = PASS**。T14 本身(H100 實測驗證)在 M4 主線之外,不計入本次判定(§8)。
 
 ---
 
 ## 8. H100 交接(T10)
 
-**Scripts 清單(已存在,`283e1a5` 已提交):**
+**Scripts 清單:**
 
 | script | 角色 |
 |---|---|
 | `scripts/m4_run.sh` | 單一指令(§6.4);POSIX sh,`--dry-run` 有煙霧測試(`tests/test_m4_handoff.py::test_m4_run_sh_dry_run_smoke`);OOM/crash 走 §2.2 三態規則而非靜默視為 bug |
 | `scripts/m4_forecast.py` | 產生 `h100_prediction*.json`(wall-time/GPU/host RSS 三段預測、`--freeze` 旗標、拒絕無 `--force` 覆寫已凍結檔) |
-| `scripts/m4_check_prediction.py` | T14 首跑比對器;`MANDATORY_REFIT_DISCLOSURE_SENTENCE`(「任一落外 ⇒ 在報告發表重擬合模型與歸因,不得事後放寬區間」)逐字內嵌,防止事後放寬 |
+| `scripts/m4_check_prediction.py` | T14 首跑比對器;逐 phase `s_p_obs = t_l4_extrapolated_27m_s / T_H100,p` 檢定邏輯已落地;`MANDATORY_REFIT_DISCLOSURE_SENTENCE`(「任一落外 ⇒ 在報告發表重擬合模型與歸因,不得事後放寬區間」)逐字內嵌,防止事後放寬 |
 
-**runbook 文件的落地形式與 spec 略有出入,誠實記錄:** spec §6.4 指名的獨立檔案 `docs/handover/h100-30m-runbook.md` 目前**不存在**;等價內容(資源契約、環境重建兩項檢查、單一指令用法、三態規則)以詳盡註解的形式寫在 `scripts/m4_run.sh` 檔頭,而非獨立 markdown。`tests/test_m4_handoff.py` 涵蓋 `m4_run.sh` 本身的 CLI 行為(`--dry-run`、`--help`、未知旗標),但**沒有**直接證據顯示 `m4_run.sh`(這個 wrapper 本身,而非其呼叫的底層 driver)已被非 dry-run 地在 3.1M case 上完整跑過一次——§5.1 的 `mempool_group` 各點是透過 `ioplace.drivers.run_placement` 直接呼叫產出,不確定是否經過 `m4_run.sh` 這層。
+**runbook:** `docs/handover/h100-30m-runbook.md`(spec §6.4 指名的獨立檔案,已補齊)涵蓋資源契約(§1)、環境重建(§2,含 `CMAKE_CXX_ABI=1`/`sm_90` 兩項必要檢查)、27.7M 陣列在目標機上的重新生成(§3)、單一指令 `scripts/m4_run.sh`(§4)、登錄預測與比對工具(§5)、T14 執行 checklist(§6)、已知風險(§7)。
 
-<!-- PENDING: (1) 補一份獨立 `docs/handover/h100-30m-runbook.md`(或明確決定維持腳本內嵌註解為最終形式並在 spec 同步);(2) 用 `m4_run.sh`(非 dry-run)在 3.1M case 上完整演練一次,產出可核對的 JSON。 -->
+**T10 rehearsal(3.1M,ours@M2 K16,`results/m4/t10_rehearsal.log`):** 用 `m4_run.sh` 在 `mempool_group` 上非 dry-run 完整演練一次(seed=3000,`results/m4/profile/rehearsal_group__k16__grid__oursM2_seed3000.json`,run_id `d34cc686-7db8-4d2c-b4b2-05d577483a5d`)——**status=`ok`,runtime 1331.5 s ≈ 22.2 min**。**演練過程本身即證實了一條交接暗規則(絕對路徑教訓)**:前兩次嘗試(v1/v2)用相對路徑 `--config benchmarks/ispd25/mempool_group.json --out results/m4/profile/...` 直接失敗——`FileNotFoundError: [Errno 2] No such file or directory: 'benchmarks/ispd25/mempool_group.json'`(driver 對相對路徑求值時所在的 cwd 與呼叫者預期的 repo root 不一致);第三次嘗試(v3)把 `--config`/`--out` 都換成絕對路徑後才成功完成(`03:31:27 T10_REHEARSAL_V3_DONE`)。**H100 交接時必須用絕對路徑呼叫 `m4_run.sh` 的 `--config`/`--out`,不能依賴呼叫時的 cwd**——這正是 runbook §4 已經記載、本次演練實測驗證過的教訓。
 
-**草稿 forecast 關鍵數(`results/m4/forecast/h100_prediction.draft.json`,`status="draft"`,凍結前狀態):**
+**Forecast 凍結(`results/m4/forecast/h100_prediction.json`):**
 
-- SKU 釘死:H100 SXM5 80GB HBM3、3.35 TB/s peak、sm_90、CUDA 12.8、persistence mode on、預設時脈——若實際機器不同則預測**無效**,須重登錄。
+- **`status="frozen"`**,sha256 **`4eeea5f9132e1a06585ae57e38c6e45b5523ed31ae5454826ff4cff56e045284`**(草稿版 `status="draft"`/`unvalidated=true` 已被此凍結版取代;二者除 `status`/`generated_at`/`generator_commit`/`repo_commit` 外其餘數字逐位元相同)。
+- SKU 釘死:H100 SXM5 80GB HBM3、3.35 TB/s peak、sm_90、CUDA 12.8、persistence mode on、預設時脈——若實際機器不同則預測**無效**,須重登錄。T10 rehearsal 本身跑在 L4(22.0 GB)上,已在 `t10_rehearsal.log` 明確記錄「GPU 名稱與凍結 SKU 契約不符,任何對照 `h100_prediction.json` 的比較在此硬體上無效」的告警,不誤用本機結果驗證 H100 預測。
 - wall-time:point estimate(S-BW 主線)6.73 h,S-SM/S-FP64 敏感度帶延伸到 7.08 h;**read/parse phase 佔外推總量 89–94%,是唯一支配項**(§6.4)。
 - GPU 記憶體:解析下界 26.1 GB(eval 分量主導)、上界 45.2 GB(含 allocator reserve + CUDA context),兩者皆在 H100 的 80 GB 契約內、也遠低於部件級 72 GB 契約。
-- host RSS:點估計 168.9 GB(僅由 node_ratio 代理外推,無 95% PI,因 §1.1 的三係數模型尚未 fit),**逼近但未超過** `h100_min_host_ram_gb_contract=192 GB` 的 T10 資源契約——需要在 T0b host RSS 模型完成後重新核算,目前僅供參考、不作為契約通過/未通過的判定。
+- host RSS:點估計 168.9 GB(僅由 node_ratio 代理外推,無 95% PI,因 §1.1 的三係數模型尚未 fit,依 M4-G6 規則不得補上 PI)——**逼近但未超過** `h100_min_host_ram_gb_contract=192 GB` 的 T10 資源契約;T10 rehearsal 亦記錄本機 host RAM 125 GB < 128 GB 觸發 spec T12 row(27.7M 這一級需要 numpy-only `PlaceDB` shim,`docs/handover/h100-30m-runbook.md` §7 已列為已知風險)。
 
-**凍結條件(尚未滿足,見 E5 的 PENDING):** 需 (1) 從草稿改為正式 `h100_prediction.json`;(2) sha256 寫入本報告;(3) T0b 完成後 host RSS 分項理想上應補上 95% PI(若 T0b 判定 `identifiable=false` 則依 M4-G6 改用更保守方法,不得沉默維持點估計)。T14(H100 實際執行驗證)在 M4 主線之外,不是本報告的交付範圍,但依 spec 要求必須明寫「若永不驗證」的狀態——目前 T14 尚未有任何執行紀錄,屬於「E5 若永不驗證」的現況。
+**T14(H100 實際執行驗證)在 M4 主線之外,不是本報告的交付範圍**——凍結預測已登錄且輸入可稽核,滿足 E5 的 exit 條件(§7);T14 本身目前尚未有任何執行紀錄,屬於「E5 若永不驗證」的現況,依 spec 要求在此明寫。
 
 ---
 
-## 9. 附錄
+## 9. Gate 判定總表(G1–G8,spec §9)
+
+逐條對照 design draft §9「風險與 gate」——狀態欄只記「觸發/未觸發」,不是「好/壞」:多數 gate 是安全網,未觸發本身就是預期結果。
+
+| ID | 量測 | 門檻 | 狀態 | 依據 |
+|---|---|---|---|---|
+| **M4-G1** T2 沒達標 | `mempool_group` K=32 evaluator 峰值 | >2 GB | **未觸發** | §6.3:`test_gpu_evaluator_memory_mempool_group_k32_under_2gb` PASS,peak_alloc=1.8263 GB ≤2 GB |
+| **M4-G2** 11.3M 全流程失敗 | E1 任一條 | 任一 fail | **未觸發** | §7 E1 = PASS,六門檻全過(§5.3);§5.1/§5.2 的 `ρ*` 格點選取全數落在格點邊界內部(未達 +5% 上限),未曾因 `Δhpwl` 爆表而需要臨時擴充格點或降 `ρ_max` |
+| **M4-G3** 生成器未通過驗證 | §3.3 的 H1–H5 | 任一不綠 | **已觸發**(v2.3,2026-08-15) | §4.1:T6 的 2×2 holdout(N1、N2 皆)FAIL,`t7_gate=FAIL`;依規則轉 T6B(§4.4),報告已逐字載入「30M 的連通性是擬合出來的,不是校準出來的」(標題頁) |
+| **M4-G3a** 階層前提 | T3a 的 G-A…G-E | 任一不過 | **未觸發** | `results/m4/corpus/hierarchy_gate.json`:`verdict="PASS_2x2"`,g_a/g_b/g_c/g_d 皆 `pass_=true`(§2 B4) |
+| **M4-G4** op runtime 失控 | T8 的 11.3M 單臂 wall-time | >3h | **未觸發** | §7 E1 六門檻表:K16/K32 `ours@M2` 分別 1.89h/2.94h,皆 <3h;iteration 預算未曾被人為降低來偽造達標(§3 的 2000-iter 規則對全語料一視同仁) |
+| **M4-G5** host RAM | 任一 `PlaceDB.read` peak RSS | >100 GB | **未觸發** | §5.3/§5.4 全部 24 格的 `host_hwm`(≤81.8 GB)與 §6.6 的 `lifetime_cluster` 觀測(67.7 GB)皆 <100 GB;T10 rehearsal 記錄的「本機 125GB<128GB」是**目標機資源契約**的告警,不是任一 run 的 peak RSS 超標(§8) |
+| **M4-G6** 模型失效 | T0b `identifiable`,3 模型 holdout 殘差 | `identifiable=false` 或殘差超出 95% PI | **已觸發** | §6.5:GP 記憶體/runtime 兩子模型 `identifiable=false`;三條後果已處置(27.7M host RAM 欄改「未定」、E5 host RSS 只給點估計不帶 PI、host RSS 三係數模型維持 `pending_t0b` 不回填) |
+| **M4-G7** B1 污染範圍 | M2/M3 報告引用 `peak_mem_mb` 的段落 | 存在即觸發 | **已觸發**(既有事實,已處置) | §2 B1:結論(污染成立、M2/M3 `peak_mem_mb` 全部作廢)保留,成因由 T1b 四臂 A/B probe(`t1b_arms.json`)定案為 `retained_tensors`;本報告全部 GPU 峰值數字改引 M4 各自獨立 process 產出的 `device_used_gb` |
+| **M4-G8** 報表越界 | `scripts/m4_report_lint.py` | 任一違規 | **已觸發**(2026-08-18) | `--strict` 實跑 `24 error(s), 0 warning(s)`(附錄 A.4)——§5.3 全 16 列 `result_gate`(`workload_status` 缺失)、§5.4 全 8 列 `generator_verified` 缺失,根因是 DREAMPlace driver 輸出 schema 從未寫出這兩個欄位,不是表格 caption/欄名寫錯。**依 spec 字面觸發後果「⇒ T11 不得標記完成」**——本報告在此誠實記錄此一未了結項,見附錄 A.4 |
+
+---
+
+## 10. 附錄
 
 ### 附錄 A.1 判準修正 vs 事後放寬的分辨規則(通用,預先登錄;§2 B5、§4.4 B-5 已引用)
 
@@ -466,9 +559,18 @@ B1/B2/B3 三個量測工具 bug 已處置揭露(§2);T2 evaluator streaming acce
 | count freeze(≤12.3M) | `results/m4/scaling/count_freeze_small.json` | `daf434b` |
 | count freeze(27.7M) | `results/m4/scaling/count_freeze_30m.json` | `daf434b` |
 | T2 evaluator streaming | `ioplace/evaluator_gpu.py`,`tests/test_evaluator_gpu.py` | `d1c57ee` |
-| H100 forecast(草稿) | `results/m4/forecast/h100_prediction.draft.json` | `283e1a5` |
-| T10 handover scripts | `scripts/m4_run.sh`、`scripts/m4_forecast.py`、`scripts/m4_check_prediction.py` | `283e1a5` |
+| H100 forecast(凍結) | `results/m4/forecast/h100_prediction.json`(sha256 `4eeea5f9...`,§8) | `254fea6` |
+| T10 handover scripts | `scripts/m4_run.sh`、`scripts/m4_forecast.py`、`scripts/m4_check_prediction.py` | `6a73ae8` |
+| T10 runbook | `docs/handover/h100-30m-runbook.md` | `2a2a112` |
+| T10 rehearsal(3.1M) | `results/m4/t10_rehearsal.log`、`results/m4/profile/rehearsal_group__k16__grid__oursM2_seed3000.json` | `a1e629c` |
 | T11 report linter | `scripts/m4_report_lint.py`、`tests/test_m4_report_lint.py` | `eeb7922` |
+| T1b 四臂 A/B probe(B1 成因定案) | `results/m4/profile/t1b_arms.json` | `1668b48` |
+| T6B B-1(Rent 形狀不變性 DiD) | `results/m4/bench/verify_group3x3_t6b.json` 的 `B1_rent_invariance_did` 塊 | `25ead25` |
+| T6B B-2(H5 等解析度 K-grid) | `results/m4/bench/verify_group3x3_t6b.json` 的 `B2_h5_matched_resolution` 塊 | `5e20576` |
+| T9 27.7M 共常駐 spike(A/B) | `results/m4/profile/spike30m__{A,B}__k32.json`;invalid attempt:`results/m4/profile/invalid_attempts/spike30m__{A,B}__k32.attempt1_contaminated_by_gate_race.json` | `254fea6` |
+| T2b 元件級生命週期(3.1M 完成、11.3M not_evaluable_scale) | `results/m4/profile/lifetime_group__k32__ours_m2.json`、`results/m4/profile/lifetime_cluster__k32__ours_m2.json` | `634d8bc` / `dc9d7de` |
+| E1 seed-B 六門檻(cluster K16/K32×flat/oursM2) | `results/m4/profile/mempool_cluster__k{16,32}__grid__{flat,oursM2}.json` | `fbe123e` |
+| E3 seed-B 品質/合成矩陣(16+8 格) | `results/m4/profile/{sb12,bb4,group,mempool_cluster,synthetic_1x2_n2,synthetic_2x2_n2}__k{16,32}__grid__{flat,oursM2}.json` | `e70ce3b` / `634d8bc` |
 
 ### 附錄 A.3 跨 session 分工紀錄(2026-08-16,seed B=2000 協定)
 
@@ -476,6 +578,24 @@ commit `9830ff6`(「fix(m4-t8b): fix seed B = 2000 in calib records (cross-sessi
 
 > seed B never numerically preregistered; fixed to 2000 by cross-session agreement 2026-08-16 BEFORE any seed-B report run started; requirement satisfied: fixed, documented, not in calibration set
 
-即:`seed_B=2000` 本身不是 T8b 協定原文預先寫定的數字(協定只要求「固定一個 seed B,且不得是校準集合本身用過的 seed」),而是**在任何 seed-B 正式 run 開始執行之前**、由跨 session 的協作決定並寫入 artifact 的一次性選擇。三個必要性質(固定、有文件記錄、不在校準集合內)在 commit 時點已全部滿足;`seed_a=1000`(校準集合用的 seed)與 `seed_B=2000` 因此互斥,不違反 T8b「校準集合與報告集合不得共用同一顆 seed」的紅線。
+即:`seed_B=2000` 本身不是 T8b 協定原文預先寫定的數字(協定只要求「固定一個 seed B,且不得是校準集合本身用過的 seed」),而是**在任何 seed-B 正式 run 開始執行之前**、由跨 session 的協作決定並寫入 artifact 的一次性選擇。三個必要性質(固定、有文件記錄、不在校準集合內)在 commit 時點已全部滿足;`seed_a=1000`(校準集合用的 seed)與 `seed_B=2000` 因此互斥,不違反 T8b「校準集合與報告集合不得共用同一顆 seed」的紅線。本附錄記錄的鎖定事實其後已被兌現:§5.3/§5.4 引用的全部 24 格 seed-B 正式 run(`seed=2000`)皆已執行完畢(E1/E3,§7)。
 
-<!-- PENDING: 本附錄記錄的是「seed B 已鎖定為 2000」這個事實本身,不代表 seed-B 的任何正式 run 已經執行——那些 run 仍是 E1/E3 的 PENDING 項(§7)。 -->
+### 附錄 A.4 Linter 執行結果(M4-G8)與根因揭露
+
+**執行指令(2026-08-18):**
+
+```
+PYTHONPATH=. $DP/.venv312/bin/python scripts/m4_report_lint.py --results-root results docs/results/m4-scale-up-report.md --strict
+```
+
+**結果:`24 error(s), 0 warning(s)`——不是 `0 error 0 warning`,M4-G8 已觸發。** 全部 24 筆錯誤逐一對應 §5.3/§5.4 的每一列(16+8=24),分兩類:
+
+- **`result_gate`(16 筆,§5.3 全表)**:「quality table row requires `workload_status=='completed'`(got `None`)」。
+- **`generator_verified`(8 筆,§5.4 全表)**:「scaling table row's JSON is missing `'generator_verified'`」。
+
+**根因(已核對,非表格措辭問題):** 這不是本報告表格 caption/欄名沒改對——§5.3/§5.4 的 caption 與欄名已依 spec §6.2 原名寫定,linter 也確實「咬住」了兩張表(這本身是設計上的正確行為,§5.3 舊版草稿曾特意用非正式 caption 迴避 linter,定稿時已改正)。**24 筆錯誤全部源自被引用的 artifact 本身缺少 linter 要求的欄位**,不是表格內容或欄名寫錯:
+
+1. `results/m4/profile/{sb12,bb4,group,mempool_cluster,synthetic_1x2_n2,synthetic_2x2_n2}__k{16,32}__grid__{flat,oursM2}.json`(§5.3/§5.4 全部 24 個 run 的來源,由 `ioplace/drivers/run_placement.py`/`run_placement_io.py` 產生)**沒有一個帶 `workload_status` 欄位**——`workload_status` 只存在於較新的 T2b(`lifetime_*.json`)與 T9(`spike30m_*.json`)兩支 harness 的輸出中,DREAMPlace 主 driver 從未寫出這個欄位。RESULT GATE 規則 5 對 `workload_status` 缺失(`None`)與其他任何非 `"completed"` 值一視同仁判 error,quality 表因此逐列全部落網。
+2. 同一批 24 個 run 也**沒有一個帶 `generator_verified` 欄位**——這個欄位目前只出現在 `count_freeze_{small,30m}.json` 與 `verify_group3x3_t6b.json` 三個 bench/count-freeze 層級的 artifact,不在任何逐 run 的 profile JSON 裡;§5.4 的 8 個合成 case run 因此全部落網。附帶一提(§5.4 已揭露):這 8 個 run 的 `benchmark_kind` 欄位值其實是 `"real"` 而非 `"synthetic"`(driver 呼叫時未帶 `--benchmark-kind synthetic`)——這**不是**本次 24 筆錯誤的成因(rule 2 的 synthetic-isolation 檢查只單向禁止 quality 表引用 `benchmark_kind=="synthetic"` 的 run,不會因為 scaling 表引用 `benchmark_kind=="real"` 的 run 而報錯),但與 `generator_verified` 缺失是同一組 artifact-schema 缺口的兩個面向。
+
+**處置範圍評估(誠實記錄,未執行):** 修正這 24 筆錯誤需要在 `ioplace/drivers/run_placement.py`/`run_placement_io.py`(或其共用的輸出 schema 模組)補上 `workload_status`/`generator_verified` 兩個欄位的寫出邏輯,並**對已落地的 24 個 run 重新執行**(或針對既有 JSON 做欄位回填)——兩者都超出本次 T11 報告 pass 的唯讀範圍(僅可讀 `results/`、不可修改)與「表格措辭」修正範圍;逕自在 `results/` 下回填欄位值也會構成憑空生成未經量測的 provenance,不可取。**依 M4-G8 的字面觸發後果(design draft §9:「⇒ T11 不得標記完成」),本報告在此誠實記錄:M4-G8 已觸發且尚未處置,T11 因此不能依 spec 字面規則標記為完成**——即便 §5.3/§5.4 的資料內容本身(E1/E3 的規模覆蓋、run_id 唯一性、`status="ok"`)在實質上是完整且正確的。此缺口的了結方式(修 driver + 重新落地 24 個 run,或另立一條類似 B-2/B-5 的裁決把「舊 schema run 免除 `workload_status`/`generator_verified` 硬性要求」正式記錄為非 gating 揭露)不是本報告執行者可以片面決定的設計選擇,留待下一輪處置。
