@@ -1,0 +1,61 @@
+{
+ "record_kind": "lifetime",
+ "case": "cluster",
+ "K": 32,
+ "rtype": "grid",
+ "arm": "ours_m2_rho0.05_ofon2.0",
+ "benchmark_kind": "real",
+ "experiment_status": "not_evaluable_scale",
+ "workload_status": "timeout_or_oom_killed",
+ "feasibility_verdict": "not_applicable_see_alternatives",
+ "reason": "T2b full-lifetime probe on mempool_cluster (11.3M, K=32) is not evaluable at this scale on this host within the pre-registered budgets: the probe's serial CPU-bound segments (7x streaming evaluator calls at ~35 min each on 12.7M nets K=32, plus per-checkpoint object-graph scans and final_eval) exceed every budget tried.",
+ "attempts": [
+  {
+   "n": 1,
+   "recipe": "300 iters / diag-every 2 (matches group's successful recipe)",
+   "outcome": "4h timeout; root cause 1: scan_cuda_tensors O(n log n) walk over PlaceDB name2id dicts (fixed in 236e91d)"
+  },
+  {
+   "n": 2,
+   "recipe": "60/10, pre-fix code",
+   "outcome": "stale-code run, killed by scheduler"
+  },
+  {
+   "n": 3,
+   "recipe": "60/10 via chain",
+   "outcome": "contaminated by gate race (GPU-mem gate opened during CPU read phase); T9 preflight caught it"
+  },
+  {
+   "n": 4,
+   "recipe": "60/10, scan fix live, 4h",
+   "outcome": "timeout AT LG phase - GP + 6 mid evals completed, ran out of budget in the tail"
+  },
+  {
+   "n": 5,
+   "recipe": "60/10, 6h",
+   "outcome": "SIGKILL by host OOM killer (concurrent route shards; scheduling error, not workload)"
+  },
+  {
+   "n": 6,
+   "recipe": "60/10, 6h, RAM freed (sb12 shard paused)",
+   "outcome": "timeout at final_eval after LG - same tail bottleneck"
+  }
+ ],
+ "partial_evidence": {
+  "gp_phase_completed": true,
+  "lg_phase_completed": true,
+  "bottleneck": "single-threaded CPU segments of streaming evaluator at 12.7M nets K=32 (~35 min/call) x (6 mid + 1 final) + read ~330s + GP",
+  "host_rss_observed_gb": 67.7
+ },
+ "sec22_feasibility_not_blocked_by_this": {
+  "integrated_full_run_evidence": "results/m4/profile/mempool_cluster__k16__grid__oursM2.json (seed-B E1 run: device_used 13.47GB <= 20GB, full GP+LG+eval lifecycle)",
+  "component_coresidency_evidence": "results/m4/profile/spike30m__{A,B}__k32.json (27.7M co-resident spike, feasible_l4_contract, peak 18.19/18.63GB)",
+  "buffer_level_attribution": "results/m4/profile/lifetime_group__k32__ours_m2.json (3.1M, complete, per-buffer registry + phase split)"
+ },
+ "adjudication_basis": "pre-registered abort semantics per T6B/M4-L4: exceeding the per-run cap is recorded as not_evaluable_scale, must not be reinterpreted as fail, and must not downgrade the estimator; the 3.1M lifetime record satisfies T2b's per-buffer attribution goal; sec 2.2 feasibility for 11.3M is decided by the integrated E1 run + T9 spike, not by this probe",
+ "run_id": "f07c7ce7-0a9a-4833-ad74-6940631b28c5",
+ "repo_commit": "475a6d241ef5ee5c8f80e4097d5e2e8dc756c7b6",
+ "hostname": "NVL5",
+ "seed": 1000,
+ "date": "2026-08-18"
+}
