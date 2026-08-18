@@ -1,4 +1,4 @@
-# M4 規模化(1M → 30M)報告(T11 內容定稿;M4-G8 未了結,見 §9)
+# M4 規模化(1M → 30M)報告(T11 完成;M4-G8 已了結,見 §9 與附錄 A.4)
 
 - 日期:2026-08-18(內容定稿 pass);分支 `m2-differentiable-io`,報告基準 HEAD `dc9d7de`
 - 環境:`docs/dev-env.md`(`DP=/nashome/NVL4/vdalab/yyds-dev/DREAMPlace`、`$DP/.venv312/bin/python`、torch 2.8.0+cu128、CUDA 12.8、NVIDIA L4、`dp_commit d971880a15ef684c4a90bccd2c65d62ae7e33297`,近期跑於 hostname `NVL5`)
@@ -6,7 +6,7 @@
 - 對應裁決:`docs/results/2026-08-14-m4-t6-adjudication.md`(T6 協定 v2、G-D 撤回、Bug A/B)、`docs/results/2026-08-15-m4-t6-holdout-adjudication.md`(T6 holdout FAIL 維持、N2 選定、T6B 協定 B-0…B-6、B5、附錄 A 的 B-5 重算)
 - 平行交付:Stage 2(commercial-tool 校準)另立報告 `docs/results/stage2-calibration-report.md` — G1 觸發(Innovus license 不通)降級為 OpenROAD-only ground truth;主要新發現:OpenROAD DR 在高利用率 ISPD2015 上的規模天花板 ~150k cells;總量級校準 α̂=0.652 / β̂=0.966(κ_ft 建議 1.482),per-net 級校準待 per-net 陣列落檔後補
 - 前置報告:`docs/results/m3-differentiable-ft-report.md`(M3 exit FAIL——`ours@M3` 臂本報告一律不納入任何表格,只有 `flat`/`ours@M2`)
-- **狀態:內容已定稿——E1/E3/E5 PASS,E2 PASS(依 T6B 替代路徑,非字面 holdout 全綠),E4 部分判定(GP 子模型已重擬合並誠實揭露 `identifiable=false`;evaluator/op 子模型未曾納入 T0b 範圍,見 §7)。全部章節已依現有 artifact 寫實。但 `scripts/m4_report_lint.py --strict` 實跑 **24 error(s)**(§5.3/§5.4 引用的 24 個 profile run 缺 `workload_status`/`generator_verified` 欄位,driver 輸出 schema 缺口,非表格措辭問題;附錄 A.4)——依 **M4-G8 字面規則(§9)「任一違規 ⇒ T11 不得標記完成」,本報告誠實記錄此一未了結項,不自行判定為完成。** 仍有極少數不影響內容判定的收尾項標 `<!-- PENDING: ... -->`,禁止以推測數字填補。
+- **狀態:內容已定稿——E1/E3/E5 PASS,E2 PASS(依 T6B 替代路徑,非字面 holdout 全綠),E4 部分判定(GP 子模型已重擬合並誠實揭露 `identifiable=false`;evaluator/op 子模型未曾納入 T0b 範圍,見 §7)。全部章節已依現有 artifact 寫實。`scripts/m4_report_lint.py --strict` 於 **2026-08-19 實跑 `0 error(s), 0 warning(s)`**:原先的 24 error(§5.3/§5.4 引用的 24 個 profile run 缺 `workload_status`/`generator_verified`,driver 輸出 schema 缺口,非表格措辭問題)已依**使用者裁決 A(2026-08-19)**以可稽核的 backfill 補齊——只新增這兩個欄位與一則 `schema_backfill_note`,不讀取、不重算、不更動任何量測值(腳本 `scripts/m4_backfill_result_gate_fields.py`,逐檔 sha256 稽核紀錄 `results/m4/backfill/2026-08-19-result-gate-backfill.json`;附錄 A.4)。**M4-G8 因此了結,T11 標記完成。** 仍有極少數不影響內容判定的收尾項標 `<!-- PENDING: ... -->`,禁止以推測數字填補。
 
 **品質宣稱紅線(design draft §3.4/§6.2;T6 holdout 裁決 §7-1):** 本報告中任何 `benchmark_kind="synthetic"` 的 case(6.2M/12.3M/27.7M 合成陣列)一律不得出現 HPWL/IO/FT 品質欄位或 winner/pareto 宣稱。凡合成表格涉及生成器未認證(`generator_verified=false`),依裁決 §7-1 必須逐字附上:
 
@@ -22,11 +22,11 @@ M4 的核心命題(v1→v2.3 一路存活):**DREAMPlace GP 在 10M 級不是瓶�
 |---|---|---|---|
 | **E1** 10M 全流程 | **PASS** | `mempool_cluster` seed-B(seed=2000)六門檻全過:`Δhpwl` +1.44%≤5%、`num_unplaced_cells=0`、`final_overflow=0.0694≤0.07`、`legalization_status=success`、`device_used_gb=13.47≤20GB`、單臂 1.9h≤4h(`results/m4/profile/mempool_cluster__k16__grid__oursM2.json`);K∈{16,32}×{flat,ours@M2} 四格皆已落地,見 §3、§7 |
 | **E2** 30M 測資 | **PASS(依 T6B 替代路徑)** | (a) 27.7M Bookshelf 產出 + T7 3×3 陣列 sha + B-5 重算全綠(T6B);(b) 12.3M 的 H1–H5 holdout 本身**仍 FAIL**(T6 裁決維持,非懸置)——依 M4-G3 轉入 T6B 的 B-0/B-3…B-6 自洽性驗收,全部綠燈,`scaling_usable=true`;(c) 27.7M 元件級 spike(T9)兩情境皆 `feasible_l4_contract`。三支子條件依裁決語意合併判 PASS,**不等於原始 H1–H5 全綠** |
-| **E3** 全規模對照表 | **PASS(內容);M4-G8 linter 未了結** | `quality_real_cases` 格式的真實 case 表 16/16 格(4 case×K{16,32}×{flat,ours@M2})、`scaling_synthetic_cases` 格式的合成表 8/8 格(2 case×K{16,32}×{flat,ours@M2})皆已落地,seed B=2000,見 §5;但 `m4_report_lint.py --strict` 對這 24 格實跑 **24 error(s)**(driver 輸出缺 `workload_status`/`generator_verified` 欄位,非表格寫法問題),依 M4-G8「⇒ T11 不得標記完成」,見 §9/附錄 A.4 |
+| **E3** 全規模對照表 | **PASS** | `quality_real_cases` 格式的真實 case 表 16/16 格(4 case×K{16,32}×{flat,ours@M2})、`scaling_synthetic_cases` 格式的合成表 8/8 格(2 case×K{16,32}×{flat,ours@M2})皆已落地,seed B=2000,見 §5;`m4_report_lint.py --strict` 曾對這 24 格實跑 24 error(driver 輸出缺 `workload_status`/`generator_verified` 欄位,非表格寫法問題),已於 2026-08-19 依使用者裁決 A 以可稽核 backfill 補欄位後轉為 `0 error, 0 warning`,見 §9/附錄 A.4 |
 | **E4** 記憶體 profile | **部分判定** | B1/B2/B3 三個量測工具 bug 已處置揭露(§2,B1 由 T1b 四臂 A/B probe 定案成因);T0b 16 點 factorial 設計**全部執行**,GP 記憶體/runtime 兩個子模型重擬合完畢、`identifiable=false`(M4-G6 觸發,誠實負結果);但 exit 文字要求的 evaluator/op 子模型**從未被 T0b 觸及**(`model_fit.json` 只有 `gp_memory_model`/`gp_runtime_model` 兩個 key),此缺口逐字記錄,不代填 → 見 §7 E4 |
 | **E5** H100 forecast | **PASS(凍結)** | `results/m4/forecast/h100_prediction.json` 已凍結(`status="frozen"`),sha256 `4eeea5f9132e1a06585ae57e38c6e45b5523ed31ae5454826ff4cff56e045284` 登錄於 §8;T14 首跑比對器(`scripts/m4_check_prediction.py`)已含逐 phase `s_p_obs` 檢定邏輯 |
 
-**一句話結論:** M4 v2.3 的誠實紀律站得住到底——iteration 預算調整是一次性的、方向不利於「ours」的全語料修正(§3),T6 的 FAIL 不因任何事後論證被翻案(§4),T6B 的自洽性驗收全綠(§4),E1/E3/E5 三個 exit 判準的**內容**已用 seed-B 正式資料補完(§5、§7)。**兩個未完全兌現的缺口本報告一併逐字揭露,不以任何理由代填:**(1) E4 的 evaluator/op 子模型——T0b 的 factorial 重擬合只覆蓋了 GP 記憶體/runtime,exit 原文點名的另外兩個子模型從未被這輪 T0b 設計納入(§7 E4);(2) **M4-G8 尚未了結**——§5.3/§5.4 的 24 個正式 run 內容完整、規模覆蓋齊全,但其來源 JSON 缺少 linter 要求的 `workload_status`/`generator_verified` 欄位,`m4_report_lint.py --strict` 因此判 24 error,依 spec 字面規則這代表 **T11 尚不能標記為完成**(§9、附錄 A.4)。
+**一句話結論:** M4 v2.3 的誠實紀律站得住到底——iteration 預算調整是一次性的、方向不利於「ours」的全語料修正(§3),T6 的 FAIL 不因任何事後論證被翻案(§4),T6B 的自洽性驗收全綠(§4),E1/E3/E5 三個 exit 判準的**內容**已用 seed-B 正式資料補完(§5、§7)。**未完全兌現的缺口本報告逐字揭露,不以任何理由代填:**(1) E4 的 evaluator/op 子模型——T0b 的 factorial 重擬合只覆蓋了 GP 記憶體/runtime,exit 原文點名的另外兩個子模型從未被這輪 T0b 設計納入(§7 E4);(2)(**已於 2026-08-19 了結**)M4-G8——§5.3/§5.4 的 24 個正式 run 內容完整、規模覆蓋齊全,但其來源 JSON 缺少 linter 要求的 `workload_status`/`generator_verified` 欄位,`m4_report_lint.py --strict` 因此判 24 error;依使用者裁決 A 補記這兩個「後定義」欄位(純新增、不動量測值、逐檔 sha256 存證)後,linter 轉為 `0 error, 0 warning`,T11 標記完成(§9、附錄 A.4)。**此一了結不改變本報告任何一個數字或判定。**
 
 ---
 
@@ -328,7 +328,7 @@ primary seed    = 0(全檔落地);seeds 1–4 只存 recipe sha256
 
 †:K=32 的 `flat` 是對同案 K=16 `flat` 的 evaluate-only 重新計分(`mode="evaluate_only"`),語意同 §5.3 的 flat†。
 
-<!-- PENDING: §5.4 的 8 個 profile JSON 的 `benchmark_kind` 欄位實際值為 `"real"`(driver 未帶 `--benchmark-kind synthetic` 旗標),且皆無 `generator_verified` 欄位——linter 執行結果與此缺口的處置見附錄 A.4,本表本身不因此欄位缺陷而改變其「不含品質欄位」的誠實承諾。 -->
+<!-- 揭露(2026-08-19 更新):§5.4 的 8 個 profile JSON 已補上 `generator_verified=false`(裁決 A 的 backfill,附錄 A.4);但其 `benchmark_kind` 欄位實際值**仍是** `"real"` 而非 `"synthetic"`(driver 呼叫時未帶 `--benchmark-kind synthetic` 旗標),本次 backfill **不修改既有欄位值**故未動它——這是尚未了結的 artifact-schema 缺陷,已知且不 gating(linter rule 2 只單向禁止 quality 表引用 synthetic run)。本表本身不因此欄位缺陷而改變其「不含品質欄位」的誠實承諾。 -->
 
 ---
 
@@ -473,7 +473,7 @@ T2 消滅 `(P,K)` 全量物化、批次化 MST edge/segment、逐欄位 assert �
 
 ### E3(全規模對照表)—— **PASS**
 
-`quality_real_cases`(真實 case × K{16,32} × {flat, ours@M2},§5.3)16/16 格、`scaling_synthetic_cases`(合成 case × K{16,32} × {flat, ours@M2},§5.4)8/8 格,兩份正式報表皆已用 T8b 之後的 **seed-B**(seed=2000)T8 run 落地,每格皆可追到唯一 `run_id`,對應 spec §6.3 E3「{1.3M, 2.2M, 3.1M, 11.3M} × K{16,32} × {flat, ours@M2}」與「{6.2M, 12.3M} × K{16,32}」的規模覆蓋要求。**Linter 執行結果見附錄 A.4**——E3 判定本身以資料完整性與規模覆蓋為準,linter 揭露的欄位缺口(附錄 A.4)不推翻本判定,但構成 M4-G8(§9)的一個待處置揭露項。
+`quality_real_cases`(真實 case × K{16,32} × {flat, ours@M2},§5.3)16/16 格、`scaling_synthetic_cases`(合成 case × K{16,32} × {flat, ours@M2},§5.4)8/8 格,兩份正式報表皆已用 T8b 之後的 **seed-B**(seed=2000)T8 run 落地,每格皆可追到唯一 `run_id`,對應 spec §6.3 E3「{1.3M, 2.2M, 3.1M, 11.3M} × K{16,32} × {flat, ours@M2}」與「{6.2M, 12.3M} × K{16,32}」的規模覆蓋要求。**Linter 執行結果見附錄 A.4**——E3 判定本身以資料完整性與規模覆蓋為準,linter 曾揭露的欄位缺口已於 2026-08-19 依裁決 A 的可稽核 backfill 補齊,`--strict` 轉為 `0 error, 0 warning`,M4-G8 了結(§9、附錄 A.4)。
 
 ### E4(記憶體 profile)—— **部分判定**
 
@@ -529,7 +529,7 @@ B1/B2/B3 三個量測工具 bug 已處置揭露(§2:B1 由 T1b 四臂 A/B probe 
 | **M4-G5** host RAM | 任一 `PlaceDB.read` peak RSS | >100 GB | **未觸發** | §5.3/§5.4 全部 24 格的 `host_hwm`(≤81.8 GB)與 §6.6 的 `lifetime_cluster` 觀測(67.7 GB)皆 <100 GB;T10 rehearsal 記錄的「本機 125GB<128GB」是**目標機資源契約**的告警,不是任一 run 的 peak RSS 超標(§8) |
 | **M4-G6** 模型失效 | T0b `identifiable`,3 模型 holdout 殘差 | `identifiable=false` 或殘差超出 95% PI | **已觸發** | §6.5:GP 記憶體/runtime 兩子模型 `identifiable=false`;三條後果已處置(27.7M host RAM 欄改「未定」、E5 host RSS 只給點估計不帶 PI、host RSS 三係數模型維持 `pending_t0b` 不回填) |
 | **M4-G7** B1 污染範圍 | M2/M3 報告引用 `peak_mem_mb` 的段落 | 存在即觸發 | **已觸發**(既有事實,已處置) | §2 B1:結論(污染成立、M2/M3 `peak_mem_mb` 全部作廢)保留,成因由 T1b 四臂 A/B probe(`t1b_arms.json`)定案為 `retained_tensors`;本報告全部 GPU 峰值數字改引 M4 各自獨立 process 產出的 `device_used_gb` |
-| **M4-G8** 報表越界 | `scripts/m4_report_lint.py` | 任一違規 | **已觸發**(2026-08-18) | `--strict` 實跑 `24 error(s), 0 warning(s)`(附錄 A.4)——§5.3 全 16 列 `result_gate`(`workload_status` 缺失)、§5.4 全 8 列 `generator_verified` 缺失,根因是 DREAMPlace driver 輸出 schema 從未寫出這兩個欄位,不是表格 caption/欄名寫錯。**依 spec 字面觸發後果「⇒ T11 不得標記完成」**——本報告在此誠實記錄此一未了結項,見附錄 A.4 |
+| **M4-G8** 報表越界 | `scripts/m4_report_lint.py` | 任一違規 | **已觸發(2026-08-18)→ 已了結(2026-08-19)** | `--strict` 於 2026-08-18 實跑 `24 error(s), 0 warning(s)`(附錄 A.4)——§5.3 全 16 列 `result_gate`(`workload_status` 缺失)、§5.4 全 8 列 `generator_verified` 缺失,根因是 DREAMPlace driver 輸出 schema 從未寫出這兩個欄位,不是表格 caption/欄名寫錯。**依 spec 字面觸發後果「⇒ T11 不得標記完成」**,報告曾據此拒絕自我標記完成;2026-08-19 依使用者裁決 A 執行可稽核 backfill(只補這兩個後定義欄位、不動量測值),`--strict` 重跑得 `0 error(s), 0 warning(s)`,**gate 了結、T11 標記完成**,見附錄 A.4 |
 
 ---
 
@@ -598,4 +598,19 @@ PYTHONPATH=. $DP/.venv312/bin/python scripts/m4_report_lint.py --results-root re
 1. `results/m4/profile/{sb12,bb4,group,mempool_cluster,synthetic_1x2_n2,synthetic_2x2_n2}__k{16,32}__grid__{flat,oursM2}.json`(§5.3/§5.4 全部 24 個 run 的來源,由 `ioplace/drivers/run_placement.py`/`run_placement_io.py` 產生)**沒有一個帶 `workload_status` 欄位**——`workload_status` 只存在於較新的 T2b(`lifetime_*.json`)與 T9(`spike30m_*.json`)兩支 harness 的輸出中,DREAMPlace 主 driver 從未寫出這個欄位。RESULT GATE 規則 5 對 `workload_status` 缺失(`None`)與其他任何非 `"completed"` 值一視同仁判 error,quality 表因此逐列全部落網。
 2. 同一批 24 個 run 也**沒有一個帶 `generator_verified` 欄位**——這個欄位目前只出現在 `count_freeze_{small,30m}.json` 與 `verify_group3x3_t6b.json` 三個 bench/count-freeze 層級的 artifact,不在任何逐 run 的 profile JSON 裡;§5.4 的 8 個合成 case run 因此全部落網。附帶一提(§5.4 已揭露):這 8 個 run 的 `benchmark_kind` 欄位值其實是 `"real"` 而非 `"synthetic"`(driver 呼叫時未帶 `--benchmark-kind synthetic`)——這**不是**本次 24 筆錯誤的成因(rule 2 的 synthetic-isolation 檢查只單向禁止 quality 表引用 `benchmark_kind=="synthetic"` 的 run,不會因為 scaling 表引用 `benchmark_kind=="real"` 的 run 而報錯),但與 `generator_verified` 缺失是同一組 artifact-schema 缺口的兩個面向。
 
-**處置範圍評估(誠實記錄,未執行):** 修正這 24 筆錯誤需要在 `ioplace/drivers/run_placement.py`/`run_placement_io.py`(或其共用的輸出 schema 模組)補上 `workload_status`/`generator_verified` 兩個欄位的寫出邏輯,並**對已落地的 24 個 run 重新執行**(或針對既有 JSON 做欄位回填)——兩者都超出本次 T11 報告 pass 的唯讀範圍(僅可讀 `results/`、不可修改)與「表格措辭」修正範圍;逕自在 `results/` 下回填欄位值也會構成憑空生成未經量測的 provenance,不可取。**依 M4-G8 的字面觸發後果(design draft §9:「⇒ T11 不得標記完成」),本報告在此誠實記錄:M4-G8 已觸發且尚未處置,T11 因此不能依 spec 字面規則標記為完成**——即便 §5.3/§5.4 的資料內容本身(E1/E3 的規模覆蓋、run_id 唯一性、`status="ok"`)在實質上是完整且正確的。此缺口的了結方式(修 driver + 重新落地 24 個 run,或另立一條類似 B-2/B-5 的裁決把「舊 schema run 免除 `workload_status`/`generator_verified` 硬性要求」正式記錄為非 gating 揭露)不是本報告執行者可以片面決定的設計選擇,留待下一輪處置。
+**處置範圍評估(2026-08-18 當下的誠實記錄,當時未執行):** 修正這 24 筆錯誤需要在 `ioplace/drivers/run_placement.py`/`run_placement_io.py`(或其共用的輸出 schema 模組)補上 `workload_status`/`generator_verified` 兩個欄位的寫出邏輯,並**對已落地的 24 個 run 重新執行**(或針對既有 JSON 做欄位回填)——兩者都超出本次 T11 報告 pass 的唯讀範圍(僅可讀 `results/`、不可修改)與「表格措辭」修正範圍;逕自在 `results/` 下回填欄位值也會構成憑空生成未經量測的 provenance,不可取。**依 M4-G8 的字面觸發後果(design draft §9:「⇒ T11 不得標記完成」),本報告在此誠實記錄:M4-G8 已觸發且尚未處置,T11 因此不能依 spec 字面規則標記為完成**——即便 §5.3/§5.4 的資料內容本身(E1/E3 的規模覆蓋、run_id 唯一性、`status="ok"`)在實質上是完整且正確的。此缺口的了結方式(修 driver + 重新落地 24 個 run,或另立一條類似 B-2/B-5 的裁決把「舊 schema run 免除 `workload_status`/`generator_verified` 硬性要求」正式記錄為非 gating 揭露)不是本報告執行者可以片面決定的設計選擇,留待下一輪處置。
+
+**了結(2026-08-19,使用者裁決 A):** 使用者裁決採 **A(批准可稽核的 backfill)**,上一段所稱「不是報告執行者可以片面決定」的設計選擇因此由使用者作出。執行方式刻意受限,以免把 schema 補記變成憑空生成 provenance:
+
+```
+PYTHONPATH=. $DP/.venv312/bin/python scripts/m4_backfill_result_gate_fields.py \
+    docs/results/m4-scale-up-report.md --results-root results/ --apply
+```
+
+- **目標集合不是手寫的**:腳本 import `m4_report_lint`,用 linter 自己的表格分類與列解析取得要處理的 JSON,因此只能碰到 linter 本身引用的檔案(實跑解析出 24 筆,與 24 個 error 一對一)。
+- **只新增、不覆寫**:欄位已存在者一律 `skip`;每個檔案除了新增的欄位與一則 `schema_backfill_note`(記錄補記時間、腳本、裁決、理由、證據、「未讀取/重算/更動任何量測值」的不變式)之外,其餘 key 與值逐一保持不變。事後以 `git show HEAD:<path>` 對照驗證:24 個檔案**無任何 key 被刪除、無任何既有值被改變**。
+- **`workload_status="completed"` 需要正面證據才寫**:完整 placement run 必須同時具備 `status="ok"` 與 driver 最後才寫出的收尾欄位(`legalization_status="success"`、`num_unplaced_cells`、`final_overflow`、`gp_iterations_run`、`hpwl_lg`、`runtime_s`);evaluate-only run 必須具備 `status="ok"` 與其評估量(`hpwl`/`io_count`/`ft_count`/`runtime_s`)。拿不出證據的檔案會被 `refuse` 且腳本整體非零退出,不猜、不填。實跑結果:24 筆全部具備證據,0 筆 refuse。
+- **`generator_verified=false`**:這是事實值——生成器從未被認證過。寫 `false` 同時讓裁決 §7-1 的強制揭露句在 linter 規則 3 下**持續為必要**,不是繞過它。
+- **稽核紀錄**:`results/m4/backfill/2026-08-19-result-gate-backfill.json` 逐檔記錄 table 類別、報告列號、欄位、值、證據字串,以及寫入前後的 sha256。
+
+**重跑結果:`0 error(s), 0 warning(s)`,M4-G8 了結,T11 依 spec 字面規則標記完成。**本報告的任何數字、任何 E/G 判定都未因此改變——backfill 補的是 schema 欄位,不是結論。**仍未了結的同源缺陷:** §5.4 那 8 個 run 的 `benchmark_kind` 值仍是 `"real"`(應為 `"synthetic"`),本次 backfill 因「不覆寫既有值」的自我限制而未動它;根治方式是在 driver 端補上欄位寫出邏輯(`--benchmark-kind` 正確帶入),留待下一輪 driver 修改處置。

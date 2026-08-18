@@ -1,0 +1,370 @@
+{
+ "utc": "2026-08-18T19:41:02Z",
+ "ruling": "user ruling A, 2026-08-19: approve an audited backfill of the post-hoc RESULT GATE fields",
+ "report": "docs/results/m4-scale-up-report.md",
+ "results_root": "results/",
+ "script": "scripts/m4_backfill_result_gate_fields.py",
+ "invariant": "only the named field plus schema_backfill_note were added; no measured value was altered",
+ "records": [
+  {
+   "table": "quality",
+   "report_line": 288,
+   "path": "results/m4/profile/sb12__k16__grid__flat.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+   "sha256_before": "cdc8e5d7cdc58b1c94016b43afc436f5fe1c8430deba3152314c0534683e7b57",
+   "sha256_after": "637227e559efee8482ae70099653d50be76feaa5f483ee97140a37557ca732c7",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 289,
+   "path": "results/m4/profile/sb12__k16__grid__oursM2.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+   "sha256_before": "1e4fb89a31a4221e18c9dbbb055afd9227c98c11a7a3e568e9272a04517261aa",
+   "sha256_after": "4fe0c5babbdb2d65bdb8ff9c1b59a3358b62b82b28d53dbfd5771ea78eb3fa5f",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 290,
+   "path": "results/m4/profile/sb12__k32__grid__flat.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; evaluate_only run carries its evaluated quantities (hpwl/io_count/ft_count/runtime_s)",
+   "sha256_before": "ddb29b91bd8c777e630a511b2eea1742389591089198dffa7b6afdf17370abef",
+   "sha256_after": "cfdca333869dec37339885f07658dfad7e734868efacf64f07a4f057be9620da",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 291,
+   "path": "results/m4/profile/sb12__k32__grid__oursM2.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+   "sha256_before": "0ac42852c5c62d71d05290b25bec0cd5c29b1ffdceb03ab88fef592420e97149",
+   "sha256_after": "6984819edcadb8104de02434d0c6da02b3d81dd7774d62d79dc4f91808697391",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 292,
+   "path": "results/m4/profile/bb4__k16__grid__flat.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+   "sha256_before": "02f5fb080cd5e3c7b524099708f9ba3ac245fee0b677ff4738e5b981333bbe7e",
+   "sha256_after": "f36a9fc0f03cb3e3967f35edb7045ee4b391e9b52a5303df6338ecab4024efbc",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 293,
+   "path": "results/m4/profile/bb4__k16__grid__oursM2.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+   "sha256_before": "50624f0a82b4e995f51a1d2155da2f639c370d6fe7100d064614fd0a7f62cb0c",
+   "sha256_after": "b1f466a968f563a1419c979ffa8b9af176e01e5fa4181c5dd90d97b7fc5848a0",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 294,
+   "path": "results/m4/profile/bb4__k32__grid__flat.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; evaluate_only run carries its evaluated quantities (hpwl/io_count/ft_count/runtime_s)",
+   "sha256_before": "bbff6f35afba6b305e6315948caddf6953ecee085034ecc6928ededb29bffb7c",
+   "sha256_after": "3e6b9153d1daf53dd978ae6f52be9793a713ea7ab892b7251b3f08ff4b2ecda6",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 295,
+   "path": "results/m4/profile/bb4__k32__grid__oursM2.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+   "sha256_before": "b11135c91526d5ebb6b1352dc146f4cd7aed26001110badde7954dc05a9757f7",
+   "sha256_after": "5a25f5bb88758c0a1ca55be66cb675b23ccc8e960605ccec64e25267a094939d",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 296,
+   "path": "results/m4/profile/group__k16__grid__flat.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+   "sha256_before": "108ea77a19247e79816f326b06b4517b52c4855f1c25abd7ef5cc0344cc0ba6b",
+   "sha256_after": "4d47273a7bca524ae2e00c38fd91fe01ca06940970fb98c3c339a96702587384",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 297,
+   "path": "results/m4/profile/group__k16__grid__oursM2.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+   "sha256_before": "f2fc4b69466465ad7cbb548e9ddfd504f9bec92c5f90c3a8e95b4d04a27a5033",
+   "sha256_after": "3679873a6778373597d335e772acad31bcb0d78d0ca0f0e77c77a164b10beed2",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 298,
+   "path": "results/m4/profile/group__k32__grid__flat.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; evaluate_only run carries its evaluated quantities (hpwl/io_count/ft_count/runtime_s)",
+   "sha256_before": "092b8c737c829a3e4866dd8ee44721b7c8715991ae39cc61f95bfae66efe1787",
+   "sha256_after": "8235a2661d8c80bb27f69f231311fcbea8870a5251a8a197ccc5aaa21ed7f9d9",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 299,
+   "path": "results/m4/profile/group__k32__grid__oursM2.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+   "sha256_before": "0de52a9c643dc58f38af37a75086371fb035606a74b2091b3dca9bddd53a944d",
+   "sha256_after": "7d63649d4f9f263e87a11efe5abd3007c001c23a89430176b07170ce4b199e09",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 300,
+   "path": "results/m4/profile/mempool_cluster__k16__grid__flat.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+   "sha256_before": "2c5e1d71e61732cc2287eea268a967a2cd485b501df196df346742d0dc1215a7",
+   "sha256_after": "9917635536931e79bbaaf528c1c561b7a37c2637aba71929ffaafbd9cc4c9ae7",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 301,
+   "path": "results/m4/profile/mempool_cluster__k16__grid__oursM2.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+   "sha256_before": "d26fbff1425dac3c62bdac46a82307a1ffa49b85c24332472e1da73d46dbfccd",
+   "sha256_after": "5e1713af9a023e2ffa427c2728b8b53af9b75562fad2d42f27ab623d192af2bd",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 302,
+   "path": "results/m4/profile/mempool_cluster__k32__grid__flat.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; evaluate_only run carries its evaluated quantities (hpwl/io_count/ft_count/runtime_s)",
+   "sha256_before": "0386913b2906e51ae2611ddc8f026c317dd6bad257ca24f4448c90b3a38fae5c",
+   "sha256_after": "f180a865bf649447b5feffbb61af210f554149fdadef18b0b1d30235d88eb210",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "quality",
+   "report_line": 303,
+   "path": "results/m4/profile/mempool_cluster__k32__grid__oursM2.json",
+   "action": "add",
+   "field": "workload_status",
+   "value": "completed",
+   "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+   "sha256_before": "103183440432007531b78b9969387374fd807c68f3b31c98bab7aeb640cde449",
+   "sha256_after": "b7e99eb92bdd6282d999b53224e739d9421823ebd5c1732b0be52c8cee980c76",
+   "keys_added": [
+    "workload_status",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "scaling",
+   "report_line": 318,
+   "path": "results/m4/profile/synthetic_1x2_n2__k16__grid__flat.json",
+   "action": "add",
+   "field": "generator_verified",
+   "value": false,
+   "evidence": "no generator certification was ever performed for the tiled synthetic arrays (holdout adjudication sec 7-1); false is the factual value and keeps the mandatory disclosure sentence required",
+   "sha256_before": "27373ba553c26e0b847e186d1d06dde92c9a0c3be17fd5fd252b0fec0ebd93ec",
+   "sha256_after": "2ae7e5856e7e1944be453dccf4660cc8149f44a854ce72482aba9e5a7df20e56",
+   "keys_added": [
+    "generator_verified",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "scaling",
+   "report_line": 319,
+   "path": "results/m4/profile/synthetic_1x2_n2__k16__grid__oursM2.json",
+   "action": "add",
+   "field": "generator_verified",
+   "value": false,
+   "evidence": "no generator certification was ever performed for the tiled synthetic arrays (holdout adjudication sec 7-1); false is the factual value and keeps the mandatory disclosure sentence required",
+   "sha256_before": "b3a01549ddc1f5db23aca737dbb03f1ea22937117e78f17c14d36079b8c3677b",
+   "sha256_after": "5ba88cfcb0ffef4dc14fc936d25a1be2f1a2c37b7baa1a96d766e716c20e094c",
+   "keys_added": [
+    "generator_verified",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "scaling",
+   "report_line": 320,
+   "path": "results/m4/profile/synthetic_1x2_n2__k32__grid__flat.json",
+   "action": "add",
+   "field": "generator_verified",
+   "value": false,
+   "evidence": "no generator certification was ever performed for the tiled synthetic arrays (holdout adjudication sec 7-1); false is the factual value and keeps the mandatory disclosure sentence required",
+   "sha256_before": "39482c93ae93710456713df41c2d1c0250c4111be67eeb150b2b54a16679ef29",
+   "sha256_after": "507b6d6b5f4f29e7b4a4f9ff61a26c0c85d5488ddec48dc1c9289bed24f63ddc",
+   "keys_added": [
+    "generator_verified",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "scaling",
+   "report_line": 321,
+   "path": "results/m4/profile/synthetic_1x2_n2__k32__grid__oursM2.json",
+   "action": "add",
+   "field": "generator_verified",
+   "value": false,
+   "evidence": "no generator certification was ever performed for the tiled synthetic arrays (holdout adjudication sec 7-1); false is the factual value and keeps the mandatory disclosure sentence required",
+   "sha256_before": "d1ce014813911d4fc46863caa74ebdfdd6953add64074fa8bb0835e2a46f0683",
+   "sha256_after": "5390332f6809bc27934fb21b12faf81f8702bfcb868606f902ad5f76389135ba",
+   "keys_added": [
+    "generator_verified",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "scaling",
+   "report_line": 322,
+   "path": "results/m4/profile/synthetic_2x2_n2__k16__grid__flat.json",
+   "action": "add",
+   "field": "generator_verified",
+   "value": false,
+   "evidence": "no generator certification was ever performed for the tiled synthetic arrays (holdout adjudication sec 7-1); false is the factual value and keeps the mandatory disclosure sentence required",
+   "sha256_before": "e13123fbe36a0739433062770fd0945607e1d980f7404639138954daafdcb16f",
+   "sha256_after": "d3c1167e8c8eb74042c280cffb81a35d87d2cca31c7c248f9d8154ceb8c84036",
+   "keys_added": [
+    "generator_verified",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "scaling",
+   "report_line": 323,
+   "path": "results/m4/profile/synthetic_2x2_n2__k16__grid__oursM2.json",
+   "action": "add",
+   "field": "generator_verified",
+   "value": false,
+   "evidence": "no generator certification was ever performed for the tiled synthetic arrays (holdout adjudication sec 7-1); false is the factual value and keeps the mandatory disclosure sentence required",
+   "sha256_before": "55f91defa468fc8fd19f029ea5d86120c71fbb451e959673728cd547dcb86c95",
+   "sha256_after": "ad92e3b67f4f1c8b0cee6f6d8baca3d3fd6eb8f4b19f23a1a1b95f732e95c9ad",
+   "keys_added": [
+    "generator_verified",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "scaling",
+   "report_line": 324,
+   "path": "results/m4/profile/synthetic_2x2_n2__k32__grid__flat.json",
+   "action": "add",
+   "field": "generator_verified",
+   "value": false,
+   "evidence": "no generator certification was ever performed for the tiled synthetic arrays (holdout adjudication sec 7-1); false is the factual value and keeps the mandatory disclosure sentence required",
+   "sha256_before": "209f617da9832cef7be98a4bcd21a660468bb566d1ad5f6f781347933bdcead8",
+   "sha256_after": "124805681b93cc9294c64db48543aa61f2925023fb0f2ff0d37846d37011f3ee",
+   "keys_added": [
+    "generator_verified",
+    "schema_backfill_note"
+   ]
+  },
+  {
+   "table": "scaling",
+   "report_line": 325,
+   "path": "results/m4/profile/synthetic_2x2_n2__k32__grid__oursM2.json",
+   "action": "add",
+   "field": "generator_verified",
+   "value": false,
+   "evidence": "no generator certification was ever performed for the tiled synthetic arrays (holdout adjudication sec 7-1); false is the factual value and keeps the mandatory disclosure sentence required",
+   "sha256_before": "4a0b584afeff913eb9da3dcdcad384a33558ab8199bc95c36dc8c51f73584807",
+   "sha256_after": "39ec8abe020e38ed5bab90501d33141fe1fc8de1e7932e8325133664663856ba",
+   "keys_added": [
+    "generator_verified",
+    "schema_backfill_note"
+   ]
+  }
+ ]
+}

@@ -38,5 +38,17 @@
  "command": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/drivers/evaluate_placement.py --npz /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/mempool_cluster__k16__grid__flat.json.npz --config /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd25/mempool_cluster.json --k 32 --rtype grid --seed 2000 --out /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/mempool_cluster__k32__grid__flat.json",
  "hostname": "NVL5",
  "benchmark_kind": "real",
- "device_baseline_gb": 0.0
+ "device_baseline_gb": 0.0,
+ "workload_status": "completed",
+ "schema_backfill_note": {
+  "added_fields": [
+   "workload_status"
+  ],
+  "added_utc": "2026-08-18T19:41:02Z",
+  "added_by": "scripts/m4_backfill_result_gate_fields.py",
+  "ruling": "user ruling A, 2026-08-19: approve an audited backfill of the post-hoc RESULT GATE fields",
+  "reason": "field was defined after this run executed and the driver never emitted it",
+  "evidence": "status=ok; evaluate_only run carries its evaluated quantities (hpwl/io_count/ft_count/runtime_s)",
+  "invariant": "no measured value was read, recomputed or altered"
+ }
 }

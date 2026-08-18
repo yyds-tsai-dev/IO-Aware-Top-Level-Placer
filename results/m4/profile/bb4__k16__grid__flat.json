@@ -347,5 +347,17 @@
  "command": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/ioplace/drivers/run_placement.py --config /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/benchmarks/ispd2005_bigblue4_m4.json --mode io --k 16 --rtype grid --seed 2000 --dp-seed 2000 --deterministic 1 --rho-max 0.0 --out /nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/profile/bb4__k16__grid__flat.json",
  "hostname": "NVL5",
  "benchmark_kind": "real",
- "device_baseline_gb": 0.20050048828125
+ "device_baseline_gb": 0.20050048828125,
+ "workload_status": "completed",
+ "schema_backfill_note": {
+  "added_fields": [
+   "workload_status"
+  ],
+  "added_utc": "2026-08-18T19:41:02Z",
+  "added_by": "scripts/m4_backfill_result_gate_fields.py",
+  "ruling": "user ruling A, 2026-08-19: approve an audited backfill of the post-hoc RESULT GATE fields",
+  "reason": "field was defined after this run executed and the driver never emitted it",
+  "evidence": "status=ok; placement run carries the fields the driver writes last (legalization_status=success, num_unplaced_cells, final_overflow, gp_iterations_run, hpwl_lg, runtime_s)",
+  "invariant": "no measured value was read, recomputed or altered"
+ }
 }
