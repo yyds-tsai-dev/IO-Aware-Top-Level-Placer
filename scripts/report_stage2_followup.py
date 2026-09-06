@@ -98,6 +98,20 @@ def main():
         values = [row["sample_id"], *[" / ".join(fmt(side["boundary_demand"][key]) for key in ("max", "p90", "gini")) for side in (ev,rt)],
                   " / ".join(fmt(side["boundary_demand_per_length"]["max"]) for side in (ev,rt))]
         lines.append("| " + " | ".join(values) + " |")
+    setup_path = Path(data["s8_dir"]) / "protocol.json"
+    if setup_path.exists():
+        setup = json.loads(setup_path.read_text())
+        if setup.get("same_placements_and_cohort"):
+            lines += ["", "## 繼承routing的修正與重用範圍", "",
+                "tile首次route有4,360條零長度signal ROUTED記錄仍停在舊座標；",
+                "GRT將nonnull dbWire視為既有routing而跳過，恰好造成3.2006%缺線。",
+                "原始樣本與2% gate失敗完整保留。修正run先移除一般signal dbWire，",
+                "保留special／POWER／GROUND routing，再對相同placement執行GR＋DR。",
+                "沒有修改density、cohort、placement座標或coverage門檻。",
+                "FFT／DES四臂的NETS section各自逐byte相同，且沒有繼承signal routing；",
+                "因此保留其有效route與evidence，透過明示case symlink納入本次校準。",
+                "tile四臂使用獨立結果目錄；兩個flat K的DEF／netmap／CoordMap／config一致才重用route。",
+                f"修正protocol：`{setup_path}`；SHA256 `{hashlib.sha256(setup_path.read_bytes()).hexdigest()}`。"]
     lines += ["", "## 限制與證據", "",
         "固定detailed-route迭代上限5（iteration0–5），殘留DRC如上；不是signoff-clean。",
         "本輪為OpenROAD-only，沒有Innovus或commercial-DP ground truth。CPU/GPU共享量測不作獨占效能宣稱。",

@@ -1,0 +1,80 @@
+{
+  "registered_at": 1788734763.5935097,
+  "reason": "4360 inherited zero-length signal dbWires exactly match missing tile routed-net set; GRT skips hasWires",
+  "same_placements_and_cohort": true,
+  "original_root": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906",
+  "evidence_source": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/evidence_source",
+  "evidence_source_manifest_sha256": "b31a577918ee4ccff63c0c5893fce4b22e17c75bc5bf29f56f30c597abe871f0",
+  "routing_source": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/routing_source_v2",
+  "routing_source_manifest_sha256": "8c48cab7637f0c28a8c49b28c37b290b6f18004a496681918a3c22b9b86e0e4a",
+  "cohort_sha256": "468fb933c1852164a95da27d8900d2e60aab8e2cd1f7d0afc062612cb6680487",
+  "input_nets_sections": {
+    "mgc_fft_1__flat_k16": {
+      "sha256": "49ef37e0c8e9ee204a2f60ca4add4e2028749684bc3a0c71191ed22bcd0c78d2",
+      "routed_record_count": 0
+    },
+    "mgc_fft_1__ours_k16": {
+      "sha256": "49ef37e0c8e9ee204a2f60ca4add4e2028749684bc3a0c71191ed22bcd0c78d2",
+      "routed_record_count": 0
+    },
+    "mgc_fft_1__flat_k32": {
+      "sha256": "49ef37e0c8e9ee204a2f60ca4add4e2028749684bc3a0c71191ed22bcd0c78d2",
+      "routed_record_count": 0
+    },
+    "mgc_fft_1__ours_k32": {
+      "sha256": "49ef37e0c8e9ee204a2f60ca4add4e2028749684bc3a0c71191ed22bcd0c78d2",
+      "routed_record_count": 0
+    },
+    "des_perf_1__flat_k16": {
+      "sha256": "6aa14da60e50593058e6d0f4378942c176e7d2b1df5b2fdd6a877eec8cd0f244",
+      "routed_record_count": 0
+    },
+    "des_perf_1__ours_k16": {
+      "sha256": "6aa14da60e50593058e6d0f4378942c176e7d2b1df5b2fdd6a877eec8cd0f244",
+      "routed_record_count": 0
+    },
+    "des_perf_1__flat_k32": {
+      "sha256": "6aa14da60e50593058e6d0f4378942c176e7d2b1df5b2fdd6a877eec8cd0f244",
+      "routed_record_count": 0
+    },
+    "des_perf_1__ours_k32": {
+      "sha256": "6aa14da60e50593058e6d0f4378942c176e7d2b1df5b2fdd6a877eec8cd0f244",
+      "routed_record_count": 0
+    },
+    "mempool_tile_wrap__flat_k16": {
+      "sha256": "8d486725864b03188641b27142c2f1b92ea887fd802290e846532ec412c5343b",
+      "routed_record_count": 4360
+    },
+    "mempool_tile_wrap__ours_k16": {
+      "sha256": "8d486725864b03188641b27142c2f1b92ea887fd802290e846532ec412c5343b",
+      "routed_record_count": 4360
+    },
+    "mempool_tile_wrap__flat_k32": {
+      "sha256": "8d486725864b03188641b27142c2f1b92ea887fd802290e846532ec412c5343b",
+      "routed_record_count": 4360
+    },
+    "mempool_tile_wrap__ours_k32": {
+      "sha256": "8d486725864b03188641b27142c2f1b92ea887fd802290e846532ec412c5343b",
+      "routed_record_count": 4360
+    }
+  },
+  "preserve_special_and_power_ground": true,
+  "unrouted_signal_limit": 0.02,
+  "threads_per_route": 8,
+  "max_concurrent_routes": 2,
+  "timeout_per_route_s": 43200,
+  "drt_end_iter": 5,
+  "legacy_active_cases": {
+    "des_perf_1__flat_k16": 1334503,
+    "des_perf_1__ours_k16": 2214597
+  },
+  "new_unique_routes": [
+    "mempool_tile_wrap__flat_k16",
+    "mempool_tile_wrap__ours_k16",
+    "des_perf_1__ours_k32",
+    "mempool_tile_wrap__ours_k32"
+  ],
+  "reuse": "FFT/DES routes only when inherited regular NETS routing count is zero; all four input NETS sections per design byte-identical; flat K reuse requires complete input hashes",
+  "supersedes_protocol_sha256": "906e3d388088a7c81bdfd69d368829e071e9e7140c965dcc916af5ee9cb97ab7",
+  "publication_fix": "publish complete route receipt atomically after routedDEF; no corrected routes had started"
+}

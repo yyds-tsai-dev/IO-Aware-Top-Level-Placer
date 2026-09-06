@@ -103,3 +103,23 @@ first-run payloads and source archives remain immutable.
 Schema4 strictnative1x2 equivalence passed537.66s; 33focusedtests and latest
 fullnonslow990passed/1skip/39deselected55.75s. Neworderedcachefullverification
 and27.7Mhistoricalaggregateparity remain active; originalschema3artifacts preserved.
+
+## 22:42 UTC checkpoint
+
+All schema4 caches completed full ordered verification (3x3 1648.87s;
+1x2/2x2 receipts adjacent). GPU full-scale historical aggregate parity passed
+all three repetitions;113 nets change IO/FT under corrected ordering, net
+delta+1IO/+2FT, every changed net also passedCPU reference.
+
+Stage2 found4360 inherited zero-length signal dbWire records in tile; GRT
+skips them. This exactly equals the3.2006%missing set. Fresh-route sanitation
+removes regular signal dbWire beforeGRT, preserves supplies/special geometry,
+and is separately registered in results/stage2_routing_input_fix_20260906.
+FFT/DES inputNETS sections havezero inheritedrouting and areidentical across
+fourarms. ExistingDES children continue; old dispatcher/unique scheduler/
+wildcard evidence/finalizer are paused and superseded. The new controller
+accounts for those activechildren within the2-route limit, then schedules
+three corrected tile routes plus remainingDESoursK32. Disjoint watchers
+processDES inoldroot andtile innewroot; calibration resolves intentional
+FFT/DEScase symlinks. Do NOT resume oldcontrollers; retirethem after their
+remaining children finish. Currentcontroller state: correctedroot/execution.json.

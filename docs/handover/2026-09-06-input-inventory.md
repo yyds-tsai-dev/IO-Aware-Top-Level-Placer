@@ -24,7 +24,7 @@
   `historical_manifest_equivalence.json`。三個 cache 的 full streaming
   verification 均通過；當時真實1×2 native測試比對的是endpoint multiset，
   未涵蓋output-front net遍歷順序。後續schema4補足此缺口，另存於
-  `cache_schema4/`；舊cache與量測保持原樣，新ordered全量驗證進行中。
+  `cache_schema4/`；舊cache與量測保持原樣，新ordered全量驗證三cache全部通過；27.7M三次整數核對也通過。
 
 3×3 有27,699,021 movable、27,804,699 physical nodes、31,595,252 nets；
 raw pins108,354,439，native canonical pins106,683,202。不得混用兩種 pin count。

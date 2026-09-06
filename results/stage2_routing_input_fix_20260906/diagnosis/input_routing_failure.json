@@ -1,0 +1,22 @@
+{
+  "missing_net_count": 4360,
+  "removed_net_count": 4360,
+  "sets_identical": true,
+  "original_unrouted_fraction": 0.03200587263718113,
+  "unrouted_gate_pass": false,
+  "source_def_sha256": "fd24792cd333f91503d8f421d6388628587b32b3e89677e7fc8516401a717a08",
+  "cleaned_def_path": "/tmp/tile-clear-tcl-preflight/clean.def",
+  "cleaned_def_sha256": "226f7bfd47e48317b2f1489cfc1d36a89ec1bf3b28e8cd1d24d1e60df54ae51c",
+  "crossing_json_sha256": "36446a29a4c6ec0f7c3f953adc6f212fcca569e73c713bda0f8c2b18accbc5bf",
+  "ledger_sha256": "e6a8e5c148811baebad07d45a3b9b93b1bd895988ca69bf3dee49b6002adea5d",
+  "native_clear_exit_code": 0,
+  "transcribed_subagent_native_probe": {
+    "evidence_kind": "transcribed tool output; original inline command had no saved artifact",
+    "identity_digest_unchanged": "8f5d2eb7e2fe459accc19bd70205fce518e889d2b1f02642bfa8c44b44e2d6ed",
+    "special_wire_box_count": 86510,
+    "special_geometry_digest_unchanged": "1e951c5511b52aca6fe0241994cfff5ee76f73696ef29dd7dcb37a0cdfa0c1af",
+    "fft_regular_signal_wires": 0,
+    "des_regular_signal_wires": 0,
+    "all_missing_native_wire_lengths_zero": true
+  }
+}

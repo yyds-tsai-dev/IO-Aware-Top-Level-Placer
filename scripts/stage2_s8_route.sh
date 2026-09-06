@@ -134,7 +134,7 @@ route_one() {
     mkdir -p "$or_run"
     # Preserve artifacts from any earlier attempt before regenerating them.
     backup_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-    for prior in openroad_route.log openroad_postprocess.log route.tcl postprocess.tcl routed.def route.guide congestion.rpt drc.rpt wirelength.rpt fixed.def fixed.def.diff fix_def_vias.log execution.json; do
+    for prior in routing_input.def cleared_signal_nets.txt openroad_route.log openroad_postprocess.log route.tcl postprocess.tcl routed.def route.guide congestion.rpt drc.rpt wirelength.rpt fixed.def fixed.def.diff fix_def_vias.log execution.json; do
         if [ -e "$or_run/$prior" ]; then
             mv "$or_run/$prior" "$or_run/$prior.previous.$backup_stamp"
         fi
@@ -165,6 +165,9 @@ route_one() {
         echo "read_def $def_for_route"
         echo 'set block [[[ord::get_db] getChip] getBlock]'
         echo 'puts "COUNT_IN insts=[llength [$block getInsts]] nets=[llength [$block getNets]]"'
+        echo "source $REPO/ioplace/route_eval/or_scripts/clear_signal_routing.tcl"
+        echo "ioplace_clear_signal_routing \$block {$or_run/cleared_signal_nets.txt}"
+        echo "write_def {$or_run/routing_input.def}"
         echo "set_thread_count $THREADS"
         echo "global_route -allow_congestion -congestion_report_file $or_run/congestion.rpt -guide_file $or_run/route.guide"
         echo "detailed_route -droute_end_iter 5 -output_drc $or_run/drc.rpt -verbose 1"
@@ -219,14 +222,26 @@ data = {
     'source_repo': repo, 'source_head': None,
     'input_def_sha256': sha(os.path.join(or_run, 'fixed.def')) or sha(os.path.join(run_dir, 'out.def')),
     'artifacts': {name: sha(os.path.join(or_run, name)) for name in
-                  ('route.guide', 'routed.def', 'congestion.rpt', 'drc.rpt', 'verify_identity.json')},
+                  ('route.guide', 'routed.def', 'congestion.rpt', 'drc.rpt', 'verify_identity.json',
+                   'route.tcl', 'routing_input.def', 'cleared_signal_nets.txt')},
+}
+ledger = os.path.join(or_run, 'cleared_signal_nets.txt')
+with open(ledger) as stream:
+    removed = [line.rstrip('\n') for line in stream]
+data['input_routing_cleanup'] = {
+    'kind': 'fresh_signal_route_preserve_special_and_supply',
+    'removed_signal_wire_count': len(removed),
+    'helper_sha256': sha(os.path.join(repo, 'ioplace/route_eval/or_scripts/clear_signal_routing.tcl')),
+    'clean_input_def_sha256': sha(os.path.join(or_run, 'routing_input.def')),
+    'removed_net_names_sha256': sha(ledger),
 }
 try:
     import subprocess
     data['source_head'] = subprocess.check_output(['git', '-C', repo, 'rev-parse', 'HEAD'], text=True).strip()
 except Exception:
     pass
-with open(out, 'w') as f: json.dump(data, f, indent=2); f.write('\n')
+with open(out + '.tmp', 'w') as f: json.dump(data, f, indent=2); f.write('\n')
+os.replace(out + '.tmp', out)
 PY
     return 0
 }

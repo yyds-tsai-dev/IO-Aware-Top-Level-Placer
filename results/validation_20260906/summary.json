@@ -4,6 +4,30 @@
   "mtkahypar_threads_override": 1,
   "checks": [
     {
+      "name": "atomic reused-route publication regression",
+      "passed": 1,
+      "seconds": 0.15,
+      "exit_code": 0,
+      "log": "route-publication-regression.log"
+    },
+    {
+      "name": "full nonslow after inherited-routing cleanup",
+      "passed": 991,
+      "skipped": 1,
+      "deselected": 39,
+      "warnings": 1,
+      "seconds": 56.94,
+      "exit_code": 0,
+      "log": "final-nonslow-routing-cleanup.log"
+    },
+    {
+      "name": "native routing cleanup preserves supplies",
+      "passed": 1,
+      "seconds": 0.23,
+      "exit_code": 0,
+      "log": "native-clear-signal-routing.log"
+    },
+    {
       "name": "full nonslow after native ordered-cache correction",
       "passed": 990,
       "skipped": 1,
@@ -120,6 +144,18 @@
     {
       "path": "results/validation_20260906/native-real-1x2-schema4.log",
       "sha256": "1c765f7b962072902ab4707a584493e5d7d766267c93f03ac00488ff6eb99f31"
+    },
+    {
+      "path": "results/validation_20260906/final-nonslow-routing-cleanup.log",
+      "sha256": "5977741422d3a2a95868314fd9aa16ca1797556daf8955b289b5fede0e48f090"
+    },
+    {
+      "path": "results/validation_20260906/native-clear-signal-routing.log",
+      "sha256": "36ee6125777253800df314c891baf72e42248a17540db95c6bdb02de742e24de"
+    },
+    {
+      "path": "results/validation_20260906/route-publication-regression.log",
+      "sha256": "976ea3fe6dfa65b827ec05fc16bf49cec94d3fda3b2d6ad4719708e74a38b32d"
     }
   ]
 }

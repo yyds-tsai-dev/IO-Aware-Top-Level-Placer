@@ -1,0 +1,110 @@
+[
+  {
+    "design": "mgc_fft_1",
+    "arm": "flat_k16",
+    "k": 16,
+    "rho": 0.0,
+    "seed": 2000,
+    "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/configs/mgc_fft_1.json",
+    "config_sha256": "e38bd034bb0816b1c00131740458ae5bd1cc42b2db7f1f0ef61800c677183941"
+  },
+  {
+    "design": "mgc_fft_1",
+    "arm": "ours_k16",
+    "k": 16,
+    "rho": 0.2,
+    "seed": 2000,
+    "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/configs/mgc_fft_1.json",
+    "config_sha256": "e38bd034bb0816b1c00131740458ae5bd1cc42b2db7f1f0ef61800c677183941"
+  },
+  {
+    "design": "mgc_fft_1",
+    "arm": "flat_k32",
+    "k": 32,
+    "rho": 0.0,
+    "seed": 2000,
+    "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/configs/mgc_fft_1.json",
+    "config_sha256": "e38bd034bb0816b1c00131740458ae5bd1cc42b2db7f1f0ef61800c677183941"
+  },
+  {
+    "design": "mgc_fft_1",
+    "arm": "ours_k32",
+    "k": 32,
+    "rho": 0.2,
+    "seed": 2000,
+    "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/configs/mgc_fft_1.json",
+    "config_sha256": "e38bd034bb0816b1c00131740458ae5bd1cc42b2db7f1f0ef61800c677183941"
+  },
+  {
+    "design": "des_perf_1",
+    "arm": "flat_k16",
+    "k": 16,
+    "rho": 0.0,
+    "seed": 2000,
+    "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/configs/des_perf_1.json",
+    "config_sha256": "4f7a657aa73249b7f6725e23bbd9918756195cdb91c958af16dadd1c6d610054"
+  },
+  {
+    "design": "des_perf_1",
+    "arm": "ours_k16",
+    "k": 16,
+    "rho": 0.2,
+    "seed": 2000,
+    "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/configs/des_perf_1.json",
+    "config_sha256": "4f7a657aa73249b7f6725e23bbd9918756195cdb91c958af16dadd1c6d610054"
+  },
+  {
+    "design": "des_perf_1",
+    "arm": "flat_k32",
+    "k": 32,
+    "rho": 0.0,
+    "seed": 2000,
+    "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/configs/des_perf_1.json",
+    "config_sha256": "4f7a657aa73249b7f6725e23bbd9918756195cdb91c958af16dadd1c6d610054"
+  },
+  {
+    "design": "des_perf_1",
+    "arm": "ours_k32",
+    "k": 32,
+    "rho": 0.2,
+    "seed": 2000,
+    "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/configs/des_perf_1.json",
+    "config_sha256": "4f7a657aa73249b7f6725e23bbd9918756195cdb91c958af16dadd1c6d610054"
+  },
+  {
+    "design": "mempool_tile_wrap",
+    "arm": "flat_k16",
+    "k": 16,
+    "rho": 0.0,
+    "seed": 2000,
+    "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/configs/mempool_tile_wrap.json",
+    "config_sha256": "29cdff29f180aa7b7e3d248aa0caeb03f3fa3bbbb6145683d4899f27682dafbb"
+  },
+  {
+    "design": "mempool_tile_wrap",
+    "arm": "ours_k16",
+    "k": 16,
+    "rho": 0.2,
+    "seed": 2000,
+    "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/configs/mempool_tile_wrap.json",
+    "config_sha256": "29cdff29f180aa7b7e3d248aa0caeb03f3fa3bbbb6145683d4899f27682dafbb"
+  },
+  {
+    "design": "mempool_tile_wrap",
+    "arm": "flat_k32",
+    "k": 32,
+    "rho": 0.0,
+    "seed": 2000,
+    "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/configs/mempool_tile_wrap.json",
+    "config_sha256": "29cdff29f180aa7b7e3d248aa0caeb03f3fa3bbbb6145683d4899f27682dafbb"
+  },
+  {
+    "design": "mempool_tile_wrap",
+    "arm": "ours_k32",
+    "k": 32,
+    "rho": 0.2,
+    "seed": 2000,
+    "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/configs/mempool_tile_wrap.json",
+    "config_sha256": "29cdff29f180aa7b7e3d248aa0caeb03f3fa3bbbb6145683d4899f27682dafbb"
+  }
+]
