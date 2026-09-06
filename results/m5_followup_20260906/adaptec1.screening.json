@@ -1,0 +1,29 @@
+{
+  "accepted_modes": [],
+  "results": {
+    "none": {
+      "io_count": 30104,
+      "ft_count": 2591,
+      "hpwl": 73855917.0,
+      "legalization_status": "success"
+    },
+    "ce": {
+      "io_count": 30104,
+      "ft_count": 2591,
+      "hpwl": 73855917.0,
+      "legalization_status": "success"
+    },
+    "refine": {
+      "io_count": 30104,
+      "ft_count": 2591,
+      "hpwl": 73855917.0,
+      "legalization_status": "success"
+    },
+    "ce_refine": {
+      "io_count": 30104,
+      "ft_count": 2591,
+      "hpwl": 73855917.0,
+      "legalization_status": "success"
+    }
+  }
+}

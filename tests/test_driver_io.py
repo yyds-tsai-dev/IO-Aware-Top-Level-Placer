@@ -16,11 +16,52 @@ def test_result_fields_contract_is_declared():
               "trajectory", "peak_mem_mb_reset_semantics", "diag_every", "no_diag"):
         assert f in RESULT_FIELDS
 
+
+@pytest.mark.slow
+def test_atomic_ft_callback_uses_applied_versions_and_real_topology(tmp_path, monkeypatch):
+    from ioplace.drivers import run_placement
+    from ioplace.evaluator_gpu import GpuEvalContext
+    def forbidden_reference(*args, **kwargs):
+        raise AssertionError("IO driver must reuse its GPU evaluator result")
+    monkeypatch.setattr(run_placement, "evaluate", forbidden_reference)
+    original = GpuEvalContext.evaluate
+    evaluated = []
+    def record_result(self, *args, **kwargs):
+        value = original(self, *args, **kwargs)
+        evaluated.append(value)
+        return value
+    monkeypatch.setattr(GpuEvalContext, "evaluate", record_result)
+    cfg = json.load(open(SIMPLE))
+    cfg.update(num_threads=4, plot_flag=0, num_bins_x=16, num_bins_y=16,
+               global_place_stages=[dict(num_bins_x=16, num_bins_y=16, iteration=40,
+                   learning_rate=.01, wirelength="weighted_average", optimizer="nesterov")])
+    path = tmp_path / "atomic.json"
+    path.write_text(json.dumps(cfg))
+    result = run_io(str(path), 4, "grid", 0, str(tmp_path / "result.json"),
+                    rho_max=.4, every=5, of_on=2., of_full=1.,
+                    callback_order="atomic", f_ft_max=.25,
+                    ft_ramp_mode="constant", topology_diagnostics=True, no_diag=True,
+                    check_invariant=True)
+    events = result["trajectory"]
+    assert events and any(event["grad_l1_ft"] > 0 for event in events)
+    assert all(event["obj_version"] == event["refreshed_version"] for event in events)
+    assert any("topology_transitions" in event for event in events)
+    for event in events:
+        if "topology_transitions" in event:
+            assert np.sum(event["topology_transitions"]) == event["topology_population"]
+    assert result["f_ft_max"] == .25
+    assert result["evaluation_backend"] == "gpu"
+    assert result["cpu_reference_full_evaluation"] is False
+    for field, value in run_placement._pack_eval_metrics(evaluated[-1]).items():
+        assert result[field] == value
+
 @pytest.mark.slow
 def test_run_io_on_simple_writes_full_schema(tmp_path):
     out = str(tmp_path / "io.json")
+    evidence = str(tmp_path / "evaluator.npz")
     res = run_io(SIMPLE, k=4, rtype="grid", seed=0, out_json=out,
-                 rho_max=0.05, every=10, check_invariant=True)
+                 rho_max=0.05, every=10, check_invariant=True, emit_eval=evidence,
+                 benchmark_kind="synthetic")
     assert os.path.exists(out) and os.path.exists(out + ".npz")
     on_disk = json.load(open(out))
     for f in RESULT_FIELDS:
@@ -31,6 +72,16 @@ def test_run_io_on_simple_writes_full_schema(tmp_path):
     assert res["num_callbacks"] > 0
     assert res["num_refreshes"] >= 1          # activation at least
     assert len(res["trajectory"]) == res["num_callbacks"]
+    from ioplace.export.evaluation import load_evaluation, array_digest
+    data = load_evaluation(evidence)
+    with np.load(out + ".npz") as positions:
+        n = data["metadata"]["num_physical"]
+        assert data["metadata"]["placement_sha256"] == array_digest(
+            np.asarray(positions["node_x"][:n], dtype=np.float64),
+            np.asarray(positions["node_y"][:n], dtype=np.float64))
+    assert data["metadata"]["totals"]["io_count"] == res["io_count"]
+    assert res["workload_status"] == "completed"
+    assert res["generator_verified"] is False
 
 @pytest.mark.slow
 def test_dp_seed_changes_the_placement(tmp_path):

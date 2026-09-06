@@ -1,0 +1,75 @@
+{
+  "command": [
+    "/ldaphome/yyds-tsai-dev/DREAMPlace/.venv312/bin/python",
+    "-m",
+    "ioplace.drivers.run_placement",
+    "--config",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/m5_followup_20260906/configs/mempool_tile_wrap.json",
+    "--mode",
+    "io",
+    "--k",
+    "16",
+    "--rtype",
+    "grid",
+    "--seed",
+    "0",
+    "--dp-seed",
+    "1000",
+    "--deterministic",
+    "1",
+    "--rho-max",
+    "0",
+    "--every",
+    "50",
+    "--no-diag",
+    "--discrete-mode",
+    "none",
+    "--discrete-max-active",
+    "65536",
+    "--out",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/m5_followup_20260906/runs/mempool_tile_wrap__none__seed1000.json"
+  ],
+  "started": 1788719802.7305949,
+  "manifest_sha256": "10954c21b8b140c124799bd411ac08492efa29147daab06edc92279575c02eb6",
+  "gpu": "0",
+  "device_before": {
+    "time": 1788719802.5111227,
+    "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d",
+    "name": "NVIDIA H100 NVL",
+    "total_gib": 93.583984375,
+    "used_gib": 3.5029296875,
+    "free_gib": 89.5830078125,
+    "utilization_pct": 0.0,
+    "compute_apps": [
+      [
+        1303704,
+        2798.0
+      ],
+      [
+        798320,
+        690.0
+      ]
+    ]
+  },
+  "measurement_mode": "shared",
+  "pid": 809659,
+  "returncode": 0,
+  "ended": 1788719885.4746451,
+  "log_sha256": "cd9e488a51e2cad98627ad7ae14985a5fc6beadb50e11956ea7c4867ba9e63db",
+  "output_sha256": "305b0079e9a2255c523b242da93c671651c7c73ac953bdd69a3ea4eafea9dc02",
+  "device_after": {
+    "time": 1788719885.6955507,
+    "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d",
+    "name": "NVIDIA H100 NVL",
+    "total_gib": 93.583984375,
+    "used_gib": 2.8232421875,
+    "free_gib": 90.2626953125,
+    "utilization_pct": 0.0,
+    "compute_apps": [
+      [
+        1303704,
+        2798.0
+      ]
+    ]
+  }
+}

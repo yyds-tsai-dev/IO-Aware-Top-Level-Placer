@@ -1,0 +1,29 @@
+{
+  "accepted_modes": [],
+  "results": {
+    "none": {
+      "io_count": 18796,
+      "ft_count": 714,
+      "hpwl": 20709318.311150193,
+      "legalization_status": "success"
+    },
+    "ce": {
+      "io_count": 18796,
+      "ft_count": 714,
+      "hpwl": 20709318.311150193,
+      "legalization_status": "success"
+    },
+    "refine": {
+      "io_count": 18796,
+      "ft_count": 714,
+      "hpwl": 20709318.311150193,
+      "legalization_status": "success"
+    },
+    "ce_refine": {
+      "io_count": 18796,
+      "ft_count": 714,
+      "hpwl": 20709318.311150193,
+      "legalization_status": "success"
+    }
+  }
+}

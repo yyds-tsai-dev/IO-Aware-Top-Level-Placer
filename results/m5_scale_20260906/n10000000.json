@@ -1,0 +1,105 @@
+{
+  "status": "completed",
+  "pid": 768593,
+  "started": 1788719368.275892,
+  "N": 10000000,
+  "E": 12000000,
+  "P": 48000000,
+  "K": 16,
+  "max_active": 65536,
+  "benchmark_kind": "synthetic",
+  "generator_verified": false,
+  "quality_claims_prohibited": true,
+  "device_before": {
+    "time": 1788719368.4116921,
+    "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d",
+    "name": "NVIDIA H100 NVL",
+    "total_gib": 93.583984375,
+    "used_gib": 3.8740234375,
+    "free_gib": 89.2119140625,
+    "utilization_pct": 26.0,
+    "compute_apps": [
+      [
+        1303704,
+        2798.0
+      ],
+      [
+        762687,
+        1070.0
+      ]
+    ]
+  },
+  "source_snapshot": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/m5_followup_20260906/source",
+  "script_sha256": "fdc6e5ac58217a0f1a4c756b95eb0c447bf496b546f975b92bcc478abdd33f75",
+  "host_peak_rss_gib": 2.6605262756347656,
+  "generate_s": 3.0375144488643855,
+  "baseline": {
+    "io_count": 68187,
+    "ft_count": 22741,
+    "hpwl": 2273304331.331015
+  },
+  "preparation": {
+    "active_cells": 65536,
+    "candidate_slots": 5,
+    "supported_incident_nets": 112624,
+    "supported_incident_pins": 450496,
+    "excluded_active_pins": 0,
+    "temperature": 750.0,
+    "characteristic_region_length": 25000.0,
+    "max_active_distance": 55.327220992727234,
+    "discarded_probability_mass_mean": 0.014944519872773052,
+    "discarded_probability_mass_max": 0.24996744367830137,
+    "preparation_s": 3.063129873946309,
+    "region_projection_epsilon": 0.1953125,
+    "balance_scope": "anchor-load deviation from incumbent; physical feasibility deferred to legalizer"
+  },
+  "ce": {
+    "decode_s": 1.1347972671501338,
+    "objective_initial": 1.6826539583356965,
+    "objective_final": 0.5200403667622161,
+    "weighted_identity_max_error": 6.362085973522976e-19,
+    "provenance": {
+      "source_sha256": "a631070eb306b2836a4aea8bf90fbeb6f40b80862815ccc2ee04f9aadeaf3b1a",
+      "library_sha256": "8134a678ee63a4b2db2444849fc5bc6d98921d6efe7ed0728b77cfcc8eda5c00",
+      "compiler": "g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0"
+    }
+  },
+  "refine": {
+    "refine_s": 2.5219911958556622,
+    "moves_accepted": 7865,
+    "swaps_attempted": 65536,
+    "swaps_accepted": 1
+  },
+  "ended": 1788719383.5985987,
+  "process_peak_allocated_gib": 4.931922435760498,
+  "process_peak_reserved_gib": 5.708984375,
+  "final_unlegalized": {
+    "io_count": 56269,
+    "ft_count": 22667,
+    "hpwl": 2272836393.156406
+  },
+  "device_after": {
+    "time": 1788719383.7338626,
+    "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d",
+    "name": "NVIDIA H100 NVL",
+    "total_gib": 93.583984375,
+    "used_gib": 10.1865234375,
+    "free_gib": 82.900390625,
+    "utilization_pct": 30.0,
+    "compute_apps": [
+      [
+        1303704,
+        2798.0
+      ],
+      [
+        762687,
+        1070.0
+      ],
+      [
+        768593,
+        6458.0
+      ]
+    ]
+  },
+  "physical_legality": "not_evaluated_synthetic_component_scale_only"
+}

@@ -1,0 +1,4776 @@
+{
+  "scope": "adaptec1 K16; frozen final geometry recomputation",
+  "source_sha256": "efd0e2982074332d8c0c60032bb8c23b16041ff9925f52233dc828c6de78c167",
+  "runs": {
+    "A0_seed1000": {
+      "metrics_sha256": "ed264c70a0345a6b0e79f29c5885a85034cac788f25feb416e35fd98eccee57e",
+      "coordinates_sha256": "a95111cc84210d9d797c2e9755da4afcbe404c80124e87892e1414058a3e4e74",
+      "placement_sha256": "9317e429901d8a1d04f92e37b7394dd3444333d0e534d3653cf186e20872ac56",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 24858.0,
+        "max": 3070.0,
+        "mean": 1035.75,
+        "p90": 2277.4,
+        "gini": 0.4655409392013302
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 9.305380059437487,
+        "max": 1.149812734082397,
+        "mean": 0.38772416914322866,
+        "p90": 0.8522876286796387,
+        "gini": 0.4655885879076055
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 309,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 201,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 585,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1730,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 226,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 296,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 545,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2269,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1601,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1454,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2281,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 964,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1976,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 506,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3070,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 685,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2522,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1056,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1630,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 79,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 302,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 147,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 234,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 190,
+          "length": 2670.0
+        }
+      ]
+    },
+    "A1_seed1000": {
+      "metrics_sha256": "7fa933db3db97f64def73ad87026f10775ea5faffc60b634ce600f3ee0df7c8b",
+      "coordinates_sha256": "6a587a6839b0cb662e662be0fa609c4fa84ed9e58463159c2067a631bc0ddd8e",
+      "placement_sha256": "67d7a42d902b57dd8bfea43a24891a0a1a8f4a2bc2a5038aac7ded49f9cc66df",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 22644.0,
+        "max": 2539.0,
+        "mean": 943.5,
+        "p90": 2182.4,
+        "gini": 0.45753474062297594
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 8.476532701126958,
+        "max": 0.950936329588015,
+        "mean": 0.3531888625469566,
+        "p90": 0.8171129522440383,
+        "gini": 0.45758667549498233
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 266,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 159,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 493,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1727,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 222,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 190,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 371,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2216,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1622,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1335,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2104,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 951,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1720,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 468,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 2539,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 597,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2374,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 902,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1197,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 204,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 323,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 220,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 262,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 182,
+          "length": 2670.0
+        }
+      ]
+    },
+    "A2_seed1000": {
+      "metrics_sha256": "7a325be81e08995ebdf59b8b3c72978b189891d59320d5b8a7ac9e96b6bce2b0",
+      "coordinates_sha256": "a6f98eceefa3f512d090dcee492f0a392e4c45d8afdc742d2e13eb761d7c4218",
+      "placement_sha256": "93f8a1be44e6a3cb539697a948afe193c770d15d279a40adcff59a0feb87d499",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 23537.0,
+        "max": 2897.0,
+        "mean": 980.7083333333334,
+        "p90": 2180.7,
+        "gini": 0.47375940009346984
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 8.810895051219646,
+        "max": 1.0850187265917604,
+        "mean": 0.3671206271341519,
+        "p90": 0.8164763742291832,
+        "gini": 0.473814444830614
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 265,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 156,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 649,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1733,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 235,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 217,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 399,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2214,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1604,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1364,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2103,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 850,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1853,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 489,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 2897,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 640,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2585,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 956,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1369,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 131,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 331,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 167,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 160,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 170,
+          "length": 2670.0
+        }
+      ]
+    },
+    "A3_seed1000": {
+      "metrics_sha256": "fe452d263c5ba12af83596ae3ec08aeec97ce0ef2840b6752b7c46b44d97f579",
+      "coordinates_sha256": "201cad7005fb397b6c53b3644a4e3a80878ccdb94614721b820b58f7be483047",
+      "placement_sha256": "1abe5ce84e7fb6d4ba89f92aa4fcac9afcb2da3b9886ea49759184439e61f4ae",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 24712.0,
+        "max": 3016.0,
+        "mean": 1029.6666666666667,
+        "p90": 2298.8,
+        "gini": 0.46624446962339483
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 9.250729517396184,
+        "max": 1.1295880149812734,
+        "mean": 0.385447063224841,
+        "p90": 0.8602943710933723,
+        "gini": 0.46628969623649363
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 321,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 205,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 544,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1777,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 229,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 286,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 529,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2275,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1563,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1498,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2309,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 986,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1975,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 480,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3016,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 658,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2508,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1020,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1569,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 79,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 303,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 153,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 240,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 189,
+          "length": 2670.0
+        }
+      ]
+    },
+    "A4_seed1000": {
+      "metrics_sha256": "b54c418f9228efe28e142528d4782419e69aa80dbc99c539733cda98e90fc107",
+      "coordinates_sha256": "a141a2be84101a8667d81976167ceee069107ba1d2f3d52bcd195473d8ced57a",
+      "placement_sha256": "d039d7e315e566a15bb151905d9771f73afa51a2566ce8652ee46e08ee5190b7",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 24760.0,
+        "max": 3042.0,
+        "mean": 1031.6666666666667,
+        "p90": 2287.2,
+        "gini": 0.46532714054927304
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 9.268702421636254,
+        "max": 1.1393258426966293,
+        "mean": 0.38619593423484394,
+        "p90": 0.8559521557648898,
+        "gini": 0.4653743498005553
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 311,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 200,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 598,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1732,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 234,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 292,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 539,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2255,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1575,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1468,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2301,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 941,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1946,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 509,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3042,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 681,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2517,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1034,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1638,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 83,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 303,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 136,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 236,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 189,
+          "length": 2670.0
+        }
+      ]
+    },
+    "A5_seed1000": {
+      "metrics_sha256": "8506b8d0041d5b23af4f262868aeca986c3d4145cea4bf6442b7d30d51552341",
+      "coordinates_sha256": "6d8435cb2b0bfb20e4a754c206abfc120e0df0a6c493810052743990c7406343",
+      "placement_sha256": "539d975913787c8821abca39014c7ae8e0e79074317be5f1c0e0394daba5e5e1",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 29927.0,
+        "max": 3160.0,
+        "mean": 1246.9583333333333,
+        "p90": 2388.2999999999997,
+        "gini": 0.38328683128947105
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 11.202332101707881,
+        "max": 1.1835205992509363,
+        "mean": 0.46676383757116174,
+        "p90": 0.893773187555959,
+        "gini": 0.38332294809723416
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 652,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 766,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 815,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 2204,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 600,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 1299,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 1196,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2242,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1915,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1563,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2451,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 903,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1962,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 864,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3160,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 656,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2631,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1059,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1817,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 256,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 317,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 178,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 232,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 189,
+          "length": 2670.0
+        }
+      ]
+    },
+    "A0_seed1001": {
+      "metrics_sha256": "6d1067fba9703d338fe8b52d0c9862f233821f644baf8439d9d132e809643cb4",
+      "coordinates_sha256": "19841a558521176915cbd1708d4284fe3608f74784ec59c3dbf716e4d086d8bc",
+      "placement_sha256": "a88a99affb6390da3722126475fe4371b3ba8904692f1a7f68175d4777b8384a",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 24702.0,
+        "max": 3156.0,
+        "mean": 1029.25,
+        "p90": 2223.4,
+        "gini": 0.4705489434053923
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 9.246983358344158,
+        "max": 1.1820224719101124,
+        "mean": 0.3852909732643399,
+        "p90": 0.8324582907728975,
+        "gini": 0.47060232150102294
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 308,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 193,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 587,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1667,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 230,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 286,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 550,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2239,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1582,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1521,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2187,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 884,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 2054,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 500,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3156,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 698,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2513,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1089,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1571,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 76,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 304,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 76,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 243,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 188,
+          "length": 2670.0
+        }
+      ]
+    },
+    "A0_seed1002": {
+      "metrics_sha256": "ae7cfadbb205f64b0d38667d98ad693c90046d6552d920a1cda39700e224e56b",
+      "coordinates_sha256": "f0f89ce46135d8772d70c64994f27ea11887db486a413c9bf77d637db4034cb9",
+      "placement_sha256": "590029effa4ecc66902afb4fa5f10f9f21644b21425c414cd83d741300a0fb7b",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 24604.0,
+        "max": 3032.0,
+        "mean": 1025.1666666666667,
+        "p90": 2282.0,
+        "gini": 0.46663821600823713
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 9.21027545534412,
+        "max": 1.1355805243445694,
+        "mean": 0.383761477306005,
+        "p90": 0.854004884466807,
+        "gini": 0.46667725535096144
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 308,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 201,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 593,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1730,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 232,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 277,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 507,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2240,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1601,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1461,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2300,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 949,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1983,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 512,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3032,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 649,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2522,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1044,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1499,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 81,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 310,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 157,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 234,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 182,
+          "length": 2670.0
+        }
+      ]
+    },
+    "A0_seed1003": {
+      "metrics_sha256": "3d3070d0bdf138bf349a994d7629cafc8ec4a8710dad25efbac136203dbd0d4f",
+      "coordinates_sha256": "831697fa92af84860de222db52e549c4628a6bf55dccc8b147baf6b2459a85e8",
+      "placement_sha256": "a15a6eeaa43a0113c30e6bde3a3860518dc16a1ea55c8c4ec717c65861339543",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 24780.0,
+        "max": 3133.0,
+        "mean": 1032.5,
+        "p90": 2292.4,
+        "gini": 0.47138149044928707
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 9.276151864042001,
+        "max": 1.1734082397003744,
+        "mean": 0.3865063276684167,
+        "p90": 0.8578976615930424,
+        "gini": 0.4714238949615939
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 303,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 201,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 600,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1715,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 231,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 272,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 548,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2256,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1609,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1465,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2308,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 887,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 2012,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 502,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3133,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 717,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2520,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1022,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1577,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 80,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 307,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 101,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 229,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 185,
+          "length": 2670.0
+        }
+      ]
+    },
+    "A2_seed1001": {
+      "metrics_sha256": "884ac164b14810f031a962ff5ad754ff9971b292b68d71fa9629658b4e8d62fa",
+      "coordinates_sha256": "8fda5882e605c71ecd9e1d3a9fadad861c5e8c665b63a4184517d27e6b7e3943",
+      "placement_sha256": "09a173cd3bad5f3be8d89a42821807061a50ee8f64a3e02664c774a12f99cc16",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 23531.0,
+        "max": 2938.0,
+        "mean": 980.4583333333334,
+        "p90": 2203.9,
+        "gini": 0.4775951581601575
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 8.808721841805488,
+        "max": 1.100374531835206,
+        "mean": 0.3670300767418953,
+        "p90": 0.8251684132208477,
+        "gini": 0.47764890728538173
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 266,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 149,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 720,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1735,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 243,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 239,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 304,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2257,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1543,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1320,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2080,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 889,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1819,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 478,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 2938,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 637,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2643,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 985,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1358,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 146,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 321,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 148,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 138,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 175,
+          "length": 2670.0
+        }
+      ]
+    },
+    "A2_seed1002": {
+      "metrics_sha256": "37a3fdcc5870a1c363c7adb9810c8396c17b55244864be488a89650f637c01aa",
+      "coordinates_sha256": "b0a3f8dc216f0096a1eabf9957080d99979f5dafcc1e096aeaa9c897b7c43eb1",
+      "placement_sha256": "639718acfca91f087701edbbd3133c94e63f4408887ac87de8ce696e1913f5ba",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 23577.0,
+        "max": 2904.0,
+        "mean": 982.375,
+        "p90": 2233.5,
+        "gini": 0.4783104296560207
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 8.825876324627885,
+        "max": 1.0876404494382022,
+        "mean": 0.3677448468594952,
+        "p90": 0.8362427016734132,
+        "gini": 0.47836433136419515
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 268,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 155,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 676,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1736,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 226,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 217,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 309,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2259,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1642,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1366,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2174,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 813,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1758,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 490,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 2904,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 642,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2595,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1018,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1400,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 144,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 327,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 147,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 142,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 169,
+          "length": 2670.0
+        }
+      ]
+    },
+    "A2_seed1003": {
+      "metrics_sha256": "fe1f63286c0850c405ef484008e5b054927000b9bdc216fa78004f2afaafd4a3",
+      "coordinates_sha256": "5c14518e888eb8e010064e8b9a32f3e27e400d3dfe2d011b607b3a233919a2e6",
+      "placement_sha256": "e72b95f1811b52d12ec86377cdfa69325c31bf69b89cff6d3606538b602a68c1",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 23675.0,
+        "max": 2897.0,
+        "mean": 986.4583333333334,
+        "p90": 2234.0,
+        "gini": 0.4760665258711721
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 8.862557745578968,
+        "max": 1.0850187265917604,
+        "mean": 0.36927323939912365,
+        "p90": 0.8364347595808269,
+        "gini": 0.47612049200208245
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 278,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 161,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 685,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1749,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 241,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 232,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 305,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2276,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1675,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1385,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2136,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 821,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1749,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 497,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 2897,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 642,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2605,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1057,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1367,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 150,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 313,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 121,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 148,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 185,
+          "length": 2670.0
+        }
+      ]
+    },
+    "P0_seed1000": {
+      "metrics_sha256": "d0ee56bfd954f4a338ea4a596d4ca2961415783a53a445a27a72309612d4c7ed",
+      "coordinates_sha256": "a95111cc84210d9d797c2e9755da4afcbe404c80124e87892e1414058a3e4e74",
+      "placement_sha256": "9317e429901d8a1d04f92e37b7394dd3444333d0e534d3653cf186e20872ac56",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 24858.0,
+        "max": 3070.0,
+        "mean": 1035.75,
+        "p90": 2277.4,
+        "gini": 0.4655409392013302
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 9.305380059437487,
+        "max": 1.149812734082397,
+        "mean": 0.38772416914322866,
+        "p90": 0.8522876286796387,
+        "gini": 0.4655885879076055
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 309,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 201,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 585,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1730,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 226,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 296,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 545,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2269,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1601,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1454,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2281,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 964,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1976,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 506,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3070,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 685,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2522,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1056,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1630,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 79,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 302,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 147,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 234,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 190,
+          "length": 2670.0
+        }
+      ]
+    },
+    "P1_seed1000": {
+      "metrics_sha256": "ab083da40dc0027fc07b0bfda09f0bf5fc40f4f7c425ab66b6f9cb1671f311ec",
+      "coordinates_sha256": "700bd6434e089cbf041b14b86d0fef6a49e1c3e885fd0d5a0c460243abd20446",
+      "placement_sha256": "bfd761d30679e4b2feb595604e0a3df40f64e53271a0d26bece52ce5636257ff",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 25840.0,
+        "max": 3131.0,
+        "mean": 1076.6666666666667,
+        "p90": 2357.0,
+        "gini": 0.4610197368421053
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 9.672914748819867,
+        "max": 1.1726591760299625,
+        "mean": 0.4030381145341611,
+        "p90": 0.8820691727932677,
+        "gini": 0.4610707348108102
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 309,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 202,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 744,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1962,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 220,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 387,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 680,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2287,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1619,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1413,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2387,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 977,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1951,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 525,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3131,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 688,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2611,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1071,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1729,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 93,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 301,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 139,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 223,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 191,
+          "length": 2670.0
+        }
+      ]
+    },
+    "P2_seed1000": {
+      "metrics_sha256": "b9361c36a6530e785ff1ba27f1a9fb248301d87432e76f569f0b103343eebe15",
+      "coordinates_sha256": "a21a2cf6e4d5d42da2c4cb2dda59b55a9c76e48a21dfc4a71691ddcd88988dc3",
+      "placement_sha256": "b82bc34debab8d19d24df307a099eb5019b4dc22ed451ab0587ebeaaaf96b3d4",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 26591.0,
+        "max": 3111.0,
+        "mean": 1107.9583333333333,
+        "p90": 2390.7999999999997,
+        "gini": 0.45222224311483833
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 9.953898535921008,
+        "max": 1.1651685393258426,
+        "mean": 0.414745772330042,
+        "p90": 0.8947136365738113,
+        "gini": 0.45226903467082336
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 377,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 223,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 722,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1981,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 215,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 694,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 658,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2283,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1765,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1438,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2437,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 920,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 2053,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 523,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3111,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 687,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2688,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1131,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1729,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 101,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 302,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 148,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 215,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 190,
+          "length": 2670.0
+        }
+      ]
+    },
+    "P3_seed1000": {
+      "metrics_sha256": "3bd9e382a55837e7c4f0d3de44a5a9a2144ce9bf9309401f2ab489b52b162faa",
+      "coordinates_sha256": "0e0e62b114b28dcc0e1ffecf6e273cc855a99016c2faa2decc6b9c1f9a6fcf19",
+      "placement_sha256": "fd6feae3dc53b9f9837108669887d5c944134c6048e80cd3f79b2c1b3066c0a5",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 27210.0,
+        "max": 3243.0,
+        "mean": 1133.75,
+        "p90": 2361.2999999999997,
+        "gini": 0.44675058189391154
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 10.18559292466908,
+        "max": 1.2146067415730337,
+        "mean": 0.424399705194545,
+        "p90": 0.8836687726200834,
+        "gini": 0.4467979910490131
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 414,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 319,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 777,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 2000,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 204,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 869,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 690,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 2215,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1863,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1507,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2424,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 917,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 2032,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 548,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3243,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 629,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2725,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1112,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1778,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 101,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 303,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 139,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 212,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 189,
+          "length": 2670.0
+        }
+      ]
+    },
+    "flat_seed1000": {
+      "metrics_sha256": "c48f422c584530bb8d8aace6b9d62f6d65c9461268a6e770bff62dbfdbe0de45",
+      "coordinates_sha256": "c982223b044f00c738f9dc9d52e0f9e9b2dd2442213de65e0f9be1312c6a1cc4",
+      "placement_sha256": "c5b918ecb95682bd01e84bf4b29657f317f1e087fed5649f156ab0609ed656d6",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 30077.0,
+        "max": 3572.0,
+        "mean": 1253.2083333333333,
+        "p90": 2339.8999999999996,
+        "gini": 0.3885873480289479
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 11.258558535836938,
+        "max": 1.3378277153558051,
+        "mean": 0.46910660565987244,
+        "p90": 0.875383464272353,
+        "gini": 0.3886158156905925
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 757,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 934,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 1019,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1898,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 491,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 1226,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 1362,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 1897,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1975,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1510,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2492,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 928,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1985,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 751,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3572,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 752,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2700,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1044,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1805,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 135,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 280,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 124,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 229,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 211,
+          "length": 2670.0
+        }
+      ]
+    },
+    "flat_seed1001": {
+      "metrics_sha256": "8a0d5794052654a59960f5d4d9d2dd2af5aea2a0e7a06c24b18a14ef4856c375",
+      "coordinates_sha256": "d70651f3ad481b4350f61d30e6e551230b63cb6f8b3ccbe3481a0f039a474e9d",
+      "placement_sha256": "a5c70f39eb7ef6649ed1165a80bf50305d440d31893232a1434617ba2c7aca37",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 29909.0,
+        "max": 3588.0,
+        "mean": 1246.2083333333333,
+        "p90": 2292.3999999999996,
+        "gini": 0.38607804785627514
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 11.195754465167699,
+        "max": 1.3438202247191011,
+        "mean": 0.46648976938198744,
+        "p90": 0.8576131687242797,
+        "gini": 0.38611972613024775
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 817,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 892,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 1028,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1920,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 524,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 1233,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 1309,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 1910,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1882,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1491,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2452,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 867,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1906,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 748,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3588,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 711,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2738,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1013,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1821,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 192,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 297,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 111,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 262,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 197,
+          "length": 2670.0
+        }
+      ]
+    },
+    "flat_seed1002": {
+      "metrics_sha256": "5342046ce5fe6c8f720c1c99a73bb47867c3e690fa2d5e17aed0b1c7e6e40317",
+      "coordinates_sha256": "f93ea609d8d4b1d8d2149a8c92cfcff7ed7c3182dc73c353f95749ddd3ca5ba0",
+      "placement_sha256": "a35282ecf235d59bd90f49dbc44804386897836409975703062d3f3a2f930d85",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 29994.0,
+        "max": 3557.0,
+        "mean": 1249.75,
+        "p90": 2276.8999999999996,
+        "gini": 0.3856771354270854
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 11.227549317561802,
+        "max": 1.3322097378277153,
+        "mean": 0.46781455489840845,
+        "p90": 0.8520612281785813,
+        "gini": 0.385721126962559
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 741,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 941,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 1039,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1929,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 543,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 1168,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 1376,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 1957,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1871,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1503,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2414,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 900,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1932,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 746,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3557,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 737,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2724,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1056,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1847,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 194,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 287,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 81,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 245,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 206,
+          "length": 2670.0
+        }
+      ]
+    },
+    "flat_seed1003": {
+      "metrics_sha256": "f0ceb30a29b08d6bc8043a86aaafc311c9be430dbc9614e50d511c5eead0052a",
+      "coordinates_sha256": "ededf97dc8405d9474dbe407f284f7764dd76615221074fe7fb7b387ff0a755d",
+      "placement_sha256": "3cf6335f8bb161af69fd89e92fc2fdb61f4bf752803f4f37edb9b9112e4fa913",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 30075.0,
+        "max": 3557.0,
+        "mean": 1253.125,
+        "p90": 2249.9999999999995,
+        "gini": 0.38552923247436965
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 11.257843100165198,
+        "max": 1.3322097378277153,
+        "mean": 0.4690767958402166,
+        "p90": 0.8417508417508416,
+        "gini": 0.3855660424841678
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 763,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 984,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 1026,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1963,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 522,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 1228,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 1358,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 1923,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1869,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1511,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2373,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 870,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1962,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 773,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3557,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 726,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2757,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1027,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1868,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 192,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 299,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 97,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 235,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 192,
+          "length": 2670.0
+        }
+      ]
+    },
+    "flat_seed1004": {
+      "metrics_sha256": "8cc376c6a7cd7da5d2b9e6c8da931cf4ce26517573b66a32a5b35efbff2867d6",
+      "coordinates_sha256": "b20a4ee727514ab45806d44c956100f32ab06209dba6732ac418cf74898e36a2",
+      "placement_sha256": "66d5b2c07254e5afc4f9bbf28be031e6f9b65aeb3a6ae145b373217879cf69a8",
+      "scalars_verified": true,
+      "boundary_demand": {
+        "n": 24,
+        "total": 29933.0,
+        "max": 3555.0,
+        "mean": 1247.2083333333333,
+        "p90": 2265.6,
+        "gini": 0.38680414035791044
+      },
+      "boundary_demand_per_length": {
+        "n": 24,
+        "total": 11.204732300113074,
+        "max": 1.3314606741573034,
+        "mean": 0.46686384583804474,
+        "p90": 0.8475869809203141,
+        "gini": 0.3868456586294429
+      },
+      "boundary_length_units": "evaluator_coordinates",
+      "pairs": [
+        {
+          "pair": [
+            0,
+            1
+          ],
+          "demand": 789,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            0,
+            4
+          ],
+          "demand": 884,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            1,
+            2
+          ],
+          "demand": 1048,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            1,
+            5
+          ],
+          "demand": 1987,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            2,
+            3
+          ],
+          "demand": 511,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            2,
+            6
+          ],
+          "demand": 1209,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            3,
+            7
+          ],
+          "demand": 1318,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            4,
+            5
+          ],
+          "demand": 1943,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            4,
+            8
+          ],
+          "demand": 1887,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            5,
+            6
+          ],
+          "demand": 1507,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            5,
+            9
+          ],
+          "demand": 2385,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            6,
+            7
+          ],
+          "demand": 867,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            6,
+            10
+          ],
+          "demand": 1934,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            7,
+            11
+          ],
+          "demand": 733,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            8,
+            9
+          ],
+          "demand": 3555,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            8,
+            12
+          ],
+          "demand": 714,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            9,
+            10
+          ],
+          "demand": 2721,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            9,
+            13
+          ],
+          "demand": 1031,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            10,
+            11
+          ],
+          "demand": 1860,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            10,
+            14
+          ],
+          "demand": 198,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            11,
+            15
+          ],
+          "demand": 301,
+          "length": 2673.0
+        },
+        {
+          "pair": [
+            12,
+            13
+          ],
+          "demand": 113,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            13,
+            14
+          ],
+          "demand": 247,
+          "length": 2670.0
+        },
+        {
+          "pair": [
+            14,
+            15
+          ],
+          "demand": 191,
+          "length": 2670.0
+        }
+      ]
+    }
+  },
+  "flat_seed_noise": {
+    "boundary_demand": {
+      "total": {
+        "values": [
+          30077.0,
+          29909.0,
+          29994.0,
+          30075.0,
+          29933.0
+        ],
+        "mean": 29997.6,
+        "std_seed": 77.99230731296517
+      },
+      "max": {
+        "values": [
+          3572.0,
+          3588.0,
+          3557.0,
+          3557.0,
+          3555.0
+        ],
+        "mean": 3565.8,
+        "std_seed": 14.166862743741115
+      },
+      "mean": {
+        "values": [
+          1253.2083333333333,
+          1246.2083333333333,
+          1249.75,
+          1253.125,
+          1247.2083333333333
+        ],
+        "mean": 1249.8999999999999,
+        "std_seed": 3.249679471373567
+      },
+      "p90": {
+        "values": [
+          2339.8999999999996,
+          2292.3999999999996,
+          2276.8999999999996,
+          2249.9999999999995,
+          2265.6
+        ],
+        "mean": 2284.96,
+        "std_seed": 34.40832748042251
+      },
+      "gini": {
+        "values": [
+          0.3885873480289479,
+          0.38607804785627514,
+          0.3856771354270854,
+          0.38552923247436965,
+          0.38680414035791044
+        ],
+        "mean": 0.38653518082891763,
+        "std_seed": 0.0012490870669629314
+      }
+    },
+    "boundary_demand_per_length": {
+      "total": {
+        "values": [
+          11.258558535836938,
+          11.195754465167699,
+          11.227549317561802,
+          11.257843100165198,
+          11.204732300113074
+        ],
+        "mean": 11.228887543768941,
+        "std_seed": 0.029162731180257476
+      },
+      "max": {
+        "values": [
+          1.3378277153558051,
+          1.3438202247191011,
+          1.3322097378277153,
+          1.3322097378277153,
+          1.3314606741573034
+        ],
+        "mean": 1.335505617977528,
+        "std_seed": 0.005305941102524745
+      },
+      "mean": {
+        "values": [
+          0.46910660565987244,
+          0.46648976938198744,
+          0.46781455489840845,
+          0.4690767958402166,
+          0.46686384583804474
+        ],
+        "mean": 0.467870314323706,
+        "std_seed": 0.0012151137991774092
+      },
+      "p90": {
+        "values": [
+          0.875383464272353,
+          0.8576131687242797,
+          0.8520612281785813,
+          0.8417508417508416,
+          0.8475869809203141
+        ],
+        "mean": 0.854879136769274,
+        "std_seed": 0.012858563809058653
+      },
+      "gini": {
+        "values": [
+          0.3886158156905925,
+          0.38611972613024775,
+          0.385721126962559,
+          0.3855660424841678,
+          0.3868456586294429
+        ],
+        "mean": 0.386573673979402,
+        "std_seed": 0.001244241205947374
+      }
+    }
+  },
+  "paired_A2_minus_A0": {
+    "boundary_demand": {
+      "total": {
+        "differences": [
+          -1171.0,
+          -1027.0,
+          -1105.0
+        ],
+        "mean": -1101.0,
+        "one_sided_95_upper": -979.4780721541647
+      },
+      "max": {
+        "differences": [
+          -218.0,
+          -128.0,
+          -236.0
+        ],
+        "mean": -194.0,
+        "one_sided_95_upper": -96.45325007437395
+      },
+      "mean": {
+        "differences": [
+          -48.79166666666663,
+          -42.79166666666674,
+          -46.04166666666663
+        ],
+        "mean": -45.875,
+        "one_sided_95_upper": -40.81158633975696
+      },
+      "p90": {
+        "differences": [
+          -19.5,
+          -48.5,
+          -58.40000000000009
+        ],
+        "mean": -42.13333333333336,
+        "one_sided_95_upper": -8.051404181114798
+      },
+      "gini": {
+        "differences": [
+          0.007046214754765245,
+          0.011672213647783591,
+          0.004685035421885031
+        ],
+        "mean": 0.007801154608144623,
+        "one_sided_95_upper": 0.013793084437183039
+      }
+    },
+    "boundary_demand_per_length": {
+      "total": {
+        "differences": [
+          -0.4382615165386703,
+          -0.3843991307162362,
+          -0.41359411846303296
+        ],
+        "mean": -0.41208492190597984,
+        "one_sided_95_upper": -0.36662941445518227
+      },
+      "max": {
+        "differences": [
+          -0.08164794007490639,
+          -0.0479400749063672,
+          -0.08838951310861409
+        ],
+        "mean": -0.07265917602996257,
+        "one_sided_95_upper": -0.03612481276193807
+      },
+      "mean": {
+        "differences": [
+          -0.018260896522444614,
+          -0.016016630446509805,
+          -0.01723308826929304
+        ],
+        "mean": -0.01717020507941582,
+        "one_sided_95_upper": -0.015276225602299204
+      },
+      "p90": {
+        "differences": [
+          -0.007289877552049795,
+          -0.01776218279339381,
+          -0.021462902012215457
+        ],
+        "mean": -0.01550498745255302,
+        "one_sided_95_upper": -0.0031119671346991878
+      },
+      "gini": {
+        "differences": [
+          0.007046585784358794,
+          0.01168707601323371,
+          0.004696597040488526
+        ],
+        "mean": 0.007810086279360344,
+        "one_sided_95_upper": 0.013807061553617304
+      }
+    }
+  },
+  "interpretation": "descriptive diagnostics; no new quality acceptance thresholds chosen from these results"
+}

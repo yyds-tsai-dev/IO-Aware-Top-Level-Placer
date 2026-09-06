@@ -1,0 +1,200 @@
+{
+  "scope": "adaptec1 K16, current DREAMPlace build, shared H100 NVL",
+  "source_manifest_sha256": "0c9dc7013407e90b9e855a7dc7f89e5c667fb13c0030f6ef4fa6ba299ebb574c",
+  "historical_M3_verdict": "FAIL (unchanged)",
+  "levers": {
+    "A0": {
+      "io_count": 24885,
+      "ft_count": 3577,
+      "hpwl": 74924025.0,
+      "runtime_s": 107.98628091812134,
+      "legalization_status": "success"
+    },
+    "A1": {
+      "io_count": 22671,
+      "ft_count": 3043,
+      "hpwl": 75853268.0,
+      "runtime_s": 118.59814119338989,
+      "legalization_status": "success"
+    },
+    "A2": {
+      "io_count": 23564,
+      "ft_count": 2985,
+      "hpwl": 75018274.0,
+      "runtime_s": 117.39159274101257,
+      "legalization_status": "success"
+    },
+    "A3": {
+      "io_count": 24739,
+      "ft_count": 3611,
+      "hpwl": 74942672.0,
+      "runtime_s": 118.92628860473633,
+      "legalization_status": "success"
+    },
+    "A4": {
+      "io_count": 24787,
+      "ft_count": 3578,
+      "hpwl": 74978812.0,
+      "runtime_s": 138.01039862632751,
+      "legalization_status": "success"
+    },
+    "A5": {
+      "io_count": 29954,
+      "ft_count": 1890,
+      "hpwl": 74718953.0,
+      "runtime_s": 144.4384274482727,
+      "legalization_status": "success"
+    }
+  },
+  "flat_seed_noise": {
+    "io_count": {
+      "values": [
+        30104,
+        29936,
+        30021,
+        30102,
+        29960
+      ],
+      "mean": 30024.6,
+      "std_seed": 77.99230731296517
+    },
+    "ft_count": {
+      "values": [
+        2591,
+        2539,
+        2540,
+        2525,
+        2530
+      ],
+      "mean": 2545.0,
+      "std_seed": 26.466960535732092
+    },
+    "hpwl": {
+      "values": [
+        73855917.0,
+        73925018.0,
+        73924731.0,
+        73989541.0,
+        73959157.0
+      ],
+      "mean": 73930872.8,
+      "std_seed": 49830.527803746976
+    }
+  },
+  "paired_A2_minus_A0": {
+    "io_count": {
+      "differences": [
+        -1171.0,
+        -1027.0,
+        -1105.0
+      ],
+      "mean": -1101.0,
+      "one_sided_95_upper": -979.4780721541647,
+      "n": 3,
+      "seeds": [
+        1001,
+        1002,
+        1003
+      ]
+    },
+    "ft_count": {
+      "differences": [
+        -604.0,
+        -599.0,
+        -600.0
+      ],
+      "mean": -601.0,
+      "one_sided_95_upper": -596.5396483499499,
+      "n": 3,
+      "seeds": [
+        1001,
+        1002,
+        1003
+      ]
+    },
+    "hpwl": {
+      "differences": [
+        200600.0,
+        83717.0,
+        157368.0
+      ],
+      "mean": 147228.33333333334,
+      "one_sided_95_upper": 246858.17504385274,
+      "n": 3,
+      "seeds": [
+        1001,
+        1002,
+        1003
+      ]
+    }
+  },
+  "pilot": {
+    "P0": {
+      "metrics": {
+        "io_count": 24885,
+        "ft_count": 3577,
+        "hpwl": 74924025.0
+      },
+      "PG1": null,
+      "PG2": true,
+      "PG4_observed_checks": true,
+      "PG4_hpwl_scope": "final relative HPWL (G8 delta metric); no per-iteration HPWL trace claimed",
+      "min_active_cancellation": null,
+      "net_chain_to_star": -57,
+      "net_chain_to_star_minus_P0": 0,
+      "eligible_for_confirmation": false
+    },
+    "P1": {
+      "metrics": {
+        "io_count": 25867,
+        "ft_count": 3223,
+        "hpwl": 74637807.0
+      },
+      "PG1": true,
+      "PG2": false,
+      "PG4_observed_checks": true,
+      "PG4_hpwl_scope": "final relative HPWL (G8 delta metric); no per-iteration HPWL trace claimed",
+      "min_active_cancellation": 0.9807507088345191,
+      "net_chain_to_star": -44,
+      "net_chain_to_star_minus_P0": 13,
+      "eligible_for_confirmation": false
+    },
+    "P2": {
+      "metrics": {
+        "io_count": 26618,
+        "ft_count": 2947,
+        "hpwl": 74394124.0
+      },
+      "PG1": true,
+      "PG2": false,
+      "PG4_observed_checks": true,
+      "PG4_hpwl_scope": "final relative HPWL (G8 delta metric); no per-iteration HPWL trace claimed",
+      "min_active_cancellation": 0.9824616889254315,
+      "net_chain_to_star": -5,
+      "net_chain_to_star_minus_P0": 52,
+      "eligible_for_confirmation": false
+    },
+    "P3": {
+      "metrics": {
+        "io_count": 27237,
+        "ft_count": 2814,
+        "hpwl": 74255113.0
+      },
+      "PG1": true,
+      "PG2": false,
+      "PG4_observed_checks": true,
+      "PG4_hpwl_scope": "final relative HPWL (G8 delta metric); no per-iteration HPWL trace claimed",
+      "min_active_cancellation": 0.9839883170201171,
+      "net_chain_to_star": 15,
+      "net_chain_to_star_minus_P0": 72,
+      "eligible_for_confirmation": false
+    }
+  },
+  "pilot_confirmation_required": false,
+  "caveats": [
+    "WL reweight improvement is relative to IO-only; FT remains above the flat baseline.",
+    "Three confirmation seeds and one design do not establish cross-design generalization.",
+    "P0c FT reductions violate the registered IO guard; no joint-quality pass.",
+    "Shared-device runtimes are not exclusive GPU performance measurements."
+  ]
+}

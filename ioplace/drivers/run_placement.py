@@ -111,15 +111,22 @@ def extract_final_positions(placer, placedb):
     node_y = np.array(placedb.node_y[:n_phys], dtype=np.float64)
     return node_x, node_y
 
-def _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed):
+def _pack_eval_metrics(res):
+    return {"io_count": res.io_count, "ft_count": res.ft_count,
+               "tree_wl": res.tree_wl, "hpwl": res.hpwl,
+               "large_net_lb": res.large_net_lb,
+               "hard_lambda_sum": res.hard_lambda_sum,
+               "io_rg": res.io_rg, "ft_rg": res.ft_rg}
+
+
+def _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed, *, include_result=False):
     nl = netlist_from_placedb(placedb)
     nl.node_x, nl.node_y = node_x, node_y
     die = (float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh))
     rg = RegionGrid(get_regions_for(die, k, rtype, seed))
     res = evaluate(nl, node_x, node_y, rg)
-    return rg, {"io_count": res.io_count, "ft_count": res.ft_count,
-                "tree_wl": res.tree_wl, "hpwl": res.hpwl,
-                "large_net_lb": res.large_net_lb}
+    metrics = _pack_eval_metrics(res)
+    return (rg, metrics, res) if include_result else (rg, metrics)
 
 
 def _repo_root():
@@ -203,9 +210,28 @@ def _effective_scale_fields(params, placedb):
     rewrite `params.target_density` (clamps it up to cell_utilization if the
     configured value is smaller), so reading it any earlier would risk the
     pre-clamp value."""
-    return {"effective_target_density": float(params.target_density),
+    result = {"effective_target_density": float(params.target_density),
             "num_filler_nodes": int(placedb.num_filler_nodes),
             "num_bins_x": int(placedb.num_bins_x), "num_bins_y": int(placedb.num_bins_y)}
+    for key in ("num_physical_nodes","num_movable_nodes","num_nodes","num_nets",
+                "num_terminals","num_terminal_NIs"):
+        if hasattr(placedb,key):
+            result[key]=int(getattr(placedb,key))
+    if hasattr(placedb,"pin2node_map"):
+        result["n_pins_canonical"]=len(placedb.pin2node_map)
+    if getattr(params,"aux_input",None):
+        from ioplace.bench.tile_bookshelf import _nets_header
+        from ioplace.dreamplace_env import setup_dreamplace
+        aux=params.aux_input
+        if not os.path.isabs(aux):
+            aux=os.path.join(setup_dreamplace(),"install",aux)
+        with open(aux) as stream:
+            nets=[token for line in stream for token in line.split("#",1)[0].split()
+                  if token.endswith(".nets")]
+        if len(nets)==1:
+            _,result["n_pins_raw"]=_nets_header(os.path.join(os.path.dirname(aux),nets[0]))
+            result["raw_pin_count_source"]="Bookshelf NumPins header"
+    return result
 
 
 def _phase_summary(timer, sampler):
@@ -283,7 +309,7 @@ def _legalization_diagnostics(placer, placedb, params, node_x, node_y):
 
 
 def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, deterministic=None,
-            benchmark_kind="real"):
+            benchmark_kind="real", emit_eval=None):
     import torch
     # Overflow-diagnosis follow-up: device_baseline_gb -- whole-device usage
     # already present before this run touches CUDA at all (run start, prior
@@ -379,7 +405,14 @@ def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, determinist
     with timer.phase("eval"):
         node_x, node_y = extract_final_positions(placer, placedb)
         legal_fields = _legalization_diagnostics(placer, placedb, params, node_x, node_y)
-        _, metrics = _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed)
+        rg, metrics, eval_result = _evaluate_and_pack(
+            placedb, node_x, node_y, k, rtype, seed, include_result=True)
+        if emit_eval is not None:
+            from ioplace.export.evaluation import save_evaluation
+            save_evaluation(emit_eval, netlist_from_placedb(placedb), rg, eval_result,
+                            node_x, node_y, placedb.net_names,
+                            provenance={"config": os.path.abspath(config_json),
+                                        "placement_stage": "gp_lg"})
 
     sampler.stop()
 
@@ -392,6 +425,9 @@ def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, determinist
               # (sec 1.4 B1 gate M4-G7 -- those must be flagged as stale,
               # not silently compared against this field).
               "peak_mem_mb_reset_semantics": True,
+              "workload_status": "completed",
+              "generator_verified": False if benchmark_kind == "synthetic" else None,
+              "evaluator_file": os.path.abspath(emit_eval) if emit_eval else None,
               "final_overflow": final_overflow,
               "stop_overflow_reached": stop_overflow_reached,
               "gp_iteration_budget": gp_iteration_budget,
@@ -403,9 +439,9 @@ def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, determinist
               **_t8a_provenance(config_json, benchmark_kind=benchmark_kind,
                                 device_baseline_gb=device_baseline_gb)}
     os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)
+    np.savez_compressed(out_json + ".npz", node_x=node_x, node_y=node_y)
     with open(out_json, "w") as f:
         json.dump(result, f, indent=1)
-    np.savez_compressed(out_json + ".npz", node_x=node_x, node_y=node_y)
     return result
 
 def main():
@@ -441,6 +477,17 @@ def main():
     # (w = 1 + alpha*min(signal, cap)) with the signal switched to ft_rg.
     ap.add_argument("--ft-reweight", default="off", choices=["off", "on"])
     ap.add_argument("--alpha-ft", type=float, default=0.5)
+    ap.add_argument("--callback-order", choices=["legacy", "atomic"], default="legacy")
+    ap.add_argument("--f-ft-max", type=float, default=0.)
+    ap.add_argument("--ft-ramp-mode", choices=["window", "constant"], default="window")
+    ap.add_argument("--tau-start", type=float, default=.12)
+    ap.add_argument("--tau-full", type=float, default=.05)
+    ap.add_argument("--home-period", type=int, default=None)
+    ap.add_argument("--topology-diagnostics", action="store_true")
+    ap.add_argument("--wl-reweight", choices=["off", "crossings", "ft_rg"], default="off")
+    ap.add_argument("--alpha-wl", type=float, default=.2)
+    ap.add_argument("--wl-cap", type=float, default=10.)
+    ap.add_argument("--cap", type=float, default=64.)
     # Stage 2 S1 (spec sec 5.1/10): opt-in sidecar DEF export
     # (out.def/regions.json/netmap.json/coord.json) of the final GP+LG
     # placement, mode="io" only. Default None/off leaves existing behavior
@@ -449,15 +496,19 @@ def main():
                     help="if set, write out.def/regions.json/netmap.json/"
                          "coord.json (Stage 2 S1) into this directory after "
                          "GP+LG (mode=io only)")
+    ap.add_argument("--emit-eval", default=None,
+                    help="write aligned per-net evaluator evidence to this NPZ (flat/io)")
     # Overflow-diagnosis follow-up (RESULT GATE): records whether a run is
     # a real benchmark (ISPD/mempool-style) or a synthetic/tiler-generated
     # one -- only meaningful for "flat"/"io" (T8a's field-addition scope).
     ap.add_argument("--benchmark-kind", default="real", choices=["real", "synthetic"])
+    ap.add_argument("--discrete-mode",choices=["none","ce","refine","ce_refine"],default="none")
+    ap.add_argument("--discrete-max-active",type=int,default=65536)
     args = ap.parse_args()
     if args.mode == "flat":
         run_flat(args.config, args.k, args.rtype, args.seed, args.out,
                  dp_seed=args.dp_seed, deterministic=args.deterministic,
-                 benchmark_kind=args.benchmark_kind)
+                 benchmark_kind=args.benchmark_kind, emit_eval=args.emit_eval)
     elif args.mode == "two_stage":
         from ioplace.drivers.run_placement_two_stage import run_two_stage  # Task 9
         run_two_stage(args.config, args.k, args.rtype, args.seed, args.out)
@@ -474,7 +525,14 @@ def main():
               dp_seed=args.dp_seed, deterministic=args.deterministic,
               diag_every=args.diag_every, no_diag=args.no_diag,
               ft_reweight=args.ft_reweight, alpha_ft=args.alpha_ft,
+              callback_order=args.callback_order, f_ft_max=args.f_ft_max,
+              ft_ramp_mode=args.ft_ramp_mode, tau_start=args.tau_start, tau_full=args.tau_full,
+              home_period=args.home_period, topology_diagnostics=args.topology_diagnostics,
+              wl_reweight=args.wl_reweight, alpha_wl=args.alpha_wl, wl_cap=args.wl_cap,
+              cap=args.cap,
+              discrete_mode=args.discrete_mode,discrete_max_active=args.discrete_max_active,
               emit_def=args.emit_def,
+              emit_eval=args.emit_eval,
               benchmark_kind=args.benchmark_kind)
 
 if __name__ == "__main__":
