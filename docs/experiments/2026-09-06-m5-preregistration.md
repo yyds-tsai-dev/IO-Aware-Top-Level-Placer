@@ -57,3 +57,13 @@ Required tests include exhaustive categorical expectations and conditioning,
 zero/one factors, multiple pins per cell, unequal areas, inactive loads, ties,
 incremental versus full metrics for moves/swaps/rollback, and final rejection
 when legalization or an excluded high-degree net violates the acceptance guard.
+
+Execution detail before the first real M5 comparison: use K16/grid and the
+rho0 flat-observer GP driver for all four arms. In addition to the original
+GP+LG incumbent, evaluate an extra-LG-only control. A proposal must beat the
+normalized IO+FT score of both legal baselines, preventing an extra legalizer
+call from being credited to CE/refinement. This tightens acceptance; the
+original incumbent is retained on rejection. Record whether the repeated
+legalizer is position-idempotent. Initial GP configs keep the existing design
+defaults, with DP disabled and8 CPU threads; freeze exact config/source hashes
+before measurements.
