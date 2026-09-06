@@ -180,7 +180,14 @@ def _stream_pl_body(path, fout, prefix, dx, dy):
             if not s:
                 continue
             parts = s.split()
-            name, x, y = parts[0], int(parts[1]), int(parts[2])
+            name = parts[0]
+            try:
+                x, y = int(parts[1]), int(parts[2])
+            except ValueError:
+                # Preserve fractional raw coordinates; native PlaceDB rounds
+                # after translation. Integer inputs retain byte-identical output.
+                from decimal import Decimal
+                x, y = Decimal(parts[1]), Decimal(parts[2])
             fout.write(f"{prefix}{name} {x + dx} {y + dy} {' '.join(parts[3:])}\n")
             n += 1
     return n

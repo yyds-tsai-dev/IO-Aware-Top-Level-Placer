@@ -12,6 +12,7 @@ instructions: write real code, don't run it against the multi-GB corpus
 right now, host RAM is shared with a concurrent GPU run).
 """
 import json
+import os
 
 import numpy as np
 import pytest
@@ -39,6 +40,72 @@ def _build_cache(tmp_path, R, C, seed=0, with_glue=True, glue_seed=1):
     cache_dir = str(tmp_path / "cache")
     meta = bn.build_tiled_netlist_cache(dst + ".manifest.json", cache_dir)
     return src, dst, cache_dir, meta
+
+
+def _named_net_tuples(prefix, native, cached, name_map):
+    """Stream named nets, retaining pin multiplicity and offset identity."""
+    def tuples(nl, net_id):
+        lo, hi = nl.flat_net2pin_start[net_id:net_id + 2]
+        pins = nl.flat_net2pin[lo:hi]
+        return sorted(zip(nl.pin2node[pins].tolist(), nl.pin_offset_x[pins].tolist(),
+                          nl.pin_offset_y[pins].tolist()))
+    checked = 0
+    with open(prefix + ".nets") as f:
+        for line in f:
+            if not line.strip().startswith("NetDegree"):
+                continue
+            name = line.split()[-1]
+            assert tuples(native, name_map[name]) == tuples(cached, checked), name
+            checked += 1
+    assert checked == cached.num_nets == native.num_nets
+
+
+def _assert_native_equivalent(prefix, cache_dir):
+    from ioplace.dreamplace_env import setup_dreamplace
+    from ioplace.netlist import netlist_from_placedb
+    setup_dreamplace()
+    import Params
+    import PlaceDB
+
+    # Letter-prefixed aliases also support generated filenames such as 1x2:
+    # the native Bookshelf lexer cannot parse digit-leading file tokens.
+    alias = os.path.join(cache_dir, "native_input")
+    os.makedirs(alias, exist_ok=True)
+    paths = tb.read_aux(prefix + ".aux")
+    for kind, path in paths.items():
+        os.symlink(os.path.abspath(path), os.path.join(alias, "native." + kind))
+    aux = os.path.join(alias, "native.aux")
+    with open(aux, "w") as f:
+        f.write("RowBasedPlacement : " + " ".join("native." + k for k in paths) + "\n")
+    params = Params.Params()
+    params.aux_input = aux
+    params.gpu = 0
+    params.dtype = "float64"
+    params.sort_nets_by_degree = 0
+    params.num_threads = 1
+    db = PlaceDB.PlaceDB()
+    db.read(params)
+    native = netlist_from_placedb(db)
+    cached, meta = bn.load_tiled_netlist(cache_dir)
+    for key in ("num_movable", "num_terminals", "num_terminal_NIs", "num_physical", "num_nets"):
+        assert getattr(cached, key) == getattr(native, key), key
+    assert cached.pin2node.size == native.pin2node.size
+    np.testing.assert_array_equal([cached.xl, cached.yl, cached.xh, cached.yh],
+                                  [native.xl, native.yl, native.xh, native.yh])
+    for key in ("node_x", "node_y", "node_size_x", "node_size_y"):
+        np.testing.assert_array_equal(getattr(cached, key), getattr(native, key))
+    inv_perm = np.load(os.path.join(cache_dir, "inv_perm.npy"), mmap_mode="r")
+    node_i = 0
+    with open(paths["nodes"]) as f:
+        for line in f:
+            fields = line.split()
+            if not fields or fields[0] in ("UCLA", "NumNodes", "NumTerminals") or fields[0].startswith("#"):
+                continue
+            assert db.node_name2id_map[fields[0]] == inv_perm[node_i], fields[0]
+            node_i += 1
+    assert node_i == cached.num_physical
+    _named_net_tuples(prefix, native, cached, db.net_name2id_map)
+    return cached, native, db
 
 
 # ---------------------------------------------------------------------------
@@ -76,12 +143,14 @@ def test_base_counts_are_exactly_rxc_times_source(tmp_path):
     src, dst, cache_dir, meta = _build_cache(tmp_path, R=2, C=2, with_glue=False)
     assert meta["n_nodes"] == 7 * 4
     assert meta["num_movable"] == 5 * 4
-    assert meta["num_terminals"] == 2 * 4
+    assert meta["num_terminals"] == 1 * 4
     assert meta["num_terminal_NIs"] == 1 * 4
     assert meta["n_nets"] == 3 * 4
     assert meta["n_pins"] == 7 * 4
     assert meta["n_glue_nets"] == 0 and meta["n_glue_pins"] == 0
-    assert meta["node_order"] == "movable_first_permuted"
+    assert meta["node_order"] == "movable_fixed_terminal_ni"
+    assert meta["schema_version"] == 3
+    assert meta["pin_offset_origin"] == "lower_left"
 
 
 def test_translation_matches_i_w_j_h(tmp_path):
@@ -138,7 +207,7 @@ def test_glue_pin2node_resolves_to_correct_stored_indices(tmp_path):
     assert len(glue_nets) == meta["n_glue_nets"]
     base_pins = meta["n_pins_base"]
     for k, net in enumerate(glue_nets):
-        (i0, j0, n0), (i1, j1, n1) = net["pins"]
+        (i0, j0, n0, *_), (i1, j1, n1, *_) = net["pins"]
         expected0 = inv_perm[(i0 * 2 + j0) * n_src + src_tile.name2local[n0]]
         expected1 = inv_perm[(i1 * 2 + j1) * n_src + src_tile.name2local[n1]]
         got0 = int(nl.pin2node[base_pins + 2 * k])
@@ -282,6 +351,65 @@ def test_verify_against_bookshelf_catches_a_corrupted_net_pin(tmp_path):
     assert result["n_mismatched_pins"] >= 1
 
 
+def test_verify_against_bookshelf_catches_offset_only_corruption(tmp_path):
+    src, dst, cache_dir, meta = _build_cache(tmp_path, R=1, C=1, with_glue=False)
+    with open(dst + ".nets") as f:
+        text = f.read()
+    corrupted = text.replace("    t0_0/o0 O : -1 -1\n", "    t0_0/o0 O : 99 -1\n", 1)
+    assert corrupted != text
+    with open(dst + ".nets", "w") as f:
+        f.write(corrupted)
+    result = bn.verify_against_bookshelf(cache_dir, dst, mode="full")
+    assert not result["ok"]
+    assert result["n_mismatched_pins"] >= 1
+
+
+def test_load_rejects_legacy_cache_schema(tmp_path):
+    _, _, cache_dir, _ = _build_cache(tmp_path, R=1, C=1, with_glue=False)
+    meta_path = tmp_path / "cache" / "meta.json"
+    with open(meta_path) as f:
+        meta = json.load(f)
+    meta.pop("schema_version")
+    with open(meta_path, "w") as f:
+        json.dump(meta, f)
+    with pytest.raises(ValueError, match="rebuild cache"):
+        bn.load_tiled_netlist(cache_dir, mmap=False)
+
+
+@pytest.mark.parametrize("with_glue", [False, True])
+def test_cache_matches_native_placedb_toy(tmp_path, with_glue):
+    """Compare the cache against the CPU DREAMPlace reader on a tiny 1x2.
+
+    This exercises native lower-left offset conversion, including glue pins,
+    without requiring the real multi-million-node payload.
+    """
+    src, dst, cache_dir, meta = _build_cache(tmp_path, R=1, C=2, with_glue=with_glue)
+    cached, native, db = _assert_native_equivalent(dst, cache_dir)
+    assert (cached.num_movable, cached.num_terminals, cached.num_terminal_NIs,
+            cached.num_physical, cached.num_nets, cached.pin2node.size) == (10, 2, 2, 14, native.num_nets, native.pin2node.size)
+    np.testing.assert_array_equal(np.load(cache_dir + "/inv_perm.npy"),
+        [0, 1, 2, 3, 4, 12, 10, 5, 6, 7, 8, 9, 13, 11])
+
+
+def test_native_offsets_round_half_away_from_zero(tmp_path):
+    from pathlib import Path
+    src = write_toy_bookshelf(str(tmp_path / "src" / "toy"))
+    nodes = Path(src + ".nodes")
+    nodes.write_text(nodes.read_text().replace("p0 0 0", "p0 3 5").replace("f0 4 4", "f0 3 5"))
+    nets = Path(src + ".nets")
+    nets.write_text(nets.read_text().replace("f0 I : 0 0", "f0 I : -2 -3")
+                    .replace("p0 I : 0 0", "p0 I : 1 1"))
+    dst = str(tmp_path / "out" / "arr")
+    tb.tile(src, dst, R=1, C=2, seed=0)
+    cache_dir = str(tmp_path / "cache")
+    bn.build_tiled_netlist_cache(dst + ".manifest.json", cache_dir)
+    cached, _, db = _assert_native_equivalent(dst, cache_dir)
+    for name, expected in (("t0_0/f0", (-1., -1.)), ("t0_0/p0", (3., 4.))):
+        pins = np.flatnonzero(cached.pin2node == db.node_name2id_map[name])
+        assert len(pins) > 0
+        assert expected in list(zip(cached.pin_offset_x[pins], cached.pin_offset_y[pins]))
+
+
 # ---------------------------------------------------------------------------
 # source/manifest sha256 mismatch guard
 # ---------------------------------------------------------------------------
@@ -299,57 +427,20 @@ def test_build_rejects_source_that_no_longer_matches_manifest_sha256(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# equivalence proof (design draft R4 / T9's own instruction): replication
-# vs `PlaceDB.read` on the real 1x2 array. This needs a real DREAMPlace
-# PlaceDB.read of a 6.16M-node design and touches CUDA config fields --
-# written per spec ("寫好不跑") but never run by the default suite; GPU is
-# busy with a concurrent T8 run on this box regardless.
+# Real 1x2 equivalence uses the same raw CPU oracle as the tiny regressions.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.gpu
 @pytest.mark.slow
 def test_replication_equals_placedb_read_on_real_1x2_array_movable_first():
-    """1x2 array built two independent ways must agree after both are
-    reduced to the same movable-first-permuted representation:
-      (a) this module's `build_tiled_netlist_cache` off
-          `results/m4/bench/arrays/1x2_n2/1x2_n2.manifest.json`;
-      (b) `ioplace.netlist.load_netlist` -> `PlaceDB.read` off
-          `benchmarks/ispd25/synthetic_1x2_n2.json` (already movable-first
-          by DREAMPlace's own PlaceDB convention).
-    Compared as per-net node-ID sets (order-independent) rather than raw
-    pin-index arrays, since PlaceDB's own internal pin ordering is not
-    contractually required to match this module's net-major convention --
-    only net/node connectivity and node positions/sizes need to agree.
+    """Compare every named node/net and pin offset, in raw Bookshelf units.
+
+    IOPLACE_1X2_MANIFEST selects a freshly regenerated corpus without changing
+    historical manifests or their original source hashes.
     """
     import tempfile
-
-    from ioplace.netlist import load_netlist
-
-    manifest_path = "results/m4/bench/arrays/1x2_n2/1x2_n2.manifest.json"
-    config_json = "benchmarks/ispd25/synthetic_1x2_n2.json"
-
+    manifest_path = os.environ.get("IOPLACE_1X2_MANIFEST",
+        "results/m4/bench/arrays/1x2_n2/1x2_n2.manifest.json")
+    prefix = os.path.abspath(manifest_path[:-len(".manifest.json")])
     with tempfile.TemporaryDirectory() as cache_dir:
-        meta = bn.build_tiled_netlist_cache(manifest_path, cache_dir)
-        nl_rep, _ = bn.load_tiled_netlist(cache_dir, mmap=True)
-
-    nl_pdb, _placedb, _params = load_netlist(config_json)
-
-    assert nl_rep.num_movable == nl_pdb.num_movable
-    assert nl_rep.num_physical == nl_pdb.num_physical
-    assert nl_rep.num_nets == nl_pdb.num_nets
-
-    def net_node_id_sets(nl):
-        sets = []
-        for net_i in range(nl.num_nets):
-            lo, hi = nl.flat_net2pin_start[net_i], nl.flat_net2pin_start[net_i + 1]
-            pins = nl.flat_net2pin[lo:hi]
-            sets.append(frozenset(int(nl.pin2node[p]) for p in pins))
-        return sets
-
-    assert sorted(net_node_id_sets(nl_rep), key=lambda s: (len(s), sorted(s))) == \
-        sorted(net_node_id_sets(nl_pdb), key=lambda s: (len(s), sorted(s)))
-
-    order_rep = np.argsort(np.lexsort((nl_rep.node_y, nl_rep.node_x)))
-    order_pdb = np.argsort(np.lexsort((nl_pdb.node_y, nl_pdb.node_x)))
-    np.testing.assert_array_equal(np.sort(nl_rep.node_x), np.sort(nl_pdb.node_x))
-    np.testing.assert_array_equal(np.sort(nl_rep.node_y), np.sort(nl_pdb.node_y))
+        bn.build_tiled_netlist_cache(manifest_path, cache_dir)
+        _assert_native_equivalent(prefix, cache_dir)
