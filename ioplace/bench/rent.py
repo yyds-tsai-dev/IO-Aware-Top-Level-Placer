@@ -76,6 +76,7 @@ class RentResult:
     levels_used: list  # level indices that fed the regression
     levels: list  # all RentLevel objects, sc.z. debugging/reporting
     n_bootstrap: int
+    runtime: dict = None
 
 
 def load_bookshelf_netlist(prefix):
@@ -354,6 +355,7 @@ def bisect_mtkahypar(node_ids, nl, seed, threads=4, epsilon=0.03, n2n_csr=None, 
     rebuilding the reverse index every call). `max_net_degree`: see
     `_induced_hyperedges`."""
     import mtkahypar
+    from ioplace.partition import mtkahypar_runtime
     if len(node_ids) < 2:
         return node_ids, np.array([], dtype=node_ids.dtype)
     n2n_starts, n2n_nets = n2n_csr if n2n_csr is not None else node_to_nets_csr(nl)
@@ -361,7 +363,7 @@ def bisect_mtkahypar(node_ids, nl, seed, threads=4, epsilon=0.03, n2n_csr=None, 
     if not edges:
         half = len(node_ids) // 2
         return node_ids[:half], node_ids[half:]
-    mtk = mtkahypar.initialize(threads, print_warnings=False)
+    mtk = mtkahypar_runtime.initialize(mtkahypar, threads)
     ctx = mtk.context_from_preset(mtkahypar.PresetType.DEFAULT)
     ctx.set_partitioning_parameters(2, epsilon, mtkahypar.Objective.KM1)
     mtkahypar.set_seed(seed)
@@ -520,9 +522,14 @@ def measure_rent(nl, max_level=None, b_lo=1e3, b_hi=1e6, seed=0, backend="auto",
     usable = [(rl.level, rl.avg_block_size, rl.avg_terminals) for rl in rent_levels
               if rl.level >= 1 and rl.avg_terminals > 0 and b_lo <= rl.avg_block_size <= b_hi]
     if len(usable) < 2:
+        runtime = None
+        if backend_used == "mtkahypar":
+            from ioplace.partition.mtkahypar_runtime import metadata
+            runtime = metadata()
         return RentResult(p=float("nan"), p_ci_lo=float("nan"), p_ci_hi=float("nan"),
                            log_t=float("nan"), backend=backend_used,
-                           levels_used=[u[0] for u in usable], levels=rent_levels, n_bootstrap=0)
+                           levels_used=[u[0] for u in usable], levels=rent_levels, n_bootstrap=0,
+                           runtime=runtime)
 
     levels_used = [u[0] for u in usable]
     p, log_t = _fit_p([(u[1], u[2]) for u in usable])
@@ -553,6 +560,10 @@ def measure_rent(nl, max_level=None, b_lo=1e3, b_hi=1e6, seed=0, backend="auto",
     else:
         p_lo = p_hi = p
 
+    runtime = None
+    if backend_used == "mtkahypar":
+        from ioplace.partition.mtkahypar_runtime import metadata
+        runtime = metadata()
     return RentResult(p=p, p_ci_lo=float(p_lo), p_ci_hi=float(p_hi), log_t=log_t,
                        backend=backend_used, levels_used=levels_used, levels=rent_levels,
-                       n_bootstrap=len(boot_ps))
+                       n_bootstrap=len(boot_ps), runtime=runtime)

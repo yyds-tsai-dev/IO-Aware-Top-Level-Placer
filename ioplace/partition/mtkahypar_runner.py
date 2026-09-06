@@ -1,4 +1,5 @@
 import numpy as np
+from . import mtkahypar_runtime
 
 def _hyperedges(nl):
     """Per-net, deduplicated, 0-indexed node id lists (installed mtkahypar==1.6.2
@@ -16,7 +17,7 @@ def partition_netlist(nl, k, epsilon=0.03, seed=0, threads=8):
     # thread pool; calling it again (e.g. Task 9 sweeping k in {8,16,32} within
     # one process) is harmless but otherwise prints "Mt-KaHyPar is already
     # initialized" to stderr on every call after the first.
-    mtk = mtkahypar.initialize(threads, print_warnings=False)
+    mtk = mtkahypar_runtime.initialize(mtkahypar, threads)
     ctx = mtk.context_from_preset(mtkahypar.PresetType.DEFAULT)
     ctx.set_partitioning_parameters(k, epsilon, mtkahypar.Objective.KM1)
     mtkahypar.set_seed(seed)
