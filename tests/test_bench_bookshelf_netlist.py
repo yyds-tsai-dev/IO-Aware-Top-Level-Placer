@@ -47,8 +47,8 @@ def _named_net_tuples(prefix, native, cached, name_map):
     def tuples(nl, net_id):
         lo, hi = nl.flat_net2pin_start[net_id:net_id + 2]
         pins = nl.flat_net2pin[lo:hi]
-        return sorted(zip(nl.pin2node[pins].tolist(), nl.pin_offset_x[pins].tolist(),
-                          nl.pin_offset_y[pins].tolist()))
+        return list(zip(nl.pin2node[pins].tolist(), nl.pin_offset_x[pins].tolist(),
+                        nl.pin_offset_y[pins].tolist()))
     checked = 0
     with open(prefix + ".nets") as f:
         for line in f:
@@ -120,19 +120,37 @@ def test_parse_source_tile_reads_toy_design(tmp_path):
     assert tile.n_terminal_ni == 1
     assert tile.n_nets == 3
     assert tile.n_pins == 7
-    # movable-first: o0..o4 (idx 0-4) not terminal, p0 (idx5)/f0 (idx6) terminal
     assert list(tile.is_terminal) == [False] * 5 + [True, True]
     assert tile.name2local["o2"] == 2 and tile.name2local["f0"] == 6
-    # .pl positions in file order (name-indexed, robust to file-order match)
     assert (pl_x[tile.name2local["o2"]], pl_y[tile.name2local["o2"]]) == (4.0, 0.0)
     assert (pl_x[tile.name2local["f0"]], pl_y[tile.name2local["f0"]]) == (6.0, 0.0)
-    # net n0: o0(O,-1,-1) o1(I,-1,-1) f0(I,0,0)
     assert tile.net_degrees.tolist() == [3, 2, 2]
     n0_pins = [i for i in range(tile.n_pins) if tile.pin2net[i] == 0]
-    assert [tile.pin2node[i] for i in n0_pins] == [
-        tile.name2local["o0"], tile.name2local["o1"], tile.name2local["f0"]]
-    assert [(tile.pin_offset_x[i], tile.pin_offset_y[i]) for i in n0_pins] == [
-        (-1.0, -1.0), (-1.0, -1.0), (0.0, 0.0)]
+    assert [tile.pin2node[i] for i in n0_pins] == [tile.name2local["o0"], tile.name2local["o1"], tile.name2local["f0"]]
+
+
+def test_schema4_marker_and_legacy_schema3_contract(tmp_path):
+    src, dst, cache, meta = _build_cache(tmp_path, 1, 2, with_glue=True)
+    assert meta["schema_version"] == 4
+    assert meta["glue_pin_order"] == "native_lexical"
+    assert bn.verify_against_bookshelf(cache, dst, mode="full")["ok"]
+    legacy = str(tmp_path / "legacy")
+    import shutil
+    shutil.copytree(cache, legacy)
+    m = json.load(open(os.path.join(legacy, "meta.json")))
+    m["schema_version"] = 3; m.pop("glue_pin_order", None)
+    with open(os.path.join(legacy, "meta.json"), "w") as f: json.dump(m, f)
+    assert bn.verify_against_bookshelf(legacy, dst, mode="window")["ok"]
+
+
+def test_tampered_base_pin_map_fails_full_verification(tmp_path):
+    src, dst, cache, meta = _build_cache(tmp_path, 1, 1, with_glue=False)
+    path = os.path.join(cache, "pin2node.npy")
+    arr = np.load(path); arr[0] = (int(arr[0]) + 1) % meta["n_nodes"]
+    np.save(path, arr)
+    result = bn.verify_against_bookshelf(cache, dst, mode="full")
+    assert result["ok"] is False
+    assert result["errors"]
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +167,7 @@ def test_base_counts_are_exactly_rxc_times_source(tmp_path):
     assert meta["n_pins"] == 7 * 4
     assert meta["n_glue_nets"] == 0 and meta["n_glue_pins"] == 0
     assert meta["node_order"] == "movable_fixed_terminal_ni"
-    assert meta["schema_version"] == 3
+    assert meta["schema_version"] == 4
     assert meta["pin_offset_origin"] == "lower_left"
 
 
@@ -444,3 +462,82 @@ def test_replication_equals_placedb_read_on_real_1x2_array_movable_first():
     with tempfile.TemporaryDirectory() as cache_dir:
         bn.build_tiled_netlist_cache(manifest_path, cache_dir)
         _assert_native_equivalent(prefix, cache_dir)
+
+
+@pytest.mark.parametrize('records,expected', [
+    (['o0 I : 0 0','o1 O : 0 0','o2 I : 0 0','o3 O : 0 0','o4 O : 0 0'], [4,0,2,1,3]),
+    (['o0 I : 0 0','o1 I : 0 0 : 1 1 named','o2 I : 0 0','o3 I : 0 0','o4 I : 0 0'], [1,0,2,3,4]),
+    (['o0 I : 0 0','o1 I : 0 0','o1 O : 1 1','o2 I : 0 0','o3 I : 0 0','o4 I : 0 0'], [0,1,2,3,4]),
+    (['o0 b : 0 0','o1 o : 0 0 : 1 1','o2 i : 0 0','o3 i : 0 0','o4 i : 0 0'], [1,0,2,3,4]),
+])
+def test_native_order_with_multiple_named_and_discarded_outputs(tmp_path, records, expected):
+    from pathlib import Path
+    src = write_toy_bookshelf(str(tmp_path/'src'/'toy'))
+    Path(src+'.nets').write_text('UCLA nets 1.0\nNumNets : 1\nNumPins : '+str(len(records))+
+        '\nNetDegree : '+str(len(records))+' n0\n'+'\n'.join(records)+'\n')
+    dst = str(tmp_path/'out'/'arr')
+    tb.tile(src,dst,R=1,C=2,seed=0)
+    cache_dir = str(tmp_path/'cache')
+    bn.build_tiled_netlist_cache(dst+'.manifest.json',cache_dir)
+    cached,native,db = _assert_native_equivalent(dst,cache_dir)
+    native_pins = native.flat_net2pin[native.flat_net2pin_start[db.net_name2id_map['t0_0/n0']]:
+                                    native.flat_net2pin_start[db.net_name2id_map['t0_0/n0']]+5]
+    wanted = [db.node_name2id_map[f't0_0/o{i}'] for i in expected]
+    np.testing.assert_array_equal(native.pin2node[native_pins],wanted)
+    np.testing.assert_array_equal(cached.pin2node[cached.flat_net2pin[:5]],wanted)
+    for mode in ('window','full'):
+        checked = bn.verify_against_bookshelf(cache_dir,dst,mode=mode)
+        assert checked['ok'], checked['errors']
+        assert checked['native_pin_order_verified']
+
+
+def test_native_glue_lexical_order_keeps_distinct_offsets(tmp_path):
+    from pathlib import Path
+    src = write_toy_bookshelf(str(tmp_path/'src'/'toy'))
+    dst = str(tmp_path/'out'/'arr')
+    tb.tile(src,dst,R=11,C=1,seed=0)
+    glue_gen.append_glue_nets(dst,[{'pins':[((2,0),'o0'),((10,0),'o1')]}],1.,.8,seed=0)
+    nets = Path(dst+'.nets')
+    head,tail = nets.read_text().rsplit('NetDegree : 2 glue0',1)
+    tail = tail.replace('t2_0/o0 I : 0 0','t2_0/o0 I : 2 -3').replace('t10_0/o1 I : 0 0','t10_0/o1 I : -4 5')
+    nets.write_text(head+'NetDegree : 2 glue0'+tail)
+    mp = Path(dst+'.manifest.json');manifest=json.loads(mp.read_text())
+    manifest['output_sha256']['nets']=tb.sha256_file(str(nets));mp.write_text(json.dumps(manifest))
+    cache_dir = str(tmp_path/'cache')
+    meta = bn.build_tiled_netlist_cache(str(mp),cache_dir)
+    cached,_,db = _assert_native_equivalent(dst,cache_dir)
+    assert meta['glue_pin_order']=='native_lexical'
+    np.testing.assert_array_equal(cached.pin2node[-2:],[db.node_name2id_map['t10_0/o1'],db.node_name2id_map['t2_0/o0']])
+    np.testing.assert_array_equal(cached.pin_offset_x[-2:],[-3,3])
+    np.testing.assert_array_equal(cached.pin_offset_y[-2:],[6,-2])
+    for mode in ('window','full'):
+        checked=bn.verify_against_bookshelf(cache_dir,dst,mode=mode)
+        assert checked['ok'],checked['errors']
+
+
+def test_verify_detects_only_net_traversal_corruption(tmp_path):
+    _,dst,cache_dir,_ = _build_cache(tmp_path,R=1,C=2,with_glue=False)
+    path = os.path.join(cache_dir,'flat_net2pin.npy')
+    order = np.load(path)
+    order[[0,1]] = order[[1,0]]
+    np.save(path,order)
+    for mode in ('window','full'):
+        checked = bn.verify_against_bookshelf(cache_dir,dst,mode=mode)
+        assert not checked['ok']
+        assert any('native net traversal' in e for e in checked['errors'])
+
+
+def test_schema4_requires_order_contract_and_schema3_is_explicit_legacy(tmp_path):
+    from pathlib import Path
+    _,dst,cache_dir,_ = _build_cache(tmp_path,R=1,C=1,with_glue=False)
+    path = Path(cache_dir)/'meta.json';meta=json.loads(path.read_text())
+    meta.pop('net_pin_order');path.write_text(json.dumps(meta))
+    with pytest.raises(ValueError,match='schema4 requires'):
+        bn.load_tiled_netlist(cache_dir)
+    meta['schema_version']=3;meta.pop('glue_pin_order');path.write_text(json.dumps(meta))
+    # Reproduce the original schema3 traversal, rather than just relabel schema4.
+    nl,_=bn.load_tiled_netlist(cache_dir)
+    np.save(Path(cache_dir)/'flat_net2pin.npy',np.arange(len(nl.pin2node),dtype=np.int32))
+    checked=bn.verify_against_bookshelf(cache_dir,dst,mode='full')
+    assert checked['ok']
+    assert checked['native_pin_order_verified'] is False

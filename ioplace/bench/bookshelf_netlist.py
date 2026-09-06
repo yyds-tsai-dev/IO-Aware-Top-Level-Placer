@@ -31,7 +31,8 @@ both `Netlist.num_movable` (a prefix count) and `IoTerm`'s backward pass
 module stably orders movable cells, regular fixed terminals, then terminal_NIs,
 matching native PlaceDB, and remaps all pin references. Cache schema 2 also
 converts center-relative Bookshelf pin offsets into native lower-left offsets
-(integer rounding with ties away from zero). Legacy caches must be rebuilt.
+(integer rounding with ties away from zero). Schema4 additionally matches native per-net output-front pin traversal. Schema3
+caches remain readable for historical experiments but do not prove ordered parity.
 
 Public API:
     build_tiled_netlist_cache(manifest_path, out_dir) -> dict   # one-time
@@ -51,7 +52,7 @@ import numpy as np
 
 from ioplace.bench import tile_bookshelf as tb
 from ioplace.netlist import Netlist
-from ioplace.bench.native_pin_order import native_pin_selection, normalize_geometry, round_away
+from ioplace.bench.native_pin_order import native_pin_selection, native_net_pin_order, normalize_geometry, round_away
 
 # Cache array files written by build_tiled_netlist_cache / read by
 # load_tiled_netlist. dtypes match ioplace.netlist.netlist_from_placedb's
@@ -90,7 +91,7 @@ class SourceTile:
     __slots__ = ("n_nodes", "n_terminals", "n_terminal_ni",
                 "node_size_x", "node_size_y", "node_orientation", "is_terminal", "is_terminal_ni", "name2local",
                 "n_nets", "n_pins", "net_degrees",
-                "pin2node", "pin2net", "pin_offset_x", "pin_offset_y", "pin_names")
+                "pin2node", "pin2net", "pin_offset_x", "pin_offset_y", "pin_names", "pin_is_output")
 
     def __init__(self, **kw):
         for k, v in kw.items():
@@ -168,7 +169,7 @@ def _read_pl(path, name2local, n_nodes):
     return x, y, orientation
 
 
-def _read_nets(path, name2local, *, include_pin_names=False):
+def _read_nets(path, name2local, *, include_pin_names=False, include_pin_directions=False):
     pin_names = {}
     with open(path) as f:
         header = next(f)
@@ -190,6 +191,7 @@ def _read_nets(path, name2local, *, include_pin_names=False):
         pin2net = np.empty(n_pins, dtype=np.int64)
         pin_offset_x = np.empty(n_pins, dtype=np.float64)
         pin_offset_y = np.empty(n_pins, dtype=np.float64)
+        pin_is_output = np.empty(n_pins, dtype=bool)
 
         net_i = -1
         pin_i = 0
@@ -204,6 +206,12 @@ def _read_nets(path, name2local, *, include_pin_names=False):
                 net_degrees[net_i] = int(deg_str)
                 continue
             parts = s.split()
+            # Native named-pin grammar forces OUTPUT; other productions retain
+            # the case-insensitive I/O/B token (BookshelfParser.yy268-275).
+            direction = parts[1].upper()
+            if direction not in ("I", "O", "B"):
+                raise ValueError(f"unsupported pin direction {parts[1]!r}")
+            pin_is_output[pin_i] = direction == "O" or len(parts) >= 9
             # parts: name, direction(I/O), ':', dx, dy
             pin2node[pin_i] = name2local[parts[0]]
             pin2net[pin_i] = net_i
@@ -217,7 +225,11 @@ def _read_nets(path, name2local, *, include_pin_names=False):
     if pin_i != n_pins:
         raise ValueError(f"{path}: header NumPins={n_pins} but {pin_i} pin records read")
     result = net_degrees, pin2node, pin2net, pin_offset_x, pin_offset_y, n_nets, n_pins
-    return (*result, pin_names) if include_pin_names else result
+    if include_pin_names:
+        result = (*result, pin_names)
+    if include_pin_directions:
+        result = (*result, pin_is_output)
+    return result
 
 
 def parse_source_tile(prefix):
@@ -230,13 +242,14 @@ def parse_source_tile(prefix):
      n_nodes, n_terminals) = _read_nodes(paths["nodes"])
     pl_x, pl_y, orientation = _read_pl(paths["pl"], name2local, n_nodes)
     (net_degrees, pin2node, pin2net, pin_off_x, pin_off_y,
-     n_nets, n_pins, pin_names) = _read_nets(paths["nets"], name2local, include_pin_names=True)
+     n_nets, n_pins, pin_names, pin_is_output) = _read_nets(
+         paths["nets"], name2local, include_pin_names=True, include_pin_directions=True)
 
     return SourceTile(
         n_nodes=n_nodes, n_terminals=n_terminals, n_terminal_ni=n_ni,
         node_size_x=size_x, node_size_y=size_y, is_terminal=is_terminal,
         is_terminal_ni=is_terminal_ni,
-        node_orientation=orientation, pin_names=pin_names,
+        node_orientation=orientation, pin_names=pin_names, pin_is_output=pin_is_output,
         name2local=name2local,
         n_nets=n_nets, n_pins=n_pins, net_degrees=net_degrees,
         pin2node=pin2node, pin2net=pin2net,
@@ -451,6 +464,10 @@ def build_tiled_netlist_cache(manifest_path, out_dir):
     if n_glue_nets:
         glue_nets = _read_glue_tail(dst_prefix + ".nets", n_glue_nets, n_glue_pins)
         glue_pin2node = np.empty(2 * n_glue_nets, dtype=np.int64)
+        # Native Bookshelf ordering is lexicographic by the complete endpoint
+        # name (tile prefix included), with offsets travelling with endpoints.
+        for net in glue_nets:
+            net["pins"].sort(key=lambda p: f"t{p[0]}_{p[1]}/{p[2]}")
         k2 = 0
         for net in glue_nets:
             (i0, j0, name0, ox0, oy0), (i1, j1, name1, ox1, oy1) = net["pins"]
@@ -520,6 +537,10 @@ def build_tiled_netlist_cache(manifest_path, out_dir):
 
     flat_net2pin_start = np.concatenate([[0], np.cumsum(net_degrees)]).astype(np.int32)
     flat_net2pin = np.arange(n_pins_total, dtype=np.int32)
+    source_order = native_net_pin_order(canonical_degrees, src.pin_is_output[selected])
+    for tile in range(n_tiles):
+        offset = tile * n_src_pins
+        flat_net2pin[offset:offset+n_src_pins] = offset + source_order
 
     num_terminals_total = n_tiles * (src.n_terminals - src.n_terminal_ni)
     num_terminal_ni_total = n_tiles * src.n_terminal_ni
@@ -559,8 +580,10 @@ def build_tiled_netlist_cache(manifest_path, out_dir):
         "n_nets": n_nets_total, "n_pins": n_pins_total,
         "n_nets_base": n_nets_base, "n_pins_base": n_pins_base,
         "n_glue_nets": n_glue_nets, "n_glue_pins": n_glue_pins,
+        "glue_pin_order": "native_lexical",
         "xl": xl, "yl": yl, "xh": xl + R * W, "yh": yl + C * H,
-        "schema_version": 3,
+        "schema_version": 4,
+        "net_pin_order": "native_sequential_output_front_swap",
         "node_order": "movable_fixed_terminal_ni",
         "pin_offset_origin": "lower_left",
         "parse_source_s": parse_source_s,
@@ -582,8 +605,12 @@ def load_tiled_netlist(cache_dir, mmap=True):
     tests where an ordinary in-memory array is simpler to assert on."""
     with open(os.path.join(cache_dir, "meta.json")) as f:
         meta = json.load(f)
-    if meta.get("schema_version") != 3 or meta.get("node_order") != "movable_fixed_terminal_ni" or meta.get("pin_offset_origin") != "lower_left":
+    if meta.get("schema_version") not in (3, 4) or meta.get("node_order") != "movable_fixed_terminal_ni" or meta.get("pin_offset_origin") != "lower_left":
         raise ValueError("unsupported or absent cache schema; rebuild cache with build_tiled_netlist_cache")
+    if meta["schema_version"] == 4 and (
+            meta.get("net_pin_order") != "native_sequential_output_front_swap"
+            or meta.get("glue_pin_order") != "native_lexical"):
+        raise ValueError("schema4 requires native net and glue pin-order contracts")
     mode = "r" if mmap else None
 
     def _load(name):
@@ -714,8 +741,8 @@ def verify_against_bookshelf(cache_dir, prefix, mode="full"):
                     or nl.node_y[idx] != round_away(float(parts[2]))):
                 _fail("pl", f".pl position mismatch for {parts[0]!r}")
 
-    # ---- .nets (base + glue): pin order in the file == cache pin array
-    # order (both concatenate tile-major then glue, identically) ----
+    # ---- .nets: verify raw records and canonical global pin arrays.
+    # Native net traversal is checked separately; it is not global pin order.
     net_degrees = np.diff(nl.flat_net2pin_start)
     n_base_nets = meta["n_nets_base"]
     with open(prefix + ".nets") as f:
@@ -770,6 +797,12 @@ def verify_against_bookshelf(cache_dir, prefix, mode="full"):
     n_glue_pins = meta["n_glue_pins"]
     if n_glue_nets:
         glue_nets = _read_glue_tail(prefix + ".nets", n_glue_nets, n_glue_pins)
+        marker = meta.get("glue_pin_order")
+        if marker not in (None, "native_lexical"):
+            raise ValueError(f"unsupported glue_pin_order marker: {marker!r}")
+        if marker == "native_lexical":
+            for net in glue_nets:
+                net["pins"].sort(key=lambda p: f"t{p[0]}_{p[1]}/{p[2]}")
         base_pin_count = meta["n_pins_base"]
         for k, net in enumerate(glue_nets):
             result["n_checked_glue_nets"] += 1
@@ -788,6 +821,28 @@ def verify_against_bookshelf(cache_dir, prefix, mode="full"):
                 result["n_checked_canonical_pins"] += 1
                 if nl.pin_offset_x[base_pin_count + 2*k + q] != ex[0] or nl.pin_offset_y[base_pin_count + 2*k + q] != ey[0]:
                     _fail("glue_nets", f"glue net #{k} offset mismatch")
+
+    # Native traversal uses the direction of the retained canonical pin. Older
+    # schema3 caches intentionally remain readable, with their weaker contract
+    # explicit; do not silently rewrite historical measurements.
+    result["native_pin_order_verified"] = meta["schema_version"] == 4
+    result["n_checked_net_pin_order"] = 0
+    if meta["schema_version"] == 4:
+        source_order = native_net_pin_order(canonical_degrees, src.pin_is_output[selected])
+        for tile in range(meta["R"] * C):
+            count_nets = src.n_nets if window is None else min(src.n_nets, max(0, window-tile*src.n_nets))
+            count_pins = int(canonical_degrees[:count_nets].sum())
+            offset = tile * len(selected)
+            actual = nl.flat_net2pin[offset:offset+count_pins]
+            expected = source_order[:count_pins] + offset
+            bad = np.flatnonzero(actual != expected)
+            result["n_checked_net_pin_order"] += count_pins
+            if len(bad):
+                _fail("pins", f"native net traversal differs in tile {tile}: {len(bad)} pins")
+        base = meta["n_pins_base"]
+        if not np.array_equal(nl.flat_net2pin[base:], np.arange(base, meta["n_pins"], dtype=np.int32)):
+            _fail("glue_nets", "native glue net traversal differs")
+        result["n_checked_net_pin_order"] += meta["n_glue_pins"]
 
     # Raw fingerprints also cover discarded pin names/directions and records
     # outside the canonical representation. Window mode deliberately omits
