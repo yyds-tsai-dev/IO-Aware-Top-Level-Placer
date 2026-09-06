@@ -44,7 +44,7 @@ def main():
         "本次使用凍結driver：最終eval先執行完整serial CPU reference，再執行GPU evaluator。",
         "將整個混合phase除以2.5–5倍GPU加速因子，沒有反映其中的CPU工作。",
         "read／LG／GP亦跨越更新後DREAMPlace、CPU、資料格式與共享負載條件；",
-        "phase比值不是單獨的GPU硬體因果加速比。上表如實保留原始预测，不事後放寬。",
+        "phase比值不是單獨的GPU硬體因果加速比。上表如實保留原始預測，不事後放寬。",
         "後續開發版本已讓IO driver重用既有GPU最終結果，省去重複CPU reference；",
         "該版本通過實際40-iteration driver regression，但沒有回套本次首跑或FT/M5凍結結果。", "",
         "若需有效新模型，必須另行預註冊多個可比較H100觀測並驗證；",
