@@ -1,6 +1,7 @@
 {
   "script": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/scripts/run_corrected_stage2_routes.py",
-  "sha256": "2660bff89912ced3249c2c22e547c107f1bda19ee164842d0802bf39adc4cfe4",
-  "registered_at": 1788734763.5951257,
-  "attempt": 2
+  "sha256": "1f496955e14c65f70717ae3e195d591ba58906339caf115aee72e5874efb1938",
+  "registered_at": 1788736953.946883,
+  "attempt": 3,
+  "fix": "route discovery uses real case parent because find does not descend case symlinks; no corrected routes started"
 }

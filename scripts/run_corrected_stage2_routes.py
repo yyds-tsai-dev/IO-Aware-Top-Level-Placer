@@ -95,7 +95,7 @@ def main():
                 active.remove(item);print('corrected completed',case,flush=True)
             while pending and len(active)+len(legacy)<2:
                 case=pending.pop(0);log=ROOT/(case+'.route.log')
-                env=dict(os.environ,IOPLACE_REPO=str(source),STAGE2_S8_ROOT=str(ROOT),
+                env=dict(os.environ,IOPLACE_REPO=str(source),STAGE2_S8_ROOT=str((ROOT/case).resolve().parent),
                          STAGE2_ROUTE_THREADS='8',STAGE2_ROUTE_TIMEOUT_S='43200')
                 with log.open('w') as f:
                     p=subprocess.Popen(['bash',str(source/'scripts/stage2_s8_route.sh'),'--shard='+case],

@@ -1,0 +1,7 @@
+{
+  "status": "passed",
+  "cases": 4,
+  "log_sha256": "35dcac463a5441637a520fb8a559975c6e9e3662d9583ff7e10b18ac91a39f59",
+  "recorded_at": 1788737163.2394211,
+  "checks": "all4 queued shard selectors discover exactly their placement case using resolved physical parent"
+}
