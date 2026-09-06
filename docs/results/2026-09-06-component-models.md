@@ -50,3 +50,8 @@ Host RSS 訓練使用 6 個配方（adaptec1、bigblue4、group、groupDrop25、
 量測快照 manifest 也保存了原始輸入與程式來源摘要：component matrix 的 `source_sha256` 與 `registration_sha256` 位於 `results/component_models_20260906/matrix.json`；host-RSS matrix 的 `input_sha256`、`source_sha256` 與 `registration_sha256` 位於 `results/host_rss_models_20260906/matrix.json`。因此本報告的 fits SHA 與輸入快照 digest 可共同稽核，沒有只記錄模型輸出而遺失實驗來源。
 
 本報告沒有 H100 NVL 的端到端計時或 T14 驗證。共享 H100 NVL 的裝置負載、CUDA context、時脈與其他程序會影響實際量測；這些 component/host 模型結果不能宣稱 GPU 容量、wall-time PI 或正式 H100 可行性。
+
+補充輸入順序範圍：本輪元件／holdout沿用凍結schema3 cache；後續查出其
+endpoint集合正確，但沒有native output-front net遍歷順序。原始資源量測與
+failed辨識裁決保留，不拿來宣稱ordered native品質等價；schema4重建與
+27.7M數值核對另存於H100後續報告。

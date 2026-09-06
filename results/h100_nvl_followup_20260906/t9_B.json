@@ -1,0 +1,726 @@
+{
+ "K": 32,
+ "P_dedup": 100901728,
+ "attempts_log": [
+  {
+   "attempt": 1,
+   "child_exit_code": 0,
+   "child_stderr_tail": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/bench/spike_30m_child.py:237: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:203.)\n  node_x0 = torch.as_tensor(nl.node_x[:num_physical], dtype=torch.float64)\n",
+   "device_baseline_after_gb": 2.8232421875,
+   "device_baseline_gb_nvsmi": 2.8232421875,
+   "device_samples": [
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ]
+     ],
+     "free_gib": 90.2626953125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715580.5849903,
+     "total_gib": 93.583984375,
+     "used_gib": 2.8232421875,
+     "utilization_pct": 18.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ]
+     ],
+     "free_gib": 90.2626953125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715583.0451307,
+     "total_gib": 93.583984375,
+     "used_gib": 2.8232421875,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       518.0
+      ]
+     ],
+     "free_gib": 89.7509765625,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715585.6477885,
+     "total_gib": 93.583984375,
+     "used_gib": 3.3349609375,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       518.0
+      ]
+     ],
+     "free_gib": 89.7509765625,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715587.9407756,
+     "total_gib": 93.583984375,
+     "used_gib": 3.3349609375,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       518.0
+      ]
+     ],
+     "free_gib": 89.7509765625,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715590.5146894,
+     "total_gib": 93.583984375,
+     "used_gib": 3.3349609375,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       518.0
+      ]
+     ],
+     "free_gib": 89.7509765625,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715592.8736484,
+     "total_gib": 93.583984375,
+     "used_gib": 3.3349609375,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       518.0
+      ]
+     ],
+     "free_gib": 89.7509765625,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715595.3082852,
+     "total_gib": 93.583984375,
+     "used_gib": 3.3349609375,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       2316.0
+      ]
+     ],
+     "free_gib": 88.4677734375,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715597.6175432,
+     "total_gib": 93.583984375,
+     "used_gib": 4.6181640625,
+     "utilization_pct": 5.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       5898.0
+      ]
+     ],
+     "free_gib": 84.4970703125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715600.022682,
+     "total_gib": 93.583984375,
+     "used_gib": 8.5888671875,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       5904.0
+      ]
+     ],
+     "free_gib": 84.4931640625,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715602.3539965,
+     "total_gib": 93.583984375,
+     "used_gib": 8.5927734375,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       5922.0
+      ]
+     ],
+     "free_gib": 84.4736328125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715604.8744934,
+     "total_gib": 93.583984375,
+     "used_gib": 8.6123046875,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       5922.0
+      ]
+     ],
+     "free_gib": 84.4736328125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715607.3476577,
+     "total_gib": 93.583984375,
+     "used_gib": 8.6123046875,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       8298.0
+      ]
+     ],
+     "free_gib": 83.1982421875,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715609.8086205,
+     "total_gib": 93.583984375,
+     "used_gib": 9.8876953125,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       16280.0
+      ]
+     ],
+     "free_gib": 74.3583984375,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715612.1204858,
+     "total_gib": 93.583984375,
+     "used_gib": 18.7275390625,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       22942.0
+      ]
+     ],
+     "free_gib": 67.8525390625,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715614.4695106,
+     "total_gib": 93.583984375,
+     "used_gib": 25.2333984375,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       22942.0
+      ]
+     ],
+     "free_gib": 67.8525390625,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715616.924996,
+     "total_gib": 93.583984375,
+     "used_gib": 25.2333984375,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       22984.0
+      ]
+     ],
+     "free_gib": 67.8349609375,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715619.256545,
+     "total_gib": 93.583984375,
+     "used_gib": 25.2509765625,
+     "utilization_pct": 45.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       31826.0
+      ]
+     ],
+     "free_gib": 59.1767578125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715621.6647031,
+     "total_gib": 93.583984375,
+     "used_gib": 33.9091796875,
+     "utilization_pct": 19.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       31826.0
+      ]
+     ],
+     "free_gib": 59.1767578125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715624.0817935,
+     "total_gib": 93.583984375,
+     "used_gib": 33.9091796875,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       31826.0
+      ]
+     ],
+     "free_gib": 59.1767578125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715626.6621592,
+     "total_gib": 93.583984375,
+     "used_gib": 33.9091796875,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       31826.0
+      ]
+     ],
+     "free_gib": 59.1767578125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715629.2269948,
+     "total_gib": 93.583984375,
+     "used_gib": 33.9091796875,
+     "utilization_pct": 42.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       31826.0
+      ]
+     ],
+     "free_gib": 59.1767578125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715631.5396097,
+     "total_gib": 93.583984375,
+     "used_gib": 33.9091796875,
+     "utilization_pct": 12.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       31826.0
+      ]
+     ],
+     "free_gib": 59.1767578125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715633.863334,
+     "total_gib": 93.583984375,
+     "used_gib": 33.9091796875,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       31826.0
+      ]
+     ],
+     "free_gib": 59.1767578125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715636.1584764,
+     "total_gib": 93.583984375,
+     "used_gib": 33.9091796875,
+     "utilization_pct": 36.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       31826.0
+      ]
+     ],
+     "free_gib": 59.1767578125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715638.5979922,
+     "total_gib": 93.583984375,
+     "used_gib": 33.9091796875,
+     "utilization_pct": 98.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       31826.0
+      ]
+     ],
+     "free_gib": 59.1767578125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715641.0409758,
+     "total_gib": 93.583984375,
+     "used_gib": 33.9091796875,
+     "utilization_pct": 0.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       31826.0
+      ]
+     ],
+     "free_gib": 59.1767578125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715643.543374,
+     "total_gib": 93.583984375,
+     "used_gib": 33.9091796875,
+     "utilization_pct": 67.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    },
+    {
+     "compute_apps": [
+      [
+       1303704,
+       2798.0
+      ],
+      [
+       261309,
+       31826.0
+      ]
+     ],
+     "free_gib": 59.1767578125,
+     "name": "NVIDIA H100 NVL",
+     "time": 1788715646.0507715,
+     "total_gib": 93.583984375,
+     "used_gib": 33.9091796875,
+     "utilization_pct": 65.0,
+     "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+    }
+   ],
+   "device_used_peak_gb_nvsmi": 33.9091796875,
+   "exit_code": 0,
+   "experiment_status": "ok",
+   "feasibility_verdict": "completed_within_registered_process_budget",
+   "oom_repeats": 0,
+   "postflight_compute_app_pids": [
+    [
+     1303704,
+     2798.0
+    ]
+   ],
+   "postflight_ok": true,
+   "wall_s": 67.3550078868866,
+   "workload_status": "completed"
+  }
+ ],
+ "baseline_reserved_gb": 2.8232421875,
+ "benchmark_kind": "synthetic",
+ "budget_gb": 84.0,
+ "budget_source": "NVIDIA H100 NVL",
+ "case": "3x3_n2",
+ "child_exit_code": 0,
+ "child_stderr_tail": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/bench/spike_30m_child.py:237: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:203.)\n  node_x0 = torch.as_tensor(nl.node_x[:num_physical], dtype=torch.float64)\n",
+ "command": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/bench/spike_30m.py --cache-dir /ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/cache/3x3_n2 --k 32 --rtype grid --seed 0 --n-iter 4 --lr 1.0 --s4-scenario B --budget-gb 84 --budget-source NVIDIA H100 NVL --measurement-mode shared --child-timeout-s 21600 --max-attempts 1 --python /ldaphome/yyds-tsai-dev/DREAMPlace/.venv312/bin/python --count-freeze /ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/m4/scaling/count_freeze_30m.json --out /ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/h100_nvl_followup_20260906/t9_B.json",
+ "component_build_s": 25.51222141017206,
+ "count_freeze_ref": "601fb8321a4dd85fb59a4e36db9248ff0a6fee5d986fe5240cf0b35f526ec625",
+ "device_baseline_gb": 2.8232421875,
+ "device_used_peak_gb": 33.9091796875,
+ "device_uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d",
+ "dp_commit": "6627f3327e6cc17db7782c0b90073a498531ca3c",
+ "exclusivity_evidence": "shared_user_authorized",
+ "experiment_status": "ok",
+ "feasibility_verdict": "completed_within_registered_process_budget",
+ "gpu_name": "NVIDIA H100 NVL",
+ "host_peak_rss_gb": 8.51666259765625,
+ "hostname": "user",
+ "input_sha256": "a1181e73587bba9b8d531ed4fbc3e3ebc319d283052ea678d2768227a63bfaa9",
+ "k_chunk": 1,
+ "max_phase_transient_gb": 12.571592026390135,
+ "measured_peak_gb": 18.504724979400635,
+ "measurement_mode": "shared",
+ "n_active": 29497091,
+ "n_interleaved_iters": 4,
+ "n_interleaved_iters_expected": 4,
+ "n_nets": 31595252,
+ "n_nodes": 27804699,
+ "n_pins": 106683202,
+ "n_pins_canonical": 106683202,
+ "n_pins_raw": 108354439,
+ "oom_repeats": 0,
+ "peak_reserved_gb": 30.48046875,
+ "phase_timings": [
+  {
+   "backward_s": 2.3416052300017327,
+   "evaluate_s": 8.517870083916932,
+   "io_forward_s": 1.3446072419174016,
+   "iteration": 0,
+   "wall_s": 12.205253496067598
+  },
+  {
+   "backward_s": 1.2418445639777929,
+   "evaluate_s": 6.047439551912248,
+   "io_forward_s": 0.6278303130529821,
+   "iteration": 1,
+   "wall_s": 7.918308652937412
+  },
+  {
+   "backward_s": 1.028131489874795,
+   "evaluate_s": 5.973945043981075,
+   "io_forward_s": 0.4900161868426949,
+   "iteration": 2,
+   "wall_s": 7.493224001023918
+  },
+  {
+   "backward_s": 1.04693397693336,
+   "evaluate_s": 7.709049161057919,
+   "io_forward_s": 0.49448989680968225,
+   "iteration": 3,
+   "wall_s": 9.26113961590454
+  }
+ ],
+ "preflight": {
+  "baseline_device_used_gb": 2.8232421875,
+  "cache_meta": {
+   "C": 3,
+   "R": 3,
+   "dst_prefix": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/arrays/3x3_n2/3x3_n2",
+   "manifest_output_sha256": {
+    "nets": "a1181e73587bba9b8d531ed4fbc3e3ebc319d283052ea678d2768227a63bfaa9",
+    "nodes": "bd3c3fb80b4b4cdd2cf1aa71d8298b8de265f32fcf004b075ef2b22f4a632d85",
+    "pl": "0e836f2e2e07e4d86b2d708f09f9ea8fc9816c08b49cd2165e9e875233fe75b5",
+    "scl": "b0d7e4c143e1c10cf9b4e6bb0f1e213e37fb479c0207c75f75d5d2262fd0e3d4",
+    "wts": "bd900238f1c8e315a9a55c04ab4e7bd11195be474df75e486902d6a047a7b562"
+   },
+   "manifest_path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/arrays/3x3_n2/3x3_n2.manifest.json",
+   "manifest_source_sha256": {
+    "nets": "42c5a9d6b641248856e171dd7ea1aa6c01275c38f6792d6ba697e909511e3e0c",
+    "nodes": "36613f1a9923197a7555d91ceed4f978e33713b020c3e15e04810bf0c3c83b21",
+    "pl": "82dd06e3f6606342191db384dd1f94f18e68cfbb84e122226f77213947dcd199",
+    "scl": "08b84fe8ca39e36d101a96e2b8482d76362ab8655ef952726da9413d732bd380",
+    "wts": "bd900238f1c8e315a9a55c04ab4e7bd11195be474df75e486902d6a047a7b562"
+   },
+   "n_duplicate_pins_removed": 1671237,
+   "n_glue_nets": 59360,
+   "n_glue_pins": 118720,
+   "n_nets": 31595252,
+   "n_nets_base": 31535892,
+   "n_nodes": 27804699,
+   "n_pins": 106683202,
+   "n_pins_base": 106564482,
+   "n_pins_base_raw": 108235719,
+   "n_pins_raw": 108354439,
+   "n_src_nets": 3503988,
+   "n_src_nodes": 3089411,
+   "n_src_pins": 11840498,
+   "n_src_pins_canonical": 11840498,
+   "n_src_pins_raw": 12026191,
+   "native_sort_implementation": {
+    "compiler": "g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+    "helper_sha256": "305f136a3daceeedbbcc8d58ab80db2f30042f7f1762505d1ecff98f8860828c",
+    "policy": "std_sort_node_name_pin_name_unique_node"
+   },
+   "node_order": "movable_fixed_terminal_ni",
+   "num_movable": 27699021,
+   "num_terminal_NIs": 102798,
+   "num_terminals": 2880,
+   "orientation_policy": "native_fixed_only_N_normalization",
+   "parse_source_s": 32.749327182769775,
+   "pin_offset_origin": "lower_left",
+   "schema_version": 3,
+   "source_prefix": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/mempool_group_export/mempool_group",
+   "tile_height": 6742400,
+   "tile_width": 6746520,
+   "xh": 20249820.0,
+   "xl": 10260.0,
+   "yh": 20237280.0,
+   "yl": 10080.0
+  },
+  "device_snapshot": {
+   "compute_apps": [
+    [
+     1303704,
+     2798.0
+    ]
+   ],
+   "free_gib": 90.2626953125,
+   "name": "NVIDIA H100 NVL",
+   "time": 1788715579.9670413,
+   "total_gib": 93.583984375,
+   "used_gib": 2.8232421875,
+   "utilization_pct": 18.0,
+   "uuid": "GPU-53b4a8f5-a736-4461-7100-64281fbbfa6d"
+  },
+  "exclusivity_evidence": "shared_user_authorized",
+  "gpu_name": "NVIDIA H100 NVL",
+  "host_mem_available_gb": 710.8870735168457,
+  "manifest_sha256_at_preflight": "9e81c54bccf86a1443ea7675b768768a3af095740549960cb2163317b23f2382",
+  "measurement_mode": "shared",
+  "preflight_compute_app_pids": [
+   [
+    1303704,
+    2798.0
+   ]
+  ],
+  "shared_free_gb": 90.2626953125,
+  "shared_free_required_gb": 88.0,
+  "shared_margin_gb": 4.0,
+  "shared_user_authorized": true,
+  "source_sha256": {
+   "ioplace/bench/bookshelf_netlist.py": "6951684e81865c76c52174d2d20933ac65a709c5bee83c393b98bf3479d357be",
+   "ioplace/bench/spike_30m.py": "97eeb65915920fd0ed4eda6aa62995cc8ee9860cef7c6f12cea38ed446ca72e2",
+   "ioplace/bench/spike_30m_child.py": "e60c7f2beb30555aba63586f3c0ad69a563870d339822da276c49b3b6717a6d0",
+   "ioplace/diagnostics/probes_m4/gpu_exclusivity.py": "4fcac259e2833098b5a62c9b0f129be269ce058ca85753e0c17a431ad3f4e21b",
+   "ioplace/evaluator_gpu.py": "1b41080bcd30323e2713f07dc32eaf427630666f91f3de6e5b0142a803f5fbac",
+   "ioplace/ops/io_term.py": "0464062cf38b2039903b9370c54a7c6957144784169c46f2023fea521ddbac42"
+  }
+ },
+ "pytorch_cuda_alloc_conf": null,
+ "record_kind": "spike",
+ "repo_commit": "b02670f0dff3b64416e05d5951cd6f6db985953b",
+ "resident_gb": 5.9331329530104995,
+ "resident_lower_bound_gb": null,
+ "retry_count": 0,
+ "run_id": "5bec8a35-b723-49a5-a6d3-287e597ed54b",
+ "s4_scenario": "B_emulated_ballast",
+ "s4_source": "emulated_two_fp64_net_buffers",
+ "seed": 0,
+ "transient_accounting_note": "peak allocation minus end-of-run resident storage; not simultaneous phase accounting",
+ "workload_status": "completed"
+}

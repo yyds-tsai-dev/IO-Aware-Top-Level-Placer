@@ -1,0 +1,86 @@
+{
+  "status": "completed",
+  "pid": 2062213,
+  "started": 1788730960.6620736,
+  "iterations": [
+    {
+      "iteration": 0,
+      "seconds": 6.571602700976655,
+      "metrics": {
+        "io_count": 455889,
+        "ft_count": 102943,
+        "tree_wl": 7531246502.193478,
+        "hpwl": 6820510525.137044,
+        "large_net_lb": 220,
+        "hard_lambda_sum": 315591,
+        "io_rg": 418291,
+        "ft_rg": 102700
+      },
+      "equal_first_per_net": true
+    },
+    {
+      "iteration": 1,
+      "seconds": 6.426467993995175,
+      "metrics": {
+        "io_count": 455889,
+        "ft_count": 102943,
+        "tree_wl": 7531246502.193478,
+        "hpwl": 6820510525.137044,
+        "large_net_lb": 220,
+        "hard_lambda_sum": 315591,
+        "io_rg": 418291,
+        "ft_rg": 102700
+      },
+      "equal_first_per_net": true
+    },
+    {
+      "iteration": 2,
+      "seconds": 3.689658015035093,
+      "metrics": {
+        "io_count": 455889,
+        "ft_count": 102943,
+        "tree_wl": 7531246502.193478,
+        "hpwl": 6820510525.137044,
+        "large_net_lb": 220,
+        "hard_lambda_sum": 315591,
+        "io_rg": 418291,
+        "ft_rg": 102700
+      },
+      "equal_first_per_net": true
+    }
+  ],
+  "fixed_and_ni_tail_exact": true,
+  "die": [
+    0.0,
+    0.0,
+    53262.0,
+    53229.47368421053
+  ],
+  "load_convert_s_after_hash_reads": 3.592589271022007,
+  "selector_s": 5.942952692974359,
+  "selected_nets": 314108,
+  "selected_pins": 5966580,
+  "boundary_risk_nets": 224,
+  "cpu_multi_region_nets": 311904,
+  "cpu_subset_seconds": 265.91095029283315,
+  "cpu_subset_metrics": {
+    "io_count": 455889,
+    "ft_count": 102943,
+    "tree_wl": 3108004704.2461367,
+    "hpwl": 3049014237.404814,
+    "large_net_lb": 220,
+    "hard_lambda_sum": 315591,
+    "io_rg": 418291,
+    "ft_rg": 102700
+  },
+  "historical_integer_reconstruction": {
+    "io_count": false,
+    "ft_count": false,
+    "hard_lambda_sum": true,
+    "io_rg": true,
+    "ft_rg": true
+  },
+  "mismatching_nets": [],
+  "per_net_differences": [],
+  "ended": 1788731263.2862759
+}

@@ -1,0 +1,137 @@
+{
+  "protocol_compatible": true,
+  "receipt_sha256": "4aa242caa406a7cadb3074e27e501851e10f5e5ef006a6566afe935b07a52674",
+  "prediction_sha256": "951a05e9c4775c3f5b245436ceebc99f79f806ea8c11521b38008bd1bf9fefbb",
+  "actual_sha256": "8cd6973b08a1a7383030629d5cbe42959cce35282df701b24f14ab4e42a58239",
+  "phase_checks": {
+    "available": true,
+    "phases": {
+      "read": {
+        "phase": "read",
+        "t_l4_extrapolated_27m_s": 22731.414228771966,
+        "s_p_lo": 1.0,
+        "s_p_hi": 1.0,
+        "t_h100_actual_s": 1476.2546493599657,
+        "s_p_obs": 15.398030575976328,
+        "relative_error": 14.398030575976328,
+        "same_order": false,
+        "verdict": "out"
+      },
+      "gp": {
+        "phase": "gp",
+        "t_l4_extrapolated_27m_s": 997.7552689498948,
+        "s_p_lo": 2.5,
+        "s_p_hi": 5.0,
+        "t_h100_actual_s": 305.23625411698595,
+        "s_p_obs": 3.2687967287381645,
+        "relative_error": 0.0,
+        "same_order": true,
+        "verdict": "in"
+      },
+      "lg": {
+        "phase": "lg",
+        "t_l4_extrapolated_27m_s": 206.39711157338436,
+        "s_p_lo": 1.0,
+        "s_p_hi": 1.0,
+        "t_h100_actual_s": 481.51787917292677,
+        "s_p_obs": 0.42863852102002903,
+        "relative_error": 0.571361478979971,
+        "same_order": false,
+        "verdict": "out"
+      },
+      "eval": {
+        "phase": "eval",
+        "t_l4_extrapolated_27m_s": 5382.829265185591,
+        "s_p_lo": 2.5,
+        "s_p_hi": 5.0,
+        "t_h100_actual_s": 10779.041283623083,
+        "s_p_obs": 0.4993792233975282,
+        "relative_error": 0.8002483106409887,
+        "same_order": false,
+        "verdict": "out"
+      }
+    }
+  },
+  "wall_time": {
+    "actual": 13042.050066272961,
+    "band_low": 24213.928247172447,
+    "band_high": 25490.045153999545,
+    "in_band": false,
+    "verdict": "out",
+    "unit": "seconds"
+  },
+  "mainline_hypothesis": {
+    "confirmed": false,
+    "phases_same_order": false,
+    "total_time_in_band": false,
+    "reason": "phase(s) out of declared s_p order (>50% relative error): ['eval', 'lg', 'read']; total wall-time outside [total_fast_s, total_slow_s]"
+  },
+  "host_rss": {
+    "actual": 185.6122703552246,
+    "point_estimate_gb": 168.85496710543924,
+    "in_band": null,
+    "verdict": "not_applicable",
+    "reason": "host RSS model unfit -- no validated interval was frozen (design draft sec 6.3 E5(iii)'s \u5426\u5247 branch); point estimate reported for context only, not graded",
+    "unit": "GB"
+  },
+  "gpu_memory": {
+    "verdict": "not_applicable_shared_attribution",
+    "whole_card_peak_gib": 29.6123046875,
+    "process_peak_allocated_gib": 25.307887077331543,
+    "analytic_forecast": {
+      "unit": "GB",
+      "components": {
+        "gp": {
+          "l4_peak_alloc_gb": 6.210755825042725,
+          "l4_peak_reserved_gb": 6.818359375,
+          "count_scale_ratio": 2.4572127508849775,
+          "count_scale_basis": "node_ratio",
+          "scaled_alloc_gb": 15.26114840592813,
+          "scaled_reserved_gb": 16.754159596366126
+        },
+        "eval": {
+          "l4_peak_alloc_gb": 10.600590229034424,
+          "l4_peak_reserved_gb": 11.994140625,
+          "count_scale_ratio": 2.4655262893406276,
+          "count_scale_basis": "pin_ratio",
+          "scaled_alloc_gb": 26.136033892211756,
+          "scaled_reserved_gb": 29.571869028985926
+        }
+      },
+      "dominant_component": "eval",
+      "lower_bound_gb": 26.136033892211756,
+      "lower_bound_basis": "scaled peak_alloc_gb of the dominant component (eval) -- an analytic resident-tensor account substitute (design draft sec 6.3 E5(i)'s resident_tensors term), not a full per-tensor dtype x shape rebuild",
+      "max_phase_transient_gb": 15.26114840592813,
+      "allocator_reserve_gb": 3.4358351367741697,
+      "cuda_context_gb": 0.38519287109375,
+      "cuda_context_basis": "L4-measured device_baseline_gb used as a placeholder for the (unmeasured) H100 constant -- T14's first run should replace this",
+      "upper_bound_gb": 45.218210306007805,
+      "formula": "design draft sec 6.3 E5(i): upper_bound = lower_bound + max_p transient_p + allocator_reserve + cuda_context (\u89e3\u6790\u4e0a\u4e0b\u754c,\u4e0d\u662f\u7d71\u8a08\u5340\u9593)",
+      "unvalidated": true
+    },
+    "reason": "whole-card usage and process analytic bounds have different attribution"
+  },
+  "legality": {
+    "legalization_status": "success",
+    "num_unplaced_cells": 0,
+    "stop_overflow_reached": true,
+    "final_overflow": 0.06630443036556244
+  },
+  "registered_counts": {
+    "physical_nodes": 27804699,
+    "movable_nodes": 27699021,
+    "nets": 31595252,
+    "raw_pins": 108354439,
+    "canonical_pins": 106683202
+  },
+  "count_scope": "physical coordinate length observed; pin/net counts from verified source/cache protocol",
+  "supervisor_wall_s": 13330.270750761032,
+  "historical_sxm_forecast": "unchanged; inapplicable SKU",
+  "source_scope": "full run uses frozen source snapshot; later development is separate",
+  "coordinate_sha256": "5f041a060c2109b34670fb165bf9777f6bd575a3173d6976f333c601e2b2c34f",
+  "coordinate_hash_scope": "computed during adjudication; supervisor bound JSON/log/device history",
+  "evaluation_procedure": "frozen final phase runs serial CPU reference then GPU evaluator",
+  "exclusive_speedup_claim": false,
+  "quality_claims_prohibited": true,
+  "required_disclosure": "Frozen runtime assumption was not confirmed; explain phase differences and refit separately without widening this forecast."
+}

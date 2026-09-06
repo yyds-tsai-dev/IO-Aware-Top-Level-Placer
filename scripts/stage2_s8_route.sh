@@ -19,10 +19,9 @@
 #      order S8's placement config already uses) + the fixed/original DEF,
 #      record the V1/V2 pre-route instance/net counts, `set_thread_count 8`,
 #      `global_route -allow_congestion` (required on this benchmark family,
-#      spec sec 6.1 note) + `detailed_route` (uncapped -- no
-#      `-droute_end_iter`, unlike the S4 rehearsal's time-boxed run; the
-#      12h `timeout` below is what bounds wall time here), `write_def
-#      routed.def`.
+#      spec sec 6.1 note) + `detailed_route -droute_end_iter 5`, then
+#      `write_def routed.def`. The finite iteration limit and12h timeout
+#      bound the run; residual DRC is retained in reports.
 #   3. `or_run/postprocess.tcl`: re-read the *input* DEF and `routed.def`
 #      in a fresh session, report V1/V2 (#insts/#nets, exact match
 #      required) and `report_wire_length` -> `or_run/wirelength.rpt`.

@@ -1,0 +1,14 @@
+{
+  "source_sha256": {
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/scripts/diagnose_full_gpu_parity.py": "8f01ca029e457031675ea13b9b9c83ae01ba560d3fe64c3f6bf5105803b221be",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/evaluator_gpu.py": "1b41080bcd30323e2713f07dc32eaf427630666f91f3de6e5b0142a803f5fbac",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/evaluator_ref.py": "ecdea1a548a6099f1fc7a82e2b6b70c9e2dba19dba56f969cfe95b69a5972101",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/region_grid.py": "ae2412285f7265e6625272f53539c957feed37802c2fa45e581b8117a0a3ff3d"
+  },
+  "reference_sha256": "8cd6973b08a1a7383030629d5cbe42959cce35282df701b24f14ab4e42a58239",
+  "first_failure_sha256": "4b445536648c20d6f6229ca9b1e779d09477d7a3f4d3bf5ba2218df0df529c29",
+  "boundary_risk_tolerance": 0.0001,
+  "selector": "CPU region spread OR GPU IO/FT positive OR degree>256 OR internal region boundary distance<=1e-4",
+  "cpu_omitted_io_ft": 0,
+  "historical_reconstruction_required": true
+}

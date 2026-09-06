@@ -21,10 +21,10 @@ plan, or passing toy test alone does not complete a real-data requirement.
 | Item | Required work and evidence | Current state |
 | --- | --- | --- |
 | 1 | Correct native node ordering/counts/pin coordinates; native small-case regression; full real 1x2 equivalence including net identity and pin multiplicity | Schema3 implemented. Native real visible1x2 equivalence passed518s. All three recovered arrays match historical hashes; 3x3/1x2/2x2 full streaming verification passed1344/376/776s. |
-| 2 | Recover/regenerate 27.7M inputs/cache, register actual NVL hardware, execute full GP+LG+evaluation, adjudicate the frozen prediction with resource provenance | NVL protocol/forecast frozen in49dccd4. T9 A/B each completed4 interleaved iterations within84GiB process budget. Full native GP+LG+eval running; forecast adjudication pending. |
-| 3 | Persist aligned per-net evaluator/degree/pin-region/boundary data; route FT and delta 0/1/2/4; >=3 routed designs and complete calibration tables/gates | All12 placements completed. Restored actual upstream GRT and launched capped DR. OpenDB pin snapshots, provenance, eligibility masks and paired calibration implemented; actual routed evidence/calibration still pending. |
+| 2 | Recover/regenerate 27.7M inputs/cache, register actual NVL hardware, execute full GP+LG+evaluation, adjudicate the frozen prediction with resource provenance | NVL protocol/forecast frozen in49dccd4. T9 A/B each completed4 interleaved iterations within84GiB process budget. Full native GP+LG+eval completed, legality success/0 unplaced; phase sum13042.050s, process CUDA allocated peak25.308GiB. Frozen timing hypothesis false. Separate GPU-only check found IO−1/FT−2 versus historical CPU metrics; per-net diagnosis active. |
+| 3 | Persist aligned per-net evaluator/degree/pin-region/boundary data; route FT and delta 0/1/2/4; >=3 routed designs and complete calibration tables/gates | All12 placements completed. Restored actual upstream GRT and launched capped DR. OpenDB pin snapshots, provenance, eligibility masks and paired calibration implemented; FFT four-arm complete paired evidence/calibration available; DES/tile routes and final three-design cohort still pending. |
 | 4 | Run the IO-enabled signal/lever experiment with matched controls; pre-register and implement P0c if pursued; report confirmation and demand/noise probes without changing prior verdicts |21 registered runs completed; A2-A0 confirmation improvesFT/IO onadaptec1. All positive P0c arms failIOguard; noqualified confirmation/P4.21 final-coordinate boundary probes verified. Historical M3 FAIL unchanged; report in docs/results/2026-09-06-ft-followup.md. |
-| 5 | Complete evaluator/IoTerm/host-RSS model evidence and output metadata; implement real conditional-expectation decode and boundary refinement; verify legal final geometry and run comparisons |144 primary +36 holdout component processes completed; all six fits fail coefficient-CI gate. Host18train+3holdout completed, both fits fail identification. M5 CE/refinement/legal acceptance implemented and14 focused tests passed; 1M/10M/30M bounded scale runs completed. Real screening11/12 completed; bigblue4 final arm pending. Finished proposals rejected by registered guards. |
+| 5 | Complete evaluator/IoTerm/host-RSS model evidence and output metadata; implement real conditional-expectation decode and boundary refinement; verify legal final geometry and run comparisons |144 primary +36 holdout component processes completed; all six fits fail coefficient-CI gate. Host18train+3holdout completed, both fits fail identification. M5 CE/refinement/legal acceptance implemented and14 focused tests passed; 1M/10M/30M bounded scale runs completed. Real screening12/12 completed. All9 proposals rejected by registered guards, final coordinates bitwise equal matched none controls. |
 
 ## Data dependencies
 
@@ -90,3 +90,16 @@ See results/validation_20260906/summary.json and hashed logs.
   ours workers. Original dispatcher PID84136 is deliberately stopped until
   the unique-work scheduler finishes six remaining cases and exact flat-K
   reuse. Do not resume it early or launch duplicate routing work.
+
+## 21:45 UTC checkpoint
+
+H100 T14 adjudication and report are complete. A separate posthoc engineering
+check retains an exact IO−1/FT−2 discrepancy; three GPU repeats have identical
+per-net arrays. CPU-reference localization runs314108 selected nets including
+224 boundary-risk nets. Native/cache pin-order equality is under additional
+audit because the earlier real1x2 test compared endpoint multisets. Existing
+first-run payloads and source archives remain immutable.
+
+Schema4 strictnative1x2 equivalence passed537.66s; 33focusedtests and latest
+fullnonslow990passed/1skip/39deselected55.75s. Neworderedcachefullverification
+and27.7Mhistoricalaggregateparity remain active; originalschema3artifacts preserved.

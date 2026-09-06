@@ -1,0 +1,57 @@
+[
+  {
+    "path": "results/h100_nvl_followup_20260906/parity_diagnosis_v1/cpu_selected_per_net_crossings.npy",
+    "bytes": 1256560,
+    "sha256": "06adf90a483f14359b7f04afc5c00cf57b9289e5393722aa4ac4544104b1ec20"
+  },
+  {
+    "path": "results/h100_nvl_followup_20260906/parity_diagnosis_v1/cpu_selected_per_net_ft.npy",
+    "bytes": 1256560,
+    "sha256": "42e07e038b92dca4399028de1ac74d8f06446b8fd4ea2a3decbf57fdcf2005f6"
+  },
+  {
+    "path": "results/h100_nvl_followup_20260906/parity_diagnosis_v1/cpu_selected_per_net_home.npy",
+    "bytes": 314236,
+    "sha256": "e18a5ccf647d5bc2191c4f513996e8a61b321eeecb1a41b4af3882f440f574b2"
+  },
+  {
+    "path": "results/h100_nvl_followup_20260906/parity_diagnosis_v1/cpu_selected_per_net_lambda.npy",
+    "bytes": 1256560,
+    "sha256": "fbfa4543d968b72ee76a04faae0b61f8b8423d0c3d2805ec59506cf6c3cfd7fe"
+  },
+  {
+    "path": "results/h100_nvl_followup_20260906/parity_diagnosis_v1/cpu_selected_per_net_steiner.npy",
+    "bytes": 1256560,
+    "sha256": "eed3ef1e407cb328da5d773e4497e185657cee06ddc5c93aeba4507b5f03852e"
+  },
+  {
+    "path": "results/h100_nvl_followup_20260906/parity_diagnosis_v1/per_net_crossings.npy",
+    "bytes": 126381136,
+    "sha256": "c01dd99c28c488c49a79cc246d93e594981bf45303a70e02888ce3a01fea39cc"
+  },
+  {
+    "path": "results/h100_nvl_followup_20260906/parity_diagnosis_v1/per_net_ft.npy",
+    "bytes": 126381136,
+    "sha256": "e653dbd0e35ff8637df5e40b03b5a52653c5918a394a83d52603b5c07e31c3d4"
+  },
+  {
+    "path": "results/h100_nvl_followup_20260906/parity_diagnosis_v1/per_net_home.npy",
+    "bytes": 31595380,
+    "sha256": "6089771c4df68df90dce9527c311881a166211fa622c0704ed95f1621afd7df0"
+  },
+  {
+    "path": "results/h100_nvl_followup_20260906/parity_diagnosis_v1/per_net_lambda.npy",
+    "bytes": 126381136,
+    "sha256": "13fc8a58c4143328ceec3b37d2a3835ff4ae27b0869d10fe7127a417ef6b04f1"
+  },
+  {
+    "path": "results/h100_nvl_followup_20260906/parity_diagnosis_v1/per_net_steiner.npy",
+    "bytes": 126381136,
+    "sha256": "81090021b77365a04836d7ed23d854a385acbc17f71b2ac871990a40e73b1570"
+  },
+  {
+    "path": "results/h100_nvl_followup_20260906/parity_diagnosis_v1/selected_net_ids.npy",
+    "bytes": 2512992,
+    "sha256": "fa7a7a9b2dc5204246a195160c671259ad12b7dabb0a28bbe671b520058116f5"
+  }
+]

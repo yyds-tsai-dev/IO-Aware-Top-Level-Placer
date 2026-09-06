@@ -33,10 +33,14 @@ IOPLACE_MTKAHYPAR_THREADS=1 CUDA_VISIBLE_DEVICES=0 \
   "$IOPLACE_PYTHON" -m pytest -q -m 'not slow'
 ```
 
-本次結果：968 passed、1 skipped、38 deselected，exit0。另有 fresh subprocess
+最初完整結果為968 passed、1 skipped、38 deselected；最新整合後結果為
+978 passed、1 skipped、39 deselected，兩者皆exit0。另有 fresh subprocess
 regression 先以 requested8 執行 partition，再以 requested4 執行三次 Rent，
 確認 effective1、合法 assignment 與原本 exponent assertions。該組 targeted
 測試共18 passed。Logs 與 hashes 保存在 `results/validation_20260906/`。
 
-這是可重現的緩解措施；原生多執行緒缺陷與較早一次 exit134 teardown abort
-尚未完成根因修復。歷史多執行緒結果保留原始 provenance。
+這是可重現的緩解措施；原生多執行緒缺陷尚未完成根因修復。歷史多執行緒
+結果保留原始provenance。另一次driver suite exit134定位為DREAMPlace內建
+ISPD2015相對路徑缺少benchmark alias；補上既有資料的symlink後，DEF export／
+reweight尾段12 passed正常退出。Driver lifecycle integration亦35 passed。
+此資料路徑問題與MtKaHyPar多執行緒缺陷分開記錄；測試群組有重疊。

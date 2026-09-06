@@ -4,6 +4,31 @@
   "mtkahypar_threads_override": 1,
   "checks": [
     {
+      "name": "full nonslow after native ordered-cache correction",
+      "passed": 990,
+      "skipped": 1,
+      "deselected": 39,
+      "warnings": 1,
+      "seconds": 55.75,
+      "exit_code": 0,
+      "log": "final-nonslow-schema4.log"
+    },
+    {
+      "name": "schema4 native pin-order regressions",
+      "passed": 33,
+      "deselected": 1,
+      "seconds": 3.04,
+      "exit_code": 0,
+      "log": "native-order-complete-tests.log"
+    },
+    {
+      "name": "real visible1x2 native ordered equivalence",
+      "passed": 1,
+      "seconds": 537.66,
+      "exit_code": 0,
+      "log": "native-real-1x2-schema4.log"
+    },
+    {
       "name": "full nonslow",
       "passed": 978,
       "skipped": 1,
@@ -83,6 +108,18 @@
     {
       "path": "results/validation_20260906/stage2-serialized-final2.log",
       "sha256": "994732650d93decb76dd866f7819754adf04f1205917b70ff2a90e3756537021"
+    },
+    {
+      "path": "results/validation_20260906/final-nonslow-schema4.log",
+      "sha256": "78f811b483f9e81340fc2c56d0ebceb26e41e45387efd3ae71384feba3ac5a87"
+    },
+    {
+      "path": "results/validation_20260906/native-order-complete-tests.log",
+      "sha256": "c0d7442abdbe92a1dcd75bb27d9b01b61d865697df5e634fe73f5f5170a39f26"
+    },
+    {
+      "path": "results/validation_20260906/native-real-1x2-schema4.log",
+      "sha256": "1c765f7b962072902ab4707a584493e5d7d766267c93f03ac00488ff6eb99f31"
     }
   ]
 }

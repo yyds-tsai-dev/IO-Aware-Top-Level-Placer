@@ -1,0 +1,67 @@
+{
+  "status": "failed",
+  "pid": 1918333,
+  "started": 1788730022.9284704,
+  "protocol_sha256": "a6cdb1bfe18327d4955c7697edf9be136e7f5f50377c8616891a5706aa524ef4",
+  "measurement_mode": "shared",
+  "cuda_visible_devices": "1",
+  "iterations": [
+    {
+      "iteration": 0,
+      "evaluate_s": 3.2489591140765697,
+      "metrics": {
+        "io_count": 455889,
+        "ft_count": 102943,
+        "tree_wl": 7531246502.193478,
+        "hpwl": 6820510525.137044,
+        "large_net_lb": 220,
+        "hard_lambda_sum": 315591,
+        "io_rg": 418291,
+        "ft_rg": 102700
+      },
+      "checks": {
+        "io_count": false,
+        "ft_count": false,
+        "hard_lambda_sum": true,
+        "io_rg": true,
+        "ft_rg": true,
+        "hpwl": true,
+        "tree_wl": true
+      },
+      "per_net_digests": {
+        "per_net_crossings": "9c564a12f4ff9544ad84fb3dc449da4454fc683a0f5149f7440c116ba0c67f88",
+        "per_net_ft": "ce7e976a3a0425bd2c4ca201be3d1a3ba50adc625e10bfdfc1eca5d70af6245f",
+        "per_net_lambda": "6c05567db8c3d5ff40a320b765ad15207b45f30d3ed6af5826e8e449134ea170",
+        "per_net_steiner": "f25126ab621411e5c7b1faa9cead00348a9dd500e13184ed75b5cfe38fee5db1",
+        "per_net_home": "56fb42424fe537b026291062263bf43a466db61bdce335b3d8d892344231095a"
+      }
+    }
+  ],
+  "device_before": {
+    "time": 1788730023.1809845,
+    "uuid": "GPU-1a75fdd3-2f46-0258-4123-095efa8636e9",
+    "name": "NVIDIA H100 NVL",
+    "total_gib": 93.583984375,
+    "used_gib": 1.1787109375,
+    "free_gib": 91.9072265625,
+    "utilization_pct": 19.0,
+    "compute_apps": [
+      [
+        1303694,
+        1186.0
+      ]
+    ]
+  },
+  "fixed_and_ni_tail_exact": true,
+  "die": [
+    0.0,
+    0.0,
+    53262.0,
+    53229.47368421053
+  ],
+  "load_convert_s_after_hash_reads": 3.6422667670994997,
+  "context_build_s": 7.795640291878954,
+  "error": "ValueError(\"aggregate parity failed: {'io_count': False, 'ft_count': False, 'hard_lambda_sum': True, 'io_rg': True, 'ft_rg': True, 'hpwl': True, 'tree_wl': True}\")",
+  "ended": 1788730038.9682848,
+  "host_peak_rss_gib": 7.435733795166016
+}

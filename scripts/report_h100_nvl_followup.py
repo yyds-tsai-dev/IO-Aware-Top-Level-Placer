@@ -69,6 +69,28 @@ def main():
         "座標NPZ雜湊在adjudication時計算；supervisor原先綁定的是JSON/log/device history。",
         "舊H100 SXM預測保留，沒有拿來當作此次NVL的相同SKU驗證。", "",
         "圖表：[PNG](figs/h100-nvl-followup-20260906.png)、[PDF](figs/h100-nvl-followup-20260906.pdf)。"]
+    diagnosis_path = root / "parity_diagnosis_v1/result.json"
+    if diagnosis_path.exists():
+        diagnosis = json.loads(diagnosis_path.read_text())
+        lines += ["", "## 額外cache順序診斷（不改寫首跑）", "",
+            "首次cache重建的GPU核對出現IO−1／FT−2；三次GPU逐net結果一致。",
+            "對314,108個候選net執行CPU reference後，CPU(cache)與GPU(cache)逐net一致，",
+            "其IO455,889／FT102,943與原始native輸入的IO455,890／FT102,945不同。",
+            "差異定位到cache漏掉native createPin的逐output front/back交換；",
+            "既有等價測試只比pin multiset，未驗證net遍歷順序。Schema4補足此順序，",
+            "schema3及首次失敗檢查完整保留，沒有修改GPU evaluator演算法。"]
+        ordered_path = root / "ordered_gpu_validation.json"
+        if ordered_path.exists():
+            ordered = json.loads(ordered_path.read_text())
+            if ordered.get("aggregate_parity_pass"):
+                lines += [f"修正cache後，三次全27.7M核對全部通過；warm GPU eval平均{ordered['warm_mean_evaluate_s']:.3f}s。",
+                    "IO／FT／lambda／RG整數完全相等，HPWL與tree-WL符合事前容差；",
+                    "所有IO／FT受影響net另存微型fixture並通過CPU reference。",
+                    "這是posthoc工程驗證，不能取代原始混合eval時間或重判凍結預測。"]
+            else:
+                lines += [f"修正cache完整核對狀態：{ordered.get('status')}；尚不宣稱完成parity。"]
+        else:
+            lines += ["修正cache的全量驗證與27.7M核對尚在執行。"]
     if verdict is not True:
         lines += ["", "任一落外 ⇒ 在報告發表重擬合模型與歸因,不得事後放寬區間",
                   "本報告提供首跑歸因與模型不成立的證據；尚無足夠同條件觀測可產生有效重新校準區間。"]
