@@ -247,6 +247,60 @@ def test_table6_ft_three_value_reports_when_available(tmp_path):
     assert t6["rows"][0]["route_ft"] == 6
 
 
+def _evidence_sample(n=6):
+    ev = {
+        "per_net_crossings": np.array([1, 2, 3, 4, 0, 99]),
+        "per_net_steiner": np.array([1, 4, 9, 16, 0, 99]),
+        "per_net_lambda": np.array([2, 3, 4, 5, 1, 8]),
+        "net_degrees": np.array([2, 3, 4, 8, 20, 2]),
+        "boundary_pairs": np.array([[0, 1], [1, 2]]),
+        "boundary_demand": np.array([2, 4]),
+        "metadata": {"max_degree": 10},
+    }
+    return dict(sample_id="e", design="d", arm="a", evaluator=ev,
+                per_net_route_cross_dw=np.array([1, 4, 9, 16, 100, 0]),
+                route_pair_demand={"0,1": 1, "1,2": 3})
+
+
+def test_artifact_table2_masks_per_model_and_reports_both_correlations():
+    t = sc.table2_per_net_correlation([_evidence_sample()])
+    rg = next(r for r in t["rows"] if r["model"] == "io_rg")
+    assert rg["n"] == 5  # zero route/model and degree > max are excluded
+    assert rg["pearson"] != rg["spearman"]
+    assert t["pooled"]
+
+
+def test_table2_rejects_unequal_lengths():
+    s = _evidence_sample(); s["per_net_route_cross_dw"] = np.array([1, 2])
+    with pytest.raises(ValueError): sc.table2_per_net_correlation([s])
+
+
+def test_table3_reports_exact_sum_ratios_for_all_models():
+    rows = sc.table3_degree_bucket([_evidence_sample()])["rows"]
+    row = next(r for r in rows if r["bucket"] == "2")
+    # Both matched degree-2 nets count: model-positive/route-zero nets must
+    # remain in the denominator (excluding them hid a 99-crossing error).
+    assert row["n"] == 2 and row["R_X"] == pytest.approx(.01) and row["R_RG"] == pytest.approx(.01)
+    assert "R_lambda" in row
+
+
+def test_table7_reports_spearman_and_zero_filled_pairs():
+    row = sc.table7_boundary_pair_demand([_evidence_sample()])["rows"][0]
+    assert row["n"] == 2 and row["spearman"] is not None
+    assert len(row["pairs"]) == 2
+
+
+def test_judge_c1_does_not_promote_pooled_spearman_to_formal_selection():
+    t1 = {"pooled": {"R_io_rg": 1.0, "R_io_mst": 1.2}}
+    t2 = {"pooled": [{"model": "io_rg", "spearman": .8}, {"model": "io_mst", "spearman": .7}]}
+    assert sc.judge_c1(t1, t2)["verdict"] == "not_evaluable"
+    t1["rows"] = [dict(sample_id="design_flat", R_io_rg=1., R_io_mst=1.2)]
+    t2["rows"] = [dict(sample_id="design_flat", **row) for row in t2["pooled"]]
+    result = sc.judge_c1(t1, t2)
+    assert result["verdict"] == "per_sample_only"
+    assert result["comparisons"][0]["verdict"] == "rg_selected"
+
+
 # ---------------------------------------------------------------------------
 # fit_regression: NNLS recovers exact coefficients on a noiseless synthetic set
 # ---------------------------------------------------------------------------

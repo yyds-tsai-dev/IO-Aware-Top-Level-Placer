@@ -1,48 +1,22 @@
-"""Stage 2 S9 -- calibration analysis (`docs/superpowers/specs/2026-08-13-
-stage2-innovus-calibration-plan.md` sec 8 (8.2's seven tables, 8.3's
-regression, 8.4's C1-C5 rules) and sec 10's S9 row).
+"""Stage 2 calibration from paired, persisted evaluator and routed-wire evidence.
 
-Pure-CPU aggregation of S8's already-routed samples
-(`results/stage2/s8/<design>__<arm>/`) -- **no GPU evaluator recompute, no
-re-routing**. Every number in this module's output is either read verbatim
-from an on-disk JSON/log or derived from those numbers with plain
-numpy/scipy. Two facts discovered while wiring this up bound how far the
-seven tables can go, and are surfaced as `not_evaluable` entries rather than
-worked around:
-
-1. **No per-net evaluator array is persisted anywhere in S8's output.**
-   `metrics.json` only has scalar totals (`io_count`, `ft_count`,
-   `hard_lambda_sum`, `io_rg`, `ft_rg`, `tree_wl`, `hpwl`, ...) and
-   `metrics.json.npz` only has `node_x`/`node_y` (`ioplace/drivers/
-   run_placement.py:408`) -- the driver never calls `evaluator_ref.evaluate`/
-   `evaluator_gpu` and saves the resulting `EvalResult.per_net_*` arrays.
-   Recomputing them now would mean calling `evaluate_gpu` on the post-route
-   `routed.def` COMPONENTS, which needs a GPU and is explicitly out of scope
-   for S9. Consequence: every *per-net* evaluator-vs-route comparison (table
-   2's Spearman/Pearson, table 3's per-degree bucket, table 7's boundary-pair
-   correlation, and C1's rho comparison) is `not_evaluable`; only *total*-
-   level ratios are computable (table 1, table 5, table 6).
-2. **`per_net_route_ft` is the `-1` "not computed" sentinel for every net in
-   every S8 sample** (`ioplace/route_eval/route_crossings.py:373`: a net
-   missing from the `pin_regions` argument gets `route_ft=-1`; S8's
-   extraction call never supplied it). So table 6's `route_ft` column is
-   `not_evaluable` too, even though `ft_rg`/`ft_mst` (evaluator totals) are
-   fine.
-
-Usage:
-    PYTHONPATH=. $PY -m ioplace.diagnostics.stage2_calibration \\
-        --s8-dir results/stage2/s8 \\
-        --out-dir results/stage2/calibration
+Historical scalar-only artifacts retain an explicit degraded path. New cohorts
+carry per-net evidence recomputed on the actual routed DEF, exact fingerprints,
+and a delta scan. This module performs CPU analysis only.
 """
 import argparse
+import hashlib
+from pathlib import Path
 import json
 import os
 import re
 
 import numpy as np
 from scipy.optimize import nnls
+from scipy.stats import pearsonr, spearmanr
+from ioplace.export.evaluation import load_evaluation
 
-REPO = "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 S8_DIR_DEFAULT = os.path.join(REPO, "results", "stage2", "s8")
 OUT_DIR_DEFAULT = os.path.join(REPO, "results", "stage2", "calibration")
 
@@ -100,8 +74,77 @@ def _read_json(path):
 # Per-sample loading
 # ---------------------------------------------------------------------------
 
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for block in iter(lambda: stream.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def load_delta_scan(case, k, primary):
+    path = os.path.join(case, f"delta_scan_k{k}.json")
+    if not os.path.exists(path):
+        return None
+    scan = _read_json(path)
+    for key in ("routed_def_sha256", "segments_sha256", "evaluator_sha256"):
+        if scan[key] != primary.get(key):
+            raise ValueError(f"delta scan {key} mismatch")
+    if sorted(row["delta"] for row in scan["rows"]) != [0, 1, 2, 4]:
+        raise ValueError("incomplete or duplicate delta scan")
+    for row in scan["rows"]:
+        if sha256_file(row["path"]) != row["sha256"]:
+            raise ValueError("delta scan artifact digest mismatch")
+        value = _read_json(row["path"])
+        if (value["delta"] != row["delta"] or value["total_route_cross_dw"] != row["route_cross_dw"]
+                or value["total_route_cross_raw"] != row["route_cross_raw"]
+                or any(value.get(key) != scan[key] for key in
+                       ("routed_def_sha256", "segments_sha256", "evaluator_sha256"))):
+            raise ValueError("delta scan row does not describe its referenced artifact")
+    return scan
+
+
 def load_metrics(s8_dir, design, arm):
     return _read_json(os.path.join(_case_dir(s8_dir, design, arm), "metrics.json"))
+
+
+def validate_case_receipt(case, k, matched):
+    """Require independently checked identities and a complete evidence chain."""
+    case = Path(case).resolve()
+    receipt = _read_json(case / "evidence.execution.json")
+    if receipt.get("status") != "completed":
+        raise ValueError("paired evidence pipeline incomplete")
+    required = [case / "or_run" / name for name in (
+        "verify_identity.json", "verify_s2.json", "pin_geometry.npz",
+        "pin_geometry.npz.json", "pin_geometry_input.npz", "pin_geometry_input.npz.json",
+        "segments.npz", "segments.provenance.json")]
+    required += [Path(matched["evaluator_file"]).resolve(), case / f"crossings_k{k}.json",
+                 case / f"delta_scan_k{k}.json", case / f"boundary_evidence_k{k}.json"]
+    outputs = receipt.get("outputs", {})
+    if any(str(path) not in outputs for path in required):
+        raise ValueError("paired receipt omits required identity or evaluator evidence")
+    inputs = receipt.get("inputs", {})
+    for path in (case / "or_run/fixed.def", case / "or_run/routed.def",
+                 case / f"evaluator_k{k}.npz", case / "metrics.json"):
+        if str(path) not in inputs:
+            raise ValueError("paired receipt omits required placement input")
+    for label, entries in (("input", inputs), ("output", outputs)):
+        for path, digest in entries.items():
+            if sha256_file(path) != digest:
+                raise ValueError(f"paired evidence {label} changed: {path}")
+    run = case / "or_run"
+    identity = _read_json(run / "verify_identity.json")
+    if not identity.get("overall_pass"):
+        raise ValueError("routing identity verification failed")
+    for key, path in (("input_def_sha256", run / "fixed.def"),
+                      ("routed_def_sha256", run / "routed.def"),
+                      ("before_geometry_sha256", run / "pin_geometry_input.npz"),
+                      ("after_geometry_sha256", run / "pin_geometry.npz")):
+        if identity.get(key) != sha256_file(path):
+            raise ValueError(f"identity evidence mismatch: {key}")
+    if not _read_json(run / "verify_s2.json").get("overall_pass"):
+        raise ValueError("routed wire verification failed")
+    return receipt
 
 
 def load_crossings(s8_dir, design, arm, k):
@@ -162,9 +205,28 @@ def build_sample(s8_dir, design, arm):
     other = load_crossings(s8_dir, design, arm, other_k)
     if matched is None:
         raise FileNotFoundError(f"{design}__{arm}: crossings_k{k}.json (matched K) missing")
+    if matched["delta"] != 2:
+        raise ValueError("primary calibration must use delta2")
+
+    evidence = None
+    ev_path = matched.get("evaluator_file")
+    if ev_path:
+        validate_case_receipt(case, k, matched)
+        if sha256_file(ev_path) != matched.get("evaluator_sha256"):
+            raise ValueError(f"{design}__{arm}: evaluator file digest mismatch")
+        ev = load_evaluation(ev_path)
+        meta = ev["metadata"]
+        for key in ("region", "placement", "net_order"):
+            if meta[key+"_sha256"] != matched.get("evaluator_"+key+"_sha256"):
+                raise ValueError(f"{design}__{arm}: evaluator {key} mismatch")
+        if (meta["k"] != k or meta["num_nets"] != matched["num_nets"]
+                or meta["provenance"].get("placement_stage") != "router_def"
+                or meta["provenance"].get("router_def_sha256") != matched.get("routed_def_sha256")):
+            raise ValueError(f"{design}__{arm}: evaluator was not paired to the routed geometry")
+        evidence = ev
 
     route_ft_arr = np.asarray(matched["per_net_route_ft"], dtype=np.int64)
-    route_ft_all_sentinel = bool(np.all(route_ft_arr == -1))
+    route_ft_complete = bool(len(route_ft_arr) and np.all(route_ft_arr >= 0))
     lam_route_arr = np.asarray(matched["per_net_lambda_route"], dtype=np.int64)
 
     verify_s2_path = os.path.join(case, "or_run", "verify_s2.json")
@@ -175,17 +237,18 @@ def build_sample(s8_dir, design, arm):
     drc_rpt_path = os.path.join(case, "or_run", "drc.rpt")
     drc_rpt_count = parse_drc_rpt(drc_rpt_path)
 
-    lam_minus_1 = int(metrics["hard_lambda_sum"])
-    io_rg = int(metrics["io_rg"])
-    ft_rg = int(metrics["ft_rg"])
-    io_mst = int(metrics["io_count"])
-    ft_mst = int(metrics["ft_count"])
+    totals = evidence["metadata"]["totals"] if evidence is not None else metrics
+    lam_minus_1 = int(totals["hard_lambda_sum"])
+    io_rg = int(totals["io_rg"])
+    ft_rg = int(totals["ft_rg"])
+    io_mst = int(totals["io_count"])
+    ft_mst = int(totals["ft_count"])
     route_cross_raw = int(matched["total_route_cross_raw"])
     route_cross_dw = int(matched["total_route_cross_dw"])
     route_wl = int(matched["total_route_wl"])
     delta = matched["delta"]
 
-    return dict(
+    sample = dict(
         sample_id=f"{design}__{arm}",
         design=design, arm=arm, k_placement=k, router="OR",
         source_paths=dict(
@@ -199,15 +262,28 @@ def build_sample(s8_dir, design, arm):
         ),
         num_nets=int(matched["num_nets"]),
         num_unmatched_nets=int(matched["num_unmatched_nets"]),
+        unmatched_net_indices=matched.get("unmatched_net_indices", []),
+        per_net_calibration_eligible=matched.get("per_net_calibration_eligible"),
+        per_net_has_routed_wire=matched.get("per_net_has_routed_wire"),
+        unrouted_signal_fraction=matched.get("unrouted_signal_fraction"),
+        unrouted_signal_gate_pass=matched.get("unrouted_signal_gate_pass"),
+        pre_route_lam_minus_1=int(metrics["hard_lambda_sum"]),
+        evaluator_stage="router_def" if evidence is not None else "legacy_gp_metrics",
+        router_geometry_delta=({key:totals[key]-metrics[key] for key in
+            ("hard_lambda_sum", "io_rg", "ft_rg", "io_count", "ft_count", "hpwl")}
+            if evidence is not None else None),
+        delta_scan=load_delta_scan(case, k, matched),
         delta=delta,
         # evaluator totals (matched K)
         lam_minus_1=lam_minus_1, io_rg=io_rg, ft_rg=ft_rg, io_mst=io_mst, ft_mst=ft_mst,
-        tree_wl=float(metrics["tree_wl"]), hpwl=float(metrics["hpwl"]),
+        tree_wl=float(totals["tree_wl"]), hpwl=float(totals["hpwl"]),
         # route totals (matched K, delta=2 primary report value per sec 7.4)
         route_cross_raw=route_cross_raw, route_cross_dw=route_cross_dw, route_wl=route_wl,
-        route_ft_evaluable=not route_ft_all_sentinel,
+        route_ft_evaluable=route_ft_complete,
+        route_ft_coverage=float(np.mean(route_ft_arr >= 0)) if len(route_ft_arr) else 0.,
+        route_ft_known_sum=int(route_ft_arr[route_ft_arr >= 0].sum()),
         route_ft_total=(int(np.sum(route_ft_arr[route_ft_arr >= 0]))
-                         if not route_ft_all_sentinel else None),
+                         if route_ft_complete else None),
         route_pair_demand=matched["route_pair_demand"],
         # route-side-only Lambda_route distribution (table 4)
         lambda_route_stats=dict(
@@ -217,6 +293,9 @@ def build_sample(s8_dir, design, arm):
         per_net_lambda_route=lam_route_arr,
         per_net_route_cross_dw=np.asarray(matched["per_net_route_cross_dw"], dtype=np.int64),
         per_net_route_wl=np.asarray(matched["per_net_route_wl"], dtype=np.int64),
+        evaluator=evidence,
+        evaluator_match_reason=("matched" if evidence is not None else
+                                "missing or mismatched evaluator provenance"),
         # derived three-value-decomposition quantities (sec 1.2 / 8.2-5)
         mst_excess=io_mst - io_rg,
         route_minus_io_rg=route_cross_dw - io_rg,
@@ -232,6 +311,57 @@ def build_sample(s8_dir, design, arm):
         route_done_route=log_info["done_route"],
         verify_s2_overall_pass=(verify_s2["overall_pass"] if verify_s2 else None),
     )
+    if evidence is not None:
+        gp = load_evaluation(os.path.join(case, f"evaluator_k{k}.npz"), net_names=evidence["net_names"])
+        if (gp["metadata"]["region_sha256"] != evidence["metadata"]["region_sha256"]
+                or gp["metadata"]["k"] != k
+                or gp["metadata"]["totals"]["hard_lambda_sum"] != metrics["hard_lambda_sum"]):
+            raise ValueError("pre-route evaluator identity/region/scalar mismatch")
+        sample["pre_route_evaluator"] = gp
+        route, models, _, _, formal = _paired_arrays(sample)
+        sample["whole_design_totals"] = {key:sample[key] for key in (
+            "lam_minus_1", "io_rg", "ft_rg", "io_mst", "ft_mst", "route_cross_dw", "route_cross_raw")}
+        sample["calibration_population"] = "matched routed signal nets with degree2..max_degree; sample unrouted<=2%"
+        sample["calibration_nets"] = int(formal.sum())
+        for key in ("lam_minus_1", "io_rg", "io_mst"):
+            sample[key] = int(models[key][formal].sum())
+        sample["ft_rg"] = sample["io_rg"]-sample["lam_minus_1"]
+        sample["ft_mst"] = int(evidence["per_net_ft"][formal].sum())
+        sample["route_cross_dw"] = int(route[formal].sum())
+        sample["route_cross_raw"] = int(np.asarray(matched["per_net_route_cross_raw"])[formal].sum())
+        if sample["delta_scan"] is not None:
+            scan = sample["delta_scan"]
+            formal_rows = []
+            for row in scan["rows"]:
+                value = _read_json(row["path"])
+                dw = np.asarray(value["per_net_route_cross_dw"], dtype=np.int64)
+                raw = np.asarray(value["per_net_route_cross_raw"], dtype=np.int64)
+                if dw.shape != formal.shape or raw.shape != formal.shape:
+                    raise ValueError("delta scan per-net population shape mismatch")
+                formal_rows.append(dict(row, route_cross_dw=int(dw[formal].sum()),
+                    route_cross_raw=int(raw[formal].sum()), population="primary formal eligible mask"))
+            primary = next(row for row in formal_rows if row["delta"] == 2)
+            if (primary["route_cross_dw"] != sample["route_cross_dw"]
+                    or primary["route_cross_raw"] != sample["route_cross_raw"]):
+                raise ValueError("formal delta2 totals differ from primary calibration")
+            sample["delta_scan"] = dict(scan, rows=formal_rows,
+                whole_design_supplementary=scan["rows"], n_nets=int(formal.sum()),
+                population="same primary formal eligible mask for every delta")
+        sample["route_ft_evaluable"] = bool(formal.any() and np.all(route_ft_arr[formal]>=0))
+        sample["route_ft_total"] = int(route_ft_arr[formal].sum()) if sample["route_ft_evaluable"] else None
+        sample["route_ft_known_sum"] = int(route_ft_arr[formal & (route_ft_arr>=0)].sum())
+        sample["route_ft_coverage"] = float(np.mean(route_ft_arr[formal]>=0)) if formal.any() else 0.
+        sample.update(mst_excess=sample["io_mst"]-sample["io_rg"],
+            route_minus_io_rg=sample["route_cross_dw"]-sample["io_rg"],
+            io_mst_minus_route=sample["io_mst"]-sample["route_cross_dw"])
+    boundary_path=os.path.join(case,f"boundary_evidence_k{k}.json")
+    if os.path.exists(boundary_path):
+        boundary=_read_json(boundary_path)
+        if (boundary["evaluator_sha256"]!=matched.get("evaluator_sha256")
+                or boundary["crossings_sha256"]!=sha256_file(sample["source_paths"]["crossings_matched"])):
+            raise ValueError("boundary evidence population/artifact mismatch")
+        sample["boundary_evidence"]=boundary
+    return sample
 
 
 # Batch driver logs under results/stage2/s8/ that record route-attempt
@@ -266,6 +396,10 @@ def build_unevaluable_sample(s8_dir, design, arm):
 # ---------------------------------------------------------------------------
 
 def table1_total_ratio(samples):
+    paired = [s for s in samples if s.get("evaluator") is not None]
+    supplementary = [s["sample_id"] for s in samples if s.get("evaluator") is None] if paired else []
+    if paired:
+        samples = paired
     rows = []
     for s in samples:
         def ratio(num, den):
@@ -279,51 +413,110 @@ def table1_total_ratio(samples):
             lam_minus_1=s["lam_minus_1"], io_rg=s["io_rg"], io_mst=s["io_mst"],
         ))
     pooled_route = sum(s["route_cross_dw"] for s in samples)
-    pooled = dict(
-        R_lam_minus_1=pooled_route / sum(s["lam_minus_1"] for s in samples),
-        R_io_rg=pooled_route / sum(s["io_rg"] for s in samples),
-        R_io_mst=pooled_route / sum(s["io_mst"] for s in samples),
-    )
-    return dict(
-        rows=rows, pooled=pooled,
-        per_net=dict(
-            not_evaluable=True,
-            reason=("no per-net evaluator array (per_net_crossings/per_net_steiner) is "
-                    "persisted in metrics.json or metrics.json.npz for any S8 sample; "
-                    "recomputing it needs evaluate_gpu on the post-route placement, which "
-                    "needs a GPU (out of scope for S9's CPU-only analysis)"),
-        ),
-    )
+    pooled = {name: pooled_route / den if den else None for name, den in (
+        ("R_lam_minus_1", sum(s["lam_minus_1"] for s in samples)),
+        ("R_io_rg", sum(s["io_rg"] for s in samples)),
+        ("R_io_mst", sum(s["io_mst"] for s in samples)))}
+    paired = sum(s.get("evaluator") is not None for s in samples)
+    return dict(rows=rows, pooled=pooled, legacy_supplementary_samples=supplementary,
+                per_net=dict(not_evaluable=paired == 0, n_paired_samples=paired,
+                             reason=None if paired else "no paired per-net evaluator evidence"))
 
 
 # ---------------------------------------------------------------------------
 # Table 2: per-net correlation -- not evaluable, same root cause as table 1
 # ---------------------------------------------------------------------------
 
-def table2_per_net_correlation():
-    return dict(
-        not_evaluable=True,
-        reason=("per-net evaluator arrays (per_net_crossings, per_net_steiner) are not "
-                "persisted anywhere in S8's output -- see module docstring point 1. Pearson/"
-                "Spearman between per_net_crossings and per_net_route_cross_dw cannot be "
-                "computed without a GPU evaluator rerun on each routed.def, which is out of "
-                "scope for S9."),
-    )
+def _corr(x, y):
+    x, y = np.asarray(x), np.asarray(y)
+    if x.shape != y.shape:
+        raise ValueError("correlation arrays have unequal lengths")
+    if len(x) < 2 or np.ptp(x) == 0 or np.ptp(y) == 0:
+        return dict(pearson=None, spearman=None, n=len(x))
+    return dict(pearson=float(pearsonr(x, y).statistic),
+                spearman=float(spearmanr(x, y).statistic), n=len(x))
 
 
-# ---------------------------------------------------------------------------
-# Table 3: per-degree bucket -- not evaluable, degree not persisted
-# ---------------------------------------------------------------------------
+def _paired_arrays(sample):
+    ev = sample["evaluator"]
+    route = np.asarray(sample["per_net_route_cross_dw"], dtype=np.float64)
+    models = dict(io_rg=np.asarray(ev["per_net_steiner"], dtype=np.float64),
+                  io_mst=np.asarray(ev["per_net_crossings"], dtype=np.float64),
+                  lam_minus_1=np.maximum(np.asarray(ev["per_net_lambda"], dtype=np.float64)-1, 0))
+    degree = np.asarray(ev["net_degrees"])
+    if any(a.shape != route.shape for a in [*models.values(), degree]) or route.ndim != 1:
+        raise ValueError(f"{sample['sample_id']}: evaluator and route arrays have unequal lengths")
+    matched = np.ones(len(route), dtype=bool)
+    unmatched = np.asarray(sample.get("unmatched_net_indices", []), dtype=np.int64)
+    if np.any((unmatched < 0) | (unmatched >= len(route))):
+        raise ValueError("unmatched net index outside netlist")
+    matched[unmatched] = False
+    formal = matched & (degree >= 2) & (degree <= ev["metadata"].get("max_degree", 256))
+    routed = sample.get("per_net_calibration_eligible")
+    if routed is not None:
+        routed = np.asarray(routed,dtype=bool)
+        if routed.shape != route.shape:
+            raise ValueError("routed population mask shape mismatch")
+        formal &= routed
+    if sample.get("unrouted_signal_gate_pass") is False:
+        formal[:] = False
+    return route, models, degree, matched, formal
 
-def table3_degree_bucket():
-    return dict(
-        not_evaluable=True,
-        reason=("net degree (pin count) is not persisted in any S8 artifact -- netmap.json "
-                "only has {net_index: net_name}, crossings_k*.json's per-net arrays carry no "
-                "degree field. Recovering it needs reloading placedb via DREAMPlace's C++ "
-                "place_io reader, which this module does not do (S9 is read-existing-"
-                "artifacts-only, no re-invocation of the placement/DP pipeline)."),
-    )
+
+def table2_per_net_correlation(samples=None):
+    rows = []
+    pooled_values = {name: ([], []) for name in ("io_rg", "io_mst", "lam_minus_1")}
+    for sample in samples or []:
+        if sample.get("evaluator") is None:
+            continue
+        route, models, degree, matched, formal = _paired_arrays(sample)
+        active = (route > 0) | np.logical_or.reduce([value>0 for value in models.values()])
+        for name, value in models.items():
+            mask = formal & active
+            rows.append(dict(sample_id=sample["sample_id"], model=name,
+                             design=sample.get("design"),k=sample.get("k_placement"),
+                             **_corr(value[mask], route[mask]),
+                             excluded_unmatched=int((~matched).sum()),
+                             excluded_large_net=int((matched & (degree>sample["evaluator"]["metadata"].get("max_degree",256))).sum()),
+                             excluded_ineligible=int((matched & ~formal).sum())))
+            pooled_values[name][0].append(value[mask])
+            pooled_values[name][1].append(route[mask])
+    pooled = []
+    for name, (xs, ys) in pooled_values.items():
+        pooled.append(dict(model=name, **_corr(np.concatenate(xs) if xs else np.array([]),
+                                               np.concatenate(ys) if ys else np.array([]))))
+    return dict(not_evaluable=not any(row["n"] for row in rows), rows=rows, pooled=pooled,
+                reason=None if rows else "no paired per-net evaluator evidence",
+                mask_definition="common eligible population & (route>0 OR any_model>0)")
+
+
+def table3_degree_bucket(samples=None):
+    from ioplace.ops.io_term import DEG_BUCKET_EDGES, DEG_BUCKET_LABELS
+    rows = []
+    bounds = list(zip(DEG_BUCKET_LABELS, DEG_BUCKET_EDGES[:-1], DEG_BUCKET_EDGES[1:]))
+    bounds += [("100-256", 100, 257), (">256 (lower-bound)", 257, float("inf"))]
+    for sample in samples or []:
+        if sample.get("evaluator") is None:
+            continue
+        route, models, degree, matched, formal = _paired_arrays(sample)
+        routed=sample.get("per_net_has_routed_wire")
+        eligible=matched & (np.asarray(routed,dtype=bool) if routed is not None else True)
+        if sample.get("unrouted_signal_gate_pass") is False:
+            eligible[:]=False
+        for label, low, high in bounds:
+            mask = eligible & (degree >= low) & (degree < high)
+            row = dict(sample_id=sample["sample_id"], bucket=label, n=int(mask.sum()), models={})
+            for name, values in models.items():
+                den = float(values[mask].sum())
+                ratio = float(route[mask].sum()) / den if den else None
+                corr_mask = mask & formal & ((route > 0) | (values > 0))
+                row["models"][name] = dict(R_X=ratio, **_corr(values[corr_mask], route[corr_mask]))
+                # Historical table consumers use these ratio field names.
+                row[{"io_mst":"R_X", "io_rg":"R_RG", "lam_minus_1":"R_lambda"}[name]] = ratio
+            rows.append(row)
+    available = any(row["n"] for row in rows)
+    return dict(not_evaluable=not available, rows=rows,
+                reason=None if available else "no eligible paired degree/evaluator evidence")
 
 
 # ---------------------------------------------------------------------------
@@ -342,30 +535,37 @@ def _bucket_index(lam):
 
 def table4_lambda_route_bucket(samples):
     rows = []
-    for s in samples:
-        lam = s["per_net_lambda_route"]
-        dw = s["per_net_route_cross_dw"]
-        wl = s["per_net_route_wl"]
-        idx = np.array([_bucket_index(int(x)) for x in lam])
-        for b, label in enumerate(LAMBDA_BUCKET_LABELS):
-            mask = idx == b
-            n = int(mask.sum())
-            rows.append(dict(
-                sample_id=s["sample_id"], lambda_route_bucket=label,
-                n_nets=n,
-                sum_route_cross_dw=int(dw[mask].sum()) if n else 0,
-                mean_route_cross_dw=float(dw[mask].mean()) if n else None,
-                sum_route_wl=int(wl[mask].sum()) if n else 0,
-            ))
-    return dict(
-        rows=rows,
-        degraded=True,
-        degraded_reason=("bucketed on route-side Lambda_route only (per_net_lambda_route in "
-                          "crossings_k*.json); no evaluator-side per-net Lambda is persisted "
-                          "(same cause as table 2), so this is NOT a route-vs-evaluator "
-                          "matched bucket table -- it only shows how route-side crossing "
-                          "counts distribute across route-observed Lambda_route."),
-    )
+    degraded = []
+    for sample in samples:
+        ev = sample.get("evaluator")
+        if ev is not None:
+            route, models, _, matched, formal = _paired_arrays(sample)
+            buckets = (("evaluator_lambda", np.asarray(ev["per_net_lambda"])),
+                       ("route_lambda", sample["per_net_lambda_route"]))
+        else:
+            degraded.append(sample["sample_id"])
+            route = sample["per_net_route_cross_dw"]
+            matched = np.ones(len(route), dtype=bool)
+            buckets = (("route_lambda", sample["per_net_lambda_route"]),)
+        for basis, lam in buckets:
+            for label, (low, high) in zip(LAMBDA_BUCKET_LABELS, LAMBDA_BUCKET_EDGES):
+                mask = (formal if ev is not None else matched) & (lam >= low) & (lam <= high if high else True)
+                n = int(mask.sum())
+                row = dict(sample_id=sample["sample_id"], bucket_basis=basis,
+                    lambda_route_bucket=label, n_nets=n,
+                    sum_route_cross_dw=int(route[mask].sum()),
+                    mean_route_cross_dw=float(route[mask].mean()) if n else None,
+                    sum_route_wl=int(sample["per_net_route_wl"][mask].sum()))
+                if ev is not None:
+                    row["models"] = {}
+                    for name, value in models.items():
+                        den = float(value[mask].sum())
+                        corr_mask = mask & formal & ((route > 0) | (value > 0))
+                        row["models"][name] = dict(R_X=float(route[mask].sum())/den if den else None,
+                                                  **_corr(value[corr_mask], route[corr_mask]))
+                rows.append(row)
+    return dict(rows=rows, degraded=bool(degraded), degraded_samples=degraded,
+                degraded_reason="no paired evaluator evidence" if degraded else None)
 
 
 # ---------------------------------------------------------------------------
@@ -397,17 +597,15 @@ def table6_ft_three_value(samples):
         rows.append(dict(
             sample_id=s["sample_id"], ft_rg=s["ft_rg"], ft_mst=s["ft_mst"],
             route_ft=s["route_ft_total"] if s["route_ft_evaluable"] else None,
+            route_ft_coverage=s.get("route_ft_coverage"), route_ft_known_sum=s.get("route_ft_known_sum"),
         ))
     return dict(
         rows=rows,
         route_ft_not_evaluable=not any_route_ft,
         route_ft_not_evaluable_reason=(
             None if any_route_ft else
-            "per_net_route_ft is the -1 'not computed' sentinel for every net in every S8 "
-            "sample (ioplace/route_eval/route_crossings.py:373: a net missing from the "
-            "pin_regions argument to evaluate_route gets route_ft=-1); S8's extraction call "
-            "never supplied pin_regions, so route_ft was never actually computed for this "
-            "corpus."
+            "No sample has a nonempty eligible population with complete route FT; "
+            "unknown values remain excluded from totals. See coverage and known sums."
         ),
     )
 
@@ -416,7 +614,34 @@ def table6_ft_three_value(samples):
 # Table 7: boundary-pair demand correlation -- not evaluable
 # ---------------------------------------------------------------------------
 
-def table7_boundary_pair_demand():
+def table7_boundary_pair_demand(samples=None):
+    if samples:
+        rows=[]
+        for s in samples:
+            boundary=s.get("boundary_evidence")
+            if boundary is not None:
+                if boundary.get("not_evaluable"):
+                    rows.append(dict(sample_id=s["sample_id"],**boundary))
+                    continue
+                pairs=boundary["pairs"]
+                x=np.array([row["evaluator"] for row in pairs],dtype=float)
+                y=np.array([row["route"] for row in pairs],dtype=float)
+                length=np.array([row["length"] for row in pairs],dtype=float)
+                rows.append(dict(sample_id=s["sample_id"],**_corr(x,y),pairs=pairs,
+                    population=boundary["population"],n_nets=boundary["n_nets"],
+                    per_length_correlation=_corr(x/length,y/length),
+                    evaluator_statistics=boundary["evaluator_statistics"],
+                    route_statistics=boundary["route_statistics"]))
+                continue
+            ev=s.get("evaluator")
+            if ev is None or "boundary_pairs" not in ev: continue
+            route={tuple(map(int,k.split(","))):v for k,v in s.get("route_pair_demand",{}).items()}
+            pairs={tuple(x):int(v) for x,v in zip(np.asarray(ev["boundary_pairs"]), ev["boundary_demand"])}
+            keys=sorted(set(route)|set(pairs)); x=np.array([pairs.get(k,0) for k in keys]); y=np.array([route.get(k,0) for k in keys])
+            c=_corr(x,y) or dict(pearson=None,spearman=None,n=0); rows.append(dict(sample_id=s["sample_id"], **c,
+                not_evaluable=True, reason="unfiltered boundary populations; supplementary only",
+                pairs=[dict(pair=list(k), evaluator=int(pairs.get(k,0)), route=int(route.get(k,0))) for k in keys]))
+        return dict(not_evaluable=not any(not r.get("not_evaluable") and r.get("n",0)>0 for r in rows), rows=rows)
     return dict(
         not_evaluable=True,
         reason=("route_pair_demand is persisted per sample (crossings_k*.json), but "
@@ -526,78 +751,71 @@ def unevaluable_sample_table(s8_dir):
 # ---------------------------------------------------------------------------
 
 def fit_regression(samples, n_boot=2000, seed=0):
-    """route[e] ~ alpha*(lam-1) + beta*(ST-(lam-1)) + gamma*(io_mst-ST), fit
-    at the TOTAL (per-sample-sum) level -- sec 8.3's per-net form is not
-    fittable here (table 2's per-net-array gap), so each of the 6 VALID
-    samples contributes one (x1,x2,x3,y) row: x1=lam_minus_1, x2=ft_rg
-    (== io_rg-lam_minus_1 == ST-(lam-1) summed), x3=mst_excess
-    (== io_mst-io_rg summed), y=route_cross_dw (matched-K, delta=2). Fit by
-    non-negative least squares (no intercept, matching spec sec 8.3's
-    formulation), report R^2, per-sample residuals, and a bootstrap 95% CI
-    over the 6 rows -- explicitly low-reliability given n=6, 3 free
-    coefficients (3 residual dof)."""
-    X = np.array([[s["lam_minus_1"], s["ft_rg"], s["mst_excess"]] for s in samples],
-                 dtype=np.float64)
-    y = np.array([s["route_cross_dw"] for s in samples], dtype=np.float64)
-    ids = [s["sample_id"] for s in samples]
-    n, p = X.shape
-    dof = n - p
+    """NNLS on paired per-net rows, or explicitly degraded legacy totals.
 
-    coef, resid_norm = nnls(X, y)
-    y_pred = X @ coef
-    resid = y - y_pred
-    ss_res = float(np.sum(resid ** 2))
-    ss_tot = float(np.sum((y - y.mean()) ** 2))
-    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else None
-
-    per_sample = [
-        dict(sample_id=ids[i], y_actual=float(y[i]), y_pred=float(y_pred[i]),
-             residual=float(resid[i]),
-             relative_residual=float(resid[i] / y[i]) if y[i] else None)
-        for i in range(n)
-    ]
-
-    rng = np.random.default_rng(seed)
-    boot_coefs = []
-    for _ in range(n_boot):
-        idx = rng.integers(0, n, size=n)
-        Xb, yb = X[idx], y[idx]
-        if np.linalg.matrix_rank(Xb) < p:
-            continue
-        cb, _ = nnls(Xb, yb)
-        boot_coefs.append(cb)
-    boot_coefs = np.array(boot_coefs) if boot_coefs else np.zeros((0, p))
-    if len(boot_coefs):
-        ci_lo = np.percentile(boot_coefs, 2.5, axis=0)
-        ci_hi = np.percentile(boot_coefs, 97.5, axis=0)
+    Net rows within a design are dependent. We do not attach a misleading
+    IID-net bootstrap interval to the per-net fit. Legacy total-row bootstrap
+    results retain their historical, explicitly limited interpretation.
+    """
+    blocks, targets, groups = [], [], []
+    paired = [sample for sample in samples if sample.get("evaluator") is not None]
+    if paired:
+        for sample in paired:
+            route, models, _, _, formal = _paired_arrays(sample)
+            lam, rg, mst = (models[key] for key in ("lam_minus_1", "io_rg", "io_mst"))
+            mask = formal & ((route > 0) | (mst > 0) | (rg > 0) | (lam > 0))
+            blocks.append(np.column_stack((lam[mask], (rg-lam)[mask], (mst-rg)[mask])))
+            targets.append(route[mask])
+            groups.append((sample["sample_id"], int(mask.sum())))
+        X, y = np.concatenate(blocks), np.concatenate(targets)
+        level = "per_net"
     else:
-        ci_lo = ci_hi = np.full(p, np.nan)
-
-    names = ["alpha", "beta", "gamma"]
-    coefficients = {
-        name: dict(value=float(coef[i]), ci95_lo=float(ci_lo[i]), ci95_hi=float(ci_hi[i]))
-        for i, name in enumerate(names)
-    }
-
-    return dict(
-        n_samples=n, n_regressors=p, dof=dof,
-        n_bootstrap_successful=int(len(boot_coefs)), n_bootstrap_requested=n_boot,
-        regressor_definitions=dict(
-            x1="lam_minus_1 = hard_lambda_sum = sum(lambda_e - 1)",
-            x2="ft_rg = io_rg - hard_lambda_sum = sum(ST_e - (lambda_e - 1))",
-            x3="mst_excess = io_mst - io_rg = sum(io_mst_e - ST_e)",
-            y="route_cross_dw(delta=2), matched K",
-        ),
-        coefficients=coefficients, r_squared=r2, residual_sum_squares=ss_res,
-        per_sample=per_sample,
-        reliability_note=(
-            f"n={n} samples, {p} free (non-negative) coefficients, {dof} residual dof -- "
-            "this is a small-n fit at the per-sample-TOTAL level (not per-net, see module "
-            "docstring), and the 95% CIs above are bootstrap-over-6-rows, which is itself "
-            "weak with only 6 rows to resample. Report per spec sec 8.3's instruction to "
-            "disclose the n=6 limitation honestly rather than overstate precision."
-        ),
-    )
+        X = np.asarray([[v["lam_minus_1"], v["ft_rg"], v["mst_excess"]] for v in samples], dtype=float).reshape(-1, 3)
+        y = np.asarray([v["route_cross_dw"] for v in samples], dtype=float)
+        groups = [(v["sample_id"], 1) for v in samples]
+        level = "sample_total"
+    n, p = X.shape
+    rank = int(np.linalg.matrix_rank(X)) if n else 0
+    scales = np.linalg.norm(X, axis=0) if n else np.zeros(p)
+    condition = float(np.linalg.cond(X / scales)) if rank == p else None
+    coef = nnls(X, y)[0] if n else np.zeros(p)
+    prediction = X @ coef
+    residual = y - prediction
+    ss_res = float(residual @ residual)
+    ss_tot = float(np.sum((y - y.mean())**2)) if n else 0.
+    grouped = []
+    offset = 0
+    for name, count in groups:
+        section = slice(offset, offset+count)
+        actual, estimate = float(y[section].sum()), float(prediction[section].sum())
+        grouped.append(dict(sample_id=name, n_rows=count, y_actual=actual, y_pred=estimate,
+                            residual=actual-estimate,
+                            residual_sum_squares=float(np.sum(residual[section]**2)),
+                            relative_residual=(actual-estimate)/actual if actual else None))
+        offset += count
+    requested = n_boot if level == "sample_total" else 0
+    bootstrap = []
+    rng = np.random.default_rng(seed)
+    if rank == p:
+        for _ in range(requested):
+            indices = rng.integers(0, n, size=n)
+            if np.linalg.matrix_rank(X[indices]) == p:
+                bootstrap.append(nnls(X[indices], y[indices])[0])
+    ci = np.percentile(bootstrap, [2.5, 97.5], axis=0) if bootstrap else None
+    coefficients = {name: dict(value=float(coef[i]),
+        ci95_lo=float(ci[0,i]) if ci is not None else None,
+        ci95_hi=float(ci[1,i]) if ci is not None else None)
+        for i,name in enumerate(("alpha", "beta", "gamma"))}
+    return dict(n_samples=n, n_regressors=p, rank=rank, dof=n-rank, level=level,
+        identifiable=rank == p, normalized_condition_number=condition,
+        n_bootstrap_requested=requested, n_bootstrap_successful=len(bootstrap),
+        coefficients=coefficients, r_squared=1-ss_res/ss_tot if ss_tot else None,
+        residual_sum_squares=ss_res, per_sample=grouped,
+        regressor_definitions=dict(x1="max(lambda-1,0)", x2="ST-max(lambda-1,0)",
+                                    x3="io_mst-ST", y="route_cross_dw(2)"),
+        reliability_note=(f"n={n}, rank={rank}, residual dof={n-rank}; " +
+            ("paired per-net fit; clustered-design uncertainty not estimated; no IID-net CI claimed"
+             if paired else "legacy total-row bootstrap; few independent designs limit inference")))
 
 
 def fit_per_design_regression(samples):
@@ -612,13 +830,10 @@ def fit_per_design_regression(samples):
         by_design.setdefault(s["design"], []).append(s)
     out = {}
     for design, rows in by_design.items():
-        X = np.array([[s["lam_minus_1"], s["ft_rg"], s["mst_excess"]] for s in rows],
-                     dtype=np.float64)
-        y = np.array([s["route_cross_dw"] for s in rows], dtype=np.float64)
-        coef, _ = nnls(X, y)
-        out[design] = dict(alpha=float(coef[0]), beta=float(coef[1]), gamma=float(coef[2]),
-                            n_samples=len(rows), dof=len(rows) - 3,
-                            note="exact fit (0 residual dof) -- purely informational")
+        fit = fit_regression(rows, n_boot=0)
+        c = fit["coefficients"]
+        out[design] = dict(alpha=c["alpha"]["value"], beta=c["beta"]["value"], gamma=c["gamma"]["value"],
+                            n_samples=fit["n_samples"], rank=fit["rank"], dof=fit["dof"], identifiable=fit["identifiable"])
     return out
 
 
@@ -626,7 +841,28 @@ def fit_per_design_regression(samples):
 # Sec 8.4: C1-C5 verdicts
 # ---------------------------------------------------------------------------
 
-def judge_c1(table1):
+def judge_c1(table1, table2=None):
+    if any(table1["pooled"].get(key) is None for key in ("R_io_rg","R_io_mst")):
+        return dict(verdict="not_evaluable", reason="undefined paired total ratio")
+    if table2 and not table2.get("not_evaluable"):
+        correlations = {}
+        for row in table2.get("rows", []):
+            correlations.setdefault(row["sample_id"], {})[row["model"]] = row["spearman"]
+        comparisons = []
+        for row in table1.get("rows", []):
+            corr = correlations.get(row["sample_id"], {})
+            rg, mst = corr.get("io_rg"), corr.get("io_mst")
+            ratios = (row["R_io_rg"], row["R_io_mst"])
+            valid = rg is not None and mst is not None and all(v is not None for v in ratios)
+            verdict = ("rg_selected" if rg > mst + .05 and abs(ratios[0]-1)<abs(ratios[1]-1)
+                       else "reconsider_rg_model") if valid else "not_evaluable"
+            comparisons.append(dict(sample_id=row["sample_id"], rho_rg=rg, rho_mst=mst,
+                                    R_io_rg=ratios[0], R_io_mst=ratios[1], verdict=verdict))
+        # The original threshold is applied independently to each sample. No
+        # post-hoc majority/pooled weighting rule is introduced for this cohort.
+        return dict(verdict="per_sample_only" if comparisons else "not_evaluable", comparisons=comparisons,
+                    scope="C1 thresholds evaluated independently; no registered cross-sample aggregation",
+                    pooled_supplementary=table2.get("pooled", []))
     r_rg = table1["pooled"]["R_io_rg"]
     r_mst = table1["pooled"]["R_io_mst"]
     closer = "io_rg" if abs(r_rg - 1) < abs(r_mst - 1) else "io_mst"
@@ -650,6 +886,9 @@ def judge_c2_c3(samples, table1, regression):
     r_lam = table1["pooled"]["R_lam_minus_1"]
     r_rg = table1["pooled"]["R_io_rg"]
     r_mst = table1["pooled"]["R_io_mst"]
+    if any(value is None for value in (r_lam,r_rg,r_mst)):
+        unavailable=dict(verdict="not_evaluable",reason="undefined paired total ratio")
+        return unavailable,dict(unavailable)
     e3_pass = all(0.80 <= r <= 1.25 for r in (r_lam, r_rg, r_mst))
     c2 = dict(e3_pass=e3_pass, pooled_ratios=dict(R_lam_minus_1=r_lam, R_io_rg=r_rg, R_io_mst=r_mst))
     if not e3_pass:
@@ -658,23 +897,32 @@ def judge_c2_c3(samples, table1, regression):
         gamma = regression["coefficients"]["gamma"]["value"]
         io_calibrated = []
         for s in samples:
+            if regression.get("level") == "per_net" and s.get("evaluator") is None:
+                continue
             val = alpha * s["lam_minus_1"] + beta * s["ft_rg"] + gamma * s["mst_excess"]
             io_calibrated.append(dict(
                 sample_id=s["sample_id"], io_calibrated=val,
                 route_actual=s["route_cross_dw"],
                 residual=s["route_cross_dw"] - val,
             ))
-        c2["action"] = "E3 failed -- io_calibrated column added"
-        c2["io_calibrated"] = io_calibrated
+        if regression.get("identifiable", True):
+            c2["action"] = "E3 failed -- io_calibrated column added"
+            c2["io_calibrated"] = io_calibrated
+        else:
+            c2["action"] = "E3 failed; calibration not identifiable"
+            c2["supplementary_in_sample_fit"] = io_calibrated
     else:
         c2["action"] = "E3 passed -- no io_calibrated column needed"
     alpha = regression["coefficients"]["alpha"]["value"]
     beta = regression["coefficients"]["beta"]["value"]
     kappa_ft = (beta / alpha) if alpha != 0 else None
+    if not regression.get("identifiable",True) or kappa_ft is None:
+        return c2,dict(verdict="not_evaluable",reason="rank-deficient fit or zero alpha",kappa_ft=None)
     c3 = dict(alpha_hat=alpha, beta_hat=beta, kappa_ft=kappa_ft,
+              uncertainty="clustered-design interval unavailable; estimate is not a validated objective weight",
               note="kappa_ft <- beta_hat/alpha_hat per spec sec 8.4 C3 -- "
-                   "the real-router feed-through-to-necessary-crossing cost ratio, "
-                   "to replace M3's kappa_ft=1.0 default.")
+                   "estimated real-router feed-through-to-necessary-crossing cost ratio; "
+                   "no placement objective or historical M3 weight is changed by this analysis.")
     return c2, c3
 
 
@@ -689,57 +937,114 @@ def judge_c4(samples):
         by_design.setdefault(s["design"], {})[s["arm"]] = s
     rows = []
     for design, arms in by_design.items():
-        if not all(a in arms for a in ("flat", "ours_k16", "ours_k32")):
-            continue
-        for pair in [("flat", "ours_k16"), ("ours_k16", "ours_k32")]:
+        pairs = [(f"flat_k{k}", f"ours_k{k}") for k in (16,32)
+                 if f"flat_k{k}" in arms and f"ours_k{k}" in arms]
+        if not pairs and all(a in arms for a in ("flat", "ours_k16", "ours_k32")):
+            pairs = [("flat", "ours_k16"), ("ours_k16", "ours_k32")]
+        legacy = "flat" in arms and not any(a.startswith("flat_k") for a in arms)
+        for pair in pairs:
             a, b = pair
-            pre_delta = arms[b]["lam_minus_1"] - arms[a]["lam_minus_1"]
-            post_delta = arms[b]["route_cross_dw"] - arms[a]["route_cross_dw"]
+            left, right = arms[a], arms[b]
+            count = None
+            if not legacy:
+                unavailable = dict(design=design, from_arm=a, to_arm=b,
+                    comparison_scope="matched_K_unavailable", not_evaluable=True,
+                    sign_flip=False, reason="missing common eligible GP/route population")
+                if any(s.get("pre_route_evaluator") is None or s.get("evaluator") is None
+                       or s.get("unrouted_signal_gate_pass") is not True for s in (left,right)):
+                    rows.append(unavailable)
+                    continue
+                lmask, rmask = _paired_arrays(left)[4], _paired_arrays(right)[4]
+                li = {str(n):i for i,n in enumerate(left["evaluator"]["net_names"]) if lmask[i]}
+                ri = {str(n):i for i,n in enumerate(right["evaluator"]["net_names"]) if rmask[i]}
+                common = sorted(li.keys() & ri.keys())
+                if not common:
+                    rows.append(unavailable)
+                    continue
+                lidx, ridx = np.array([li[n] for n in common]), np.array([ri[n] for n in common])
+                lgp, rgp = left["pre_route_evaluator"], right["pre_route_evaluator"]
+                pre_delta = int(np.maximum(rgp["per_net_lambda"][ridx]-1,0).sum()
+                                -np.maximum(lgp["per_net_lambda"][lidx]-1,0).sum())
+                post_delta = int(right["per_net_route_cross_dw"][ridx].sum()
+                                 -left["per_net_route_cross_dw"][lidx].sum())
+                count = len(common)
+            else:
+                pre_delta = right.get("pre_route_lam_minus_1", right["lam_minus_1"]) - left.get("pre_route_lam_minus_1", left["lam_minus_1"])
+                post_delta = right["route_cross_dw"] - left["route_cross_dw"]
             sign_flip = (pre_delta * post_delta) < 0
             rows.append(dict(
                 design=design, from_arm=a, to_arm=b,
                 pre_route_metric="hard_lambda_sum", pre_route_delta=pre_delta,
                 post_route_metric="route_cross_dw", post_route_delta=post_delta,
                 sign_flip=bool(sign_flip),
+                common_eligible_nets=count,
+                comparison_scope="legacy_cross_K_supplementary" if legacy else "matched_K",
             ))
     any_flip = any(r["sign_flip"] for r in rows)
     return dict(rows=rows, any_sign_flip=any_flip,
-                 verdict=("sign_flip_detected" if any_flip else "sign_invariant"))
+                 formal_rows=[r for r in rows if r["comparison_scope"]=="matched_K"],
+                 formal_verdict=("not_evaluable" if not any(r["comparison_scope"]=="matched_K" for r in rows)
+                    else "sign_flip_detected" if any(r["sign_flip"] for r in rows if r["comparison_scope"]=="matched_K")
+                    else "sign_invariant"),
+                 verdict=("not_evaluable" if not any(not r.get("not_evaluable") for r in rows)
+                          else "sign_flip_detected" if any_flip else "sign_invariant"))
 
 
 def judge_c5(samples):
-    designs = sorted({s["design"] for s in samples})
-    return dict(
-        verdict="not_evaluable",
-        reason=(f"C5 needs >= 3 design with valid routed samples to compute a coefficient "
-                f"of variation across their (alpha_hat, beta_hat, gamma_hat); this corpus "
-                f"has {len(designs)} ({', '.join(designs)}). Per-design fits are reported "
-                "as informational only (see per_design_regression), not a CV verdict."),
-        n_designs_available=len(designs), n_designs_required=3,
-    )
+    designs = sorted({s.get("design") for s in samples})
+    if len(designs) < 3:
+        return dict(verdict="not_evaluable", n_designs_available=len(designs), n_designs_required=3,
+                    reason="fewer than 3 identifiable design fits")
+    fits = fit_per_design_regression(samples)
+    valid = [v for v in fits.values() if v["identifiable"]]
+    if len(valid) < 3:
+        return dict(verdict="not_evaluable", n_designs_available=len(valid), n_designs_required=3,
+                    reason="fewer than 3 identifiable design fits")
+    vals = np.array([[v["alpha"], v["beta"], v["gamma"]] for v in valid])
+    mean = vals.mean(axis=0); sd = vals.std(axis=0, ddof=1)
+    cv = np.divide(sd, np.abs(mean), out=np.full(3, np.nan), where=np.abs(mean) > 0)
+    if np.any(~np.isfinite(cv)):
+        return dict(verdict="not_evaluable", n_designs_available=len(valid),
+                    reason="zero-mean coefficient has undefined relative variation")
+    return dict(verdict="fail" if np.any(cv > .25) else "pass", n_designs_available=len(valid),
+                cv=dict(zip(("alpha", "beta", "gamma"), cv.tolist())))
 
 
 # ---------------------------------------------------------------------------
 # Top level
 # ---------------------------------------------------------------------------
 
-def build_calibration(s8_dir=S8_DIR_DEFAULT):
-    samples = [build_sample(s8_dir, design, arm) for design, arm in VALID_SAMPLES]
+def build_calibration(s8_dir=S8_DIR_DEFAULT, sample_pairs=None):
+    cohort_path = Path(s8_dir) / "cohort.json"
+    if sample_pairs is not None:
+        pairs = sample_pairs
+    elif cohort_path.exists():
+        pairs = [(row["design"], row["arm"]) for row in _read_json(cohort_path)]
+    else:
+        pairs = VALID_SAMPLES
+    samples, missing = [], []
+    for design, arm in pairs:
+        try:
+            samples.append(build_sample(s8_dir, design, arm))
+        except FileNotFoundError as error:
+            missing.append(dict(sample_id=f"{design}__{arm}", reason=str(error)))
+    if not samples:
+        raise ValueError("no evaluable routed samples in requested cohort")
 
     t1 = table1_total_ratio(samples)
-    t2 = table2_per_net_correlation()
-    t3 = table3_degree_bucket()
+    t2 = table2_per_net_correlation(samples)
+    t3 = table3_degree_bucket(samples)
     t4 = table4_lambda_route_bucket(samples)
     t5 = table5_three_value_decomposition(samples)
     t6 = table6_ft_three_value(samples)
-    t7 = table7_boundary_pair_demand()
+    t7 = table7_boundary_pair_demand(samples)
     tsample = sample_list_table(samples)
-    tuneval = unevaluable_sample_table(s8_dir)
+    tuneval = dict(rows=missing) if cohort_path.exists() or sample_pairs is not None else unevaluable_sample_table(s8_dir)
 
     regression = fit_regression(samples)
     per_design_regression = fit_per_design_regression(samples)
 
-    c1 = judge_c1(t1)
+    c1 = judge_c1(t1, t2)
     c2, c3 = judge_c2_c3(samples, t1, regression)
     c4 = judge_c4(samples)
     c5 = judge_c5(samples)
@@ -751,19 +1056,27 @@ def build_calibration(s8_dir=S8_DIR_DEFAULT):
     g4 = dict(
         route_cross_raw_total=raw_total, route_cross_dw2_total=dw_total,
         drift_pct=g4_drift_pct, triggered=(g4_drift_pct is not None and g4_drift_pct > 15),
-        note=("only delta in {0(raw),2} was extracted for S8 -- the spec's full delta scan "
-              "{0,1,2,4} (sec 7.4/L-Q4-a) was not run; re-deriving delta=1/4 from "
-              "segments.npz would need re-invoking route_eval.route_crossings, out of scope "
-              "for this read-existing-artifacts pass."),
+        delta_scans=[dict(sample_id=s["sample_id"], scan=s.get("delta_scan")) for s in samples],
+        complete=all(s.get("delta_scan") is not None for s in samples),
     )
 
-    for s in samples:
-        del s["per_net_lambda_route"], s["per_net_route_cross_dw"], s["per_net_route_wl"]
+    clean_samples = []
+    for sample in samples:
+        clean = {key:value for key,value in sample.items()
+                 if not key.startswith("per_net_") and key not in ("evaluator", "pre_route_evaluator")}
+        clean["evaluator_metadata"] = sample["evaluator"]["metadata"] if sample.get("evaluator") else None
+        clean_samples.append(clean)
 
     return dict(
         spec="docs/superpowers/specs/2026-08-13-stage2-innovus-calibration-plan.md sec 8/10 S9",
         s8_dir=s8_dir,
-        valid_samples=samples,
+        requested_sample_pairs=pairs,
+        requested_scope="explicit subset" if sample_pairs is not None else "registered cohort" if cohort_path.exists() else "historical cohort",
+        complete_requested_scope=not missing,
+        registered_cohort_size=len(_read_json(cohort_path)) if cohort_path.exists() else None,
+        complete_registered_cohort=(not missing and cohort_path.exists() and
+            {tuple(pair) for pair in pairs}=={(row["design"],row["arm"]) for row in _read_json(cohort_path)}),
+        valid_samples=clean_samples,
         table1_total_ratio=t1,
         table2_per_net_correlation=t2,
         table3_degree_bucket=t3,
@@ -799,9 +1112,10 @@ def main():
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--s8-dir", default=S8_DIR_DEFAULT)
     ap.add_argument("--out-dir", default=OUT_DIR_DEFAULT)
+    ap.add_argument("--samples", type=json.loads, default=None)
     args = ap.parse_args()
 
-    result = build_calibration(s8_dir=args.s8_dir)
+    result = build_calibration(s8_dir=args.s8_dir, sample_pairs=args.samples)
     os.makedirs(args.out_dir, exist_ok=True)
     tables_path = os.path.join(args.out_dir, "tables.json")
     with open(tables_path, "w") as f:

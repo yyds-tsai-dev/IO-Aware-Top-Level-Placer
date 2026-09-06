@@ -214,8 +214,11 @@ def align_net_indices(segments, net_names):
     """
     seg_id_of = np.full(len(net_names), -1, dtype=np.int64)
     unmatched = []
+    lookup = {str(name):i for i,name in enumerate(segments.net_names)}
+    if len(lookup) != len(segments.net_names):
+        raise ValueError("duplicate routed net names")
     for i, name in enumerate(net_names):
-        j = segments.net_index(name)
+        j = lookup.get(str(name))
         if j is None:
             unmatched.append(i)
         else:
@@ -348,7 +351,7 @@ class RouteEvalResult:
 
 
 def evaluate_route(segments, region_grid, net_names, coord_map=None,
-                    pin_regions=None, delta=2):
+                    pin_regions=None, delta=2, net_mask=None):
     """Sec 7 main entry: extract route_cross_raw / route_cross_dw(delta) /
     lambda_route / route_ft / route_pair_demand / route_wl from a
     routed-DEF `segments` dump (S2's `Segments`), aligned to the placedb
@@ -379,6 +382,8 @@ def evaluate_route(segments, region_grid, net_names, coord_map=None,
     if coord_map is None:
         coord_map = CoordMap.identity()
     n = len(net_names)
+    if net_mask is not None and np.asarray(net_mask).shape != (n,):
+        raise ValueError("net mask shape mismatch")
     seg_id_of, unmatched = align_net_indices(segments, net_names)
 
     raw = np.zeros(n, dtype=np.int64)
@@ -391,12 +396,20 @@ def evaluate_route(segments, region_grid, net_names, coord_map=None,
 
     wire_mask = segments.wire_mask()
     per_net_wl_by_segid = segments.per_net_wire_length()
+    wire_indices = np.flatnonzero(wire_mask)
+    wire_indices = wire_indices[np.argsort(segments.seg_net_id[wire_indices], kind="stable")]
+    wire_starts = np.r_[0, np.cumsum(np.bincount(segments.seg_net_id[wire_indices],
+                                               minlength=segments.num_nets))]
 
     for i, name in enumerate(net_names):
+        if net_mask is not None and not net_mask[i]:
+            continue
         j = int(seg_id_of[i])
         if j < 0:
             continue
-        rows = np.nonzero(wire_mask & (segments.seg_net_id == j))[0]
+        rows = wire_indices[wire_starts[j]:wire_starts[j+1]]
+        if len(rows) == 0:
+            continue  # no routed geometry: preserve unknown FT sentinel
         regions_raw = set()
         regions_filtered = set()
         raw_c = 0
@@ -459,7 +472,7 @@ def evaluate_route(segments, region_grid, net_names, coord_map=None,
 
 
 def evaluate_route_from_files(segments_npz, regions_json, netmap_json, coord_json,
-                               pin_regions=None, delta=2):
+                               pin_regions=None, delta=2, net_mask=None):
     """Convenience wrapper: load everything sec 7.1's architecture diagram
     lists (segments.npz + regions.json + netmap.json + coord.json, all
     S1/S2 outputs) and call `evaluate_route()`. See that function's
@@ -470,4 +483,4 @@ def evaluate_route_from_files(segments_npz, regions_json, netmap_json, coord_jso
     net_names = load_net_order(netmap_json)
     coord_map = CoordMap.from_json(coord_json)
     return evaluate_route(segments, region_grid, net_names, coord_map=coord_map,
-                           pin_regions=pin_regions, delta=delta)
+                           pin_regions=pin_regions, delta=delta, net_mask=net_mask)

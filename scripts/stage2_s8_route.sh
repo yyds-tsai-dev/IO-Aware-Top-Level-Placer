@@ -27,9 +27,7 @@
 #      in a fresh session, report V1/V2 (#insts/#nets, exact match
 #      required) and `report_wire_length` -> `or_run/wirelength.rpt`.
 #
-# **Concurrency: 1 (sequential, conservative by explicit instruction --
-# reconsider later).** Runs are the ones this script's own `for` loop
-# issues one at a time; nothing here backgrounds or parallelizes routing.
+# Runs are limited to two concurrent CPU routing processes by the batch loop.
 #
 # Idempotent: a run whose `or_run/routed.def` already exists is skipped.
 # Each run's OpenROAD stdout/stderr goes to its own log
@@ -45,10 +43,11 @@
 #                                              #   would execute, run nothing
 set -uo pipefail
 
-REPO="${IOPLACE_REPO:-/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer}"
-S8_ROOT="$REPO/results/stage2/s8"
+REPO="${IOPLACE_REPO:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
+S8_ROOT="${STAGE2_S8_ROOT:-$REPO/results/stage2/s8}"
 OPENROAD="${OPENROAD_BIN:-openroad}"
-FIX_VIAS_PY="${STAGE2_FIX_VIAS_PY:-/usr/bin/python3}"
+PYTHON="${IOPLACE_PYTHON:-$(dirname -- "$REPO")/DREAMPlace/.venv312/bin/python}"
+FIX_VIAS_PY="${STAGE2_FIX_VIAS_PY:-$PYTHON}"
 # 4h + capped DR iterations: des_perf_1 measurement (2026-08-17) showed DRT
 # plateaus at ~172k violations for hours on high-utilization ISPD2015 designs
 # and a timeout kill leaves NO routed.def at all. Stage2's crossing ground
@@ -56,8 +55,8 @@ FIX_VIAS_PY="${STAGE2_FIX_VIAS_PY:-/usr/bin/python3}"
 # 57.7k violations, 0 unrouted nets, S2/S3 acceptance green) - so cap DR at
 # 5 optimization iterations, let it write the DEF, and disclose the final
 # violation count in S9/the report instead of chasing convergence.
-ROUTE_TIMEOUT_S=14400
-THREADS=8
+ROUTE_TIMEOUT_S="${STAGE2_ROUTE_TIMEOUT_S:-14400}"
+THREADS="${STAGE2_ROUTE_THREADS:-8}"
 
 DRY_RUN=0
 SHARD_GLOB="*"
@@ -93,11 +92,19 @@ route_one() {
     out_def="$run_dir/out.def"
     or_run="$run_dir/or_run"
     routed_def="$or_run/routed.def"
+    started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    run_pid="${BASHPID:-$$}"
 
-    config="$(config_for_case "$case_name")" || {
+    config=""
+    if [ -f "$run_dir/metrics.json" ]; then
+        config="$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("config", ""))' "$run_dir/metrics.json")"
+    fi
+    if [ ! -f "$config" ]; then
+      config="$(config_for_case "$case_name")" || {
         echo "[FAIL] $base: unknown case '$case_name' (no config_for_case entry)" >&2
         return 1
-    }
+      }
+    fi
     if [ ! -f "$config" ]; then
         echo "[FAIL] $base: config not found: $config" >&2
         return 1
@@ -105,7 +112,7 @@ route_one() {
 
     # LEF list, in the config's own order (tech.lef first by convention --
     # see stage2_s8_place.sh/the benchmark configs themselves).
-    mapfile -t lefs < <(jq -r '.lef_input[]' "$config")
+    mapfile -t lefs < <("$PYTHON" -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["lef_input"]))' "$config")
     if [ "${#lefs[@]}" -eq 0 ]; then
         echo "[FAIL] $base: could not read lef_input from $config" >&2
         return 1
@@ -126,6 +133,13 @@ route_one() {
     fi
 
     mkdir -p "$or_run"
+    # Preserve artifacts from any earlier attempt before regenerating them.
+    backup_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    for prior in openroad_route.log openroad_postprocess.log route.tcl postprocess.tcl routed.def route.guide congestion.rpt drc.rpt wirelength.rpt fixed.def fixed.def.diff fix_def_vias.log execution.json; do
+        if [ -e "$or_run/$prior" ]; then
+            mv "$or_run/$prior" "$or_run/$prior.previous.$backup_stamp"
+        fi
+    done
 
     # --- step 1: VIA-dup fix (pure text, always safe) ----------------------
     fixed_def="$or_run/fixed.def"
@@ -173,34 +187,48 @@ route_one() {
         return 1
     fi
 
-    # --- step 3: postprocess.tcl (V1/V2 + report_wire_length) --------------
-    postprocess_tcl="$or_run/postprocess.tcl"
-    {
-        echo "# S8 postprocess: V1/V2 invariant counts + wirelength report."
-        for l in "${lefs[@]}"; do echo "read_lef $l"; done
-        echo "read_def $def_for_route"
-        echo 'set block_in [[[ord::get_db] getChip] getBlock]'
-        echo 'set n_insts_in [llength [$block_in getInsts]]'
-        echo 'set n_nets_in [llength [$block_in getNets]]'
-        for l in "${lefs[@]}"; do echo "read_lef $l"; done
-        echo "read_def $routed_def"
-        echo 'set block_out [[[ord::get_db] getChip] getBlock]'
-        echo 'set n_insts_out [llength [$block_out getInsts]]'
-        echo 'set n_nets_out [llength [$block_out getNets]]'
-        echo 'puts "V1_INSTS in=$n_insts_in out=$n_insts_out match=[expr {$n_insts_in == $n_insts_out}]"'
-        echo 'puts "V2_NETS in=$n_nets_in out=$n_nets_out match=[expr {$n_nets_in == $n_nets_out}]"'
-        echo "report_wire_length -net [get_nets *] -detailed_route -file $or_run/wirelength.rpt"
-        echo 'puts "DONE_POSTPROCESS"'
-        echo "exit"
-    } > "$postprocess_tcl"
-
-    postprocess_log="$or_run/openroad_postprocess.log"
-    "$OPENROAD" -no_init "$postprocess_tcl" >"$postprocess_log" 2>&1
-    if ! grep -q "^V1_INSTS .*match=1" "$postprocess_log" || ! grep -q "^V2_NETS .*match=1" "$postprocess_log"; then
-        echo "[WARN] $base: V1/V2 invariant check did not report match=1 -- inspect $postprocess_log" >&2
-    fi
+    # --- step 3: independent OpenDB instance/net/endpoint identity --------
+    lef_args=()
+    for l in "${lefs[@]}"; do lef_args+=(--lef "$l"); done
+    dump_pin="$REPO/ioplace/route_eval/or_scripts/dump_pin_geometry.py"
+    "$OPENROAD" -python "$dump_pin" "${lef_args[@]}" --def "$def_for_route" \
+        --out "$or_run/pin_geometry_input.npz" > "$or_run/input_identity.log" 2>&1 || return 1
+    "$OPENROAD" -python "$dump_pin" "${lef_args[@]}" --def "$routed_def" \
+        --out "$or_run/pin_geometry.npz" > "$or_run/output_identity.log" 2>&1 || return 1
+    "$PYTHON" "$REPO/scripts/stage2_verify_identity.py" \
+        --before "$or_run/pin_geometry_input.npz" --after "$or_run/pin_geometry.npz" \
+        --out "$or_run/verify_identity.json" > "$or_run/openroad_postprocess.log" 2>&1 || return 1
 
     echo "[done] $base"
+    finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    "$PYTHON" - "$or_run/execution.json" "$run_dir" "$config" "$started_at" "$finished_at" "$run_pid" "$OPENROAD" "$REPO" <<'PY'
+import hashlib, json, os, sys
+out, run_dir, config, started, finished, pid, binary, repo = sys.argv[1:]
+def sha(path):
+    h = hashlib.sha256()
+    try:
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(1 << 20), b''): h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+or_run = os.path.join(run_dir, 'or_run')
+data = {
+    'run_dir': run_dir, 'config': config, 'started_at_utc': started,
+    'finished_at_utc': finished, 'pid': int(pid), 'status': 'completed',
+    'tool_binary': binary, 'tool_binary_sha256': sha(binary),
+    'source_repo': repo, 'source_head': None,
+    'input_def_sha256': sha(os.path.join(or_run, 'fixed.def')) or sha(os.path.join(run_dir, 'out.def')),
+    'artifacts': {name: sha(os.path.join(or_run, name)) for name in
+                  ('route.guide', 'routed.def', 'congestion.rpt', 'drc.rpt', 'verify_identity.json')},
+}
+try:
+    import subprocess
+    data['source_head'] = subprocess.check_output(['git', '-C', repo, 'rev-parse', 'HEAD'], text=True).strip()
+except Exception:
+    pass
+with open(out, 'w') as f: json.dump(data, f, indent=2); f.write('\n')
+PY
     return 0
 }
 
@@ -209,8 +237,8 @@ if [ "$DRY_RUN" -eq 0 ]; then
         echo "FATAL: openroad not found on PATH (\$OPENROAD_BIN=$OPENROAD)" >&2
         exit 1
     fi
-    if ! command -v jq >/dev/null 2>&1; then
-        echo "FATAL: jq not found on PATH (needed to read lef_input from configs)" >&2
+    if ! command -v "$PYTHON" >/dev/null 2>&1; then
+        echo "FATAL: Python not found ($PYTHON)" >&2
         exit 1
     fi
 fi
@@ -229,14 +257,27 @@ if [ "${#ordered_defs[@]}" -eq 0 ]; then
     exit 0
 fi
 
-echo "== stage2_s8_route.sh: ${#ordered_defs[@]} out.def found, routing smallest-first, concurrency=1 =="
+echo "== stage2_s8_route.sh: ${#ordered_defs[@]} out.def found, routing smallest-first, concurrency=2 =="
 
 FAILED=""
+running=0
+pids=()
+names=()
 for out_def in "${ordered_defs[@]}"; do
     run_dir="$(dirname "$out_def")"
-    if ! route_one "$run_dir"; then
-        FAILED="$FAILED $(basename "$run_dir")"
+    route_one "$run_dir" &
+    pids+=("$!")
+    names+=("$(basename "$run_dir")")
+    running=$((running + 1))
+    if [ "$running" -ge 2 ]; then
+        for i in "${!pids[@]}"; do
+            if ! wait "${pids[$i]}"; then FAILED="$FAILED ${names[$i]}"; fi
+        done
+        pids=(); names=(); running=0
     fi
+done
+for i in "${!pids[@]}"; do
+    if ! wait "${pids[$i]}"; then FAILED="$FAILED ${names[$i]}"; fi
 done
 
 echo ""
