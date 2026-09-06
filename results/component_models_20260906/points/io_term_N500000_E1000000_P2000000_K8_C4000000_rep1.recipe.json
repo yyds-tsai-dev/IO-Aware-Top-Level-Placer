@@ -1,0 +1,12 @@
+{
+  "N": 500000,
+  "E": 1000000,
+  "P": 2000000,
+  "K": 8,
+  "component": "io_term",
+  "chunk_budget": 4000000,
+  "seed": 0,
+  "layout": "local",
+  "recipe_id": "io_term_N500000_E1000000_P2000000_K8_C4000000",
+  "repetition": 1
+}

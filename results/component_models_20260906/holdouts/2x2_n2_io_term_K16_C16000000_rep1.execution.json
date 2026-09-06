@@ -1,0 +1,28 @@
+{
+  "recipe": {
+    "component": "io_term",
+    "K": 16,
+    "chunk_budget": 16000000,
+    "seed": 0,
+    "layout": "real_tiled",
+    "cache": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/cache/2x2_n2",
+    "recipe_id": "2x2_n2_io_term_K16_C16000000",
+    "repetition": 1
+  },
+  "recipe_sha256": "7aec9ae207680273a7bd7f7190e77d286b7ae2151e9dec272a6696deaa553af4",
+  "fits_sha256": "a58e1850c8e517e5eeb795764c3e22a52a26993b8414a437079cafc8ecdb87d0",
+  "started": 1788716860.12856,
+  "command": [
+    "/ldaphome/yyds-tsai-dev/DREAMPlace/.venv312/bin/python",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/component_models_20260906/source/scripts/run_component_models.py",
+    "--point",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/component_models_20260906/holdouts/2x2_n2_io_term_K16_C16000000_rep1.recipe.json",
+    "--out",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/component_models_20260906/holdouts/2x2_n2_io_term_K16_C16000000_rep1.json"
+  ],
+  "pid": 465155,
+  "returncode": 0,
+  "ended": 1788716881.0014265,
+  "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "output_sha256": "4692de3ef4b8e7693fe42e07158c2d489b457c347d09ab9b2954055a0795c1f9"
+}

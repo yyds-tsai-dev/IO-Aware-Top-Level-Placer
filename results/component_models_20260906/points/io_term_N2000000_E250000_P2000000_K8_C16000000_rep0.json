@@ -1,0 +1,114 @@
+{
+  "recipe": {
+    "N": 2000000,
+    "E": 250000,
+    "P": 2000000,
+    "K": 8,
+    "component": "io_term",
+    "chunk_budget": 16000000,
+    "seed": 0,
+    "layout": "local",
+    "recipe_id": "io_term_N2000000_E250000_P2000000_K8_C16000000",
+    "repetition": 0
+  },
+  "status": "completed",
+  "pid": 377378,
+  "started": 1788716213.091824,
+  "gpu_before": {
+    "time": 1788716213.2186284,
+    "uuid": "GPU-24111147-0a1d-a1f3-6b60-66cc0d0d663b",
+    "name": "NVIDIA H100 NVL",
+    "total_gib": 93.583984375,
+    "used_gib": 18.8173828125,
+    "free_gib": 74.2685546875,
+    "utilization_pct": 0.0,
+    "compute_apps": [
+      [
+        3101,
+        5794.0
+      ],
+      [
+        3062,
+        13460.0
+      ]
+    ]
+  },
+  "dtype": "float64",
+  "benchmark_kind": "synthetic",
+  "generator_verified": false,
+  "torch_version": "2.8.0+cu128",
+  "cuda_version": "12.8",
+  "raw_pins": 2000000,
+  "N": 2000000,
+  "E": 250000,
+  "P": 2000000,
+  "K": 8,
+  "num_movable": 2000000,
+  "P_dedup": 2000000,
+  "E_active": 250000,
+  "c": 8,
+  "Q": 16000000,
+  "construction_s": 0.40101397107355297,
+  "construction_peak_allocated_gib": 0.06495952606201172,
+  "iterations": [
+    {
+      "iteration": 0,
+      "wall_s": 1.0726487839128822,
+      "cuda_event_ms": 1072.241455078125,
+      "loss": 111008.32226909266,
+      "forward_wall_s": 0.24551267293281853,
+      "backward_wall_s": 0.8270889010746032,
+      "forward_event_ms": 245.28179931640625,
+      "backward_event_ms": 826.9595947265625
+    },
+    {
+      "iteration": 1,
+      "wall_s": 0.02673350484110415,
+      "cuda_event_ms": 26.40131187438965,
+      "loss": 111008.32226909266,
+      "forward_wall_s": 0.008666689973324537,
+      "backward_wall_s": 0.018022615928202868,
+      "forward_event_ms": 8.55958366394043,
+      "backward_event_ms": 17.84172821044922
+    },
+    {
+      "iteration": 2,
+      "wall_s": 0.026516248006373644,
+      "cuda_event_ms": 26.25993537902832,
+      "loss": 111008.32226909266,
+      "forward_wall_s": 0.008597759064286947,
+      "backward_wall_s": 0.017873134929686785,
+      "forward_event_ms": 8.499103546142578,
+      "backward_event_ms": 17.760831832885742
+    }
+  ],
+  "peak_allocated_gib": 3.18263578414917,
+  "peak_reserved_gib": 3.267578125,
+  "host_peak_rss_gib": 1.188201904296875,
+  "gpu_after": {
+    "time": 1788716216.0331037,
+    "uuid": "GPU-24111147-0a1d-a1f3-6b60-66cc0d0d663b",
+    "name": "NVIDIA H100 NVL",
+    "total_gib": 93.583984375,
+    "used_gib": 22.6875,
+    "free_gib": 70.3984375,
+    "utilization_pct": 30.0,
+    "compute_apps": [
+      [
+        3101,
+        5794.0
+      ],
+      [
+        3062,
+        13460.0
+      ],
+      [
+        377378,
+        3958.0
+      ]
+    ]
+  },
+  "ended": 1788716216.1506286,
+  "warm_mean_wall_s": 0.026624876423738897,
+  "cuda_event_scope": "elapsed CUDA stream range, may include CPU scheduling gaps"
+}

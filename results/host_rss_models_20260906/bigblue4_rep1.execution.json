@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/ldaphome/yyds-tsai-dev/DREAMPlace/.venv312/bin/python",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/scripts/run_host_rss_models.py",
+    "--config",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/bigblue4.config.json",
+    "--out",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/bigblue4_rep1.json"
+  ],
+  "started": 1788717850.2419028,
+  "matrix_sha256": "a9774d0dcd3b515d5f183fb01712894b617d5ec97230f545d9200bf3f9fc19dd",
+  "pid": 588997,
+  "returncode": 0,
+  "ended": 1788717916.9931421,
+  "output_sha256": "c367b8d13baffb4d7c440a4862b254697e1d1faa1f876a77740d7cee35182718"
+}

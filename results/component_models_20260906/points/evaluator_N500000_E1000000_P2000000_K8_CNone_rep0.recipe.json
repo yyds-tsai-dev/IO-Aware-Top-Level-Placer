@@ -1,0 +1,12 @@
+{
+  "N": 500000,
+  "E": 1000000,
+  "P": 2000000,
+  "K": 8,
+  "component": "evaluator",
+  "chunk_budget": null,
+  "seed": 0,
+  "layout": "local",
+  "recipe_id": "evaluator_N500000_E1000000_P2000000_K8_CNone",
+  "repetition": 0
+}

@@ -1,0 +1,7 @@
+{
+  "aux_input": "/ldaphome/yyds-tsai-dev/DREAMPlace/benchmarks/ispd2005/adaptec1/rss_alias/rssInput.aux",
+  "gpu": 0,
+  "dtype": "float64",
+  "sort_nets_by_degree": 0,
+  "num_threads": 8
+}

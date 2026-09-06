@@ -1,0 +1,1474 @@
+{
+  "frozen_at": 1788716308.7216196,
+  "matrix_sha256": "54be5595fedf832a5ff2750816cbabe15dc3337ea0c69828c5d84b33fc5447cd",
+  "status": "complete_matrix",
+  "failures": [],
+  "fits": {
+    "evaluator": {
+      "peak_allocated_gib": {
+        "n_recipes": 16,
+        "n_regressors": 5,
+        "rank": 5,
+        "dof": 11,
+        "standardized_condition": 2.1747985537454086,
+        "condition_limit": 30.0,
+        "relative_ci_limit": 0.25,
+        "identifiable": false,
+        "coefficients": {
+          "intercept": {
+            "value": 0.4282745718956,
+            "ci95_halfwidth": 0.19156619887663717,
+            "relative_halfwidth": 0.44729762504633375
+          },
+          "N": {
+            "value": 1.3396739959716594e-08,
+            "ci95_halfwidth": 8.360634351877658e-08,
+            "relative_halfwidth": 6.240797669446236
+          },
+          "P": {
+            "value": 5.317874749501546e-08,
+            "ci95_halfwidth": 2.0901585879694155e-08,
+            "relative_halfwidth": 0.39304396707826367
+          },
+          "E": {
+            "value": -3.151733594782218e-07,
+            "ci95_halfwidth": 2.2027021371306678e-07,
+            "relative_halfwidth": 0.6988858895870202
+          },
+          "E_K": {
+            "value": 1.8799951263502557e-08,
+            "ci95_halfwidth": 7.1691848112043745e-09,
+            "relative_halfwidth": 0.3813406061920135
+          }
+        },
+        "covariance": [
+          [
+            0.007575364511145364,
+            -1.8036582169393712e-09,
+            -4.5091455423484343e-10,
+            -3.6073164338787445e-09,
+            5.7075681403210634e-27
+          ],
+          [
+            -1.8036582169393712e-09,
+            1.4429265735514973e-15,
+            -1.0012314405002238e-32,
+            -2.327501139398817e-31,
+            3.627654172992298e-33
+          ],
+          [
+            -4.5091455423484343e-10,
+            -1.0012314405002238e-32,
+            9.018291084696868e-17,
+            1.0490230134584327e-32,
+            -1.5257429472294402e-33
+          ],
+          [
+            -3.6073164338787454e-09,
+            -2.3275011393988166e-31,
+            1.0490230134584327e-32,
+            1.0015607981122164e-14,
+            -2.121950843458085e-16
+          ],
+          [
+            2.892573414943138e-26,
+            3.627654172992298e-33,
+            -1.52574294722944e-33,
+            -2.1219508434580855e-16,
+            1.0609754217290425e-17
+          ]
+        ],
+        "residual_variance": 0.012986339161963482,
+        "residuals": [
+          {
+            "recipe": "evaluator_N500000_E1000000_P2000000_K8_CNone",
+            "actual": 0.4096646308898926,
+            "prediction": 0.3765566874952878,
+            "residual": 0.033107943394604766,
+            "leave_one_recipe_out_residual": 0.0523567476937936
+          },
+          {
+            "recipe": "evaluator_N2000000_E250000_P2000000_K32_CNone",
+            "actual": 0.7587628364562988,
+            "prediction": 0.6330318170435292,
+            "residual": 0.12573101941276965,
+            "leave_one_recipe_out_residual": 0.16930117465481853
+          },
+          {
+            "recipe": "evaluator_N500000_E1000000_P8000000_K32_CNone",
+            "actual": 1.1208739280700684,
+            "prediction": 1.146828002789442,
+            "residual": -0.02595407471937361,
+            "leave_one_recipe_out_residual": -0.041043653044590844
+          },
+          {
+            "recipe": "evaluator_N500000_E250000_P8000000_K8_CNone",
+            "actual": 0.6855506896972656,
+            "prediction": 0.8192094844930315,
+            "residual": -0.13365879479576592,
+            "leave_one_recipe_out_residual": -0.17997619893291256
+          },
+          {
+            "recipe": "evaluator_N2000000_E250000_P8000000_K8_CNone",
+            "actual": 0.708371639251709,
+            "prediction": 0.8393045944326065,
+            "residual": -0.13093295518089754,
+            "leave_one_recipe_out_residual": -0.1763057614317036
+          },
+          {
+            "recipe": "evaluator_N2000000_E250000_P8000000_K32_CNone",
+            "actual": 1.0806050300598145,
+            "prediction": 0.952104302013622,
+            "residual": 0.1285007280461925,
+            "leave_one_recipe_out_residual": 0.17303068330972454
+          },
+          {
+            "recipe": "evaluator_N500000_E250000_P8000000_K32_CNone",
+            "actual": 1.0694799423217773,
+            "prediction": 0.932009192074047,
+            "residual": 0.13747075024773037,
+            "leave_one_recipe_out_residual": 0.1851091290464488
+          },
+          {
+            "recipe": "evaluator_N2000000_E1000000_P2000000_K8_CNone",
+            "actual": 0.43505287170410156,
+            "prediction": 0.39665179743486273,
+            "residual": 0.03840107426923883,
+            "leave_one_recipe_out_residual": 0.06072728023972653
+          },
+          {
+            "recipe": "evaluator_N500000_E1000000_P2000000_K32_CNone",
+            "actual": 0.792050838470459,
+            "prediction": 0.8277555178193492,
+            "residual": -0.03570467934889021,
+            "leave_one_recipe_out_residual": -0.05646321385405894
+          },
+          {
+            "recipe": "evaluator_N2000000_E1000000_P2000000_K32_CNone",
+            "actual": 0.8134260177612305,
+            "prediction": 0.8478506277589241,
+            "residual": -0.03442460999769359,
+            "leave_one_recipe_out_residual": -0.054438918135887526
+          },
+          {
+            "recipe": "evaluator_N500000_E250000_P2000000_K8_CNone",
+            "actual": 0.3710441589355469,
+            "prediction": 0.5001369995229389,
+            "residual": -0.129092840587392,
+            "leave_one_recipe_out_residual": -0.17382798336520114
+          },
+          {
+            "recipe": "evaluator_N500000_E250000_P2000000_K32_CNone",
+            "actual": 0.73931884765625,
+            "prediction": 0.6129367071039542,
+            "residual": 0.1263821405522958,
+            "leave_one_recipe_out_residual": 0.17017793183279434
+          },
+          {
+            "recipe": "evaluator_N2000000_E1000000_P8000000_K32_CNone",
+            "actual": 1.1334853172302246,
+            "prediction": 1.166923112729017,
+            "residual": -0.03343779549879233,
+            "leave_one_recipe_out_residual": -0.052878374277159974
+          },
+          {
+            "recipe": "evaluator_N2000000_E1000000_P8000000_K8_CNone",
+            "actual": 0.7462868690490723,
+            "prediction": 0.7157242824049556,
+            "residual": 0.030562586644116707,
+            "leave_one_recipe_out_residual": 0.04833153236744037
+          },
+          {
+            "recipe": "evaluator_N2000000_E250000_P2000000_K8_CNone",
+            "actual": 0.3958320617675781,
+            "prediction": 0.5202321094625137,
+            "residual": -0.12440004769493562,
+            "leave_one_recipe_out_residual": -0.16750897511397272
+          },
+          {
+            "recipe": "evaluator_N500000_E1000000_P8000000_K8_CNone",
+            "actual": 0.723078727722168,
+            "prediction": 0.6956291724653807,
+            "residual": 0.027449555256787272,
+            "leave_one_recipe_out_residual": 0.043408599010733365
+          }
+        ],
+        "gate_reasons": [
+          "coefficient_relative_interval_gate_failed"
+        ],
+        "holdout_status": "not_run",
+        "extrapolation_allowed": false,
+        "interval_scope": "conditional OLS t interval across recipe means; real-design holdouts separate"
+      },
+      "peak_reserved_gib": {
+        "n_recipes": 16,
+        "n_regressors": 5,
+        "rank": 5,
+        "dof": 11,
+        "standardized_condition": 2.1747985537454086,
+        "condition_limit": 30.0,
+        "relative_ci_limit": 0.25,
+        "identifiable": false,
+        "coefficients": {
+          "intercept": {
+            "value": 0.8259277343750006,
+            "ci95_halfwidth": 0.4514220707511893,
+            "relative_halfwidth": 0.5465636422692493
+          },
+          "N": {
+            "value": -8.170572916666668e-08,
+            "ci95_halfwidth": 1.9701674377057482e-07,
+            "relative_halfwidth": 2.4112965612079913
+          },
+          "P": {
+            "value": 6.315104166666662e-08,
+            "ci95_halfwidth": 4.9254185942643725e-08,
+            "relative_halfwidth": 0.779942573277328
+          },
+          "E": {
+            "value": -7.777650122549025e-07,
+            "ci95_halfwidth": 5.19062530771374e-07,
+            "relative_halfwidth": 0.6673770645281456
+          },
+          "E_K": {
+            "value": 4.240387561274513e-08,
+            "ci95_halfwidth": 1.6894046403018885e-08,
+            "relative_halfwidth": 0.3984080737643972
+          }
+        },
+        "covariance": [
+          [
+            0.042066012686799124,
+            -1.001571730638074e-08,
+            -2.5039293265951875e-09,
+            -2.0031434612761483e-08,
+            9.874518607398885e-26
+          ],
+          [
+            -1.0015717306380742e-08,
+            8.012573845104594e-15,
+            -5.55983998084028e-32,
+            -1.2924617992235288e-30,
+            2.0144370114454224e-32
+          ],
+          [
+            -2.5039293265951875e-09,
+            -5.55983998084028e-32,
+            5.007858653190375e-16,
+            5.825226671002094e-32,
+            -8.472453316341324e-33
+          ],
+          [
+            -2.0031434612761486e-08,
+            -1.2924617992235288e-30,
+            5.825226671002091e-32,
+            5.561668904249072e-14,
+            -1.178319683103617e-15
+          ],
+          [
+            8.451165590982983e-26,
+            2.0144370114454224e-32,
+            -8.472453316341324e-33,
+            -1.178319683103617e-15,
+            5.891598415518084e-17
+          ]
+        ],
+        "residual_variance": 0.07211316460594136,
+        "residuals": [
+          {
+            "recipe": "evaluator_N500000_E1000000_P2000000_K8_CNone",
+            "actual": 0.5390625,
+            "prediction": 0.47284294577205904,
+            "residual": 0.06621955422794096,
+            "leave_one_recipe_out_residual": 0.10471929505813923
+          },
+          {
+            "recipe": "evaluator_N2000000_E250000_P2000000_K32_CNone",
+            "actual": 1.171875,
+            "prediction": 0.933608111213236,
+            "residual": 0.23826688878676405,
+            "leave_one_recipe_out_residual": 0.3208346225247516
+          },
+          {
+            "recipe": "evaluator_N500000_E1000000_P8000000_K32_CNone",
+            "actual": 1.95703125,
+            "prediction": 1.869442210477942,
+            "residual": 0.08758903952205799,
+            "leave_one_recipe_out_residual": 0.13851289970930106
+          },
+          {
+            "recipe": "evaluator_N500000_E250000_P8000000_K8_CNone",
+            "actual": 0.8515625,
+            "prediction": 1.180649701286765,
+            "residual": -0.32908720128676494,
+            "leave_one_recipe_out_residual": -0.44312732054455484
+          },
+          {
+            "recipe": "evaluator_N2000000_E250000_P8000000_K8_CNone",
+            "actual": 0.869140625,
+            "prediction": 1.0580911075367647,
+            "residual": -0.18895048253676472,
+            "leave_one_recipe_out_residual": -0.2544283725247525
+          },
+          {
+            "recipe": "evaluator_N2000000_E250000_P8000000_K32_CNone",
+            "actual": 1.591796875,
+            "prediction": 1.3125143612132355,
+            "residual": 0.2792825137867645,
+            "leave_one_recipe_out_residual": 0.3760635829207918
+          },
+          {
+            "recipe": "evaluator_N500000_E250000_P8000000_K32_CNone",
+            "actual": 1.748046875,
+            "prediction": 1.4350729549632357,
+            "residual": 0.3129739200367643,
+            "leave_one_recipe_out_residual": 0.42143022896039545
+          },
+          {
+            "recipe": "evaluator_N2000000_E1000000_P2000000_K8_CNone",
+            "actual": 0.552734375,
+            "prediction": 0.35028435202205904,
+            "residual": 0.20245002297794096,
+            "leave_one_recipe_out_residual": 0.320153524709302
+          },
+          {
+            "recipe": "evaluator_N500000_E1000000_P2000000_K32_CNone",
+            "actual": 1.525390625,
+            "prediction": 1.4905359604779422,
+            "residual": 0.034854664522057766,
+            "leave_one_recipe_out_residual": 0.05511900436046344
+          },
+          {
+            "recipe": "evaluator_N2000000_E1000000_P2000000_K32_CNone",
+            "actual": 1.138671875,
+            "prediction": 1.3679773667279422,
+            "residual": -0.22930549172794223,
+            "leave_one_recipe_out_residual": -0.362622638081397
+          },
+          {
+            "recipe": "evaluator_N500000_E250000_P2000000_K8_CNone",
+            "actual": 0.44140625,
+            "prediction": 0.801743451286765,
+            "residual": -0.36033720128676505,
+            "leave_one_recipe_out_residual": -0.48520652846534706
+          },
+          {
+            "recipe": "evaluator_N500000_E250000_P2000000_K32_CNone",
+            "actual": 1.3359375,
+            "prediction": 1.056166704963236,
+            "residual": 0.27977079503676405,
+            "leave_one_recipe_out_residual": 0.37672107054455356
+          },
+          {
+            "recipe": "evaluator_N2000000_E1000000_P8000000_K32_CNone",
+            "actual": 1.576171875,
+            "prediction": 1.746883616727942,
+            "residual": -0.170711741727942,
+            "leave_one_recipe_out_residual": -0.26996275436046646
+          },
+          {
+            "recipe": "evaluator_N2000000_E1000000_P8000000_K8_CNone",
+            "actual": 0.830078125,
+            "prediction": 0.7291906020220588,
+            "residual": 0.10088752297794124,
+            "leave_one_recipe_out_residual": 0.15954305959302337
+          },
+          {
+            "recipe": "evaluator_N2000000_E250000_P2000000_K8_CNone",
+            "actual": 0.447265625,
+            "prediction": 0.679184857536765,
+            "residual": -0.23191923253676505,
+            "leave_one_recipe_out_residual": -0.31228728341584205
+          },
+          {
+            "recipe": "evaluator_N500000_E1000000_P8000000_K8_CNone",
+            "actual": 0.759765625,
+            "prediction": 0.8517491957720588,
+            "residual": -0.09198357077205876,
+            "leave_one_recipe_out_residual": -0.145462390988372
+          }
+        ],
+        "gate_reasons": [
+          "coefficient_relative_interval_gate_failed"
+        ],
+        "holdout_status": "not_run",
+        "extrapolation_allowed": false,
+        "interval_scope": "conditional OLS t interval across recipe means; real-design holdouts separate"
+      },
+      "warm_mean_wall_s": {
+        "n_recipes": 16,
+        "n_regressors": 5,
+        "rank": 5,
+        "dof": 11,
+        "standardized_condition": 2.1747985537454086,
+        "condition_limit": 30.0,
+        "relative_ci_limit": 0.25,
+        "identifiable": false,
+        "coefficients": {
+          "intercept": {
+            "value": 0.04887717444055153,
+            "ci95_halfwidth": 0.08592074471731669,
+            "relative_halfwidth": 1.7578909931019155
+          },
+          "N": {
+            "value": -1.4796382876944293e-10,
+            "ci95_halfwidth": 3.749888727943626e-08,
+            "relative_halfwidth": 253.43279902459798
+          },
+          "P": {
+            "value": 2.2100967169131363e-08,
+            "ci95_halfwidth": 9.37472181985907e-09,
+            "relative_halfwidth": 0.4241769940707769
+          },
+          "E": {
+            "value": -1.1820647990737402e-07,
+            "ci95_halfwidth": 9.879499051634274e-08,
+            "relative_halfwidth": 0.8357832040490334
+          },
+          "E_K": {
+            "value": 3.428005456834818e-10,
+            "ci95_halfwidth": 3.2155030564208704e-09,
+            "relative_halfwidth": 9.380099001913033
+          }
+        },
+        "covariance": [
+          [
+            0.0015239188338995987,
+            -3.628378175951424e-10,
+            -9.070945439878566e-11,
+            -7.256756351902851e-10,
+            8.163887924626681e-28
+          ],
+          [
+            -3.628378175951423e-10,
+            2.9027025407611395e-16,
+            -2.01415449649435e-33,
+            -4.6821810581314877e-32,
+            7.2976693187026396e-34
+          ],
+          [
+            -9.070945439878566e-11,
+            -2.01415449649435e-33,
+            1.8141890879757134e-17,
+            2.1102957158713843e-33,
+            -3.0693023544300417e-34
+          ],
+          [
+            -7.256756351902852e-10,
+            -4.6821810581314877e-32,
+            2.1102957158713836e-33,
+            2.0148170577047915e-15,
+            -4.268680207001676e-17
+          ],
+          [
+            1.8170450523679112e-27,
+            7.297669318702639e-34,
+            -3.069302354430042e-34,
+            -4.268680207001676e-17,
+            2.1343401035008376e-18
+          ]
+        ],
+        "residual_variance": 0.002612432286685026,
+        "residuals": [
+          {
+            "recipe": "evaluator_N500000_E1000000_P2000000_K8_CNone",
+            "actual": 0.02247561300949504,
+            "prediction": -0.022458948677476637,
+            "residual": 0.04493456168697167,
+            "leave_one_recipe_out_residual": 0.0710593068538157
+          },
+          {
+            "recipe": "evaluator_N2000000_E250000_P2000000_K32_CNone",
+            "actual": 0.02190968153687815,
+            "prediction": 0.06597396550989972,
+            "residual": -0.04406428397302156,
+            "leave_one_recipe_out_residual": -0.05933408534981121
+          },
+          {
+            "recipe": "evaluator_N500000_E1000000_P8000000_K32_CNone",
+            "actual": 0.07324408099520952,
+            "prediction": 0.11837406743371512,
+            "residual": -0.045129986438505604,
+            "leave_one_recipe_out_residual": -0.07136835064693912
+          },
+          {
+            "recipe": "evaluator_N500000_E250000_P8000000_K8_CNone",
+            "actual": 0.21424768868989,
+            "prediction": 0.1967449109937412,
+            "residual": 0.017502777696148802,
+            "leave_one_recipe_out_residual": 0.023568096699764726
+          },
+          {
+            "recipe": "evaluator_N2000000_E250000_P8000000_K8_CNone",
+            "actual": 0.20715692879942557,
+            "prediction": 0.19652296525058705,
+            "residual": 0.010633963548838526,
+            "leave_one_recipe_out_residual": 0.014319000422198412
+          },
+          {
+            "recipe": "evaluator_N2000000_E250000_P8000000_K32_CNone",
+            "actual": 0.2800889591841648,
+            "prediction": 0.19857976852468792,
+            "residual": 0.0815091906594769,
+            "leave_one_recipe_out_residual": 0.10975494979889958
+          },
+          {
+            "recipe": "evaluator_N500000_E250000_P8000000_K32_CNone",
+            "actual": 0.24786894267890602,
+            "prediction": 0.19880171426784207,
+            "residual": 0.04906722841106395,
+            "leave_one_recipe_out_residual": 0.066070723404997
+          },
+          {
+            "recipe": "evaluator_N2000000_E1000000_P2000000_K8_CNone",
+            "actual": 0.020031184190884233,
+            "prediction": -0.0226808944206308,
+            "residual": 0.042712078611515034,
+            "leave_one_recipe_out_residual": 0.06754468245541913
+          },
+          {
+            "recipe": "evaluator_N500000_E1000000_P2000000_K32_CNone",
+            "actual": 0.019498469152798254,
+            "prediction": -0.014231735581073074,
+            "residual": 0.033730204733871325,
+            "leave_one_recipe_out_residual": 0.05334078888147093
+          },
+          {
+            "recipe": "evaluator_N2000000_E1000000_P2000000_K32_CNone",
+            "actual": 0.022882633958943188,
+            "prediction": -0.014453681324227238,
+            "residual": 0.037336315283170426,
+            "leave_one_recipe_out_residual": 0.05904347533152532
+          },
+          {
+            "recipe": "evaluator_N500000_E250000_P2000000_K8_CNone",
+            "actual": 0.02727723113882045,
+            "prediction": 0.06413910797895299,
+            "residual": -0.036861876840132535,
+            "leave_one_recipe_out_residual": -0.04963579455701015
+          },
+          {
+            "recipe": "evaluator_N500000_E250000_P2000000_K32_CNone",
+            "actual": 0.03020840452518314,
+            "prediction": 0.06619591125305388,
+            "residual": -0.03598750672787074,
+            "leave_one_recipe_out_residual": -0.04845842490089525
+          },
+          {
+            "recipe": "evaluator_N2000000_E1000000_P8000000_K32_CNone",
+            "actual": 0.07958443101961166,
+            "prediction": 0.11815212169056095,
+            "residual": -0.0385676906709493,
+            "leave_one_recipe_out_residual": -0.06099076664243145
+          },
+          {
+            "recipe": "evaluator_N2000000_E1000000_P8000000_K8_CNone",
+            "actual": 0.062164827909631036,
+            "prediction": 0.10992490859415739,
+            "residual": -0.047760080684526356,
+            "leave_one_recipe_out_residual": -0.07552756945459982
+          },
+          {
+            "recipe": "evaluator_N2000000_E250000_P2000000_K8_CNone",
+            "actual": 0.02211766946129501,
+            "prediction": 0.06391716223579882,
+            "residual": -0.041799492774503816,
+            "leave_one_recipe_out_residual": -0.05628446551814375
+          },
+          {
+            "recipe": "evaluator_N500000_E1000000_P8000000_K8_CNone",
+            "actual": 0.08289145181576411,
+            "prediction": 0.11014685433731156,
+            "residual": -0.027255402521547442,
+            "leave_one_recipe_out_residual": -0.043101566778261075
+          }
+        ],
+        "gate_reasons": [
+          "coefficient_relative_interval_gate_failed"
+        ],
+        "holdout_status": "not_run",
+        "extrapolation_allowed": false,
+        "interval_scope": "conditional OLS t interval across recipe means; real-design holdouts separate"
+      }
+    },
+    "io_term": {
+      "peak_allocated_gib": {
+        "n_recipes": 32,
+        "n_regressors": 4,
+        "rank": 4,
+        "dof": 28,
+        "standardized_condition": 1.2151654658683202,
+        "condition_limit": 30.0,
+        "relative_ci_limit": 0.25,
+        "identifiable": false,
+        "coefficients": {
+          "intercept": {
+            "value": 0.6116044762042849,
+            "ci95_halfwidth": 0.7401526258771721,
+            "relative_halfwidth": 1.2101818326619804
+          },
+          "Q": {
+            "value": 1.0021583850567163e-07,
+            "ci95_halfwidth": 4.611963092313906e-08,
+            "relative_halfwidth": 0.46020301392308327
+          },
+          "P_dedup": {
+            "value": -1.216675344950113e-07,
+            "ci95_halfwidth": 7.988154398520158e-08,
+            "relative_halfwidth": 0.6565559523890652
+          },
+          "E_active": {
+            "value": 4.7653953234354845e-08,
+            "ci95_halfwidth": 6.271063947647556e-07,
+            "relative_halfwidth": 13.159588076161118
+          }
+        },
+        "covariance": [
+          [
+            0.13055995923756492,
+            -4.7312496013612825e-09,
+            -5.745088801652985e-09,
+            -5.857737601685398e-08
+          ],
+          [
+            -4.731249601361282e-09,
+            5.069196001458516e-16,
+            -1.6897320004861725e-16,
+            -2.134311625276654e-31
+          ],
+          [
+            -5.745088801652985e-09,
+            -1.6897320004861723e-16,
+            1.520758800437555e-15,
+            -4.686194970234089e-31
+          ],
+          [
+            -5.857737601685398e-08,
+            -2.1343116252766546e-31,
+            -4.686194970234089e-31,
+            9.372380162696637e-14
+          ]
+        ],
+        "residual_variance": 0.4217571073213485,
+        "residuals": [
+          {
+            "recipe": "io_term_N2000000_E1000000_P8000000_K32_C4000000",
+            "actual": 0.8402619361877441,
+            "prediction": 0.4876448615239224,
+            "residual": 0.35261707466382175,
+            "leave_one_recipe_out_residual": 0.3975303605966121
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P8000000_K32_C4000000",
+            "actual": 0.8171877861022949,
+            "prediction": 0.4519043965981563,
+            "residual": 0.36528338950413863,
+            "leave_one_recipe_out_residual": 0.4118100000913867
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P8000000_K32_C4000000",
+            "actual": 0.5504589080810547,
+            "prediction": 0.4876448615239224,
+            "residual": 0.0628140465571323,
+            "leave_one_recipe_out_residual": 0.07081475167416541
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P2000000_K8_C16000000",
+            "actual": 1.0892038345336914,
+            "prediction": 2.0193767765393633,
+            "residual": -0.9301729420056719,
+            "leave_one_recipe_out_residual": -1.0778605678951518
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P8000000_K32_C16000000",
+            "actual": 1.2954678535461426,
+            "prediction": 1.2893715695692956,
+            "residual": 0.006096283976847028,
+            "leave_one_recipe_out_residual": 0.0068727754318925844
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P2000000_K32_C16000000",
+            "actual": 1.0316767692565918,
+            "prediction": 1.983636311613597,
+            "residual": -0.9519595423570053,
+            "leave_one_recipe_out_residual": -1.1031063220627138
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P8000000_K8_C4000000",
+            "actual": 0.8171873092651367,
+            "prediction": 0.4519043965981563,
+            "residual": 0.36528291266698043,
+            "leave_one_recipe_out_residual": 0.4118094625188723
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P2000000_K8_C4000000",
+            "actual": 0.9550714492797852,
+            "prediction": 0.7810462495455376,
+            "residual": 0.17402519973424757,
+            "leave_one_recipe_out_residual": 0.20165594175333426
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P2000000_K8_C4000000",
+            "actual": 0.35871219635009766,
+            "prediction": 0.8167867144713037,
+            "residual": -0.45807451812120603,
+            "leave_one_recipe_out_residual": -0.5308050126418432
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P8000000_K8_C4000000",
+            "actual": 0.5504579544067383,
+            "prediction": 0.4876448615239224,
+            "residual": 0.06281309288281589,
+            "leave_one_recipe_out_residual": 0.07081367652913662
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P2000000_K8_C16000000",
+            "actual": 1.0242252349853516,
+            "prediction": 1.983636311613597,
+            "residual": -0.9594110766282455,
+            "leave_one_recipe_out_residual": -1.1117409690176885
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P8000000_K32_C16000000",
+            "actual": 0.8195209503173828,
+            "prediction": 1.2536311046435293,
+            "residual": -0.4341101543261465,
+            "leave_one_recipe_out_residual": -0.4894033176143007
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P2000000_K32_C16000000",
+            "actual": 1.0964369773864746,
+            "prediction": 2.0193767765393633,
+            "residual": -0.9229397991528887,
+            "leave_one_recipe_out_residual": -1.069478987319225
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P2000000_K8_C16000000",
+            "actual": 3.18263578414917,
+            "prediction": 1.983636311613597,
+            "residual": 1.1989994725355728,
+            "leave_one_recipe_out_residual": 1.3893698623253437
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P8000000_K32_C4000000",
+            "actual": 0.5262622833251953,
+            "prediction": 0.4519043965981563,
+            "residual": 0.07435788672703902,
+            "leave_one_recipe_out_residual": 0.08382894547004942
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P8000000_K32_C16000000",
+            "actual": 1.2684693336486816,
+            "prediction": 1.2536311046435293,
+            "residual": 0.014838229005152304,
+            "leave_one_recipe_out_residual": 0.016728193133179834
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P2000000_K32_C16000000",
+            "actual": 3.2124385833740234,
+            "prediction": 1.983636311613597,
+            "residual": 1.2288022717604263,
+            "leave_one_recipe_out_residual": 1.4239045823184886
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P2000000_K32_C4000000",
+            "actual": 0.9835543632507324,
+            "prediction": 0.8167867144713037,
+            "residual": 0.16676764877942873,
+            "leave_one_recipe_out_residual": 0.1932460776942684
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P2000000_K32_C4000000",
+            "actual": 0.9541678428649902,
+            "prediction": 0.7810462495455376,
+            "residual": 0.17312159331945265,
+            "leave_one_recipe_out_residual": 0.2006088657963574
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P2000000_K32_C4000000",
+            "actual": 0.32932472229003906,
+            "prediction": 0.7810462495455376,
+            "residual": -0.4517215272554985,
+            "leave_one_recipe_out_residual": -0.5234433296331126
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P2000000_K32_C4000000",
+            "actual": 0.3578071594238281,
+            "prediction": 0.8167867144713037,
+            "residual": -0.45897955504747556,
+            "leave_one_recipe_out_residual": -0.5318537462388575
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P2000000_K8_C4000000",
+            "actual": 0.9835538864135742,
+            "prediction": 0.8167867144713037,
+            "residual": 0.16676717194227053,
+            "leave_one_recipe_out_residual": 0.19324552514758928
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P8000000_K8_C4000000",
+            "actual": 0.8402614593505859,
+            "prediction": 0.4876448615239224,
+            "residual": 0.35261659782666355,
+            "leave_one_recipe_out_residual": 0.3975298230240977
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P8000000_K8_C16000000",
+            "actual": 1.2684688568115234,
+            "prediction": 1.2536311046435293,
+            "residual": 0.0148377521679941,
+            "leave_one_recipe_out_residual": 0.016727655560665435
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P8000000_K8_C16000000",
+            "actual": 1.2954673767089844,
+            "prediction": 1.2893715695692956,
+            "residual": 0.006095807139688825,
+            "leave_one_recipe_out_residual": 0.006872237859378187
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P8000000_K8_C16000000",
+            "actual": 0.8186154365539551,
+            "prediction": 1.2536311046435293,
+            "residual": -0.43501566808957426,
+            "leave_one_recipe_out_residual": -0.49042416781914067
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P8000000_K8_C4000000",
+            "actual": 0.5272002220153809,
+            "prediction": 0.4519043965981563,
+            "residual": 0.07529582541722457,
+            "leave_one_recipe_out_residual": 0.08488635060586835
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P2000000_K32_C16000000",
+            "actual": 3.272979259490967,
+            "prediction": 2.0193767765393633,
+            "residual": 1.2536024829516035,
+            "leave_one_recipe_out_residual": 1.452642431498237
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P8000000_K8_C16000000",
+            "actual": 0.8474593162536621,
+            "prediction": 1.2893715695692956,
+            "residual": -0.44191225331563344,
+            "leave_one_recipe_out_residual": -0.49819917988971146
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P2000000_K8_C4000000",
+            "actual": 0.32841968536376953,
+            "prediction": 0.7810462495455376,
+            "residual": -0.45262656418176805,
+            "leave_one_recipe_out_residual": -0.5244920632301268
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P8000000_K32_C16000000",
+            "actual": 0.8474607467651367,
+            "prediction": 1.2893715695692956,
+            "residual": -0.44191082280415883,
+            "leave_one_recipe_out_residual": -0.49819756717216823
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P2000000_K8_C16000000",
+            "actual": 3.2431764602661133,
+            "prediction": 2.0193767765393633,
+            "residual": 1.22379968372675,
+            "leave_one_recipe_out_residual": 1.418107711505092
+          }
+        ],
+        "gate_reasons": [
+          "coefficient_relative_interval_gate_failed"
+        ],
+        "holdout_status": "not_run",
+        "extrapolation_allowed": false,
+        "interval_scope": "conditional OLS t interval across recipe means; real-design holdouts separate"
+      },
+      "peak_reserved_gib": {
+        "n_recipes": 32,
+        "n_regressors": 4,
+        "rank": 4,
+        "dof": 28,
+        "standardized_condition": 1.2151654658683202,
+        "condition_limit": 30.0,
+        "relative_ci_limit": 0.25,
+        "identifiable": false,
+        "coefficients": {
+          "intercept": {
+            "value": 0.6286746294070507,
+            "ci95_halfwidth": 0.7343822595417716,
+            "relative_halfwidth": 1.1681436234104463
+          },
+          "Q": {
+            "value": 1.1112623948317312e-07,
+            "ci95_halfwidth": 4.5760073777253666e-08,
+            "relative_halfwidth": 0.4117845973199041
+          },
+          "P_dedup": {
+            "value": -1.2452580378605765e-07,
+            "ci95_halfwidth": 7.925877274030362e-08,
+            "relative_halfwidth": 0.6364847311202637
+          },
+          "E_active": {
+            "value": 8.040364583333364e-08,
+            "ci95_halfwidth": 6.222173576897652e-07,
+            "relative_halfwidth": 7.738670942603043
+          }
+        },
+        "covariance": [
+          [
+            0.12853215570810278,
+            -4.6577657806214976e-09,
+            -5.655858447897532e-09,
+            -5.766757633150426e-08
+          ],
+          [
+            -4.6577657806214976e-09,
+            4.990463336380176e-16,
+            -1.6634877787933925e-16,
+            -2.101162375905084e-31
+          ],
+          [
+            -5.655858447897532e-09,
+            -1.663487778793392e-16,
+            1.4971390009140526e-15,
+            -4.613410919473951e-31
+          ],
+          [
+            -5.766757633150426e-08,
+            -2.1011623759050835e-31,
+            -4.613410919473951e-31,
+            9.226812213040682e-14
+          ]
+        ],
+        "residual_variance": 0.41520654958683056,
+        "residuals": [
+          {
+            "recipe": "io_term_N2000000_E1000000_P8000000_K32_C4000000",
+            "actual": 0.970703125,
+            "prediction": 0.6018817608173079,
+            "residual": 0.36882136418269207,
+            "leave_one_recipe_out_residual": 0.41579861111111094
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P8000000_K32_C4000000",
+            "actual": 0.935546875,
+            "prediction": 0.5415790264423077,
+            "residual": 0.3939678485576923,
+            "leave_one_recipe_out_residual": 0.4441480352303523
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P8000000_K32_C4000000",
+            "actual": 0.5859375,
+            "prediction": 0.6018817608173079,
+            "residual": -0.01594426081730793,
+            "leave_one_recipe_out_residual": -0.01797510162601653
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P2000000_K8_C16000000",
+            "actual": 1.341796875,
+            "prediction": 2.2380464993990388,
+            "residual": -0.8962496243990388,
+            "leave_one_recipe_out_residual": -1.0385510967966578
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P8000000_K32_C16000000",
+            "actual": 1.59375,
+            "prediction": 1.490891676682693,
+            "residual": 0.10285832331730704,
+            "leave_one_recipe_out_residual": 0.11595951897018898
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P2000000_K32_C16000000",
+            "actual": 1.306640625,
+            "prediction": 2.1777437650240388,
+            "residual": -0.8711031400240388,
+            "leave_one_recipe_out_residual": -1.0094119951253486
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P8000000_K8_C4000000",
+            "actual": 0.935546875,
+            "prediction": 0.5415790264423077,
+            "residual": 0.3939678485576923,
+            "leave_one_recipe_out_residual": 0.4441480352303523
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P2000000_K8_C4000000",
+            "actual": 1.041015625,
+            "prediction": 0.8442288912259612,
+            "residual": 0.19678673377403877,
+            "leave_one_recipe_out_residual": 0.2280314240947079
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P2000000_K8_C4000000",
+            "actual": 0.4375,
+            "prediction": 0.9045316256009615,
+            "residual": -0.46703162560096145,
+            "leave_one_recipe_out_residual": -0.5411842792479108
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P8000000_K8_C4000000",
+            "actual": 0.646484375,
+            "prediction": 0.6018817608173079,
+            "residual": 0.04460261418269207,
+            "leave_one_recipe_out_residual": 0.050283705962059354
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P2000000_K8_C16000000",
+            "actual": 1.162109375,
+            "prediction": 2.1777437650240388,
+            "residual": -1.0156343900240388,
+            "leave_one_recipe_out_residual": -1.1768911037604461
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P8000000_K32_C16000000",
+            "actual": 0.970703125,
+            "prediction": 1.4305889423076927,
+            "residual": -0.45988581730769273,
+            "leave_one_recipe_out_residual": -0.5184620596205967
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P2000000_K32_C16000000",
+            "actual": 1.3359375,
+            "prediction": 2.2380464993990388,
+            "residual": -0.9021089993990388,
+            "leave_one_recipe_out_residual": -1.0453407903899725
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P2000000_K8_C16000000",
+            "actual": 3.267578125,
+            "prediction": 2.1777437650240388,
+            "residual": 1.0898343599759612,
+            "leave_one_recipe_out_residual": 1.2628721274373256
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P8000000_K32_C4000000",
+            "actual": 0.56640625,
+            "prediction": 0.5415790264423077,
+            "residual": 0.02482722355769229,
+            "leave_one_recipe_out_residual": 0.02798949864498643
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P8000000_K32_C16000000",
+            "actual": 1.515625,
+            "prediction": 1.4305889423076927,
+            "residual": 0.08503605769230727,
+            "leave_one_recipe_out_residual": 0.09586720867208624
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P2000000_K32_C16000000",
+            "actual": 3.388671875,
+            "prediction": 2.1777437650240388,
+            "residual": 1.2109281099759612,
+            "leave_one_recipe_out_residual": 1.403192461699164
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P2000000_K32_C4000000",
+            "actual": 1.072265625,
+            "prediction": 0.9045316256009615,
+            "residual": 0.16773399939903855,
+            "leave_one_recipe_out_residual": 0.19436586002785528
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P2000000_K32_C4000000",
+            "actual": 1.041015625,
+            "prediction": 0.8442288912259612,
+            "residual": 0.19678673377403877,
+            "leave_one_recipe_out_residual": 0.2280314240947079
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P2000000_K32_C4000000",
+            "actual": 0.40625,
+            "prediction": 0.8442288912259612,
+            "residual": -0.43797889122596123,
+            "leave_one_recipe_out_residual": -0.5075187151810582
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P2000000_K32_C4000000",
+            "actual": 0.44921875,
+            "prediction": 0.9045316256009615,
+            "residual": -0.45531287560096145,
+            "leave_one_recipe_out_residual": -0.5276048920612812
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P2000000_K8_C4000000",
+            "actual": 1.072265625,
+            "prediction": 0.9045316256009615,
+            "residual": 0.16773399939903855,
+            "leave_one_recipe_out_residual": 0.19436586002785528
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P8000000_K8_C4000000",
+            "actual": 0.970703125,
+            "prediction": 0.6018817608173079,
+            "residual": 0.36882136418269207,
+            "leave_one_recipe_out_residual": 0.4157986111111109
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P8000000_K8_C16000000",
+            "actual": 1.515625,
+            "prediction": 1.4305889423076927,
+            "residual": 0.08503605769230727,
+            "leave_one_recipe_out_residual": 0.09586720867208624
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P8000000_K8_C16000000",
+            "actual": 1.59375,
+            "prediction": 1.490891676682693,
+            "residual": 0.10285832331730704,
+            "leave_one_recipe_out_residual": 0.11595951897018898
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P8000000_K8_C16000000",
+            "actual": 0.951171875,
+            "prediction": 1.4305889423076927,
+            "residual": -0.47941706730769273,
+            "leave_one_recipe_out_residual": -0.5404810298102987
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P8000000_K8_C4000000",
+            "actual": 0.56640625,
+            "prediction": 0.5415790264423077,
+            "residual": 0.02482722355769229,
+            "leave_one_recipe_out_residual": 0.02798949864498643
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P2000000_K32_C16000000",
+            "actual": 3.525390625,
+            "prediction": 2.2380464993990388,
+            "residual": 1.2873441256009612,
+            "leave_one_recipe_out_residual": 1.4917413823119774
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P8000000_K8_C16000000",
+            "actual": 0.970703125,
+            "prediction": 1.490891676682693,
+            "residual": -0.520188551682693,
+            "leave_one_recipe_out_residual": -0.5864456300813016
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P2000000_K8_C4000000",
+            "actual": 0.40625,
+            "prediction": 0.8442288912259612,
+            "residual": -0.43797889122596123,
+            "leave_one_recipe_out_residual": -0.5075187151810582
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P8000000_K32_C16000000",
+            "actual": 0.970703125,
+            "prediction": 1.490891676682693,
+            "residual": -0.520188551682693,
+            "leave_one_recipe_out_residual": -0.5864456300813016
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P2000000_K8_C16000000",
+            "actual": 3.404296875,
+            "prediction": 2.2380464993990388,
+            "residual": 1.1662503756009612,
+            "leave_one_recipe_out_residual": 1.351421048050139
+          }
+        ],
+        "gate_reasons": [
+          "coefficient_relative_interval_gate_failed"
+        ],
+        "holdout_status": "not_run",
+        "extrapolation_allowed": false,
+        "interval_scope": "conditional OLS t interval across recipe means; real-design holdouts separate"
+      },
+      "warm_mean_wall_s": {
+        "n_recipes": 32,
+        "n_regressors": 4,
+        "rank": 4,
+        "dof": 28,
+        "standardized_condition": 1.2151654658683202,
+        "condition_limit": 30.0,
+        "relative_ci_limit": 0.25,
+        "identifiable": false,
+        "coefficients": {
+          "intercept": {
+            "value": 0.015839681926097034,
+            "ci95_halfwidth": 0.18820738167688977,
+            "relative_halfwidth": 11.882017742212636
+          },
+          "Q": {
+            "value": 4.813474021200542e-09,
+            "ci95_halfwidth": 1.172738523985048e-08,
+            "relative_halfwidth": 2.4363661646865022
+          },
+          "P_dedup": {
+            "value": 2.0113103557688996e-08,
+            "ci95_halfwidth": 2.0312427075354358e-08,
+            "relative_halfwidth": 1.009910132322128
+          },
+          "E_active": {
+            "value": -5.686584100153038e-09,
+            "ci95_halfwidth": 1.5946177648378028e-07,
+            "relative_halfwidth": 28.041751194621185
+          }
+        },
+        "covariance": [
+          [
+            0.008441910491630917,
+            -3.0591910323425235e-10,
+            -3.7147319678444926e-10,
+            -3.7875698495669345e-09
+          ],
+          [
+            -3.0591910323425235e-10,
+            3.2777046775098465e-17,
+            -1.0925682258366158e-17,
+            -1.3800301261620452e-32
+          ],
+          [
+            -3.714731967844493e-10,
+            -1.0925682258366157e-17,
+            9.83311403252954e-17,
+            -3.030059040770962e-32
+          ],
+          [
+            -3.7875698495669345e-09,
+            -1.3800301261620455e-32,
+            -3.030059040770962e-32,
+            6.0601117593070956e-15
+          ]
+        ],
+        "residual_variance": 0.027270502916881923,
+        "residuals": [
+          {
+            "recipe": "io_term_N2000000_E1000000_P8000000_K32_C4000000",
+            "actual": 0.19111450063064694,
+            "prediction": 0.2095657184570603,
+            "residual": -0.018451217826413346,
+            "leave_one_recipe_out_residual": -0.02080137294251478
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P8000000_K32_C4000000",
+            "actual": 0.16009175047899285,
+            "prediction": 0.21383065653217506,
+            "residual": -0.05373890605318221,
+            "leave_one_recipe_out_residual": -0.060583698965105154
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P8000000_K32_C4000000",
+            "actual": 0.14877401994696507,
+            "prediction": 0.2095657184570603,
+            "residual": -0.06079169851009522,
+            "leave_one_recipe_out_residual": -0.06853481458048676
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P2000000_K8_C16000000",
+            "actual": 0.01659613890418162,
+            "prediction": 0.12739488928053067,
+            "residual": -0.11079875037634905,
+            "leave_one_recipe_out_residual": -0.12839075252524013
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P8000000_K32_C16000000",
+            "actual": 0.6036216530095165,
+            "prediction": 0.24807351062666463,
+            "residual": 0.35554814238285193,
+            "leave_one_recipe_out_residual": 0.40083476214435343
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P2000000_K32_C16000000",
+            "actual": 0.0748979967708389,
+            "prediction": 0.13165982735564544,
+            "residual": -0.056761830584806536,
+            "leave_one_recipe_out_residual": -0.06577415466094574
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P8000000_K8_C4000000",
+            "actual": 0.045556403890562557,
+            "prediction": 0.21383065653217506,
+            "residual": -0.1682742526416125,
+            "leave_one_recipe_out_residual": -0.1897075585336336
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P2000000_K8_C4000000",
+            "actual": 0.058599595562554896,
+            "prediction": 0.07389813910123894,
+            "residual": -0.01529854353868404,
+            "leave_one_recipe_out_residual": -0.017727560200814934
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P2000000_K8_C4000000",
+            "actual": 0.04833920303887377,
+            "prediction": 0.06963320102612415,
+            "residual": -0.02129399798725038,
+            "leave_one_recipe_out_residual": -0.024674939171855596
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P8000000_K8_C4000000",
+            "actual": 0.030523070017807186,
+            "prediction": 0.2095657184570603,
+            "residual": -0.1790426484392531,
+            "leave_one_recipe_out_residual": -0.2018475386198626
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P2000000_K8_C16000000",
+            "actual": 0.015192085799450675,
+            "prediction": 0.13165982735564544,
+            "residual": -0.11646774155619476,
+            "leave_one_recipe_out_residual": -0.13495983422667696
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P8000000_K32_C16000000",
+            "actual": 0.5694722222009053,
+            "prediction": 0.2523384487017794,
+            "residual": 0.3171337734991259,
+            "leave_one_recipe_out_residual": 0.35752750616703627
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P2000000_K32_C16000000",
+            "actual": 0.057763100524122514,
+            "prediction": 0.12739488928053067,
+            "residual": -0.06963178875640816,
+            "leave_one_recipe_out_residual": -0.08068753237511364
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P2000000_K8_C16000000",
+            "actual": 0.026960239745676517,
+            "prediction": 0.13165982735564544,
+            "residual": -0.10469958760996892,
+            "leave_one_recipe_out_residual": -0.12132319901322304
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P8000000_K32_C4000000",
+            "actual": 0.16033196119436374,
+            "prediction": 0.21383065653217506,
+            "residual": -0.05349869533781132,
+            "leave_one_recipe_out_residual": -0.060312892304958024
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P8000000_K32_C16000000",
+            "actual": 0.5712168123573065,
+            "prediction": 0.2523384487017794,
+            "residual": 0.3188783636555271,
+            "leave_one_recipe_out_residual": 0.35949430699376494
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P2000000_K32_C16000000",
+            "actual": 0.11108996133164813,
+            "prediction": 0.13165982735564544,
+            "residual": -0.02056986602399731,
+            "leave_one_recipe_out_residual": -0.02383583360998017
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P2000000_K32_C4000000",
+            "actual": 0.22410384433654448,
+            "prediction": 0.06963320102612415,
+            "residual": 0.15447064331042032,
+            "leave_one_recipe_out_residual": 0.17899662288895504
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P2000000_K32_C4000000",
+            "actual": 0.2717505954982092,
+            "prediction": 0.07389813910123894,
+            "residual": 0.19785245639697024,
+            "leave_one_recipe_out_residual": 0.2292663561591633
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P2000000_K32_C4000000",
+            "actual": 0.23823697469197214,
+            "prediction": 0.07389813910123894,
+            "residual": 0.1643388355907332,
+            "leave_one_recipe_out_residual": 0.19043163121377443
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P2000000_K32_C4000000",
+            "actual": 0.20751796131177494,
+            "prediction": 0.06963320102612415,
+            "residual": 0.13788476028565078,
+            "leave_one_recipe_out_residual": 0.15977732668197975
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P2000000_K8_C4000000",
+            "actual": 0.06186460288396726,
+            "prediction": 0.06963320102612415,
+            "residual": -0.007768598142156892,
+            "leave_one_recipe_out_residual": -0.009002052443279297
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P8000000_K8_C4000000",
+            "actual": 0.04377210885286331,
+            "prediction": 0.2095657184570603,
+            "residual": -0.16579360960419698,
+            "leave_one_recipe_out_residual": -0.18691095283291584
+          },
+          {
+            "recipe": "io_term_N2000000_E250000_P8000000_K8_C16000000",
+            "actual": 0.15614198586748293,
+            "prediction": 0.2523384487017794,
+            "residual": -0.09619646283429648,
+            "leave_one_recipe_out_residual": -0.1084491288321608
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P8000000_K8_C16000000",
+            "actual": 0.14502978813834488,
+            "prediction": 0.24807351062666463,
+            "residual": -0.10304372248831975,
+            "leave_one_recipe_out_residual": -0.11616853266975885
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P8000000_K8_C16000000",
+            "actual": 0.14204771867177138,
+            "prediction": 0.2523384487017794,
+            "residual": -0.11029073003000803,
+            "leave_one_recipe_out_residual": -0.12433860079263778
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P8000000_K8_C4000000",
+            "actual": 0.03798482865871241,
+            "prediction": 0.21383065653217506,
+            "residual": -0.17584582787346265,
+            "leave_one_recipe_out_residual": -0.19824353494677632
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P2000000_K32_C16000000",
+            "actual": 0.12140026090977092,
+            "prediction": 0.12739488928053067,
+            "residual": -0.005994628370759744,
+            "leave_one_recipe_out_residual": -0.006946421733248061
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P8000000_K8_C16000000",
+            "actual": 0.1325962908255557,
+            "prediction": 0.24807351062666463,
+            "residual": -0.11547721980110892,
+            "leave_one_recipe_out_residual": -0.13018570037198188
+          },
+          {
+            "recipe": "io_term_N500000_E250000_P2000000_K8_C4000000",
+            "actual": 0.04733715404290706,
+            "prediction": 0.07389813910123894,
+            "residual": -0.026560985058331876,
+            "leave_one_recipe_out_residual": -0.030778188814111592
+          },
+          {
+            "recipe": "io_term_N500000_E1000000_P8000000_K32_C16000000",
+            "actual": 0.5569582225289196,
+            "prediction": 0.24807351062666463,
+            "residual": 0.30888471190225497,
+            "leave_one_recipe_out_residual": 0.34822775108763704
+          },
+          {
+            "recipe": "io_term_N2000000_E1000000_P2000000_K8_C16000000",
+            "actual": 0.028694511701663334,
+            "prediction": 0.12739488928053067,
+            "residual": -0.09870037757886733,
+            "leave_one_recipe_out_residual": -0.11437146816938389
+          }
+        ],
+        "gate_reasons": [
+          "coefficient_relative_interval_gate_failed"
+        ],
+        "holdout_status": "not_run",
+        "extrapolation_allowed": false,
+        "interval_scope": "conditional OLS t interval across recipe means; real-design holdouts separate"
+      }
+    }
+  },
+  "fitter_source_sha256": "fbf7bf4a549353cee046aada703f049812344ac9813242d969eb5b4baec40611",
+  "regression_source_sha256": "04834b1188121c56a76ee85b772f0646e6334bba3b39d0aad4304aad01adb1a8",
+  "historical_gp_fit_verdict": "unchanged",
+  "holdout_status": "not_run"
+}

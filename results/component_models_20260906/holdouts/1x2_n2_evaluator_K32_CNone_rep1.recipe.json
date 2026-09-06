@@ -1,0 +1,10 @@
+{
+  "component": "evaluator",
+  "K": 32,
+  "chunk_budget": null,
+  "seed": 0,
+  "layout": "real_tiled",
+  "cache": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/cache/1x2_n2",
+  "recipe_id": "1x2_n2_evaluator_K32_CNone",
+  "repetition": 1
+}

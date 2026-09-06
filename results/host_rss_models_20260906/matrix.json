@@ -1,0 +1,67 @@
+{
+  "created": 1788716536.7944214,
+  "input_sha256": {
+    "adaptec1": {
+      "/ldaphome/yyds-tsai-dev/DREAMPlace/benchmarks/ispd2005/adaptec1/adaptec1.nodes": "0cf59367a50a8f9da97a2a5ec87cb7b13a52282a73d05cdbd0c404ed2f740c85",
+      "/ldaphome/yyds-tsai-dev/DREAMPlace/benchmarks/ispd2005/adaptec1/adaptec1.nets": "6a3f2fc3604571085db9be79c86eedbefaabcf1c1ebaec6acf8f8aa8d2886781",
+      "/ldaphome/yyds-tsai-dev/DREAMPlace/benchmarks/ispd2005/adaptec1/adaptec1.wts": "b4a5ef40809a061293bd523948f89e1bba9bfad136e9f7c264f777d8acca851b",
+      "/ldaphome/yyds-tsai-dev/DREAMPlace/benchmarks/ispd2005/adaptec1/adaptec1.pl": "b389170c484c2a77742b0399999c79c8a8ecf23885c642c3462c1a3478001296",
+      "/ldaphome/yyds-tsai-dev/DREAMPlace/benchmarks/ispd2005/adaptec1/adaptec1.scl": "fdb44a90d48118c3d264ee212ff09ff70478beda1af32a5f98387ef350548cd0"
+    },
+    "bigblue4": {
+      "/ldaphome/yyds-tsai-dev/DREAMPlace/benchmarks/ispd2005/bigblue4/bigblue4.nodes": "9df2e1bc9ac7235d7aa06e48c54e4d10646ca9903c14a2a6c492cd9facfaf42d",
+      "/ldaphome/yyds-tsai-dev/DREAMPlace/benchmarks/ispd2005/bigblue4/bigblue4.nets": "f6db2929540951b0533c6e0c105321db2588e95e864e2698793df49e7474ce19",
+      "/ldaphome/yyds-tsai-dev/DREAMPlace/benchmarks/ispd2005/bigblue4/bigblue4.wts": "0e64b76496c416cbc4d77e1058b4d1983256f77d4e4c08244bf05a406b5852e8",
+      "/ldaphome/yyds-tsai-dev/DREAMPlace/benchmarks/ispd2005/bigblue4/bigblue4.pl": "730bb2e656ef510520b2123d2c393890a464a3df05b1e08d29d4eec7cc4d87d7",
+      "/ldaphome/yyds-tsai-dev/DREAMPlace/benchmarks/ispd2005/bigblue4/bigblue4.scl": "71059c8c6f3d88ecb87d634af3c1814937b84249404242a4a352cac5a3b195a8"
+    },
+    "group": {
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/mempool_group_export/mempool_group.nodes": "36613f1a9923197a7555d91ceed4f978e33713b020c3e15e04810bf0c3c83b21",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/mempool_group_export/mempool_group.nets": "42c5a9d6b641248856e171dd7ea1aa6c01275c38f6792d6ba697e909511e3e0c",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/mempool_group_export/mempool_group.wts": "bd900238f1c8e315a9a55c04ab4e7bd11195be474df75e486902d6a047a7b562",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/mempool_group_export/mempool_group.pl": "82dd06e3f6606342191db384dd1f94f18e68cfbb84e122226f77213947dcd199",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/mempool_group_export/mempool_group.scl": "08b84fe8ca39e36d101a96e2b8482d76362ab8655ef952726da9413d732bd380"
+    },
+    "groupDrop25": {
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/inputs/groupDrop25/groupDrop25.nodes": "36613f1a9923197a7555d91ceed4f978e33713b020c3e15e04810bf0c3c83b21",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/inputs/groupDrop25/groupDrop25.nets": "ee0b393860cca92d13a9ddeb76f233333fa31edf0cd789aa1c7a834730fca16f",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/inputs/groupDrop25/groupDrop25.wts": "bd900238f1c8e315a9a55c04ab4e7bd11195be474df75e486902d6a047a7b562",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/inputs/groupDrop25/groupDrop25.pl": "82dd06e3f6606342191db384dd1f94f18e68cfbb84e122226f77213947dcd199",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/inputs/groupDrop25/groupDrop25.scl": "08b84fe8ca39e36d101a96e2b8482d76362ab8655ef952726da9413d732bd380"
+    },
+    "groupDrop50": {
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/inputs/groupDrop50/groupDrop50.nodes": "36613f1a9923197a7555d91ceed4f978e33713b020c3e15e04810bf0c3c83b21",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/inputs/groupDrop50/groupDrop50.nets": "a7e92caf235505032429385e00a946a62af022994b37ff0bdf25b26a29aa60b3",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/inputs/groupDrop50/groupDrop50.wts": "bd900238f1c8e315a9a55c04ab4e7bd11195be474df75e486902d6a047a7b562",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/inputs/groupDrop50/groupDrop50.pl": "82dd06e3f6606342191db384dd1f94f18e68cfbb84e122226f77213947dcd199",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/inputs/groupDrop50/groupDrop50.scl": "08b84fe8ca39e36d101a96e2b8482d76362ab8655ef952726da9413d732bd380"
+    },
+    "array1x2": {
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/arrays/1x2_n2/1x2_n2.nodes": "ca60340818d1a83c47c18db9761206652e13e6a10ea57b01469dde63170a42e3",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/arrays/1x2_n2/1x2_n2.nets": "f8dba0bd7de8ab94160628bee743d5013036273e9c2a678d0fdc963cde594f2b",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/arrays/1x2_n2/1x2_n2.wts": "bd900238f1c8e315a9a55c04ab4e7bd11195be474df75e486902d6a047a7b562",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/arrays/1x2_n2/1x2_n2.pl": "5b7cab1f242178cd24f24b8c962b220f463c1924d81ed69ca39133d1aabd818b",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/arrays/1x2_n2/1x2_n2.scl": "392d0f2024d58eb3180eda720ef324cb12ae2750d3f22ee72fdc802a1685b4c5"
+    },
+    "array2x2": {
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/arrays/2x2_n2/2x2_n2.nodes": "64da01b0f926305dba5362f10b098e1912e89e826e0ae14b0645d61a662500ef",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/arrays/2x2_n2/2x2_n2.nets": "ea44f43fafaf159169a3980fa69258f06fabe6013096f99209c1c7c8fda6de03",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/arrays/2x2_n2/2x2_n2.wts": "bd900238f1c8e315a9a55c04ab4e7bd11195be474df75e486902d6a047a7b562",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/arrays/2x2_n2/2x2_n2.pl": "5980cfaf5e0175be5c760076d1872c38ee09cc7442ec0c0d39a7854e529b91ff",
+      "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/arrays/2x2_n2/2x2_n2.scl": "902e0b94ffb06318a5e048c4ae07580ddd32ba539f0f6938c312cd87be019a53"
+    }
+  },
+  "source_sha256": "a451af3117c4ded18b5256c65048669f422e01d2d12eca12579ad5ebf3a74a65",
+  "registration_sha256": "d905df7d50281c568c51bd2d25a25a09978a7445215477fcdd81e37c91d5095d",
+  "train": [
+    "adaptec1",
+    "bigblue4",
+    "group",
+    "groupDrop25",
+    "groupDrop50",
+    "array1x2"
+  ],
+  "holdout": "array2x2",
+  "repetitions": 3,
+  "timeout_s": 3600
+}

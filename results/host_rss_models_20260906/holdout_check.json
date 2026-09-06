@@ -1,0 +1,19 @@
+{
+  "fit_sha256": "e59aac9593c9f6e580d2830ef798c5d2d94319fb815d820b6de7584e95274172",
+  "checks": {
+    "host_peak_rss_gib": {
+      "point": 76.3492152540643,
+      "pi95": null,
+      "identified_model": false,
+      "requires_external_validation": true,
+      "actual": 76.1969388326009
+    },
+    "read_s": {
+      "point": 609.2690785392421,
+      "pi95": null,
+      "identified_model": false,
+      "requires_external_validation": true,
+      "actual": 685.7673373916186
+    }
+  }
+}

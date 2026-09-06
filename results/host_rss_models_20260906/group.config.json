@@ -1,0 +1,7 @@
+{
+  "aux_input": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/mempool_group_export/rss_alias/rssInput.aux",
+  "gpu": 0,
+  "dtype": "float64",
+  "sort_nets_by_degree": 0,
+  "num_threads": 8
+}

@@ -1,0 +1,21 @@
+{
+  "status": "completed",
+  "config": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/host_rss_models_20260906/array1x2.config.json",
+  "config_sha256": "0d07ca14107ba2655d845ecae636c4400c202c49c89c62d5d0c39017f76c64d9",
+  "phase": "native_raw_read_without_initialize",
+  "read_s": 266.0718767340295,
+  "host_peak_rss_gib": 38.046775817871094,
+  "baseline_hwm_gib": 0.4842491149902344,
+  "N": 6178822,
+  "P_raw": 24078796,
+  "P_canonical": 23707410,
+  "E_raw": 7021183,
+  "E_native": 7021183,
+  "name_bytes": 1322755765,
+  "pid": 644627,
+  "python": "3.12.13 (main, Mar  4 2026, 09:23:07) [GCC 11.4.0]",
+  "host_meminfo_before": "MemTotal:       1056496616 kB\nMemFree:        136007328 kB\nMemAvailable:   558306456 kB\nBuffers:          721596 kB\nCached:         413353268 kB\nSwapCached:       693876 kB\nActive:         229007264 kB\nInactive:       669742468 kB\nActive(anon):    1542872 kB\nInactive(anon): 483417856 kB\nActive(file):   227464392 kB\nInactive(file): 186324612 kB\nUnevictable:       27848 kB\nMlocked:           27848 kB\nSwapTotal:       8388604 kB\nSwapFree:              0 kB\nDirty:               972 kB\nWriteback:            76 kB\nAnonPages:      483946400 kB\nMapped:          5190016 kB\nShmem:            278048 kB\nKReclaimable:   14693148 kB\nSlab:           16446724 kB\nSReclaimable:   14693148 kB\nSUnreclaim:      1753576 kB\nKernelStack:      144048 kB\nPageTables:      1415848 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    536636912 kB\nCommitted_AS:   366188944 kB\nVmallocTotal:   13743895347199 kB\nVmallocUsed:      790576 kB\nVmallocChunk:          0 kB\nPercpu:           407232 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:  28037120 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:    78788100 kB\nDirectMap2M:    926461952 kB\nDirectMap1G:    70254592 kB\n",
+  "memory_scope": "absolute process RUSAGE_SELF HWM; GiB; no PlaceDB.initialize or GPU context",
+  "dreamplace_commit": "6627f3327e6cc17db7782c0b90073a498531ca3c",
+  "source_sha256": "a451af3117c4ded18b5256c65048669f422e01d2d12eca12579ad5ebf3a74a65"
+}

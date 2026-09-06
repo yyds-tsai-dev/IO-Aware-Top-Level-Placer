@@ -1,0 +1,10 @@
+{
+  "component": "io_term",
+  "K": 16,
+  "chunk_budget": 4000000,
+  "seed": 0,
+  "layout": "real_tiled",
+  "cache": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/recovery_visible_20260906/cache/2x2_n2",
+  "recipe_id": "2x2_n2_io_term_K16_C4000000",
+  "repetition": 1
+}

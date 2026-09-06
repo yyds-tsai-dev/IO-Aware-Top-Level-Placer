@@ -1,0 +1,17 @@
+{
+  "command": [
+    "/ldaphome/yyds-tsai-dev/DREAMPlace/.venv312/bin/python",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/component_models_20260906/source/scripts/run_component_models.py",
+    "--point",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/component_models_20260906/points/evaluator_N2000000_E1000000_P2000000_K32_CNone_rep0.recipe.json",
+    "--out",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/component_models_20260906/points/evaluator_N2000000_E1000000_P2000000_K32_CNone_rep0.json"
+  ],
+  "started": 1788715479.9006903,
+  "matrix_sha256": "54be5595fedf832a5ff2750816cbabe15dc3337ea0c69828c5d84b33fc5447cd",
+  "pid": 252267,
+  "returncode": 0,
+  "ended": 1788715485.3364155,
+  "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "output_sha256": "6f33c650b7a83674e06d4749a29f1fbd46403b6ce758711b1b42f260cbcd300c"
+}

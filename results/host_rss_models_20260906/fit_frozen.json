@@ -1,0 +1,196 @@
+{
+  "frozen_at": 1788719031.2871583,
+  "matrix_sha256": "a9774d0dcd3b515d5f183fb01712894b617d5ec97230f545d9200bf3f9fc19dd",
+  "fits": {
+    "host_peak_rss_gib": {
+      "n_recipes": 6,
+      "n_regressors": 3,
+      "rank": 3,
+      "dof": 3,
+      "standardized_condition": 6.007481240013053,
+      "condition_limit": 30.0,
+      "relative_ci_limit": 0.25,
+      "identifiable": false,
+      "coefficients": {
+        "intercept": {
+          "value": -2.427739508984072,
+          "ci95_halfwidth": 6.4681173788986035,
+          "relative_halfwidth": 2.664255104372913
+        },
+        "N": {
+          "value": 3.204057297006811e-06,
+          "ci95_halfwidth": 5.61255108457007e-06,
+          "relative_halfwidth": 1.7517012226383228
+        },
+        "P_raw": {
+          "value": 8.136302604385612e-07,
+          "ci95_halfwidth": 1.395133085410944e-06,
+          "relative_halfwidth": 1.7147015705376327
+        }
+      },
+      "covariance": [
+        [
+          4.130794740145836,
+          -1.7809200760761635e-06,
+          2.130011257900815e-07
+        ],
+        [
+          -1.7809200760761622e-06,
+          3.1102725251860022e-12,
+          -7.314425101668779e-13
+        ],
+        [
+          2.1300112579008117e-07,
+          -7.314425101668777e-13,
+          1.9218040591434837e-13
+        ]
+      ],
+      "residual_variance": 6.063359377557615,
+      "residuals": [
+        {
+          "recipe": "adaptec1",
+          "actual": 1.2656364440917969,
+          "prediction": -0.982141117446068,
+          "residual": 2.247777561537865,
+          "leave_one_recipe_out_residual": 6.016682951079503
+        },
+        {
+          "recipe": "bigblue4",
+          "actual": 8.360828399658203,
+          "prediction": 11.789997039889109,
+          "residual": -3.4291686402309054,
+          "leave_one_recipe_out_residual": -4.861516282644563
+        },
+        {
+          "recipe": "group",
+          "actual": 17.419504801432293,
+          "prediction": 17.255783264432917,
+          "residual": 0.16372153699937542,
+          "leave_one_recipe_out_residual": 0.21191715106566208
+        },
+        {
+          "recipe": "groupDrop25",
+          "actual": 15.143166859944662,
+          "prediction": 14.875342770577038,
+          "residual": 0.2678240893676236,
+          "leave_one_recipe_out_residual": 0.3540318760955325
+        },
+        {
+          "recipe": "groupDrop50",
+          "actual": 12.170658111572266,
+          "prediction": 12.502385234226413,
+          "residual": -0.33172712265414717,
+          "leave_one_recipe_out_residual": -1.6551663827800942
+        },
+        {
+          "recipe": "array1x2",
+          "actual": 38.0423698425293,
+          "prediction": 36.96079726754913,
+          "residual": 1.0815725749801643,
+          "leave_one_recipe_out_residual": 5.646443105506531
+        }
+      ],
+      "gate_reasons": [
+        "coefficient_relative_interval_gate_failed"
+      ],
+      "holdout_status": "not_run",
+      "extrapolation_allowed": false,
+      "interval_scope": "conditional OLS t interval across recipe means; real-design holdouts separate"
+    },
+    "read_s": {
+      "n_recipes": 6,
+      "n_regressors": 3,
+      "rank": 3,
+      "dof": 3,
+      "standardized_condition": 6.007481240013053,
+      "condition_limit": 30.0,
+      "relative_ci_limit": 0.25,
+      "identifiable": false,
+      "coefficients": {
+        "intercept": {
+          "value": -21.44926860874569,
+          "ci95_halfwidth": 66.2417911019207,
+          "relative_halfwidth": 3.0883006926824246
+        },
+        "N": {
+          "value": 4.096615716067043e-05,
+          "ci95_halfwidth": 5.7479698452265415e-05,
+          "relative_halfwidth": 1.4031020343653031
+        },
+        "P_raw": {
+          "value": 2.5847126716057932e-06,
+          "ci95_halfwidth": 1.4287946397612619e-05,
+          "relative_halfwidth": 5.527866425762523
+        }
+      },
+      "covariance": [
+        [
+          433.2533841770491,
+          -0.00018678963696985938,
+          2.2340364115699454e-05
+        ],
+        [
+          -0.0001867896369698592,
+          3.262171523928487e-10,
+          -7.671645840470099e-11
+        ],
+        [
+          2.234036411569941e-05,
+          -7.671645840470098e-11,
+          2.0156608224975835e-11
+        ]
+      ],
+      "residual_variance": 635.9480765959676,
+      "residuals": [
+        {
+          "recipe": "adaptec1",
+          "actual": 5.766243654380863,
+          "prediction": -10.346991823825947,
+          "residual": 16.11323547820681,
+          "leave_one_recipe_out_residual": 43.13070423308572
+        },
+        {
+          "recipe": "bigblue4",
+          "actual": 59.87470548134297,
+          "prediction": 90.75266096839151,
+          "residual": -30.87795548704854,
+          "leave_one_recipe_out_residual": -43.775532534017486
+        },
+        {
+          "recipe": "group",
+          "actual": 135.88268485409208,
+          "prediction": 136.19627622000985,
+          "residual": -0.31359136591777315,
+          "leave_one_recipe_out_residual": -0.40590499015616727
+        },
+        {
+          "recipe": "groupDrop25",
+          "actual": 150.80079936608672,
+          "prediction": 128.63417460255476,
+          "residual": 22.166624763531956,
+          "leave_one_recipe_out_residual": 29.301665022995465
+        },
+        {
+          "recipe": "groupDrop50",
+          "actual": 108.11293662906003,
+          "prediction": 121.09584458754043,
+          "residual": -12.982907958480396,
+          "leave_one_recipe_out_residual": -64.77876343565917
+        },
+        {
+          "recipe": "array1x2",
+          "actual": 299.804688218981,
+          "prediction": 293.91009364927316,
+          "residual": 5.894594569707863,
+          "leave_one_recipe_out_residual": 30.77324040737036
+        }
+      ],
+      "gate_reasons": [
+        "coefficient_relative_interval_gate_failed"
+      ],
+      "holdout_status": "not_run",
+      "extrapolation_allowed": false,
+      "interval_scope": "conditional OLS t interval across recipe means; real-design holdouts separate"
+    }
+  }
+}
