@@ -1,0 +1,13 @@
+{
+  "name": "NVIDIA H100 NVL",
+  "sm_arch": "sm_90",
+  "cuda_version": "12.8",
+  "mig": false,
+  "persistence_mode": "on",
+  "clocks": "default; not modified by this experiment",
+  "gpu_uuid": "GPU-1a75fdd3-2f46-0258-4123-095efa8636e9",
+  "observed_snapshot": "GPU-1a75fdd3-2f46-0258-4123-095efa8636e9, NVIDIA H100 NVL, 95830, 1207, 94113, 13, Enabled, Disabled, 1785, 2619",
+  "memory_total_mib": 95830,
+  "measurement_mode": "shared",
+  "note": "User explicitly permits other workloads when capacity remains; no exclusive speedup claim."
+}
