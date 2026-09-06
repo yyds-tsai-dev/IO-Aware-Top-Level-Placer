@@ -64,7 +64,8 @@ import numpy as np
 
 from ioplace.bench import rent
 
-REPO = "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+DP = os.environ.get("DREAMPLACE_ROOT", os.path.join(os.path.dirname(REPO), "DREAMPlace"))
 SOURCE_PREFIX = os.path.join(REPO, "results/m4/bench/mempool_group_export/mempool_group")
 CLUSTER_DEF = ("/nashome/NVL4/vdalab/yyds-dev/benchmarks/ispd25/extracted/"
                "ISPD2025_benchmarks/visible/mempool_cluster/mempool_cluster.def")

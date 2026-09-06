@@ -57,8 +57,8 @@ import uuid
 
 from ioplace.bench import net_drop
 
-REPO = "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer"
-DP = "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+DP = os.environ.get("DREAMPLACE_ROOT", os.path.join(os.path.dirname(REPO), "DREAMPlace"))
 
 GROUP_CONFIG = os.path.join(REPO, "benchmarks", "ispd25", "mempool_group.json")
 NETDROP_SOURCE_PREFIX = os.path.join(

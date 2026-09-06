@@ -38,6 +38,7 @@ whatever contamination is present):
 """
 import subprocess
 import threading
+import os
 
 # sec 1.4 D9: baseline must be < 0.5 GiB in absolute terms.
 CONTAMINATION_BASELINE_GIB = 0.5
@@ -55,6 +56,11 @@ def _nvsmi(query, fmt="csv,noheader,nounits", timeout=5.0):
             args = ["nvidia-smi", f"--query-compute-apps={query[8:]}", f"--format={fmt}"]
         else:
             args = ["nvidia-smi", f"--query-gpu={query}", f"--format={fmt}"]
+        # nvidia-smi ignores CUDA_VISIBLE_DEVICES. Match the device used by
+        # CUDA rather than silently sampling physical GPU 0 on multi-GPU hosts.
+        visible = os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")[0].strip()
+        if visible and visible != "-1":
+            args += ["--id", visible]
         out = subprocess.check_output(args, stderr=subprocess.DEVNULL, timeout=timeout)
         return out.decode()
     except Exception:

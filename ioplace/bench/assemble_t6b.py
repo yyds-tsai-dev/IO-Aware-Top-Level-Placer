@@ -63,7 +63,8 @@ import numpy as np
 from ioplace.bench import glue_gen
 from ioplace.bench import verify_bench as vb
 
-REPO = "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DP = os.environ.get("DREAMPLACE_ROOT", os.path.join(os.path.dirname(REPO), "DREAMPlace"))
 DEFAULT_ARRAYS_ROOT = os.path.join(REPO, "results/m4/bench/arrays")
 DEFAULT_SOURCE_PREFIX = os.path.join(REPO, "results/m4/bench/mempool_group_export/mempool_group")
 DEFAULT_OUT = os.path.join(REPO, "results/m4/bench/verify_group3x3_t6b.json")

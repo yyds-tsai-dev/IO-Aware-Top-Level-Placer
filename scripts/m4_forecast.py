@@ -163,6 +163,33 @@ def _load_json(path):
         return json.load(f)
 
 
+_SKU_REQUIRED_FIELDS = ("name", "sm_arch", "cuda_version", "mig",
+                        "persistence_mode", "clocks")
+
+
+def _validate_sku(sku):
+    if not isinstance(sku, dict):
+        raise ValueError("SKU JSON must contain an object")
+    missing = [key for key in _SKU_REQUIRED_FIELDS if key not in sku]
+    if missing:
+        raise ValueError("SKU JSON missing required fields: " + ", ".join(missing))
+    if not isinstance(sku["name"], str) or not sku["name"].strip():
+        raise ValueError("SKU name must be a non-empty string")
+    for key in ("sm_arch", "cuda_version", "persistence_mode", "clocks"):
+        if not isinstance(sku[key], str) or not sku[key].strip():
+            raise ValueError(f"SKU {key} must be a non-empty string")
+    if type(sku["mig"]) is not bool:
+        raise ValueError("SKU mig must be a boolean")
+    return dict(sku)
+
+
+def _load_sku_json(path):
+    sku = _validate_sku(_load_json(path))
+    sku["source_path"] = str(path)
+    sku["source_sha256"] = sha256_file(path)
+    return sku
+
+
 # ---------------------------------------------------------------------------
 # stage A: scale ratios (27.7M / 11.3M, same GPU)
 # ---------------------------------------------------------------------------
@@ -341,7 +368,7 @@ def build_host_rss_forecast(cluster_flat, ratios):
 
 def build_prediction(cluster_flat, count_freeze, probe_gp, *,
                       cluster_flat_path, count_freeze_path, probe_gp_path,
-                      status="draft"):
+                      status="draft", sku=None):
     ratios = compute_scale_ratios(count_freeze, probe_gp)
     l4_gpu_name = cluster_flat.get("env", {}).get("gpu_name", "NVIDIA L4")
 
@@ -352,7 +379,7 @@ def build_prediction(cluster_flat, count_freeze, probe_gp, *,
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "generator": "scripts/m4_forecast.py",
         "generator_commit": _git_head(),
-        "sku": H100_SKU,
+        "sku": dict(H100_SKU if sku is None else _validate_sku(sku)),
         "l4_reference": {
             "name": l4_gpu_name,
             "note": "the L4 device the three input measurements below were taken on",
@@ -393,6 +420,8 @@ def main(argv=None):
     ap.add_argument("--cluster-flat", default=str(DEFAULT_CLUSTER_FLAT))
     ap.add_argument("--count-freeze", default=str(DEFAULT_COUNT_FREEZE))
     ap.add_argument("--probe-gp-memory", default=str(DEFAULT_PROBE_GP_MEMORY))
+    ap.add_argument("--sku-json", help="JSON object registering the actual target GPU SKU")
+    ap.add_argument("--protocol-json", help="prospective workload and measurement protocol")
     ap.add_argument("--out", default=str(DEFAULT_OUT))
     ap.add_argument("--force", action="store_true",
                      help="overwrite --out even if it already exists")
@@ -410,6 +439,7 @@ def main(argv=None):
     cluster_flat = _load_json(args.cluster_flat)
     count_freeze = _load_json(args.count_freeze)
     probe_gp = _load_json(args.probe_gp_memory)
+    sku = _load_sku_json(args.sku_json) if args.sku_json else None
 
     prediction = build_prediction(
         cluster_flat, count_freeze, probe_gp,
@@ -417,7 +447,14 @@ def main(argv=None):
         count_freeze_path=args.count_freeze,
         probe_gp_path=args.probe_gp_memory,
         status="frozen" if args.freeze else "draft",
+        sku=sku,
     )
+    if args.protocol_json:
+        protocol = _load_json(args.protocol_json)
+        if not isinstance(protocol, dict) or not protocol.get("config_sha256"):
+            raise ValueError("protocol must register a config_sha256")
+        prediction["execution_protocol"] = protocol
+        prediction["execution_protocol_sha256"] = sha256_file(args.protocol_json)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w") as f:

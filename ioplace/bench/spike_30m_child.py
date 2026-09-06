@@ -23,7 +23,7 @@ docstring). It:
   4. optionally allocates `--s4-scenario B`'s two extra `(E,) float64`
      ballast tensors (sec 8's memory-parametrization table) -- M3's own S4
      is not merged into this repo yet, so this is a disclosed EMULATION of
-     its resident-memory footprint (`s4_source="not_merged_m3"`), not a
+     its resident-memory footprint (`s4_source="emulated_two_fp64_net_buffers"`), not a
      real S4 computation;
   5. writes `--out` incrementally (right after the components are built,
      and again after every iteration) so a kill/timeout/OOM still leaves a
@@ -57,6 +57,8 @@ import json
 import os
 import sys
 import traceback
+import time
+import resource
 
 # Imported at module level (not deferred into main()'s try block): merely
 # `import torch` does not touch CUDA -- only a `torch.cuda.*` call does
@@ -120,23 +122,40 @@ def _resident_bytes(*objs):
     choice in this task's final report."""
     total = 0
     seen = set()
+    visited = set()
+    def walk(obj):
+        if id(obj) in visited:
+            return
+        visited.add(id(obj))
+        if isinstance(obj, torch.Tensor):
+            if obj.is_cuda:
+                yield obj
+            return
+        if isinstance(obj, dict):
+            for v in obj.values(): yield from walk(v)
+        elif isinstance(obj, (list, tuple, set)):
+            for v in obj: yield from walk(v)
+        elif hasattr(obj, "named_buffers"):
+            for _, v in obj.named_buffers(recurse=True): yield from walk(v)
+            for _, v in obj.named_parameters(recurse=True): yield from walk(v)
+            for val in vars(obj).values():
+                if not isinstance(val, (str, bytes, int, float, type(None))): yield from walk(val)
+        elif hasattr(obj, "__dict__"):
+            for v in vars(obj).values(): yield from walk(v)
     for obj in objs:
-        for val in vars(obj).values():
-            if isinstance(val, torch.Tensor) and val.is_cuda:
-                ptr = val.data_ptr()
-                if ptr in seen:
-                    continue
-                seen.add(ptr)
-                total += val.numel() * val.element_size()
-            elif isinstance(val, (list, tuple)):
-                for item in val:
-                    if isinstance(item, torch.Tensor) and item.is_cuda:
-                        ptr = item.data_ptr()
-                        if ptr in seen:
-                            continue
-                        seen.add(ptr)
-                        total += item.numel() * item.element_size()
+        for val in walk(obj):
+            ptr = val.untyped_storage().data_ptr()
+            if ptr not in seen:
+                seen.add(ptr); total += val.untyped_storage().nbytes()
     return total
+
+
+def movable_step(pos, grad, num_movable, num_physical, die, lr):
+    """Fixed/NI coordinates may be outside the die; never update or clamp them."""
+    with torch.no_grad():
+        for section, low, high in ((slice(0, num_movable), die[0], die[2]),
+                (slice(num_physical, num_physical+num_movable), die[1], die[3])):
+            pos[section].add_(grad[section], alpha=-lr).clamp_(low, high)
 
 
 def main(argv=None):
@@ -152,7 +171,7 @@ def main(argv=None):
         "record_kind": "spike",
         "K": args.k, "rtype": args.rtype, "seed": args.seed,
         "s4_scenario": ("A" if args.s4_scenario == "A" else "B_emulated_ballast"),
-        "s4_source": ("n/a" if args.s4_scenario == "A" else "not_merged_m3"),
+        "s4_source": ("n/a" if args.s4_scenario == "A" else "emulated_two_fp64_net_buffers"),
         "n_interleaved_iters": 0,
         "budget_gb": args.budget_gb, "budget_source": args.budget_source,
         "workload_status": "running",
@@ -177,12 +196,16 @@ def main(argv=None):
         record["device_baseline_gb"] = device_baseline_gb
         record["gpu_name"] = gpu_name
         torch.cuda.reset_peak_memory_stats()
+        torch.cuda.synchronize()
+        build_started = time.perf_counter()
 
         nl, meta = load_tiled_netlist(args.cache_dir, mmap=True)
         record.update({
             "case": os.path.basename(meta.get("dst_prefix", args.cache_dir)),
             "n_nodes": int(nl.num_physical), "n_nets": int(nl.num_nets),
             "n_pins": int(len(nl.pin2node)),
+            "n_pins_raw": meta["n_pins_raw"],
+            "n_pins_canonical": meta["n_pins"],
             "input_sha256": meta.get("manifest_output_sha256", {}).get("nets"),
         })
 
@@ -220,28 +243,46 @@ def main(argv=None):
         L_R = ((nx * ny) / args.k) ** 0.5
         tau = args.tau if args.tau is not None else 0.1 * L_R
 
+        torch.cuda.synchronize()
+        record["component_build_s"] = time.perf_counter()-build_started
         record["n_interleaved_iters"] = 0
         record["measured_peak_gb"] = torch.cuda.max_memory_allocated() / 2**30
         _write(args.out, record)
 
         measured_peak_gb = record["measured_peak_gb"]
+        fixed_x0 = pos.detach()[nl.num_movable:num_physical].clone()
+        fixed_y0 = pos.detach()[num_physical + nl.num_movable:].clone()
+        phase_times = []
         for it in range(args.n_iter):
+            torch.cuda.synchronize()
+            t_iter = t0 = time.perf_counter()
             L = io_term(pos, tau, lambda_io=1.0)
+            torch.cuda.synchronize()
+            t_io = time.perf_counter() - t0
+            t0 = time.perf_counter()
             L.backward()
-            with torch.no_grad():
-                pos.data.add_(pos.grad, alpha=-args.lr)
-                pos.data[:num_physical].clamp_(die[0], die[2])
-                pos.data[num_physical:].clamp_(die[1], die[3])
+            torch.cuda.synchronize()
+            t_bw = time.perf_counter() - t0
+            movable_step(pos, pos.grad, nl.num_movable, num_physical, die, args.lr)
+            assert torch.equal(pos.detach()[nl.num_movable:num_physical], fixed_x0)
+            assert torch.equal(pos.detach()[num_physical+nl.num_movable:], fixed_y0)
             pos.grad = None
-
+            torch.cuda.synchronize()
+            t0 = time.perf_counter()
             with torch.no_grad():
-                res = ctx.evaluate(pos[:num_physical], pos[num_physical:2 * num_physical])
+                res = ctx.evaluate(pos[:num_physical], pos[num_physical:2*num_physical])
+            torch.cuda.synchronize()
+            phase_times.append(dict(iteration=it, wall_s=time.perf_counter()-t_iter,
+                io_forward_s=t_io, backward_s=t_bw, evaluate_s=time.perf_counter()-t0))
 
             measured_peak_gb = max(measured_peak_gb, torch.cuda.max_memory_allocated() / 2**30)
             record["n_interleaved_iters"] = it + 1
             record["measured_peak_gb"] = measured_peak_gb
             record["last_io_loss"] = float(L.detach())
             record["last_eval_hpwl"] = float(getattr(res, "hpwl", 0.0) or 0.0)
+            record["phase_timings"] = phase_times
+            record["host_peak_rss_gb"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20
+            record["s4_source"] = "emulated_two_fp64_net_buffers" if args.s4_scenario == "B" else "n/a"
             _write(args.out, record)
 
         record["resident_gb"] = _resident_bytes(io_term, ctx) / 2**30 + (
@@ -250,6 +291,7 @@ def main(argv=None):
              + s4_home_e.numel() * s4_home_e.element_size()
              + sum(t.numel() * t.element_size() for t in s4_extra)) / 2**30)
         record["max_phase_transient_gb"] = max(0.0, measured_peak_gb - record["resident_gb"])
+        record["transient_accounting_note"] = "peak allocation minus end-of-run resident storage; not simultaneous phase accounting"
         record["peak_reserved_gb"] = torch.cuda.max_memory_reserved() / 2**30
         record["device_used_peak_gb"] = None  # parent's nvsmi trace fills this in
         record["workload_status"] = "completed"

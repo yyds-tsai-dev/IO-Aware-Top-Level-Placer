@@ -35,6 +35,9 @@ L4_DEVICE_GIB = 21.7
 HW_BUDGET_GB = {
     "NVIDIA L4": 19.5,                 # 0.9 * 21.7 GiB (sec 2.2's L4 contract)
     "NVIDIA H100 80GB HBM3": 72.0,     # sec 1.4 B3
+    # NVL host reports 95,830 MiB = 93.58 GiB. Round 90% down to 84 GiB;
+    # this is a separate contract, not a change to the historical SXM/L4 caps.
+    "NVIDIA H100 NVL": 84.0,
     "_m2_10m_contract": 8.0,           # sec 1.4 B3 / spike_10m.py's original default
 }
 

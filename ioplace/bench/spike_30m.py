@@ -69,6 +69,8 @@ CLI:
 import argparse
 import hashlib
 import json
+import math
+import threading
 import os
 import socket
 import subprocess
@@ -86,10 +88,10 @@ from ioplace.bench.result_gate import (HW_BUDGET_GB, SPIKE_SCHEMA_FIELDS,
 # (`gpu_name()`, `sp.CONTAMINATION_BASELINE_GIB`, etc.) is unchanged.
 from ioplace.diagnostics.probes_m4.gpu_exclusivity import (  # noqa: E402  (re-exported)
     CONTAMINATION_BASELINE_GIB, POSTFLIGHT_TOLERANCE_GIB, NvsmiPoller,
-    compute_app_pids, device_used_gb, gpu_name)
+    compute_app_pids, device_used_gb, gpu_name, _nvsmi)
 
-REPO = "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer"
-DP = "/nashome/NVL4/vdalab/yyds-dev/DREAMPlace"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DP = os.environ.get("DREAMPLACE_ROOT", os.path.join(os.path.dirname(REPO), "DREAMPlace"))
 DEFAULT_PYTHON = os.path.join(DP, ".venv312", "bin", "python")
 DEFAULT_BUDGET_GB = HW_BUDGET_GB["NVIDIA L4"]
 DEFAULT_BUDGET_SOURCE = "NVIDIA L4"
@@ -116,7 +118,35 @@ def _git_head(root):
         return None
 
 
-def _preflight(budget_gb, budget_source, cache_dir):
+def device_snapshot():
+    raw = _nvsmi("uuid,name,memory.total,memory.used,memory.free,utilization.gpu")
+    if not raw:
+        raise RuntimeError("selected GPU snapshot unavailable")
+    rows = raw.strip().splitlines()
+    if len(rows) != 1:
+        raise ValueError("select exactly one GPU with CUDA_VISIBLE_DEVICES")
+    uuid_, name, total, used, free, utilization = [v.strip() for v in rows[0].split(",")]
+    values = list(map(float, (total, used, free, utilization)))
+    if not all(math.isfinite(value) and value >= 0 for value in values):
+        raise ValueError("nonfinite or negative device snapshot")
+    return dict(time=time.time(), uuid=uuid_, name=name, total_gib=values[0]/1024,
+                used_gib=values[1]/1024, free_gib=values[2]/1024,
+                utilization_pct=values[3], compute_apps=compute_app_pids())
+
+
+def shared_verdict(experiment_status, workload_status, peak, budget, iterations, expected):
+    if experiment_status != "ok":
+        return "invalid_measurement"
+    if workload_status == "oom":
+        return "shared_oom_unattributed"
+    if (workload_status != "completed" or iterations < expected or peak is None
+            or not math.isfinite(peak) or peak < 0):
+        return "invalid_measurement"
+    return ("completed_within_registered_process_budget" if peak <= budget
+            else "exceeds_registered_process_budget")
+
+
+def _preflight(budget_gb, budget_source, cache_dir, measurement_mode="exclusive", shared_margin_gb=4.0):
     """Returns (ok, status_if_not_ok, details_dict). `status_if_not_ok` is
     "contaminated" or "input_error" -- never "ok" (caller only reads it
     when ok is False)."""
@@ -130,11 +160,27 @@ def _preflight(budget_gb, budget_source, cache_dir):
     pids = compute_app_pids()
     details["preflight_compute_app_pids"] = pids
 
-    if baseline is None or baseline >= CONTAMINATION_BASELINE_GIB:
+    if measurement_mode == "shared":
+        details["measurement_mode"] = "shared"
+        details["shared_user_authorized"] = True
+        details["shared_margin_gb"] = shared_margin_gb
+        details["shared_free_required_gb"] = budget_gb + shared_margin_gb
+        try:
+            snapshot = device_snapshot()
+            details["device_snapshot"] = snapshot
+            free = snapshot["free_gib"]
+            details["shared_free_gb"] = free
+            if free < budget_gb + shared_margin_gb:
+                return False, "input_error", details
+        except Exception as e:
+            details["nvidia_smi_error"] = str(e)
+            return False, "input_error", details
+    elif baseline is None or baseline >= CONTAMINATION_BASELINE_GIB:
         return False, "contaminated", details
-    if pids:  # non-empty and non-None -- some other process is already compute-active
+    if measurement_mode != "shared" and pids:  # external process invalidates exclusive run
         return False, "contaminated", details
-    exclusivity_evidence = "compute_apps_pid_confirmed" if pids is not None else "baseline_only"
+    exclusivity_evidence = ("shared_user_authorized" if measurement_mode == "shared" else
+                            "compute_apps_pid_confirmed" if pids is not None else "baseline_only")
     details["exclusivity_evidence"] = exclusivity_evidence
 
     mem_avail_gb = None
@@ -166,6 +212,19 @@ def _preflight(budget_gb, budget_source, cache_dir):
 
 def _run_one_attempt(attempt, args, child_out_path):
     poller = NvsmiPoller().start()
+    shared = getattr(args, "measurement_mode", "exclusive") == "shared"
+    samples, stop = [], threading.Event()
+    def sample_loop():
+        while True:
+            try:
+                samples.append(device_snapshot())
+            except Exception as error:
+                samples.append(dict(time=time.time(), error=str(error)))
+            if stop.wait(2):
+                break
+    thread = threading.Thread(target=sample_loop, daemon=True) if shared else None
+    if thread:
+        thread.start()
     baseline_before = device_used_gb()
     cmd = [
         args.python, "-m", "ioplace.bench.spike_30m_child",
@@ -192,13 +251,18 @@ def _run_one_attempt(attempt, args, child_out_path):
     wall_s = time.time() - t0
 
     poller.stop()
+    if thread:
+        stop.set()
+        thread.join()
     baseline_after = device_used_gb()
 
     postflight_ok = (baseline_after is not None
                      and abs(baseline_after - (baseline_before or 0.0)) <= POSTFLIGHT_TOLERANCE_GIB)
     post_pids = compute_app_pids()
-    if post_pids:  # any lingering external compute process
+    if post_pids and not shared:  # any lingering external compute process
         postflight_ok = False
+    if shared:
+        postflight_ok = True
 
     partial = {}
     if os.path.exists(child_out_path):
@@ -222,6 +286,9 @@ def _run_one_attempt(attempt, args, child_out_path):
         "child_exit_code": exit_code,
         "device_used_peak_gb_nvsmi": poller.peak_gb,
         "device_baseline_gb_nvsmi": baseline_before,
+        "postflight_compute_app_pids": post_pids,
+        "device_baseline_after_gb": baseline_after,
+        "device_samples": samples,
         "partial": partial,
     }
 
@@ -244,10 +311,17 @@ def _load_cache_meta_best_effort(cache_dir):
 
 
 def run(args):
+    args.measurement_mode = getattr(args, "measurement_mode", "exclusive")
+    args.shared_margin_gb = getattr(args, "shared_margin_gb", 4.0)
     ok, preflight_status, preflight_details = _preflight(
-        args.budget_gb, args.budget_source, args.cache_dir)
+        args.budget_gb, args.budget_source, args.cache_dir, args.measurement_mode, args.shared_margin_gb)
     if "cache_meta" not in preflight_details:
         preflight_details["cache_meta"] = _load_cache_meta_best_effort(args.cache_dir)
+    preflight_details["source_sha256"] = {
+        path: _sha256_file(os.path.join(REPO, path)) for path in (
+            "ioplace/bench/spike_30m.py", "ioplace/bench/spike_30m_child.py",
+            "ioplace/bench/bookshelf_netlist.py", "ioplace/ops/io_term.py",
+            "ioplace/evaluator_gpu.py", "ioplace/diagnostics/probes_m4/gpu_exclusivity.py")}
 
     attempts_log = []
     oom_count = 0
@@ -290,19 +364,21 @@ def run(args):
         partial = result.get("partial", {})
         peak_gb = partial.get("measured_peak_gb")
         resident_lb_gb = partial.get("resident_lower_bound_gb")
-        result["feasibility_verdict"] = feasibility_verdict(
-            experiment_status, result["workload_status"], peak_gb,
-            args.budget_gb, oom_count, resident_lb_gb)
+        if args.measurement_mode == "shared":
+            result["feasibility_verdict"] = shared_verdict(experiment_status,
+                result["workload_status"], peak_gb, args.budget_gb,
+                partial.get("n_interleaved_iters", 0), args.n_iter)
+        else:
+            result["feasibility_verdict"] = feasibility_verdict(experiment_status, result["workload_status"], peak_gb, args.budget_gb, oom_count, resident_lb_gb)
 
         attempts_log.append(result)
         final = result
-        if result["feasibility_verdict"] != "invalid_measurement":
+        if args.measurement_mode == "shared" or result["feasibility_verdict"] != "invalid_measurement":
             break
         # preflight may transiently clear on a retry -- re-check before the
         # next attempt if it failed this time.
         if not ok:
-            ok, preflight_status, preflight_details = _preflight(
-                args.budget_gb, args.budget_source, args.cache_dir)
+            ok, preflight_status, preflight_details = _preflight(args.budget_gb, args.budget_source, args.cache_dir, args.measurement_mode, args.shared_margin_gb)
 
     record = _assemble_record(args, final, attempts_log, preflight_details)
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
@@ -367,6 +443,13 @@ def _assemble_record(args, final, attempts_log, preflight_details):
         "input_sha256": partial.get("input_sha256")
                         or meta.get("manifest_output_sha256", {}).get("nets"),
     }
+    record["measurement_mode"] = getattr(args, "measurement_mode", "exclusive")
+    record["device_uuid"] = preflight_details.get("device_snapshot", {}).get("uuid")
+    record["preflight"] = preflight_details
+    record["n_pins_raw"] = meta.get("n_pins_raw")
+    record["n_pins_canonical"] = meta.get("n_pins")
+    for key in ("phase_timings", "component_build_s", "host_peak_rss_gb", "transient_accounting_note"):
+        record[key] = partial.get(key)
     if final["feasibility_verdict"] == "invalid_measurement" and len(attempts_log) >= args.max_attempts:
         record["closed"] = "blocked_external"
 
@@ -392,7 +475,11 @@ def _parse_args(argv=None):
     ap.add_argument("--python", default=DEFAULT_PYTHON)
     ap.add_argument("--count-freeze", default=DEFAULT_COUNT_FREEZE)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--measurement-mode", choices=("exclusive", "shared"), default="exclusive")
+    ap.add_argument("--shared-margin-gb", type=float, default=4.0)
     args = ap.parse_args(argv)
+    if not math.isfinite(args.shared_margin_gb) or args.shared_margin_gb < 0:
+        raise ValueError("shared margin must be finite and nonnegative")
 
     # sec 1.4 B3 enforcement point 1 ("parent argv 解析時"): a CLI
     # --budget-gb may never exceed the hardware contract -- fails loudly

@@ -1,5 +1,5 @@
 {
- "aux_input": "/nashome/NVL4/vdalab/yyds-dev/IO-Aware-Top-Level-Placer/results/m4/bench/arrays/2x2_n2/alias/synB.aux",
+ "aux_input": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/m4/bench/arrays/2x2_n2/alias/synB.aux",
  "gpu": 1,
  "num_bins_x": 4096,
  "num_bins_y": 4096,
