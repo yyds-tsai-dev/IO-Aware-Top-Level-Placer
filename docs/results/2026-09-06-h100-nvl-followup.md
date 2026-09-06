@@ -63,7 +63,10 @@ Checker驗證protocol/config/source與JSON/log/device hashes，並核對最終�
 差異定位到cache漏掉native createPin的逐output front/back交換；
 既有等價測試只比pin multiset，未驗證net遍歷順序。Schema4補足此順序，
 schema3及首次失敗檢查完整保留，沒有修改GPU evaluator演算法。
-修正cache的全量驗證與27.7M核對尚在執行。
+修正cache後，三次全27.7M核對全部通過；warm GPU eval平均3.216s。
+IO／FT／lambda／RG整數完全相等，HPWL與tree-WL符合事前容差；
+共113個net的IO／FT受順序影響；全部另存微型fixture並通過CPU reference。
+這是posthoc工程驗證，不能取代原始混合eval時間或重判凍結預測。
 
 任一落外 ⇒ 在報告發表重擬合模型與歸因,不得事後放寬區間
 本報告提供首跑歸因與模型不成立的證據；尚無足夠同條件觀測可產生有效重新校準區間。

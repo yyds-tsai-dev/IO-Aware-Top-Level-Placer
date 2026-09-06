@@ -1,0 +1,1056 @@
+{
+  "status": "completed",
+  "pid": 2283703,
+  "started": 1788733357.4463983,
+  "protocol_sha256": "9a54e0d9d4f85ed187e75bcd32318a740e0bee24cb062488d1b4bb7419d3e9ec",
+  "measurement_mode": "shared",
+  "cuda_visible_devices": "GPU-1a75fdd3-2f46-0258-4123-095efa8636e9",
+  "iterations": [
+    {
+      "iteration": 0,
+      "evaluate_s": 3.4304816010408103,
+      "metrics": {
+        "io_count": 455890,
+        "ft_count": 102945,
+        "tree_wl": 7531246502.1934805,
+        "hpwl": 6820510525.137044,
+        "large_net_lb": 220,
+        "hard_lambda_sum": 315591,
+        "io_rg": 418291,
+        "ft_rg": 102700
+      },
+      "checks": {
+        "io_count": true,
+        "ft_count": true,
+        "hard_lambda_sum": true,
+        "io_rg": true,
+        "ft_rg": true,
+        "hpwl": true,
+        "tree_wl": true
+      },
+      "per_net_digests": {
+        "per_net_crossings": "9ae9232dd283ffff71603eb424c922f01cf74802fbed7a21533f7e4835fb0436",
+        "per_net_ft": "c627e701bcf80f2131731fdf5b793e551109f8ee0e4dcd3f71222012df1fb74b",
+        "per_net_lambda": "6c05567db8c3d5ff40a320b765ad15207b45f30d3ed6af5826e8e449134ea170",
+        "per_net_steiner": "f25126ab621411e5c7b1faa9cead00348a9dd500e13184ed75b5cfe38fee5db1",
+        "per_net_home": "56fb42424fe537b026291062263bf43a466db61bdce335b3d8d892344231095a"
+      },
+      "changed_order_sensitive_nets": [
+        {
+          "net": 12182,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 12196,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 12499,
+          "degree": 6,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 12949,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 14532,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 14784,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 15773,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 15950,
+          "degree": 6,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 16022,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 16252,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 16292,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 16621,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 17664,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 17677,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 17759,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 17787,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 934777,
+          "degree": 9,
+          "legacy_io": 1,
+          "legacy_ft": 0,
+          "native_io": 2,
+          "native_ft": 0
+        },
+        {
+          "net": 2977069,
+          "degree": 34,
+          "legacy_io": 5,
+          "legacy_ft": 0,
+          "native_io": 5,
+          "native_ft": 1
+        },
+        {
+          "net": 2980213,
+          "degree": 35,
+          "legacy_io": 4,
+          "legacy_ft": 0,
+          "native_io": 4,
+          "native_ft": 1
+        },
+        {
+          "net": 3518947,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3520105,
+          "degree": 7,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540153,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540154,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540155,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540156,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540160,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540171,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540172,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540175,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540176,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540201,
+          "degree": 5,
+          "legacy_io": 4,
+          "legacy_ft": 1,
+          "native_io": 4,
+          "native_ft": 0
+        },
+        {
+          "net": 3540202,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540249,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540250,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540258,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540259,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540279,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540290,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540294,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 3540312,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 7019530,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 7025302,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 10525080,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 10528187,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 10529047,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 10539313,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 10539323,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 10539335,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 10539336,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 10539342,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 10539349,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 10539356,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 10539361,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 10539362,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 10539364,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 14032427,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 14032537,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 14251206,
+          "degree": 14,
+          "legacy_io": 4,
+          "legacy_ft": 1,
+          "native_io": 4,
+          "native_ft": 0
+        },
+        {
+          "net": 17121934,
+          "degree": 29,
+          "legacy_io": 4,
+          "legacy_ft": 0,
+          "native_io": 4,
+          "native_ft": 1
+        },
+        {
+          "net": 17122976,
+          "degree": 22,
+          "legacy_io": 4,
+          "legacy_ft": 1,
+          "native_io": 4,
+          "native_ft": 0
+        },
+        {
+          "net": 17531570,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 17534681,
+          "degree": 7,
+          "legacy_io": 4,
+          "legacy_ft": 1,
+          "native_io": 4,
+          "native_ft": 0
+        },
+        {
+          "net": 17534790,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 17534998,
+          "degree": 5,
+          "legacy_io": 4,
+          "legacy_ft": 0,
+          "native_io": 4,
+          "native_ft": 1
+        },
+        {
+          "net": 17535277,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 17535438,
+          "degree": 7,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 17535602,
+          "degree": 6,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 17535884,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 17535911,
+          "degree": 5,
+          "legacy_io": 4,
+          "legacy_ft": 0,
+          "native_io": 4,
+          "native_ft": 1
+        },
+        {
+          "net": 17536455,
+          "degree": 6,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 17536653,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 17536852,
+          "degree": 6,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 17537296,
+          "degree": 6,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 17537448,
+          "degree": 7,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 17537796,
+          "degree": 6,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 17537804,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 17538581,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 17551759,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 17562926,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 17562931,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 17562942,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 17563010,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 19406488,
+          "degree": 7,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 19498570,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 21644195,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 21644211,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 21654326,
+          "degree": 11,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 21654340,
+          "degree": 8,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 24540182,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 24543287,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 24543667,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 24544758,
+          "degree": 3,
+          "legacy_io": 4,
+          "legacy_ft": 2,
+          "native_io": 4,
+          "native_ft": 1
+        },
+        {
+          "net": 24545364,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 24545388,
+          "degree": 6,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 24545504,
+          "degree": 6,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 24545559,
+          "degree": 7,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 24545655,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 24570865,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 24570869,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 24570892,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 24570894,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 24570895,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 24762534,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 24762536,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 27809508,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 28047413,
+          "degree": 5,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 28049330,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 28049406,
+          "degree": 4,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 28049416,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 1,
+          "native_io": 3,
+          "native_ft": 0
+        },
+        {
+          "net": 28049516,
+          "degree": 6,
+          "legacy_io": 4,
+          "legacy_ft": 0,
+          "native_io": 4,
+          "native_ft": 1
+        },
+        {
+          "net": 28049772,
+          "degree": 3,
+          "legacy_io": 3,
+          "legacy_ft": 0,
+          "native_io": 3,
+          "native_ft": 1
+        },
+        {
+          "net": 31006248,
+          "degree": 56,
+          "legacy_io": 8,
+          "legacy_ft": 1,
+          "native_io": 8,
+          "native_ft": 0
+        },
+        {
+          "net": 31137117,
+          "degree": 25,
+          "legacy_io": 6,
+          "legacy_ft": 1,
+          "native_io": 6,
+          "native_ft": 0
+        }
+      ],
+      "changed_nets_cpu_parity": true
+    },
+    {
+      "iteration": 1,
+      "evaluate_s": 3.220599866937846,
+      "metrics": {
+        "io_count": 455890,
+        "ft_count": 102945,
+        "tree_wl": 7531246502.1934805,
+        "hpwl": 6820510525.137044,
+        "large_net_lb": 220,
+        "hard_lambda_sum": 315591,
+        "io_rg": 418291,
+        "ft_rg": 102700
+      },
+      "checks": {
+        "io_count": true,
+        "ft_count": true,
+        "hard_lambda_sum": true,
+        "io_rg": true,
+        "ft_rg": true,
+        "hpwl": true,
+        "tree_wl": true
+      },
+      "per_net_digests": {
+        "per_net_crossings": "9ae9232dd283ffff71603eb424c922f01cf74802fbed7a21533f7e4835fb0436",
+        "per_net_ft": "c627e701bcf80f2131731fdf5b793e551109f8ee0e4dcd3f71222012df1fb74b",
+        "per_net_lambda": "6c05567db8c3d5ff40a320b765ad15207b45f30d3ed6af5826e8e449134ea170",
+        "per_net_steiner": "f25126ab621411e5c7b1faa9cead00348a9dd500e13184ed75b5cfe38fee5db1",
+        "per_net_home": "56fb42424fe537b026291062263bf43a466db61bdce335b3d8d892344231095a"
+      }
+    },
+    {
+      "iteration": 2,
+      "evaluate_s": 3.211360482033342,
+      "metrics": {
+        "io_count": 455890,
+        "ft_count": 102945,
+        "tree_wl": 7531246502.1934805,
+        "hpwl": 6820510525.137044,
+        "large_net_lb": 220,
+        "hard_lambda_sum": 315591,
+        "io_rg": 418291,
+        "ft_rg": 102700
+      },
+      "checks": {
+        "io_count": true,
+        "ft_count": true,
+        "hard_lambda_sum": true,
+        "io_rg": true,
+        "ft_rg": true,
+        "hpwl": true,
+        "tree_wl": true
+      },
+      "per_net_digests": {
+        "per_net_crossings": "9ae9232dd283ffff71603eb424c922f01cf74802fbed7a21533f7e4835fb0436",
+        "per_net_ft": "c627e701bcf80f2131731fdf5b793e551109f8ee0e4dcd3f71222012df1fb74b",
+        "per_net_lambda": "6c05567db8c3d5ff40a320b765ad15207b45f30d3ed6af5826e8e449134ea170",
+        "per_net_steiner": "f25126ab621411e5c7b1faa9cead00348a9dd500e13184ed75b5cfe38fee5db1",
+        "per_net_home": "56fb42424fe537b026291062263bf43a466db61bdce335b3d8d892344231095a"
+      }
+    }
+  ],
+  "device_before": {
+    "time": 1788733357.607604,
+    "uuid": "GPU-1a75fdd3-2f46-0258-4123-095efa8636e9",
+    "name": "NVIDIA H100 NVL",
+    "total_gib": 93.583984375,
+    "used_gib": 1.1787109375,
+    "free_gib": 91.9072265625,
+    "utilization_pct": 11.0,
+    "compute_apps": [
+      [
+        1303694,
+        1186.0
+      ]
+    ]
+  },
+  "fixed_and_ni_tail_exact": true,
+  "die": [
+    0.0,
+    0.0,
+    53262.0,
+    53229.47368421053
+  ],
+  "load_convert_s_after_hash_reads": 3.3182402490638196,
+  "context_build_s": 9.470819991081953,
+  "aggregate_parity_pass": true,
+  "warm_mean_evaluate_s": 3.215980174485594,
+  "process_peak_allocated_gib": 11.764887809753418,
+  "process_peak_reserved_gib": 13.501953125,
+  "device_after": {
+    "time": 1788733382.904875,
+    "uuid": "GPU-1a75fdd3-2f46-0258-4123-095efa8636e9",
+    "name": "NVIDIA H100 NVL",
+    "total_gib": 93.583984375,
+    "used_gib": 15.2841796875,
+    "free_gib": 77.8017578125,
+    "utilization_pct": 0.0,
+    "compute_apps": [
+      [
+        1303694,
+        1186.0
+      ],
+      [
+        2283703,
+        14438.0
+      ]
+    ]
+  },
+  "ended": 1788733383.0592635,
+  "host_peak_rss_gib": 8.140022277832031
+}

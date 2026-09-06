@@ -1,0 +1,20 @@
+{
+  "1x2_n2": {
+    "source_sha256": true,
+    "output_sha256": true,
+    "base": true,
+    "glue": true
+  },
+  "2x2_n2": {
+    "source_sha256": true,
+    "output_sha256": true,
+    "base": true,
+    "glue": true
+  },
+  "3x3_n2": {
+    "source_sha256": true,
+    "output_sha256": true,
+    "base": true,
+    "glue": true
+  }
+}

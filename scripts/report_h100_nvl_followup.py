@@ -85,7 +85,7 @@ def main():
             if ordered.get("aggregate_parity_pass"):
                 lines += [f"修正cache後，三次全27.7M核對全部通過；warm GPU eval平均{ordered['warm_mean_evaluate_s']:.3f}s。",
                     "IO／FT／lambda／RG整數完全相等，HPWL與tree-WL符合事前容差；",
-                    "所有IO／FT受影響net另存微型fixture並通過CPU reference。",
+                    f"共{len(ordered['iterations'][0]['changed_order_sensitive_nets'])}個net的IO／FT受順序影響；全部另存微型fixture並通過CPU reference。",
                     "這是posthoc工程驗證，不能取代原始混合eval時間或重判凍結預測。"]
             else:
                 lines += [f"修正cache完整核對狀態：{ordered.get('status')}；尚不宣稱完成parity。"]

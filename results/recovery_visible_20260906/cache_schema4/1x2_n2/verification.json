@@ -1,0 +1,31 @@
+{
+  "verify": {
+    "mode": "full",
+    "ok": true,
+    "errors": [],
+    "n_checked_nodes": 6178822,
+    "n_mismatched_nodes": 0,
+    "n_checked_pl": 6178822,
+    "n_mismatched_pl": 0,
+    "n_checked_nets": 7021183,
+    "n_mismatched_nets": 0,
+    "n_checked_pins": 24078796,
+    "n_mismatched_pins": 0,
+    "n_checked_glue_nets": 13207,
+    "n_mismatched_glue_nets": 0,
+    "n_checked_raw_pins": 24078796,
+    "n_checked_canonical_pins": 23707410,
+    "n_duplicate_pins_removed": 371386,
+    "native_pin_order_verified": true,
+    "n_checked_net_pin_order": 23707410,
+    "raw_file_sha256": {
+      "nets": "f8dba0bd7de8ab94160628bee743d5013036273e9c2a678d0fdc963cde594f2b",
+      "nodes": "ca60340818d1a83c47c18db9761206652e13e6a10ea57b01469dde63170a42e3",
+      "pl": "5b7cab1f242178cd24f24b8c962b220f463c1924d81ed69ca39133d1aabd818b",
+      "scl": "392d0f2024d58eb3180eda720ef324cb12ae2750d3f22ee72fdc802a1685b4c5",
+      "wts": "bd900238f1c8e315a9a55c04ab4e7bd11195be474df75e486902d6a047a7b562"
+    },
+    "elapsed_s": 325.7397184371948
+  },
+  "source_protocol_sha256": "6b3563b36919fee841f308491dade2e547a4adeb68ae6802cadc28c5de7ccfe9"
+}

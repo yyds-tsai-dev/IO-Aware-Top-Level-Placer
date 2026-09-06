@@ -1,0 +1,11 @@
+{
+  "started": 1788731501.1127696,
+  "reason": "native ordered net pin traversal including sequential output-front swaps",
+  "source_sha256": {
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/scripts/build_ordered_caches.py": "e14344a17888b56f10ae0da68317a28a2d005b41b29cd581280c5c7631710d3e",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/bench/bookshelf_netlist.py": "03c3e1d7b3de90a0fed4cf4816adb691bbbcb94f1008cdc57a236434572350f1",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/bench/native_pin_order.py": "7829c26d75e73405020b743cb3a546768746a87da05e3994c6be11829974cfc4",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/bench/native_pin_order.cpp": "4fc45eb760286ca9435c9fb41b44bb29e4f0390c9906e8f712b5d77f89637b0c"
+  },
+  "preserve_legacy_caches": true
+}
