@@ -1,0 +1,10 @@
+{
+  "observed_at": 1788740849.9850485,
+  "guide_path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__flat_k16/or_run/route.guide",
+  "guide_sha256": "596a299ee26f8f91e8c102d12bbe90a99b71ec05476c6518bf696d5ce9b7508f",
+  "guide_nets": 136225,
+  "previously_skipped_nets": 4360,
+  "now_have_nonempty_guides": 4360,
+  "missing": [],
+  "detailed_route_coverage_not_yet_adjudicated": true
+}
