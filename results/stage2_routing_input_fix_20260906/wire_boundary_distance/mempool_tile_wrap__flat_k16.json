@@ -1,0 +1,151 @@
+{
+  "sample_id": "mempool_tile_wrap__flat_k16",
+  "k": 16,
+  "population": "primary formal eligible routed signal nets",
+  "n_nets": 136208,
+  "evaluator_order_mask_sha256": "305a68cd05046186ff02b02d64fc92671e4270cc53f56b5c840d05d0b22a73e7",
+  "inputs": {
+    "segments": {
+      "path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__flat_k16/or_run/segments.npz",
+      "sha256": "1873389f7afe85f0e99c5bf15d32f68c7394f6a563d39085aa6994ed59a0d0a9"
+    },
+    "regions": {
+      "path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__flat_k16/regions.json",
+      "sha256": "8195dea521e038a3a9159b388e00962cb62d07998379af5f0dcf448eeee5cea2"
+    },
+    "netmap": {
+      "path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__flat_k16/netmap.json",
+      "sha256": "bd936a1341ad4775facbca25d0e407bd7a497e385c8897926e5cebbf712541c0"
+    },
+    "coord": {
+      "path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__flat_k16/coord.json",
+      "sha256": "595ebd096b733cc47df10d1b067b1e0b0bda6c457bf94dc9b2d65b36a9eff377"
+    },
+    "evaluator_file": {
+      "path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__flat_k16/evaluator_routed_k16.npz",
+      "sha256": "273a7834250fab4f90fb082bb2e7e96cdd2eb79d7b1813dce896af3341df81e9"
+    },
+    "crossings": {
+      "path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__flat_k16/crossings_k16.json",
+      "sha256": "2abc8f650b0102c190147839fd85f955e95f90eee75fc4637676a2601aa48c38"
+    },
+    "receipt": {
+      "path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__flat_k16/evidence.execution.json",
+      "sha256": "b40b62d9deeb1f31dc3922b294a091daec309ce790222af37030c20128e781b0"
+    },
+    "routed_def": {
+      "path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__flat_k16/or_run/routed.def",
+      "sha256": "d8333c27cb9dd3a395cf0d1667b1cda7cfb5949097be46a3b4e69cef047318bc"
+    },
+    "segments_metadata": {
+      "path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__flat_k16/or_run/segments.json",
+      "sha256": "f9c2cb146b0cbff4d92fd6dc7d85a3dd474e99244f456628edde7953f2fda772"
+    }
+  },
+  "formal": {
+    "available": true,
+    "distance_cells": [
+      0.0,
+      0.25,
+      0.5,
+      1.0,
+      2.0,
+      4.0,
+      8.0,
+      16.0,
+      32.0,
+      64.0,
+      128.0
+    ],
+    "distance_definition": "min axis-normalized perpendicular distance to internal full-grid boundaries",
+    "weight": "decoded WIRE segment length in DBU, retaining multiplicity, clipped to die",
+    "positive_wire_segments": 1896630,
+    "zero_length_wire_rows": 0,
+    "total_wire_length_dbu": 9730643210.0,
+    "inside_die_wire_length_dbu": 9667026010.0,
+    "outside_die_wire_length_dbu": 63617200.0,
+    "horizontal_inside_length_dbu": 5057959220.0,
+    "vertical_inside_length_dbu": 4609066790.0,
+    "any_boundary_cdf": [
+      7.464860436431163e-05,
+      0.0069091343496699405,
+      0.013435787146350478,
+      0.026904267634219388,
+      0.05460350280727133,
+      0.10687552894305288,
+      0.20782174923645416,
+      0.38757961941958197,
+      0.6619129760932546,
+      0.9772200263791366,
+      1.0
+    ],
+    "parallel_boundary_cdf": [
+      7.464860436431163e-05,
+      0.0035852401725357517,
+      0.0068431976837103805,
+      0.01381518058003032,
+      0.02881233584267557,
+      0.05663124102838739,
+      0.11331957614128732,
+      0.22298090206545332,
+      0.41950972882507015,
+      0.8257651786332578,
+      1.0
+    ],
+    "vertical_cut_count": 3,
+    "horizontal_cut_count": 3
+  },
+  "whole_design_supplementary": {
+    "available": true,
+    "distance_cells": [
+      0.0,
+      0.25,
+      0.5,
+      1.0,
+      2.0,
+      4.0,
+      8.0,
+      16.0,
+      32.0,
+      64.0,
+      128.0
+    ],
+    "distance_definition": "min axis-normalized perpendicular distance to internal full-grid boundaries",
+    "weight": "decoded WIRE segment length in DBU, retaining multiplicity, clipped to die",
+    "positive_wire_segments": 1948766,
+    "zero_length_wire_rows": 0,
+    "total_wire_length_dbu": 9906669130.0,
+    "inside_die_wire_length_dbu": 9842936740.0,
+    "outside_die_wire_length_dbu": 63732390.0,
+    "horizontal_inside_length_dbu": 5148225060.0,
+    "vertical_inside_length_dbu": 4694711680.0,
+    "any_boundary_cdf": [
+      7.41394585047389e-05,
+      0.006921724253109253,
+      0.013488524556521863,
+      0.02698454335124199,
+      0.054721833439696575,
+      0.10707026208178698,
+      0.20822371196987902,
+      0.3882926557216703,
+      0.6627127653621393,
+      0.9775017369460408,
+      1.0
+    ],
+    "parallel_boundary_cdf": [
+      7.41394585047389e-05,
+      0.0035836794375252684,
+      0.006867457526705592,
+      0.01384280256991675,
+      0.028842545421052863,
+      0.056679029311733645,
+      0.1134897489953796,
+      0.22331844225588307,
+      0.4201497082871631,
+      0.8264243654988683,
+      1.0
+    ],
+    "vertical_cut_count": 3,
+    "horizontal_cut_count": 3
+  }
+}

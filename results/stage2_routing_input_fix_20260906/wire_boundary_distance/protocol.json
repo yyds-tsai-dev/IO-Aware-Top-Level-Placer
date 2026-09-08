@@ -1,0 +1,28 @@
+{
+  "registered_at": "2026-09-08T08:01:29.891162+00:00",
+  "role": "Posthoc diagnostic required by triggered G4; registered before first distance measurement, after routing outcomes known",
+  "population": "12 matched-K samples, primary eligible nets; whole-design supplementary separate",
+  "distance_cells": [
+    0,
+    0.25,
+    0.5,
+    1,
+    2,
+    4,
+    8,
+    16,
+    32,
+    64,
+    128
+  ],
+  "definition": "Exact length-weighted CDF of minimum axis-normalized perpendicular distance to any internal full-grid boundary; parallel-only CDF separately; decoded WIRE multiplicity retained, clipped to die, DBU weights, outside length reported",
+  "primary_delta": 2,
+  "change_to_primary_gates": false,
+  "source_sha256": {
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/scripts/stage2_wire_boundary_distance.py": "ac05b1e5345401142f1ede90fa0f0a57563014eeb6db7526b8675ba9b3a9622d",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/route_eval/boundary_distance.py": "edabb3ad0258f72a3672b6bd9aca0d23c0f8244ebd263e01f25fc71528e771c2",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/diagnostics/stage2_calibration.py": "e362708cf196983dd49f146d6cb347702ae087ae149b67a70176f085c3efb609",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/route_eval/segments.py": "4a2074b25ef60de0e70c778e4ef0371f47efa29f412797e6d69ba02174dd3e40",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/ioplace/route_eval/route_crossings.py": "ad92483dae510d21ea41a0e944850712d037a0386ef3683a1888b62e05ab38f3"
+  }
+}

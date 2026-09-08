@@ -4,6 +4,18 @@
   "mtkahypar_threads_override": 1,
   "checks": [
     {
+      "name": "final full nonslow with G4 distance and raw companion",
+      "passed": 1015,
+      "skipped": 1,
+      "deselected": 39,
+      "warnings": 1,
+      "seconds": 40.22,
+      "exit_code": 0,
+      "log": "final-nonslow-g4-20260908.log",
+      "cuda_visible_devices": "GPU-24111147-0a1d-a1f3-6b60-66cc0d0d663b",
+      "command": "source scripts/env.sh; source scripts/openroad_env.sh; CUDA_VISIBLE_DEVICES=3 IOPLACE_MTKAHYPAR_THREADS=1 \"$IOPLACE_PYTHON\" -m pytest -q -m \"not slow\""
+    },
+    {
       "name": "atomic reused-route publication regression",
       "passed": 1,
       "seconds": 0.15,
@@ -156,6 +168,10 @@
     {
       "path": "results/validation_20260906/route-publication-regression.log",
       "sha256": "976ea3fe6dfa65b827ec05fc16bf49cec94d3fda3b2d6ad4719708e74a38b32d"
+    },
+    {
+      "path": "results/validation_20260906/final-nonslow-g4-20260908.log",
+      "sha256": "a792b5c7a809d29b6767b08454c1cc6ebcd1dfc642c22bb9e63b8d8d0727e9aa"
     }
   ]
 }

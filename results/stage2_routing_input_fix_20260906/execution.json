@@ -1,0 +1,59 @@
+{
+  "status": "completed",
+  "pid": 2616987,
+  "started": 1788736955.1207705,
+  "protocol_sha256": "297ef3fa2a349bc3efffb54893910203a26eab9ac575e167cd0697f775a6e627",
+  "legacy_cases": {
+    "des_perf_1__flat_k16": "completed",
+    "des_perf_1__ours_k16": "completed"
+  },
+  "routes": [
+    {
+      "case": "mempool_tile_wrap__flat_k16",
+      "pid": 3063938,
+      "started": 1788740329.5416737,
+      "log": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__flat_k16.route.log",
+      "returncode": 0,
+      "ended": 1788754435.5389385
+    },
+    {
+      "case": "mempool_tile_wrap__ours_k16",
+      "pid": 3913974,
+      "started": 1788748243.6368682,
+      "log": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__ours_k16.route.log",
+      "returncode": 0,
+      "ended": 1788763508.954126
+    },
+    {
+      "case": "des_perf_1__ours_k32",
+      "pid": 323448,
+      "started": 1788754437.0026977,
+      "log": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/des_perf_1__ours_k32.route.log",
+      "returncode": 0,
+      "ended": 1788775006.8292527
+    },
+    {
+      "case": "mempool_tile_wrap__ours_k32",
+      "pid": 1242247,
+      "started": 1788763508.957133,
+      "log": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__ours_k32.route.log",
+      "returncode": 0,
+      "ended": 1788779336.8622859
+    }
+  ],
+  "watchers": [
+    {
+      "scope": "des_perf_1__*",
+      "pid": 2616990,
+      "log": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/des_evidence.log"
+    },
+    {
+      "scope": "mempool_tile_wrap__*",
+      "pid": 2616993,
+      "log": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/tile_evidence.log"
+    }
+  ],
+  "calibration": null,
+  "ended": 1788780967.0063837,
+  "calibration_sha256": "d1174aecd3ee56c20c63b1581225bc39d616cf60af5659d3d26927e356eba15f"
+}
