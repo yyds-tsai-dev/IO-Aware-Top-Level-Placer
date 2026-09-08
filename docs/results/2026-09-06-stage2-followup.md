@@ -220,6 +220,27 @@ Raw evidence `/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_r
 Distance protocol／12份結果／hash receipt：`/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/wire_boundary_distance`。
 距離圖：[PNG](figs/stage2-followup-20260906-distance.png)、[PDF](figs/stage2-followup-20260906-distance.pdf)。
 
+## S2／所有routed nets交叉驗證
+
+全部12個case通過；相同DEF與LEF context對應9個獨立route檢查。
+逐net比對canonical geometry sets，未比對wire widths或重複線段multiplicity。
+所有檢查皆n_checked=n_match=n_sampled=routed_net_count，mismatch／missing為0，wire oracle通過，沒有未驗證JUNCTION。
+
+| Representative | Routed nets checked | Mapped cases |
+|---|---:|---:|
+| mgc_fft_1__flat_k16 | 33307 | 2 |
+| mgc_fft_1__ours_k16 | 33307 | 1 |
+| mgc_fft_1__ours_k32 | 33307 | 1 |
+| des_perf_1__flat_k16 | 112878 | 2 |
+| des_perf_1__ours_k16 | 112878 | 1 |
+| des_perf_1__ours_k32 | 112878 | 1 |
+| mempool_tile_wrap__flat_k16 | 136225 | 2 |
+| mempool_tile_wrap__ours_k16 | 136225 | 1 |
+| mempool_tile_wrap__ours_k32 | 136225 | 1 |
+
+補充receipt：`/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/execution.json`；SHA256 `695a1f1b4f544a92e4f51a6404bee0656b064a1beeddbe0367dadfaf0047df8d`。
+此OpenROAD build在Python SystemExit(0)時回傳process code1；另要求明確SystemExit:0、OVERALL:PASS及完整JSON檢查，未將一般code1當成功。
+
 ## 限制與證據
 
 固定detailed-route迭代上限5（iteration0–5），殘留DRC如上；不是signoff-clean。

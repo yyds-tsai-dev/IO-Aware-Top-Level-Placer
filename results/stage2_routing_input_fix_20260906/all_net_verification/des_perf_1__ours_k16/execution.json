@@ -1,0 +1,80 @@
+{
+  "name": "des_perf_1__ours_k16",
+  "original_command": [
+    "/ldaphome/yyds-tsai-dev/tools/openroad/prefix-upstream-grt-uint64/bin/openroad",
+    "-python",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/evidence_source/ioplace/route_eval/or_scripts/verify_routed_def.py",
+    "--lef",
+    "/ldaphome/yyds-tsai-dev/benchmarks/ispd2015/mgc_des_perf_1/tech.lef",
+    "--lef",
+    "/ldaphome/yyds-tsai-dev/benchmarks/ispd2015/mgc_des_perf_1/cells.lef",
+    "--def",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/des_perf_1__ours_k16/or_run/routed.def",
+    "--sample",
+    "1000",
+    "--seed",
+    "0",
+    "--report-out",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/des_perf_1__ours_k16/or_run/verify_wire_length.rpt",
+    "--json-out",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/des_perf_1__ours_k16/or_run/verify_s2.json"
+  ],
+  "inputs": {
+    "/ldaphome/yyds-tsai-dev/tools/openroad/prefix-upstream-grt-uint64/bin/openroad": "8fb20d30744ebcc2b4061434a8c382a80e82a0a16659d08569abf6cf71f48e10",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/evidence_source/ioplace/route_eval/or_scripts/verify_routed_def.py": "ed2e66c4e8c6754b87bd0b2c45ab7f67cfd94ce9c4495a3741b94e56416123e4",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/evidence_source/ioplace/route_eval/or_scripts/dump_segments.py": "ca3e5cd4a2151d74f91ddb5323d18b926614df4671141a49f979cb033d89c93e",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/evidence_source/ioplace/route_eval/def_text_parser.py": "1bcd92601fdbcd54dc0cedaabe4cb263331b6cfb3497c275e6cd9278657090c4",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/des_perf_1__ours_k16/or_run/routed.def": "511feb6796d40ce25ae28defd1fe23520a1cfa439dc4d054e37b0f0a61121550",
+    "/ldaphome/yyds-tsai-dev/benchmarks/ispd2015/mgc_des_perf_1/tech.lef": "627521115b61edaaa16b355564a42c461d8b72d2254f1cc8557fbf3152a30f7c",
+    "/ldaphome/yyds-tsai-dev/benchmarks/ispd2015/mgc_des_perf_1/cells.lef": "75f64114ba8e3e07dd132fadea802bbe309b64702ca87b7b4bafa9aa527af17b"
+  },
+  "receipt_path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/des_perf_1__ours_k16/evidence.execution.json",
+  "receipt_sha256": "6ad5ea31a58ec41fa6ff7e6fbeb1117788d0bdd1f9e0cc735911e2e9525c678b",
+  "key": [
+    "511feb6796d40ce25ae28defd1fe23520a1cfa439dc4d054e37b0f0a61121550",
+    [
+      "627521115b61edaaa16b355564a42c461d8b72d2254f1cc8557fbf3152a30f7c",
+      "75f64114ba8e3e07dd132fadea802bbe309b64702ca87b7b4bafa9aa527af17b"
+    ],
+    "8fb20d30744ebcc2b4061434a8c382a80e82a0a16659d08569abf6cf71f48e10",
+    "ed2e66c4e8c6754b87bd0b2c45ab7f67cfd94ce9c4495a3741b94e56416123e4"
+  ],
+  "command": [
+    "/ldaphome/yyds-tsai-dev/tools/openroad/prefix-upstream-grt-uint64/bin/openroad",
+    "-python",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/evidence_source/ioplace/route_eval/or_scripts/verify_routed_def.py",
+    "--lef",
+    "/ldaphome/yyds-tsai-dev/benchmarks/ispd2015/mgc_des_perf_1/tech.lef",
+    "--lef",
+    "/ldaphome/yyds-tsai-dev/benchmarks/ispd2015/mgc_des_perf_1/cells.lef",
+    "--def",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/des_perf_1__ours_k16/or_run/routed.def",
+    "--sample",
+    "0",
+    "--seed",
+    "0",
+    "--report-out",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/des_perf_1__ours_k16/wire_length.rpt",
+    "--json-out",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/des_perf_1__ours_k16/verify.json"
+  ],
+  "started": 1788855201.0970924,
+  "ended": 1788855344.4465559,
+  "returncode": 1,
+  "embedded_python_system_exit_zero": true,
+  "checks": {
+    "full_population": true,
+    "zero_disagreement": true,
+    "wire_oracle": true,
+    "no_unvalidated_junction": true,
+    "overall": true,
+    "inputs_unchanged": true,
+    "process_completion": true
+  },
+  "status": "completed",
+  "outputs": {
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/des_perf_1__ours_k16/verify.log": "52357ab3271267e2fce3549f78d1979a34b4741b78d771d3a4271171bfee9883",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/des_perf_1__ours_k16/wire_length.rpt": "4d40566b6d89b3fc8ca53ab8fa639945b0d30245288239092b8e106ddab64f0e",
+    "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/des_perf_1__ours_k16/verify.json": "e69c7028e2bdb3c8d460ea54102f97b97f1f13c4f495f0c33c245307bd88e172"
+  }
+}

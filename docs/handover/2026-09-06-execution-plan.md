@@ -5,8 +5,9 @@ implementation **and** the corresponding experiments/checks below; a harness,
 plan, or passing toy test alone does not complete a real-data requirement.
 
 最新執行狀態以 `results/stage2_routing_input_fix_20260906/execution.json` 為準。
-下方時間checkpoint保留歷史；旧controller不要恢復。工作1／2／4／5已完成，
-工作3仍在執行相同cohort的routing與校準。
+下方時間checkpoint保留歷史；旧controller不要恢復。**原定工作1～5全部完成**。
+工作3完成12/12 routing、raw／δ2校準、G4距離診斷與9/9獨立route全量文字解析交叉驗證。
+下方表格與checkpoints為歷史過程；最新總覽見 `2026-09-06-stage-progress.md`。
 
 ## Execution conditions
 
@@ -24,13 +25,17 @@ plan, or passing toy test alone does not complete a real-data requirement.
 
 | Item | Required work and evidence | Current state |
 | --- | --- | --- |
-| 1 | Correct native node ordering/counts/pin coordinates; native small-case regression; full real 1x2 equivalence including net identity and pin multiplicity | Schema3 implemented. Native real visible1x2 equivalence passed518s. All three recovered arrays match historical hashes; 3x3/1x2/2x2 full streaming verification passed1344/376/776s. |
+| 1 | Native node/pin identity and ordered replication; real 1x2 equivalence; full cache validation | Complete: schema4 strict real visible1x2 equivalence passed537.66s; all3 ordered caches verified; all3 full27.7M GPU integer parity checks passed. |
 | 2 | Recover/regenerate 27.7M inputs/cache, register actual NVL hardware, execute full GP+LG+evaluation, adjudicate the frozen prediction with resource provenance | NVL protocol/forecast frozen in49dccd4. T9 A/B each completed4 interleaved iterations within84GiB process budget. Full native GP+LG+eval completed, legality success/0 unplaced; phase sum13042.050s, process CUDA allocated peak25.308GiB. Frozen timing hypothesis false. Separate GPU-only check localized cache pin-order mismatch; schema4 repair now passes all three27.7M integer parity runs (warm3.216s). |
-| 3 | Persist aligned per-net evaluator/degree/pin-region/boundary data; route FT and delta 0/1/2/4; >=3 routed designs and complete calibration tables/gates | All12 placements completed. Restored actual upstream GRT and launched capped DR. OpenDB pin snapshots, provenance, eligibility masks and paired calibration implemented; FFT four-arm complete paired evidence/calibration available; DES/tile routes and final three-design cohort still pending. |
+| 3 | Per-net evaluator/route evidence; >=3 designs x2K x2arms; seven tables, C1-C5 and G4 | 12/12 completed, all0% missing signal wire; raw/delta2 seven tables and C1-C5 complete, G4 distance12/12 complete. All-routed-net text-parser supplement passed for9unique routes/12cases (847230 net checks, zero mismatch/missing). Primary C5 fails; raw C5 passes. |
 | 4 | Run the IO-enabled signal/lever experiment with matched controls; pre-register and implement P0c if pursued; report confirmation and demand/noise probes without changing prior verdicts |21 registered runs completed; A2-A0 confirmation improvesFT/IO onadaptec1. All positive P0c arms failIOguard; noqualified confirmation/P4.21 final-coordinate boundary probes verified. Historical M3 FAIL unchanged; report in docs/results/2026-09-06-ft-followup.md. |
 | 5 | Complete evaluator/IoTerm/host-RSS model evidence and output metadata; implement real conditional-expectation decode and boundary refinement; verify legal final geometry and run comparisons |144 primary +36 holdout component processes completed; all six fits fail coefficient-CI gate. Host18train+3holdout completed, both fits fail identification. M5 CE/refinement/legal acceptance implemented and14 focused tests passed; 1M/10M/30M bounded scale runs completed. Real screening12/12 completed. All9 proposals rejected by registered guards, final coordinates bitwise equal matched none controls. |
 
-## Data dependencies
+## Historical execution notes (retained; latest status is above)
+
+The checkpoints below describe earlier execution states, not the final task status.
+
+### Data dependencies
 
 See `2026-09-06-input-inventory.md`. Missing historical payloads must be
 retrieved or regenerated with fresh provenance; old metrics must not be

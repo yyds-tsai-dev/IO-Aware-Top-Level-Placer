@@ -1,0 +1,80 @@
+{
+  "status": "completed",
+  "completed_at": "2026-09-08T08:25:26.757757+00:00",
+  "objective": "完成原定工作1～5的實作、真實實驗與驗證；研究品質門檻依實際結果保留",
+  "items": {
+    "1": {
+      "status": "completed",
+      "evidence": {
+        "results/recovery_visible_20260906/cache_schema4/1x2_n2/verification.json": "7ce3ce82e645a7f6fb7dd3251e8ac270658075625c00e15f2d8c50e7cd243a2d",
+        "results/recovery_visible_20260906/cache_schema4/2x2_n2/verification.json": "32d24339ef7f7de615025a777d31b9120eda83f1c19d024f8293b0b32798837a",
+        "results/recovery_visible_20260906/cache_schema4/3x3_n2/verification.json": "83a1387602d245a0292e468666393de2c02c69aa8eedfec5b1d2132e244f61c7"
+      }
+    },
+    "2": {
+      "status": "completed",
+      "evidence": {
+        "results/h100_nvl_followup_20260906/prediction_check.json": "0335eb34afd88d7d745685fd22bcadd2b21db0979fe8ed29df6e250e20060fa3",
+        "results/h100_nvl_followup_20260906/ordered_gpu_validation.json": "ee063683de71f26c07d872d568f54ccaacb96aaa62705e31bf2f5049ea14cf29"
+      }
+    },
+    "3": {
+      "status": "completed",
+      "evidence": {
+        "results/stage2_routing_input_fix_20260906/execution.json": "c55cf504a3cc59ee8eec4acd419237f4653e9ceba06778fa73e3c938e17b3cb5",
+        "results/stage2_routing_input_fix_20260906/paired_evidence_manifest.json": "0514448919056e4ff5e59df43c23ad4622f8579a144be3cb1192c93ca85f9c49",
+        "results/stage2_routing_input_fix_20260906/calibration/tables.json": "d1174aecd3ee56c20c63b1581225bc39d616cf60af5659d3d26927e356eba15f",
+        "results/stage2_routing_input_fix_20260906/g4_raw/tables.json": "f40190383928676302276e8e3794839ec5ef9b9a943b0d18b143cabc354441da",
+        "results/stage2_routing_input_fix_20260906/wire_boundary_distance/execution.json": "e99d0575a1a61761185f70e5eba4f03b1ebeb9f18938332ffdaae1020c63afd1",
+        "results/stage2_routing_input_fix_20260906/all_net_verification/execution.json": "695a1f1b4f544a92e4f51a6404bee0656b064a1beeddbe0367dadfaf0047df8d"
+      }
+    },
+    "4": {
+      "status": "completed",
+      "evidence": {
+        "results/ft_followup_20260906/summary.json": "bcc5472a3f0432e38d163f89f75f433365bd7e5871f7a7fb53e640e7e01a029f"
+      }
+    },
+    "5": {
+      "status": "completed",
+      "evidence": {
+        "results/component_models_20260906/fits_frozen.json": "a58e1850c8e517e5eeb795764c3e22a52a26993b8414a437079cafc8ecdb87d0",
+        "results/component_models_20260906/holdout_check.json": "d962463766a5d7c4ce0834a3501cfb3f48890133688d22ba60a38399741e212c",
+        "results/host_rss_models_20260906/fit_frozen.json": "e59aac9593c9f6e580d2830ef798c5d2d94319fb815d820b6de7584e95274172",
+        "results/host_rss_models_20260906/holdout_check.json": "9bfe45bf5df25b4426d9022990aa4de927b8f0adb1ba3832b501138cc44199e0",
+        "results/m5_followup_20260906/checked_summary.json": "fdef9f4a7d206d948b9dd98c95cacf39afa0228fcffdc313eb85a54baf6ca808"
+      }
+    }
+  },
+  "validation": {
+    "nonslow_passed": 1015,
+    "skipped": 1,
+    "deselected": 39,
+    "all_net_cases": 12,
+    "all_net_unique_routes": 9,
+    "all_net_checks": 847230,
+    "summary_sha256": "1c0d1f955fe8bf81db55efabad6aca14bd577ba698ae37cbb1111d68e7158559"
+  },
+  "outcomes": {
+    "h100_forecast": "failed",
+    "stage2_coverage": "12/12 pass, 0% missing signal wires",
+    "stage2_c4": "6/6 matched-K improvement directions preserved in raw and delta2",
+    "stage2_c5": "primary delta2 fail; raw supplementary pass",
+    "ft": "A2 paired improvement; all positive P0c candidates fail IO guard",
+    "component_models": "all six component and both host fits fail identification",
+    "m5": "all nine proposals rejected; matched none coordinates preserved"
+  },
+  "remaining_in_this_goal": [],
+  "future_work": [
+    "RG model review and cross-design calibration",
+    "User decision on Phase1 LEF/DEF benchmark migration (G3)",
+    "Innovus/commercial-DP validation",
+    "Broader FT objective and M5 quality improvements",
+    "Historical two-stage escape-cell legality repair"
+  ],
+  "reports": {
+    "docs/handover/2026-09-06-stage-progress.md": "ffce45c5f32fe8d0740ddf79001f90f9d88283991a26ab2009d3316d16ed3fe3",
+    "docs/handover/2026-09-06-execution-plan.md": "da94785da130069a23e36d51c360353632c5e95e9639d336f55e90b6cd9e36a0",
+    "docs/results/2026-09-06-stage2-followup.md": "b77d061eb7462b944ff982543fe313d525199507af923a9620fa8a237a4d4270"
+  }
+}

@@ -1,0 +1,191 @@
+{
+  "status": "completed",
+  "ended": 1788855801.5016167,
+  "protocol_sha256": "8b4f31cf29d45fbd36f8e03196f09845f0a875dc40ec30de533bdd160959199f",
+  "cases": {
+    "mgc_fft_1__flat_k16": {
+      "status": "completed",
+      "representative": "mgc_fft_1__flat_k16",
+      "input_def_sha256": "ab6f56d2d02180f2ba4f28b815b000eb5eba487fcf89a464b64f53d20b994913",
+      "lef_sha256": [
+        "627521115b61edaaa16b355564a42c461d8b72d2254f1cc8557fbf3152a30f7c",
+        "78fca0f4f71e01da9751392f83ab0730c70b6b82cba35092ad496225350a7b73"
+      ],
+      "verification_receipt": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/mgc_fft_1__flat_k16/execution.json",
+      "verification_receipt_sha256": "2649fadf69ad3692ab1ed76ffa453a1c53dd451b5e9c5c216c410eec0f0ae85d"
+    },
+    "mgc_fft_1__flat_k32": {
+      "status": "completed",
+      "representative": "mgc_fft_1__flat_k16",
+      "input_def_sha256": "ab6f56d2d02180f2ba4f28b815b000eb5eba487fcf89a464b64f53d20b994913",
+      "lef_sha256": [
+        "627521115b61edaaa16b355564a42c461d8b72d2254f1cc8557fbf3152a30f7c",
+        "78fca0f4f71e01da9751392f83ab0730c70b6b82cba35092ad496225350a7b73"
+      ],
+      "verification_receipt": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/mgc_fft_1__flat_k16/execution.json",
+      "verification_receipt_sha256": "2649fadf69ad3692ab1ed76ffa453a1c53dd451b5e9c5c216c410eec0f0ae85d"
+    },
+    "mgc_fft_1__ours_k16": {
+      "status": "completed",
+      "representative": "mgc_fft_1__ours_k16",
+      "input_def_sha256": "441885f1ba8cf0ee97a5caf75ec6c0244147a5cb10783daf2b52e4ce7427360d",
+      "lef_sha256": [
+        "627521115b61edaaa16b355564a42c461d8b72d2254f1cc8557fbf3152a30f7c",
+        "78fca0f4f71e01da9751392f83ab0730c70b6b82cba35092ad496225350a7b73"
+      ],
+      "verification_receipt": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/mgc_fft_1__ours_k16/execution.json",
+      "verification_receipt_sha256": "c457387cd30d75d9482118c9ad78a8996b1ab2a3f9b2c4794661bc941ca9575a"
+    },
+    "mgc_fft_1__ours_k32": {
+      "status": "completed",
+      "representative": "mgc_fft_1__ours_k32",
+      "input_def_sha256": "762ba3f397016f54b91a38fc6469ed44d7dca143bd2e851673435586ebd7fb3b",
+      "lef_sha256": [
+        "627521115b61edaaa16b355564a42c461d8b72d2254f1cc8557fbf3152a30f7c",
+        "78fca0f4f71e01da9751392f83ab0730c70b6b82cba35092ad496225350a7b73"
+      ],
+      "verification_receipt": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/mgc_fft_1__ours_k32/execution.json",
+      "verification_receipt_sha256": "1f1eecf7c9c211fb64db9801e9ebe096b86e52045b5ecca55fb0f09694c6e450"
+    },
+    "des_perf_1__flat_k16": {
+      "status": "completed",
+      "representative": "des_perf_1__flat_k16",
+      "input_def_sha256": "c7a38e27a843a8c3363d4eed972cf0e031278282e0c0a2be85dbdcee600fd6c2",
+      "lef_sha256": [
+        "627521115b61edaaa16b355564a42c461d8b72d2254f1cc8557fbf3152a30f7c",
+        "75f64114ba8e3e07dd132fadea802bbe309b64702ca87b7b4bafa9aa527af17b"
+      ],
+      "verification_receipt": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/des_perf_1__flat_k16/execution.json",
+      "verification_receipt_sha256": "5ba35bbed0364e4eab67090ab6c07e4907a3aaed3485d10a03cee1dddc657835"
+    },
+    "des_perf_1__flat_k32": {
+      "status": "completed",
+      "representative": "des_perf_1__flat_k16",
+      "input_def_sha256": "c7a38e27a843a8c3363d4eed972cf0e031278282e0c0a2be85dbdcee600fd6c2",
+      "lef_sha256": [
+        "627521115b61edaaa16b355564a42c461d8b72d2254f1cc8557fbf3152a30f7c",
+        "75f64114ba8e3e07dd132fadea802bbe309b64702ca87b7b4bafa9aa527af17b"
+      ],
+      "verification_receipt": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/des_perf_1__flat_k16/execution.json",
+      "verification_receipt_sha256": "5ba35bbed0364e4eab67090ab6c07e4907a3aaed3485d10a03cee1dddc657835"
+    },
+    "des_perf_1__ours_k16": {
+      "status": "completed",
+      "representative": "des_perf_1__ours_k16",
+      "input_def_sha256": "511feb6796d40ce25ae28defd1fe23520a1cfa439dc4d054e37b0f0a61121550",
+      "lef_sha256": [
+        "627521115b61edaaa16b355564a42c461d8b72d2254f1cc8557fbf3152a30f7c",
+        "75f64114ba8e3e07dd132fadea802bbe309b64702ca87b7b4bafa9aa527af17b"
+      ],
+      "verification_receipt": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/des_perf_1__ours_k16/execution.json",
+      "verification_receipt_sha256": "05147f754a216fd6ddcb2876b0bd5b293209ae14455ecf38623a08cc126e08af"
+    },
+    "des_perf_1__ours_k32": {
+      "status": "completed",
+      "representative": "des_perf_1__ours_k32",
+      "input_def_sha256": "215e3b710c3817ec4478a5243ec3e71cae314a753fbcab19e8d2be18bf53c054",
+      "lef_sha256": [
+        "627521115b61edaaa16b355564a42c461d8b72d2254f1cc8557fbf3152a30f7c",
+        "75f64114ba8e3e07dd132fadea802bbe309b64702ca87b7b4bafa9aa527af17b"
+      ],
+      "verification_receipt": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/des_perf_1__ours_k32/execution.json",
+      "verification_receipt_sha256": "179e34632c1a383bc0a24adef3ebd58bab5df552dbf0fb777813aff48fcb07e0"
+    },
+    "mempool_tile_wrap__flat_k16": {
+      "status": "completed",
+      "representative": "mempool_tile_wrap__flat_k16",
+      "input_def_sha256": "d8333c27cb9dd3a395cf0d1667b1cda7cfb5949097be46a3b4e69cef047318bc",
+      "lef_sha256": [
+        "834a79295054cd4209178d1bade67c353863c47bb4b3c22ee38b862b7cec37f2",
+        "ae48ca01bc12b9f0c44717b7275ba8884f1760bf562f5a42e3ca39906ddc9e54",
+        "f1bb5571f970fc352978d85c97391e056569cf56dad8e13ed0d0963c429ccba9",
+        "482ee50f1f7fa60876c4011ef157c8c4e67f31e66cf3c53220f7641644132de4",
+        "f6befdc4c36550ca4fb493a7e59c338b4ffd85b23e3c0958b213c5e48028abcc",
+        "9765349e8d204e1a2ef868740bcfc780162fe0a8f06ebfad0de22b6b3ebc7f34",
+        "f74c5f9064e19ba690a4391b0c2c78cc44353f7f19224a805efc1e0a245c3507",
+        "33c94de65b831c3c0daa45b54ef21e25771b67cbd38fa3affc298231a0b5553b",
+        "22e8746150d8d844368fda198d57324301acff79ed7cfca227cf3aa8fe1dfa58",
+        "a2c2f874aeb44b07feb3ace88475aecb665db5f5a872142bc20e5693cdd3855b",
+        "b3641c9991701cc9faa63bfd4b947a15ff3e3a85c67e27db23476a7d9754ede8",
+        "4440d92d842454a4b5710717cac4c410e4cf7af290dedf4891c5ea0bb11a3928",
+        "8b85775e97fd9a426f9521ed8f80f0a5ce6119a4926726499c89dc24a95d7508",
+        "b609ce40bb76d7ed0e02afb0e07e16e85e15bbdf0b3657557c3eed8db79c97bf",
+        "33db0d8a9f0c1d61bb2b1cef924b44685cacf4f9f98f4daef70d0ccbc827f86e"
+      ],
+      "verification_receipt": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/mempool_tile_wrap__flat_k16/execution.json",
+      "verification_receipt_sha256": "2c45be616300abc14fc945db404e2234deece21a96314da1e5fdc37a3b4445c2"
+    },
+    "mempool_tile_wrap__flat_k32": {
+      "status": "completed",
+      "representative": "mempool_tile_wrap__flat_k16",
+      "input_def_sha256": "d8333c27cb9dd3a395cf0d1667b1cda7cfb5949097be46a3b4e69cef047318bc",
+      "lef_sha256": [
+        "834a79295054cd4209178d1bade67c353863c47bb4b3c22ee38b862b7cec37f2",
+        "ae48ca01bc12b9f0c44717b7275ba8884f1760bf562f5a42e3ca39906ddc9e54",
+        "f1bb5571f970fc352978d85c97391e056569cf56dad8e13ed0d0963c429ccba9",
+        "482ee50f1f7fa60876c4011ef157c8c4e67f31e66cf3c53220f7641644132de4",
+        "f6befdc4c36550ca4fb493a7e59c338b4ffd85b23e3c0958b213c5e48028abcc",
+        "9765349e8d204e1a2ef868740bcfc780162fe0a8f06ebfad0de22b6b3ebc7f34",
+        "f74c5f9064e19ba690a4391b0c2c78cc44353f7f19224a805efc1e0a245c3507",
+        "33c94de65b831c3c0daa45b54ef21e25771b67cbd38fa3affc298231a0b5553b",
+        "22e8746150d8d844368fda198d57324301acff79ed7cfca227cf3aa8fe1dfa58",
+        "a2c2f874aeb44b07feb3ace88475aecb665db5f5a872142bc20e5693cdd3855b",
+        "b3641c9991701cc9faa63bfd4b947a15ff3e3a85c67e27db23476a7d9754ede8",
+        "4440d92d842454a4b5710717cac4c410e4cf7af290dedf4891c5ea0bb11a3928",
+        "8b85775e97fd9a426f9521ed8f80f0a5ce6119a4926726499c89dc24a95d7508",
+        "b609ce40bb76d7ed0e02afb0e07e16e85e15bbdf0b3657557c3eed8db79c97bf",
+        "33db0d8a9f0c1d61bb2b1cef924b44685cacf4f9f98f4daef70d0ccbc827f86e"
+      ],
+      "verification_receipt": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/mempool_tile_wrap__flat_k16/execution.json",
+      "verification_receipt_sha256": "2c45be616300abc14fc945db404e2234deece21a96314da1e5fdc37a3b4445c2"
+    },
+    "mempool_tile_wrap__ours_k16": {
+      "status": "completed",
+      "representative": "mempool_tile_wrap__ours_k16",
+      "input_def_sha256": "7559f206b1e69b28325aab4aaf9dce9a2abe8c944f1e74bdad716fb982cdf072",
+      "lef_sha256": [
+        "834a79295054cd4209178d1bade67c353863c47bb4b3c22ee38b862b7cec37f2",
+        "ae48ca01bc12b9f0c44717b7275ba8884f1760bf562f5a42e3ca39906ddc9e54",
+        "f1bb5571f970fc352978d85c97391e056569cf56dad8e13ed0d0963c429ccba9",
+        "482ee50f1f7fa60876c4011ef157c8c4e67f31e66cf3c53220f7641644132de4",
+        "f6befdc4c36550ca4fb493a7e59c338b4ffd85b23e3c0958b213c5e48028abcc",
+        "9765349e8d204e1a2ef868740bcfc780162fe0a8f06ebfad0de22b6b3ebc7f34",
+        "f74c5f9064e19ba690a4391b0c2c78cc44353f7f19224a805efc1e0a245c3507",
+        "33c94de65b831c3c0daa45b54ef21e25771b67cbd38fa3affc298231a0b5553b",
+        "22e8746150d8d844368fda198d57324301acff79ed7cfca227cf3aa8fe1dfa58",
+        "a2c2f874aeb44b07feb3ace88475aecb665db5f5a872142bc20e5693cdd3855b",
+        "b3641c9991701cc9faa63bfd4b947a15ff3e3a85c67e27db23476a7d9754ede8",
+        "4440d92d842454a4b5710717cac4c410e4cf7af290dedf4891c5ea0bb11a3928",
+        "8b85775e97fd9a426f9521ed8f80f0a5ce6119a4926726499c89dc24a95d7508",
+        "b609ce40bb76d7ed0e02afb0e07e16e85e15bbdf0b3657557c3eed8db79c97bf",
+        "33db0d8a9f0c1d61bb2b1cef924b44685cacf4f9f98f4daef70d0ccbc827f86e"
+      ],
+      "verification_receipt": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/mempool_tile_wrap__ours_k16/execution.json",
+      "verification_receipt_sha256": "ef0e2a06eb955e37dd47f9a902bf9aa6e4e80b1fad6c4225f13a5b3881708185"
+    },
+    "mempool_tile_wrap__ours_k32": {
+      "status": "completed",
+      "representative": "mempool_tile_wrap__ours_k32",
+      "input_def_sha256": "9838f55071d1d56f574667857b9e608c0c1d67b34964ab2d5f5bca7d623ea49d",
+      "lef_sha256": [
+        "834a79295054cd4209178d1bade67c353863c47bb4b3c22ee38b862b7cec37f2",
+        "ae48ca01bc12b9f0c44717b7275ba8884f1760bf562f5a42e3ca39906ddc9e54",
+        "f1bb5571f970fc352978d85c97391e056569cf56dad8e13ed0d0963c429ccba9",
+        "482ee50f1f7fa60876c4011ef157c8c4e67f31e66cf3c53220f7641644132de4",
+        "f6befdc4c36550ca4fb493a7e59c338b4ffd85b23e3c0958b213c5e48028abcc",
+        "9765349e8d204e1a2ef868740bcfc780162fe0a8f06ebfad0de22b6b3ebc7f34",
+        "f74c5f9064e19ba690a4391b0c2c78cc44353f7f19224a805efc1e0a245c3507",
+        "33c94de65b831c3c0daa45b54ef21e25771b67cbd38fa3affc298231a0b5553b",
+        "22e8746150d8d844368fda198d57324301acff79ed7cfca227cf3aa8fe1dfa58",
+        "a2c2f874aeb44b07feb3ace88475aecb665db5f5a872142bc20e5693cdd3855b",
+        "b3641c9991701cc9faa63bfd4b947a15ff3e3a85c67e27db23476a7d9754ede8",
+        "4440d92d842454a4b5710717cac4c410e4cf7af290dedf4891c5ea0bb11a3928",
+        "8b85775e97fd9a426f9521ed8f80f0a5ce6119a4926726499c89dc24a95d7508",
+        "b609ce40bb76d7ed0e02afb0e07e16e85e15bbdf0b3657557c3eed8db79c97bf",
+        "33db0d8a9f0c1d61bb2b1cef924b44685cacf4f9f98f4daef70d0ccbc827f86e"
+      ],
+      "verification_receipt": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/all_net_verification/mempool_tile_wrap__ours_k32/execution.json",
+      "verification_receipt_sha256": "4818fcd703aa01a59ece3b4f54b15a159adb26833ffa504434c4e2a413a61445"
+    }
+  }
+}

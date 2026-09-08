@@ -1,0 +1,37 @@
+{
+ "generated_at": "2026-09-08T08:12:35.626930",
+ "def_path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_followup_20260906/mgc_fft_1__ours_k16/or_run/routed.def",
+ "lef_paths": [
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd2015/mgc_fft_1/tech.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd2015/mgc_fft_1/cells.lef"
+ ],
+ "junction_unvalidated": false,
+ "check1_wire_length": {
+  "ours_dbu": 534426300,
+  "ours_um": 534426.3,
+  "dbwire_native_dbu": 546099200,
+  "dbwire_native_um": 546099.2,
+  "rect_term_dbu": 11999100,
+  "recon_dbu": 546425400,
+  "recon_um": 546425.4,
+  "err_vs_dbwire_native_recon_pct": 0.059732737202325144,
+  "definitional_delta_pct": 2.1375054202606414,
+  "report_wire_length_drt_total_um": 546099.199999987,
+  "err_vs_report_wire_length_pct": 2.1375054202583086,
+  "pass_lt_1pct": true
+ },
+ "check2_odb_vs_text_parser": {
+  "sample_requested": 0,
+  "seed": 0,
+  "routed_net_count": 33307,
+  "n_sampled": 33307,
+  "n_checked": 33307,
+  "n_match": 33307,
+  "n_mismatch": 0,
+  "n_mismatch_rect_only": 0,
+  "n_mismatch_other": 0,
+  "n_missing_from_text": 0,
+  "pass_n_mismatch_eq_0": true
+ },
+ "overall_pass": true
+}

@@ -4,6 +4,18 @@
   "mtkahypar_threads_override": 1,
   "checks": [
     {
+      "name": "all routed nets OpenDB vs text canonical geometry sets",
+      "cases": 12,
+      "unique_routes": 9,
+      "unique_route_net_checks": 847230,
+      "exit_code": 0,
+      "receipt": "results/stage2_routing_input_fix_20260906/all_net_verification/execution.json",
+      "receipt_sha256": "695a1f1b4f544a92e4f51a6404bee0656b064a1beeddbe0367dadfaf0047df8d",
+      "embedded_openroad_return_code": 1,
+      "embedded_python_exit": 0,
+      "all_independent_json_and_log_checks_pass": true
+    },
+    {
       "name": "final full nonslow with G4 distance and raw companion",
       "passed": 1015,
       "skipped": 1,

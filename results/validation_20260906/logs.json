@@ -66,5 +66,9 @@
   {
     "path": "results/validation_20260906/route-publication-regression.log",
     "sha256": "976ea3fe6dfa65b827ec05fc16bf49cec94d3fda3b2d6ad4719708e74a38b32d"
+  },
+  {
+    "path": "results/validation_20260906/final-nonslow-g4-20260908.log",
+    "sha256": "a792b5c7a809d29b6767b08454c1cc6ebcd1dfc642c22bb9e63b8d8d0727e9aa"
   }
 ]

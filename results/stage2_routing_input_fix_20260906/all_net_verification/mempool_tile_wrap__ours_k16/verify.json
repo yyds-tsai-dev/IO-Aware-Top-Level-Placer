@@ -1,0 +1,50 @@
+{
+ "generated_at": "2026-09-08T08:21:22.187500",
+ "def_path": "/ldaphome/yyds-tsai-dev/IO-Aware-Top-Level-Placer/results/stage2_routing_input_fix_20260906/mempool_tile_wrap__ours_k16/or_run/routed.def",
+ "lef_paths": [
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/NangateOpenCellLibrary.tech.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/NangateOpenCellLibrary.macro.mod.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_128x116.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_128x256.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_128x32.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_256x16.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_256x32.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_256x48.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_256x64.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_32x32.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_512x64.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_64x124.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_64x256.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_64x62.lef",
+  "/ldaphome/yyds-tsai-dev/benchmarks/ispd25/NanGate45/lef/fakeram45_64x64.lef"
+ ],
+ "junction_unvalidated": false,
+ "check1_wire_length": {
+  "ours_dbu": 10095762760,
+  "ours_um": 5047881.38,
+  "dbwire_native_dbu": 10095519930,
+  "dbwire_native_um": 5047759.965,
+  "rect_term_dbu": 0,
+  "recon_dbu": 10095762760,
+  "recon_um": 5047881.38,
+  "err_vs_dbwire_native_recon_pct": 0.0024053243585642646,
+  "definitional_delta_pct": 0.0024053243585642646,
+  "report_wire_length_drt_total_um": 5047759.96499999,
+  "err_vs_report_wire_length_pct": 0.00240532435876796,
+  "pass_lt_1pct": true
+ },
+ "check2_odb_vs_text_parser": {
+  "sample_requested": 0,
+  "seed": 0,
+  "routed_net_count": 136225,
+  "n_sampled": 136225,
+  "n_checked": 136225,
+  "n_match": 136225,
+  "n_mismatch": 0,
+  "n_mismatch_rect_only": 0,
+  "n_mismatch_other": 0,
+  "n_missing_from_text": 0,
+  "pass_n_mismatch_eq_0": true
+ },
+ "overall_pass": true
+}

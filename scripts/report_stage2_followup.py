@@ -227,6 +227,33 @@ def main():
                 "tile四臂使用獨立結果目錄；兩個flat K的DEF／netmap／CoordMap／config一致才重用route。",
                 f"修正protocol：`{setup_path}`；SHA256 `{hashlib.sha256(setup_path.read_bytes()).hexdigest()}`。"]
     lines += g4_supplement(data, args.fig)
+    all_net_path = Path(data["s8_dir"]) / "all_net_verification/execution.json"
+    lines += ["", "## S2／所有routed nets交叉驗證", ""]
+    if all_net_path.exists() and json.loads(all_net_path.read_text())["status"] == "completed":
+        all_net = json.loads(all_net_path.read_text())
+        if set(all_net["cases"]) != {s["sample_id"] for s in samples}:
+            raise ValueError("all-net verification does not cover this cohort")
+        groups = {}
+        for name, row in all_net["cases"].items():
+            receipt_path = Path(row["verification_receipt"])
+            if hashlib.sha256(receipt_path.read_bytes()).hexdigest() != row["verification_receipt_sha256"]:
+                raise ValueError("all-net verification receipt changed")
+            proof = json.loads(receipt_path.read_text())
+            if proof["status"] != "completed" or not all(proof["checks"].values()):
+                raise ValueError("all-net verification failed")
+            groups.setdefault(row["representative"], []).append(name)
+        lines += ["全部12個case通過；相同DEF與LEF context對應9個獨立route檢查。",
+            "逐net比對canonical geometry sets，未比對wire widths或重複線段multiplicity。",
+            "所有檢查皆n_checked=n_match=n_sampled=routed_net_count，mismatch／missing為0，wire oracle通過，沒有未驗證JUNCTION。", "",
+            "| Representative | Routed nets checked | Mapped cases |", "|---|---:|---:|"]
+        for rep, names in groups.items():
+            check_path = all_net_path.parent / rep / "verify.json"
+            check = json.loads(check_path.read_text())["check2_odb_vs_text_parser"]
+            lines.append(f"| {rep} | {check['n_checked']} | {len(names)} |")
+        lines += ["", f"補充receipt：`{all_net_path}`；SHA256 `{hashlib.sha256(all_net_path.read_bytes()).hexdigest()}`。",
+            "此OpenROAD build在Python SystemExit(0)時回傳process code1；另要求明確SystemExit:0、OVERALL:PASS及完整JSON檢查，未將一般code1當成功。"]
+    else:
+        lines.append("全量文字解析交叉驗證仍在執行；既有1000-net抽樣不視為此項全量驗收。")
     lines += ["", "## 限制與證據", "",
         "固定detailed-route迭代上限5（iteration0–5），殘留DRC如上；不是signoff-clean。",
         "本輪為OpenROAD-only，沒有Innovus或commercial-DP ground truth。CPU/GPU共享量測不作獨占效能宣稱。",
