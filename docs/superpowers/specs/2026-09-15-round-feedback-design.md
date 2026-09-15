@@ -1,6 +1,7 @@
 # Feedback between complete GP rounds
 
-Status: architecture decisions confirmed; detailed defaults pending written review.
+Status: approved for implementation planning on 2026-09-15. Long-horizon
+validation and feedback revision were additionally requested during planning.
 
 ## 1. Objective and scope
 
@@ -333,16 +334,42 @@ trigger DR on every benchmark or make GR results into DR evidence.
 - Complete matched real-case GR tests before claiming measured improvement;
   verify representative DR selection and report its results separately.
 
-## 11. Limits and review focus
+## 11. Limits and approved defaults
 
 The CPU FLUTE stage and transfers may dominate fast evaluation; batching is not
 a measured speed claim. Fast resource prices use a 2-D layer aggregation and
 cannot certify layer routing or DR feasibility. Degree-above-256 nets remain
 outside fast-tree modeling, although full-net GR acceptance covers them.
 
-The written-review decisions added here are the exact feedback formulas and
+The written-review decisions approved here are the exact feedback formulas and
 defaults, supported fast cohort, native-total-overflow predicate, failure
 semantics, initialization accounting, and deterministic representative DR
-selection. Review these before implementation planning. The confirmed
+selection. The confirmed
 checkpoint interval, wirelength bound, stop limits, and recovery policy remain
 unchanged.
+
+## 12. Long-horizon outcome and feedback revision
+
+The user additionally requires evidence that feedback improves placement over
+multiple complete GP rounds. Demonstrating changed coefficients, gradients, or
+positions alone does not satisfy this requirement.
+
+Run paired feedback-enabled and feedback-disabled trajectories through the
+configured twelve-round horizon or their declared early-stop condition. Compare
+the final GR-accepted placements and checkpoint trajectories with the same
+initialization, seed, GP limits, and routing policies. Include independent seeds
+and physical benchmarks, preserve early stops and regressions, and report
+quality together with actual GP/evaluation/GR cost.
+
+If feedback fails the predeclared outcome criteria, diagnose and revise the
+feedback mapping or update method, then repeat matched evaluation. Keep the
+checkpoint acceptance constraints unchanged. Version each attempted policy,
+use calibration cases for tuning, freeze the revised policy before validation,
+and distinguish previously examined cases from fresh validation evidence.
+The initial formulas in Section 5 are starting policies, not immutable choices.
+
+Do not claim this objective complete while the final policy lacks measured
+long-horizon improvement. If available evidence or resources do not support that
+claim, report the unmet gate and retained safe placement explicitly. Select DR
+representatives from the final policy campaign, rather than launching DR for
+every exploratory feedback revision.

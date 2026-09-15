@@ -65,5 +65,8 @@ learned from the failure while keeping the published placement GR-accepted.
 The [detailed design](../superpowers/specs/2026-09-15-round-feedback-design.md)
 proposes the feedback mapping, overflow measurements, numerical conventions,
 routing failure handling, supported FLUTE cohort, and representative DR
-selection. Those detailed defaults require written review before implementation
-planning.
+selection. The user approved progression to implementation planning on
+2026-09-15, then required long-horizon paired placement validation and feedback
+method revision if improvement is not demonstrated. The feedback formulas are
+initial policies subject to that evidence-driven revision; the GR acceptance
+constraints remain fixed.
