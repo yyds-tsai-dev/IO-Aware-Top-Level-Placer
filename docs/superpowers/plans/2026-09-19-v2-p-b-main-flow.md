@@ -28,7 +28,7 @@ export IOPLACE_MTKAHYPAR_THREADS=1 CUDA_VISIBLE_DEVICES=3
 
 **No new DREAMPlace patch.** DREAMPlace source is off-limits. The two existing patches (`src/ioplace/dp_patch/m2-extra-obj-terms.patch`, `src/ioplace/dp_patch/iteration-callback.patch`) plus `src/ioplace/dp_patch/shapely2-compat.patch` are the only modifications. Everything else is driver-side: `params`-borne term attachment (`src/ioplace/dp_hook.py:7-10`), the per-iteration callback (`NonLinearPlace.py:521-523`), instance-attribute monkeypatches installed and restored through `_install_attribute` (`src/ioplace/drivers/run_placement_io.py:110-119`).
 
-**Coordinate contract: native post-read PlaceDB units.** Every cross-phase array artefact (`seed.npz`, `soft.npz`, `regions.json`, `membership.npz`) is expressed in the coordinate system of `placedb` **after `read(params)` and before `initialize(params)`**. `initialize()` calls `PlaceDB.scale()` (`$DREAMPLACE_ROOT/install/dreamplace/PlaceDB.py:151-196`), which rescales `node_x`/`node_y`, `node_size_x`/`node_size_y`, the die box, `regions` and `flat_region_boxes` together, with `params.shift_factor = (xl, yl)` and `params.scale_factor = 1/site_width` fixed at `PlaceDB.py:759-767`. Conversions: `scaled = (native - shift_factor) * scale_factor`, `native = scaled / scale_factor + shift_factor`. Evaluator artefacts (`evaluation.npz`) stay in scaled evaluator units and record `shift_factor`/`scale_factor`, exactly as `src/ioplace/export/evaluation.py:68-117` already does.
+**Coordinate contract: native post-read PlaceDB units.** Every cross-phase array artefact (`seed.npz`, `soft.npz`, `regions.json`, `membership.npz`) is expressed in the coordinate system of `placedb` **after `read(params)` and before `initialize(params)`**. `initialize()` calls `PlaceDB.scale()` (`$DREAMPLACE_ROOT/install/dreamplace/PlaceDB.py:151-196`), which rescales `node_x`/`node_y`, `node_size_x`/`node_size_y`, the die box, `regions` and `flat_region_boxes` together, with `params.shift_factor = (xl, yl)` and `params.scale_factor = 1/site_width` fixed at `PlaceDB.py:759-767`. Conversions: `scaled = (native - shift_factor) * scale_factor`, `native = scaled / scale_factor + shift_factor`. Evaluator artefacts (`evaluation.npz`) stay in scaled evaluator units and record `shift_factor`/`scale_factor`, exactly as `src/ioplace/export/evaluation.py:68-117` already does. This is the same contract P-C Task 10 states as its "coordinate flip": the producer works in scaled units *inside* the GP and converts back to native before writing `regions.json`/`seed.npz`, which is exactly the frame `init_pos.apply_init` (Task 2) and `fence_phase.build_fence_placedb` (Task 4) write into `placedb.node_x`/`node_y` after `read()` and before `initialize()`.
 
 **Artefact schema (spec §1 table, verbatim):**
 
@@ -61,11 +61,30 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 
 ## File Structure
 
+**Reconciliation note (2026-09-19).** P-B and P-C were written in parallel and
+both defined `src/ioplace/artifacts.py`. **P-B Task 1 is the single owner; P-C
+consumes it.** Merged into Task 1 below: P-C's `placedb_fingerprint` becomes
+`placedb_identity_sha256` (its digest now also covers `pin2node_map` and
+`pin2net_map`, so it is strictly stronger than either original); P-C's
+`save_seed`/`load_seed` become `save_positions`/`load_positions` with
+`kind="seed"`; P-C's positional `save_membership`/`load_membership` become this
+plan's keyword-only pair; and P-C's `save_producer_json` moves here, gaining
+`PRODUCER_SCHEMA_VERSION`, a `PRODUCER_FIELDS` contract and a
+`load_producer_json` reader. P-C's Task 1 shrinks to a verification step and
+every artefact test lives in `tests/test_artifacts.py` here. Two further seams
+were reconciled: **Task 8** *relocates* P-H Task 8's `IOPLACE_ENABLE_GR_IN_LOOP`
+check into `src/ioplace/gr_in_loop.py` instead of adding a second gate, and the
+dead `/nashome/NVL4` benchmark config is repaired exactly once, by **P-C Task
+11** (`benchmarks/ispd25/h100/mempool_tile_wrap.json`) — P-B stays on GCD and
+does not create or edit anything under `benchmarks/`. The coordinate contract
+below was checked against P-C Task 10's scaled-inside/native-outside flip and
+needed no change.
+
 **New modules**
 
 | File | Responsibility |
 |---|---|
-| `src/ioplace/artifacts.py` | Artefact I/O and the coordinate contract: `seed.npz`/`soft.npz`, `membership.npz`, `freeze.json`, `result.json` readers/writers with schema validation; `placedb_identity_sha256`; native↔scaled `RegionSet` conversion. No DREAMPlace import. |
+| `src/ioplace/artifacts.py` | Artefact I/O and the coordinate contract for **both** v2 drivers: `seed.npz`/`soft.npz`, `membership.npz`, `freeze.json`, `producer.json`, `result.json` readers/writers with schema validation; `placedb_identity_sha256`; native↔scaled `RegionSet` conversion. No DREAMPlace import. P-C (region producer) imports these names and adds nothing of its own. |
 | `src/ioplace/init_pos.py` | The three initial-position modes (`die_center`, `region_center`, `seed`) written into `placedb.node_x/node_y` between `read()` and `initialize()`. |
 | `src/ioplace/freeze.py` | Cell-centre region argmax, membership-churn tracking, the three-part freeze criterion, empty-region repair, per-region cell/area statistics, the `freeze.json` record. |
 | `src/ioplace/fence_phase.py` | Phase-3 PlaceDB construction: fence injection, escape-cell workaround, warm start, and the density-weight clamp (including its scoped `PlaceObj.initialize_density_weight` wrapper). |
@@ -79,11 +98,11 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 
 **Modified**
 
-`src/scripts/run_route_gp.py`, `src/ioplace/ops/routing_gp_controller.py` (import guard); `tests/test_routing_gp_driver.py`, `tests/test_bounded_grt_feedback.py` (set the guard env var); `docs/dev-env.md` (driver table).
+`src/scripts/run_route_gp.py` (import-time guard); `src/ioplace/ops/routing_gp_controller.py` (P-H Task 8's inline constructor gate *relocated* into `gr_in_loop.py` — not a second gate, see Task 8); `tests/test_routing_gp_driver.py`, `tests/test_bounded_grt_feedback.py` (set the guard env var); `docs/dev-env.md` (driver table).
 
 **Reused unchanged** — do not edit: `regions.py`, `region_grid.py`, `region_graph.py`, `fence_inject.py`, `ops/soft_assign.py`, `ops/io_term.py`, `ops/ft_term.py`, `ops/ft_callback.py`, `schedules.py`, `dp_hook.py`, `export/evaluation.py`, `evaluator_gpu.py`, `drivers/run_placement.py`, `drivers/run_placement_io.py`, `drivers/run_placement_two_stage.py`.
 
-**Small test input.** The smallest real LEF/DEF case available on this host is GCD: config `results/route_feedback_20260914/gcd.json`, LEF/DEF under `third_party/OpenROAD/src/grt/test/` (both present). 508 movable nodes, 168 terminals, 54 terminal-NIs, 579 nets, native die `(20140, 22400, 180500, 179200)`. `benchmarks/ispd25/mempool_tile_wrap.json` points at `/nashome/NVL4/...`, which does not exist on this host — do not use it. `$DREAMPLACE_ROOT/install/test/simple.json` (8 cells) is too small for multi-fence legalisation (see the note at `tests/test_fence_inject.py:127-149`) and is only used for non-fence unit work.
+**Small test input.** The smallest real LEF/DEF case available on this host is GCD: config `results/route_feedback_20260914/gcd.json`, LEF/DEF under `third_party/OpenROAD/src/grt/test/` (both present). 508 movable nodes, 168 terminals, 54 terminal-NIs, 579 nets, native die `(20140, 22400, 180500, 179200)`. `benchmarks/ispd25/mempool_tile_wrap.json` points at `/nashome/NVL4/...`, which does not exist on this host — do not use it, and **do not repair it here**: P-C Task 11 is the single owner of that repair and promotes a host-local copy to `benchmarks/ispd25/h100/mempool_tile_wrap.json`. No task in this plan creates or edits anything under `benchmarks/`. `$DREAMPLACE_ROOT/install/test/simple.json` (8 cells) is too small for multi-fence legalisation (see the note at `tests/test_fence_inject.py:127-149`) and is only used for non-fence unit work.
 
 ---
 
@@ -95,9 +114,10 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 
 **Interfaces:**
 - Consumes: `ioplace.regions.RegionSet`/`RegionSpec` (`src/ioplace/regions.py:5-58`).
+- Consumed by: this plan's Tasks 2-9 **and all of P-C** (`drivers/run_region_producer.py` and its acceptance verifier). P-C Task 1 is a verification step over these names; it adds nothing. Do not rename anything here without editing `docs/superpowers/plans/2026-09-19-v2-p-c-region-producer.md` in the same commit.
 - Produces:
-  - `POSITIONS_SCHEMA_VERSION = 1`, `MEMBERSHIP_SCHEMA_VERSION = 1`, `FREEZE_SCHEMA_VERSION = 1`, `MAIN_FLOW_RESULT_SCHEMA_VERSION = 1`
-  - `MAIN_FLOW_RESULT_FIELDS: tuple[str, ...]`, `FREEZE_FIELDS: tuple[str, ...]`
+  - `POSITIONS_SCHEMA_VERSION = 1`, `MEMBERSHIP_SCHEMA_VERSION = 1`, `FREEZE_SCHEMA_VERSION = 1`, `MAIN_FLOW_RESULT_SCHEMA_VERSION = 1`, `PRODUCER_SCHEMA_VERSION = 1`
+  - `MAIN_FLOW_RESULT_FIELDS: tuple[str, ...]`, `FREEZE_FIELDS: tuple[str, ...]`, `PRODUCER_FIELDS: tuple[str, ...]`
   - `@dataclass Positions(node_x, node_y, die, shift_factor, scale_factor, placedb_sha256, kind)` with `.num_physical`
   - `@dataclass Membership(part, source, k, seed, epsilon)` with `.num_movable`
   - `placedb_identity_sha256(placedb) -> str`
@@ -107,6 +127,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
   - `load_membership(path, *, expect_num_movable=None, expect_k=None, require_nonempty=False) -> Membership`
   - `save_freeze(path, record) -> None`, `load_freeze(path) -> dict`
   - `save_result(path, record) -> None`
+  - `save_producer_json(path, payload) -> None`, `load_producer_json(path) -> dict` (P-C's `producer.json`; the only writer that stamps `schema_version` itself, because the producer builds its whole payload in one place)
   - `scaled_region_set(rs, shift_factor, scale_factor) -> RegionSet`
   - `file_sha256(path) -> str`
 
@@ -116,15 +137,51 @@ Create `tests/test_artifacts.py`:
 
 ```python
 import json
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
 from ioplace.artifacts import (
     FREEZE_FIELDS, MAIN_FLOW_RESULT_FIELDS, MAIN_FLOW_RESULT_SCHEMA_VERSION,
-    Membership, Positions, file_sha256, load_freeze, load_membership,
-    load_positions, save_freeze, save_membership, save_positions, save_result,
-    scaled_region_set)
+    PRODUCER_FIELDS, PRODUCER_SCHEMA_VERSION, Membership, Positions,
+    file_sha256, load_freeze, load_membership, load_positions,
+    load_producer_json, placedb_identity_sha256, save_freeze, save_membership,
+    save_positions, save_producer_json, save_result, scaled_region_set)
 from ioplace.regions import make_grid_regions
+
+
+def _fake_placedb(**override):
+    base = dict(num_movable_nodes=3, num_physical_nodes=4, num_nets=2,
+                node_size_x=np.array([1., 1., 1., 2.]),
+                node_size_y=np.array([1., 1., 1., 2.]),
+                pin2node_map=np.array([0, 1, 2, 3], dtype=np.int32),
+                pin2net_map=np.array([0, 0, 1, 1], dtype=np.int32),
+                flat_net2pin_start_map=np.array([0, 2, 4], dtype=np.int32))
+    base.update(override)
+    return SimpleNamespace(**base)
+
+
+def test_placedb_identity_is_stable_and_connectivity_sensitive():
+    first = placedb_identity_sha256(_fake_placedb())
+    assert first == placedb_identity_sha256(_fake_placedb())
+    assert len(first) == 64
+    assert first != placedb_identity_sha256(
+        _fake_placedb(pin2node_map=np.array([0, 1, 3, 2], dtype=np.int32)))
+    assert first != placedb_identity_sha256(
+        _fake_placedb(node_size_x=np.array([1., 1., 1., 3.])))
+
+
+def test_placedb_identity_ignores_node_positions():
+    """Counts, node sizes and connectivity only -- never a coordinate. Node
+    sizes do change under PlaceDB.scale(), which is why the docstring pins the
+    fingerprint to the pre-initialize() point of the lifecycle; the producer
+    (P-C Task 10) hashes in its `read` phase for exactly that reason."""
+    db = _fake_placedb()
+    before = placedb_identity_sha256(db)
+    db.node_x = np.array([1., 2., 3., 4.])
+    db.xl, db.yl, db.xh, db.yh = 0., 0., 10., 10.
+    assert placedb_identity_sha256(db) == before
 
 
 def _positions(tmp_path, **override):
@@ -216,6 +273,21 @@ def test_result_requires_every_declared_field(tmp_path):
         save_result(str(tmp_path / "bad.json"), record)
 
 
+def test_producer_json_requires_every_field_and_stamps_the_version(tmp_path):
+    record = {name: 0 for name in PRODUCER_FIELDS}
+    record["k"] = 16
+    record["extract_bins"] = 64
+    path = str(tmp_path / "producer.json")
+    save_producer_json(path, record)
+    on_disk = json.load(open(path))
+    assert on_disk["k"] == 16 and on_disk["extract_bins"] == 64
+    assert on_disk["schema_version"] == PRODUCER_SCHEMA_VERSION
+    assert load_producer_json(path)["rects_per_region"] == 0
+    del record["rects_per_region"]
+    with pytest.raises(ValueError, match="rects_per_region"):
+        save_producer_json(str(tmp_path / "bad.json"), record)
+
+
 def test_scaled_region_set_matches_placedb_scale_and_still_validates():
     native = make_grid_regions((10., 20., 110., 220.), 2, 2, lattice=8)
     scaled = scaled_region_set(native, (10., 20.), 2.)
@@ -247,7 +319,12 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'ioplace.artifacts'`
 Create `src/ioplace/artifacts.py`:
 
 ```python
-"""v2 main-flow artefact I/O and the native/scaled coordinate contract (design v2 sec 1).
+"""v2 artefact I/O and the native/scaled coordinate contract (design v2 sec 1).
+
+Shared by BOTH v2 drivers: the main flow (P-B, drivers/run_main_flow.py) and the
+region producer (P-C, drivers/run_region_producer.py). Every name the producer
+needs -- placedb_identity_sha256, save/load_positions, save/load_membership,
+save/load_producer_json -- lives here; P-C adds nothing of its own.
 
 Every array artefact here is written in **native post-read PlaceDB units**:
 the coordinate frame of `placedb` after `placedb.read(params)` and before
@@ -276,6 +353,7 @@ POSITIONS_SCHEMA_VERSION = 1
 MEMBERSHIP_SCHEMA_VERSION = 1
 FREEZE_SCHEMA_VERSION = 1
 MAIN_FLOW_RESULT_SCHEMA_VERSION = 1
+PRODUCER_SCHEMA_VERSION = 1
 
 POSITION_KINDS = ("seed", "soft")
 
@@ -310,6 +388,29 @@ MAIN_FLOW_RESULT_FIELDS = (
     "effective_target_density", "num_filler_nodes", "num_bins_x", "num_bins_y",
     # artefacts
     "artifacts",
+)
+
+# producer.json -- the region producer's run record (P-C Task 10 builds it).
+PRODUCER_FIELDS = (
+    # identity / provenance
+    "config", "out_dir", "placedb_sha256", "command", "hostname", "env",
+    # knobs
+    "k", "membership_source", "membership_seed", "epsilon", "hierarchy_depth",
+    "extract_bins", "fine_bins", "lattice", "rect_max", "t_hull",
+    "probe_every", "alpha_pull", "alpha_push", "sa_seed",
+    # geometry and the coordinate contract
+    "die_native", "die_scaled", "shift_factor", "scale_factor",
+    "num_movable", "num_physical", "num_nodes", "num_nets", "target_density",
+    # grouping-term telemetry
+    "n_hull_rebuilds", "wt_final", "lambda_group_final", "ratio_ema_final",
+    "probes",
+    # placement outcome
+    "gp_iterations_run", "final_overflow", "hpwl_gp", "hpwl_lg",
+    # shapes
+    "sa", "rects_per_region", "rect_max_observed", "region_bins",
+    "region_area", "region_cell_area", "region_utilisation", "area_balance",
+    # runtime
+    "runtime_s", "peak_mem_mb",
 )
 
 
@@ -365,13 +466,22 @@ def placedb_identity_sha256(placedb):
     Must be computed after read() and BEFORE initialize(): node sizes are
     multiplied by scale_factor inside initialize() (PlaceDB.py:160-161), so
     the same design would otherwise fingerprint differently in phase 1 and
-    phase 3 and every cross-phase check would spuriously fail.
+    phase 3 and every cross-phase check would spuriously fail. The region
+    producer (P-C) hashes in its own `read` phase for the same reason.
+
+    Covers counts, node sizes and full pin connectivity -- never a coordinate.
+    pin2node_map/pin2net_map come from P-C's `placedb_fingerprint`, which this
+    function replaces: the start map alone does not notice a permutation of the
+    pins inside a net, which is exactly the "seed written for a different
+    design" case the guard exists for.
     """
     return _digest_arrays(
         np.asarray([placedb.num_movable_nodes, placedb.num_physical_nodes,
                     placedb.num_nets, len(placedb.pin2node_map)], dtype=np.int64),
         np.asarray(placedb.node_size_x[:placedb.num_physical_nodes], dtype=np.float64),
         np.asarray(placedb.node_size_y[:placedb.num_physical_nodes], dtype=np.float64),
+        np.asarray(placedb.pin2node_map, dtype=np.int64),
+        np.asarray(placedb.pin2net_map, dtype=np.int64),
         np.asarray(placedb.flat_net2pin_start_map, dtype=np.int64))
 
 
@@ -516,6 +626,28 @@ def save_result(path, record):
     _atomic_write_json(path, record)
 
 
+def save_producer_json(path, payload):
+    """producer.json -- the region producer's own run record (P-C Task 10).
+
+    Unlike save_freeze/save_result this writer stamps schema_version itself:
+    run_region_producer.run_producer builds the payload as one dict literal and
+    also returns it to its caller, so the version belongs to the writer.
+    """
+    _require_fields(payload, PRODUCER_FIELDS, "producer.json")
+    record = dict(payload)
+    record["schema_version"] = PRODUCER_SCHEMA_VERSION
+    _atomic_write_json(path, record)
+
+
+def load_producer_json(path):
+    with open(path) as stream:
+        record = json.load(stream)
+    _require_fields(record, PRODUCER_FIELDS, f"{path}")
+    if int(record["schema_version"]) != PRODUCER_SCHEMA_VERSION:
+        raise ValueError(f"unsupported producer schema in {path}")
+    return record
+
+
 def scaled_region_set(rs, shift_factor, scale_factor):
     """Native -> scaled RegionSet, using PlaceDB.scale()'s own transform
     (PlaceDB.py:184-196: subtract the shift, multiply by the scale, applied to
@@ -536,7 +668,7 @@ def scaled_region_set(rs, shift_factor, scale_factor):
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_artifacts.py -v`
-Expected: PASS — 8 passed.
+Expected: PASS — 11 passed.
 
 - [ ] **Step 5: Run the fast suite for regressions**
 
@@ -547,11 +679,12 @@ Expected: PASS — no new failures relative to the pre-task baseline.
 
 ```bash
 git add src/ioplace/artifacts.py tests/test_artifacts.py
-git commit -m "feat(artifacts): v2 main-flow artefact I/O with schema validation
+git commit -m "feat(artifacts): v2 artefact I/O with schema validation
 
-Adds seed/soft positions, membership, freeze.json and result.json readers
-and writers in native post-read PlaceDB units, plus placedb_identity_sha256
-and the native->scaled RegionSet conversion.
+Adds seed/soft positions, membership, freeze.json, producer.json and
+result.json readers and writers in native post-read PlaceDB units, plus
+placedb_identity_sha256 and the native->scaled RegionSet conversion. This is
+the single owner of the producer (P-C) <-> main-flow (P-B) file contract.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -1443,6 +1576,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 | `needs_refresh() -> bool`, `mark_refreshed() -> None` | Nesterov-secant discipline (`dp_hook.py:36-59`) |
 
 P-H's plan owns adding `TermNormalizerAdapter` to this file, mapping `register`/`probe`/`weights`/`transaction`/`mark_refreshed` onto the same protocol. Until then `--norm-policy grandplan|adaptive` fails fast with a message naming the missing module — that is the behaviour pinned by a test, not a stub.
+
+**Checked against P-H (2026-09-19).** `NORM_POLICIES` here is character-for-character `TermNormalizer.POLICIES` in P-H Task 2 — `("legacy", "grandplan", "adaptive")` — so `--norm-policy legacy` is not a P-B-only fallback but the same policy P-H implements in its Task 6: under `legacy` the normalizer owns no coefficient maths and delegates `obj_version`/`refreshed_version` to `schedules.ScheduleState`, which is exactly what `LegacyNormAdapter` does here. When `TermNormalizerAdapter` lands it may therefore serve all three policies; `LegacyNormAdapter` stays only as the no-P-H path. P-C's `GroupingWeight` (its Task 4) touches `src/ioplace/norm.py` at a different level — the pure helpers `grandplan_weight(iteration, it_activate, wt0, wt_step, ramp_period, wt_max)` and `ema_update(prev, inst, ema)` from P-H Task 1, both already present in the tree with those exact signatures — so there is no name clash with this adapter.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2709,16 +2844,23 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `src/ioplace/gr_in_loop.py`
-- Modify: `src/ioplace/ops/routing_gp_controller.py` (add the guard after the module docstring)
-- Modify: `src/scripts/run_route_gp.py` (add the guard after the module docstring)
+- Modify: `src/ioplace/ops/routing_gp_controller.py` (**replace** P-H Task 8's inline `os.environ` check in `__init__` with a call to `require_gr_in_loop()`; no import-time gate)
+- Modify: `src/scripts/run_route_gp.py` (add the import-time guard after the module docstring)
 - Modify: `tests/test_routing_gp_driver.py:41`, `:105`, `:127`, `:149`, `:166`
 - Modify: `tests/test_bounded_grt_feedback.py:48-49`
 - Test: `tests/test_gr_in_loop_gate.py`
+- Do **not** modify: `tests/test_routing_gp_retirement.py` (P-H Task 8 owns it)
 
 **Interfaces:**
 - Produces: `GR_IN_LOOP_ENV = "IOPLACE_ENABLE_GR_IN_LOOP"`, `require_gr_in_loop() -> None`
+- Consumed by: `ioplace.ops.routing_gp_controller.RoutingGPController.__init__`, `src/scripts/run_route_gp.py`.
 
 Spec §1 "Retired" puts `src/scripts/run_route_gp.py`, `ops/routing_gp_controller.py`, `ops/route_gp.py`, `ops/joint_route_feedback.py` and `ops/route_feedback.py` behind `IOPLACE_ENABLE_GR_IN_LOOP=1` as unmaintained. This task gates the two modules named in the P-B scope; the remaining three stay importable because live unit tests exercise them directly as libraries.
+
+**Reconciliation with P-H Task 8 (2026-09-19) — relocate, do not duplicate.** P-H lands before P-B and its Task 8 already installs an `IOPLACE_ENABLE_GR_IN_LOOP` check, but *inside* `RoutingGPController.__init__`, not at import time. Two consequences:
+
+1. **The controller keeps a constructor gate, not an import gate.** P-H ships `tests/test_routing_gp_retirement.py`, whose module-level `from ioplace.ops.routing_gp_controller import RoutingGPController` would fail at collection if this task added an import-time guard to that module. So this task *moves* P-H's four-line `if os.environ.get(...) != "1": raise RuntimeError(...)` block out of `__init__` and into `gr_in_loop.require_gr_in_loop()`, leaving a one-line call at the same place (before the `mode` check). Same env var, **same message text, copied verbatim from P-H**, so `test_controller_is_retired_unless_the_escape_hatch_is_set` keeps passing untouched. The import-time guard is added only to `src/scripts/run_route_gp.py`, whose module docstring is the only thing P-H Task 8 changes there.
+2. **Test edits P-H already made: none.** P-H Task 8's file list is `src/ioplace/ops/routing_gp_controller.py`, `src/scripts/run_route_gp.py` and the new `tests/test_routing_gp_retirement.py`; it modifies no existing test module, and in particular it does **not** set the env var in `tests/test_routing_gp_driver.py` or `tests/test_bounded_grt_feedback.py` (neither constructs a `RoutingGPController` — they only run/import `run_route_gp.py`, so P-H's constructor gate never fires there). Those two files therefore stay on this task's plate: they break only because of the `run_route_gp.py` import guard added in Step 4, and Step 5 repairs them. What this task must *skip* is duplicating P-H's constructor-gate coverage — `tests/test_gr_in_loop_gate.py` asserts only that the controller *delegates* to `require_gr_in_loop`, never re-testing the `RuntimeError` message.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2744,14 +2886,17 @@ def test_require_gr_in_loop_rejects_an_unset_env(monkeypatch):
     require_gr_in_loop()
 
 
-def test_importing_the_controller_is_gated(monkeypatch):
-    monkeypatch.delenv("IOPLACE_ENABLE_GR_IN_LOOP", raising=False)
-    sys.modules.pop("ioplace.ops.routing_gp_controller", None)
-    with pytest.raises(RuntimeError, match="retired"):
-        importlib.import_module("ioplace.ops.routing_gp_controller")
-    sys.modules.pop("ioplace.ops.routing_gp_controller", None)
+def test_the_controller_gate_routes_through_require_gr_in_loop(monkeypatch):
+    """P-H Task 8 owns the controller's RuntimeError and its message
+    (tests/test_routing_gp_retirement.py). This only pins that the controller
+    delegates to gr_in_loop instead of re-reading os.environ, so the repo has
+    exactly one gate with exactly one message."""
     monkeypatch.setenv("IOPLACE_ENABLE_GR_IN_LOOP", "1")
-    assert importlib.import_module("ioplace.ops.routing_gp_controller") is not None
+    module = importlib.import_module("ioplace.ops.routing_gp_controller")
+    calls = []
+    monkeypatch.setattr(module, "require_gr_in_loop", lambda: calls.append(1))
+    module.RoutingGPController(object(), object())
+    assert calls == [1]
 
 
 def test_run_route_gp_cli_is_gated(tmp_path):
@@ -2778,12 +2923,16 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'ioplace.gr_in_loop'`
 Create `src/ioplace/gr_in_loop.py`:
 
 ```python
-"""Import gate for the retired GR-in-loop paths (design v2 sec 1, "Retired").
+"""The one gate for the retired GR-in-loop paths (design v2 sec 1, "Retired").
 
 `src/scripts/run_route_gp.py` and `ioplace/ops/routing_gp_controller.py` are
 not part of the v2 flow and are unmaintained. They stay in the tree (the
 round-feedback results reference them) but must be opted into explicitly so
 no v2 driver picks them up by accident.
+
+The message below is P-H Task 8's, moved here verbatim from
+`RoutingGPController.__init__`: one env var, one message, two call sites (the
+controller at construction time, the CLI script at import time).
 """
 import os
 
@@ -2793,22 +2942,32 @@ GR_IN_LOOP_ENV = "IOPLACE_ENABLE_GR_IN_LOOP"
 def require_gr_in_loop():
     if os.environ.get(GR_IN_LOOP_ENV) != "1":
         raise RuntimeError(
-            "GR-in-loop is retired and unmaintained (design v2 sec 1). Set "
-            f"{GR_IN_LOOP_ENV}=1 to import this module; the v2 main flow "
-            "(src/ioplace/drivers/run_main_flow.py) does not use it.")
+            "in-loop GR is retired by the v2 design (sec 1): the final GRT "
+            "protocol runs once, after placement. Set "
+            "IOPLACE_ENABLE_GR_IN_LOOP=1 to use this unmaintained path.")
 ```
 
-- [ ] **Step 4: Install the guard in both modules**
+- [ ] **Step 4: Relocate P-H's check, then guard the script**
 
-In `src/ioplace/ops/routing_gp_controller.py`, insert immediately after the module docstring on line 1 and before `import math`:
+In `src/ioplace/ops/routing_gp_controller.py`, add `from ioplace.gr_in_loop import require_gr_in_loop` to the project imports and **delete** the block P-H Task 8 put at the top of `__init__`:
 
 ```python
-from ioplace.gr_in_loop import require_gr_in_loop
-
-require_gr_in_loop()
+        if os.environ.get("IOPLACE_ENABLE_GR_IN_LOOP") != "1":
+            raise RuntimeError(
+                "in-loop GR is retired by the v2 design (sec 1): the final GRT "
+                "protocol runs once, after placement. Set "
+                "IOPLACE_ENABLE_GR_IN_LOOP=1 to use this unmaintained path.")
 ```
 
-In `src/scripts/run_route_gp.py`, insert immediately after the module docstring on line 1 and before `import argparse`:
+replacing it, at the same position (before the `mode` check), with:
+
+```python
+        require_gr_in_loop()
+```
+
+Drop the now-unused `import os` if nothing else in the module uses it. Do **not** add an import-time guard to this module: `tests/test_routing_gp_retirement.py` (P-H) imports `RoutingGPController` at module level and would fail at collection.
+
+In `src/scripts/run_route_gp.py`, insert immediately after the module docstring (the one P-H Task 8 rewrote) and before `import argparse`:
 
 ```python
 from ioplace.gr_in_loop import require_gr_in_loop
@@ -2838,8 +2997,8 @@ In `tests/test_bounded_grt_feedback.py`:
 
 - [ ] **Step 6: Run the gate test and the two touched test modules**
 
-Run: `"$IOPLACE_PYTHON" -m pytest tests/test_gr_in_loop_gate.py tests/test_routing_gp_driver.py tests/test_bounded_grt_feedback.py -v -m "not slow"`
-Expected: PASS — the gate's 3 tests pass; the previously passing fast tests in the two modules still pass (slow ones deselected).
+Run: `"$IOPLACE_PYTHON" -m pytest tests/test_gr_in_loop_gate.py tests/test_routing_gp_retirement.py tests/test_routing_gp_driver.py tests/test_bounded_grt_feedback.py -v -m "not slow"`
+Expected: PASS — the gate's 3 tests pass; P-H's 5 retirement tests still pass **unmodified** (that is the check that the relocation preserved the message); the previously passing fast tests in the two driver modules still pass (slow ones deselected).
 
 - [ ] **Step 7: Run the fast suite**
 
@@ -2852,11 +3011,13 @@ Expected: PASS — no new failures.
 git add src/ioplace/gr_in_loop.py src/ioplace/ops/routing_gp_controller.py \
         src/scripts/run_route_gp.py tests/test_gr_in_loop_gate.py \
         tests/test_routing_gp_driver.py tests/test_bounded_grt_feedback.py
-git commit -m "chore(gr-in-loop): gate the retired routing-GP paths behind an env flag
+git commit -m "chore(gr-in-loop): one gate for the retired routing-GP paths
 
-run_route_gp.py and routing_gp_controller.py now refuse to import unless
-IOPLACE_ENABLE_GR_IN_LOOP=1 (design v2 sec 1 'Retired'). The tests that still
-exercise them set the flag explicitly.
+Moves P-H's inline IOPLACE_ENABLE_GR_IN_LOOP check out of
+RoutingGPController.__init__ into ioplace.gr_in_loop.require_gr_in_loop, so
+there is a single env var with a single message, and adds the same guard at
+import time to run_route_gp.py (design v2 sec 1 'Retired'). The tests that
+still exercise the script set the flag explicitly.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -3060,6 +3221,7 @@ and routes it through `assign_blocks_to_regions` before use.
 | Spec item | Task |
 |---|---|
 | §1 artefact table, coordinate contract | Global Constraints + Task 1 |
+| §1 `producer.json` I/O (payload built by P-C Task 10) | Task 1 (`PRODUCER_FIELDS`, `save_producer_json`/`load_producer_json`) |
 | §1 two drivers, `run_placement_io.py` stays legacy | Global Constraints + Task 7 |
 | §1 retired GR-in-loop behind `IOPLACE_ENABLE_GR_IN_LOOP` | Task 8 |
 | §3 phase 1 warm start (`seed.npz` → `node_x`, flag 0) | Task 2 + Task 7 |
@@ -3078,7 +3240,7 @@ and routes it through `assign_blocks_to_regions` before use.
 | §9 freeze tests, warm-start-after-scaling test, small end-to-end case | Tasks 3, 4, 9 |
 | §9 B+C "done" (2×2 on `mempool_group`) | Global Constraints → Acceptance; campaign, not a task |
 
-Out of scope by design and *not* gaps: `capacity.npz` and the capacity term (P-D), pseudo-FT (P-E), the remaining three straddle diagnostics and the soft-assign anchor change (P-F), the final GRT protocol (P-G), `TermNormalizer` itself (P-H), the region producer (P-C), §3b's continuous upgrade path.
+Out of scope by design and *not* gaps: `capacity.npz` and the capacity term (P-D), pseudo-FT (P-E), the remaining three straddle diagnostics and the soft-assign anchor change (P-F), the final GRT protocol (P-G), `TermNormalizer` itself (P-H), the region producer's own modules (P-C `producer/*` and `drivers/run_region_producer.py`), §3b's continuous upgrade path. Note the one exception carved out by the 2026-09-19 reconciliation: `src/ioplace/artifacts.py` is owned here and serves P-C too, so Task 1's `PRODUCER_FIELDS`/`save_producer_json` are in scope even though nothing in this plan writes a `producer.json`.
 
 **2. Placeholder scan.** No `TBD`, no "add error handling", no "similar to Task N", no test described without code, no reference to an undefined symbol. Every code step is complete, runnable source.
 

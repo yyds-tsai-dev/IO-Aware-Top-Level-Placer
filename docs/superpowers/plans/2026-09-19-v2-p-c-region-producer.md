@@ -4,7 +4,7 @@
 
 **Goal:** Build the v2 region producer — a standalone driver that runs a flat DREAMPlace GP+LG with a GrandPlan grouping loss, extracts rectilinear partition shapes from the resulting density maps, refines them by simulated annealing, and emits `regions.json` + `seed.npz` + `membership.npz` + `producer.json` for the main flow.
 
-**Architecture:** One new package `src/ioplace/producer/` with five pure, separately testable modules (hull geometry + rasterised anchor tables, the grouping objective term, bin-map extraction, SA refinement, rectification) plus one new driver `src/ioplace/drivers/run_region_producer.py` that sequences them, and one new file-contract module `src/ioplace/artifacts.py`. Everything talks to DREAMPlace only through the two extension points that already exist (`dp_hook.attach_terms` and `placer.iteration_callback`) — no new DREAMPlace patch.
+**Architecture:** One new package `src/ioplace/producer/` with five pure, separately testable modules (hull geometry + rasterised anchor tables, the grouping objective term, bin-map extraction, SA refinement, rectification) plus one new driver `src/ioplace/drivers/run_region_producer.py` that sequences them. The file contract itself, `src/ioplace/artifacts.py`, is **not** created here: it is owned by P-B Task 1 and consumed by this plan (see the reconciliation note under File Structure). Everything talks to DREAMPlace only through the two extension points that already exist (`dp_hook.attach_terms` and `placer.iteration_callback`) — no new DREAMPlace patch.
 
 **Tech Stack:** Python 3.12, numpy 1.26.4, scipy 1.17.1 (`scipy.spatial.ConvexHull` = Qhull/quickhull, `scipy.ndimage` morphology/labelling/EDT), torch 2.8.0+cu128 (CUDA 12.8, H100 NVL), DREAMPlace 4.3.1 at `$DREAMPLACE_ROOT`, mtkahypar 1.6.2, pytest 9.1.1.
 
@@ -14,8 +14,8 @@
 
 - **Run protocol.** From the repo root: `source src/scripts/env.sh`, then `export CUDA_VISIBLE_DEVICES=3`, then `"$IOPLACE_PYTHON" -m pytest`. `env.sh` already defaults `IOPLACE_MTKAHYPAR_THREADS=1`. Use `-m "not slow"` while iterating; run the full suite before declaring a task done. This is a shared host — check `nvidia-smi` and pick an idle device before GPU work.
 - **No new DREAMPlace patch.** `m2-extra-obj-terms.patch` already adds extra terms after the fence branch of `PlaceObj.obj_fn`, and `iteration-callback.patch` already supplies the per-iteration hook. Everything in this plan goes through `dp_hook.attach_terms(params, [...])` and `placer.iteration_callback`. Do not edit anything under `$DREAMPLACE_ROOT`.
-- **Coordinate contract: native post-read PlaceDB units.** Every emitted artefact (`regions.json`, `seed.npz`) is in the die box captured right after `placedb.read(params)` and **before** `placedb.initialize(params)`, because `PlaceDB.scale()` inside `initialize()` rescales `node_x`, `regions` and `flat_region_boxes` together (`PlaceDB.py:151-196`, called from `initialize` which sets `params.shift_factor = (xl, yl)` and `params.scale_factor = 1/site_width`). Conversion back from the scaled system is `x_native = x_scaled / scale_factor + shift_factor[0]`. **Inside** the GP (grouping term, anchor tables) everything is in the scaled system — the tables are built from the post-`initialize()` die.
-- **Artefact schema, verbatim from spec §1.** `regions.json` = `RegionSet` (die, lattice, per-region rect list) via `ioplace.regions.RegionSet.to_json`/`from_json`. `seed.npz` = `node_x`, `node_y` over `num_physical`, native units, `die`, `shift_factor`, `scale_factor`, `placedb_sha256`. `membership.npz` = `part` int32 per movable node, `{source, k, seed, epsilon}`. `producer.json` = the producer's own run record (schema defined in Task 1). No P-B plan exists at `docs/superpowers/plans/2026-09-19-v2-p-b-main-flow.md` and there is no `src/ioplace/artifacts.py` in the tree, so **this plan defines the `artifacts.py` writers/readers itself**, using exactly the field names above; P-B must reuse them.
+- **Coordinate contract: native post-read PlaceDB units.** Every emitted artefact (`regions.json`, `seed.npz`) is in the die box captured right after `placedb.read(params)` and **before** `placedb.initialize(params)`, because `PlaceDB.scale()` inside `initialize()` rescales `node_x`, `regions` and `flat_region_boxes` together (`PlaceDB.py:151-196`, called from `initialize` which sets `params.shift_factor = (xl, yl)` and `params.scale_factor = 1/site_width`). Conversion back from the scaled system is `x_native = x_scaled / scale_factor + shift_factor[0]`. **Inside** the GP (grouping term, anchor tables) everything is in the scaled system — the tables are built from the post-`initialize()` die. This is the same contract as P-B's: the main flow reads `seed.npz`/`regions.json` in native units and writes them into `placedb.node_x`/`node_y` after `read()` and before `initialize()` (P-B Tasks 2 and 4), which is where `PlaceDB.scale()` converts them; `fence_phase.build_fence_placedb` additionally rejects a `regions.json` whose die is not the native post-read die. Checked 2026-09-19: the two plans agree, no change was needed on either side.
+- **Artefact schema, verbatim from spec §1.** `regions.json` = `RegionSet` (die, lattice, per-region rect list) via `ioplace.regions.RegionSet.to_json`/`from_json`. `seed.npz` = `node_x`, `node_y` over `num_physical`, native units, `die`, `shift_factor`, `scale_factor`, `placedb_sha256`. `membership.npz` = `part` int32 per movable node, `{source, k, seed, epsilon}`. `producer.json` = the producer's own run record (field list `artifacts.PRODUCER_FIELDS`). **`src/ioplace/artifacts.py` is owned by P-B Task 1** (`docs/superpowers/plans/2026-09-19-v2-p-b-main-flow.md`), which lands first and implements every reader/writer with exactly these field names; this plan consumes them and defines none of its own. The canonical names are `placedb_identity_sha256`, `save_positions`/`load_positions` (with `kind="seed"`), `save_membership`/`load_membership` and `save_producer_json`/`load_producer_json` — see the rename table in Task 1.
 - **`rect_max = 8`** rectangles per region, hard (spec §2 and §10 risk 1 — `ops/soft_assign.py:19-31` builds `(N, r)` temporaries with `r` = rects per k-chunk, so the budget is a memory contract, not cosmetics).
 - **Lattice 512** for the emitted `RegionSet`. Extraction runs at `2048²` fine bins, majority-votes to `--extract-bins` ∈ {64, 32}, and 512 % 64 == 512 % 32 == 0, so every rect edge lands exactly on the lattice and `RegionSet.validate()` passes.
 - **Fixed producer knobs (spec §2, do not re-derive):** Algorithm 1 `m=16`, `q=0.90`, `α=0.25`, `K_dir=64`; area cap `A_max = EA_k` with centroid shrink by bisection to `1e-3` relative area; macro pseudo points at mean std-cell pitch, `≤64/macro`; hull rebuild period `T_hull = 50` with anchors frozen in between; `α_pull = α_push = 1`; SA `θ=0.05`, `C_max=2`, `ρ_target=0.8`, `β=(1.0, 0.3, 0.5, 0.2)`, min-max normalisation over the first 200 samples, `T_0` = mean `|ΔE|` of 200 probe moves, geometric cooling `0.92`, 50 moves/level, 150 levels, stop after 3 levels with no accept, moves = area-balancing + corner-filling windows of 2–9 bins (equal probability while any area violation exists, corner-filling only afterwards), reject any move that fragments a region.
@@ -27,11 +27,26 @@
 
 ## File Structure
 
+**Reconciliation note (2026-09-19).** P-B and P-C were written in parallel and
+both defined `src/ioplace/artifacts.py`. **P-B Task 1 is the single owner; this
+plan consumes it.** Renamed here: `placedb_fingerprint` →
+`placedb_identity_sha256`, `save_seed`/`load_seed` →
+`save_positions`/`load_positions` (`kind="seed"`, and `load_positions` returns a
+`Positions` dataclass, not a dict), positional `save_membership`/`load_membership`
+→ P-B's keyword-only pair returning a `Membership` dataclass, and
+`save_producer_json` moves to P-B Task 1 with a `PRODUCER_FIELDS` contract and a
+new `load_producer_json`. Task 1 below is now a verification step and
+`tests/test_artifacts.py` belongs to P-B. Two further seams: the
+`IOPLACE_ENABLE_GR_IN_LOOP` gate is entirely P-H's and P-B's business (nothing
+in this plan touches it), and **Task 11 is the single owner of the dead
+`/nashome/NVL4` benchmark-config repair** — P-B stays on GCD and creates nothing
+under `benchmarks/`. The coordinate contract in Task 10 rule 1 was checked
+against P-B's warm-start write and needed no change.
+
 **New files**
 
 | File | Responsibility |
 |---|---|
-| `src/ioplace/artifacts.py` | The producer↔main-flow file contract: `placedb_fingerprint`, `save_seed`/`load_seed`, `save_membership`/`load_membership`, `save_producer_json`. Nothing else in the repo owns these names; P-B imports them. |
 | `src/ioplace/producer/__init__.py` | Empty package marker. |
 | `src/ioplace/producer/hull.py` | Algorithm-1 candidate reduction, quickhull via `scipy.spatial.ConvexHull`, area cap by centroid bisection, macro pseudo points, and the rasterised `512²` anchor tables (Eq.1's two anchor fields). Pure geometry — no DREAMPlace, no netlist. |
 | `src/ioplace/producer/grouping_term.py` | `GroupingTerm` (Eq.1/Eq.2 quadratic springs to frozen, table-read anchors; a `torch.nn.Module` callable as a `dp_hook.attach_terms` term) and `GroupingWeight` (Eq.3 gradient-norm ratio with §4.3's ramp). |
@@ -44,247 +59,105 @@
 
 **New tests**
 
-`tests/test_artifacts.py`, `tests/test_producer_hull.py`, `tests/test_producer_anchor_tables.py`, `tests/test_producer_grouping_term.py`, `tests/test_producer_extract.py`, `tests/test_region_producer.py` (SA, per spec §9's named file), `tests/test_producer_rectify.py`, `tests/test_producer_membership.py`, `tests/test_run_region_producer.py`.
+`tests/test_producer_hull.py`, `tests/test_producer_anchor_tables.py`, `tests/test_producer_grouping_term.py`, `tests/test_producer_extract.py`, `tests/test_region_producer.py` (SA, per spec §9's named file), `tests/test_producer_rectify.py`, `tests/test_producer_membership.py`, `tests/test_run_region_producer.py`.
 
-**Files read but never modified:** `src/ioplace/regions.py`, `src/ioplace/region_grid.py`, `src/ioplace/region_graph.py`, `src/ioplace/dp_hook.py`, `src/ioplace/netlist.py`, `src/ioplace/paths.py`, `src/ioplace/profile.py`, `src/ioplace/norm.py` (P-H; `ema_update` and `grandplan_weight` are imported by Task 4), `src/ioplace/partition/mtkahypar_runner.py`, `src/ioplace/drivers/run_placement.py`.
+**Files read but never modified:** `src/ioplace/artifacts.py` (P-B Task 1 — the file contract; imported by Tasks 10 and 11, never edited), `src/ioplace/regions.py`, `src/ioplace/region_grid.py`, `src/ioplace/region_graph.py`, `src/ioplace/dp_hook.py`, `src/ioplace/netlist.py`, `src/ioplace/paths.py`, `src/ioplace/profile.py`, `src/ioplace/norm.py` (P-H; `ema_update` and `grandplan_weight` are imported by Task 4), `src/ioplace/partition/mtkahypar_runner.py`, `src/ioplace/drivers/run_placement.py`.
 
 **Boundary rule:** `hull.py`/`extract.py`/`sa.py`/`rectify.py` take arrays and return arrays. Only `run_region_producer.py` knows what a `PlaceDB` is. That is what makes every geometric step testable in milliseconds with a hand-built input.
 
 ---
 
-### Task 1: Artefact contract (`artifacts.py`)
+### Task 1: Verify the artefact contract (`artifacts.py`, owned by P-B)
+
+`src/ioplace/artifacts.py` is owned by **P-B Task 1**
+(`docs/superpowers/plans/2026-09-19-v2-p-b-main-flow.md`), which lands first and
+already implements every name this plan needs, under the spec §1 field names,
+alongside the `freeze.json`/`result.json` I/O only the main flow uses. An earlier
+draft of this plan defined a second, incompatible copy of those names; that
+duplication is now merged away. **This task creates no file.** It verifies the
+contract once, before eight tasks build on it.
+
+Merged names — use the right-hand column everywhere in Tasks 2–11:
+
+| Old P-C name | Canonical name (P-B Task 1) |
+|---|---|
+| `placedb_fingerprint(placedb)` | `placedb_identity_sha256(placedb)` — the digest also covers `node_size_x`/`node_size_y` and `pin2node_map`/`pin2net_map`, so it must be taken after `read()` and **before** `initialize()` (node sizes are multiplied by `scale_factor` inside it, `PlaceDB.py:160-161`). Task 10 already hashes inside its `read` phase. |
+| `save_seed(path, x, y, die, shift_factor, scale_factor, placedb_sha256)` | `save_positions(path, x, y, *, die, shift_factor, scale_factor, placedb_sha256, kind="seed")` — keyword-only, raises `ValueError` (not `AssertionError`) on a bad write |
+| `load_seed(path) -> dict` | `load_positions(path, *, expect_num_physical=None, expect_sha256=None) -> Positions` — a **dataclass**: `seed.node_x`, not `seed["node_x"]` |
+| `save_membership(path, part, source, k, seed, epsilon)` | `save_membership(path, part, *, source, k, seed=0, epsilon=0.0)` — keyword-only |
+| `load_membership(path) -> dict` | `load_membership(path, *, expect_num_movable=None, expect_k=None, require_nonempty=False) -> Membership` — a dataclass: `mem.part`, `mem.k`, `mem.source` |
+| `save_producer_json(path, payload)` | same name and same stamping behaviour, defined in P-B Task 1; it now validates `artifacts.PRODUCER_FIELDS` (the 48 keys Task 10's payload sets) and has a matching `load_producer_json(path) -> dict` |
+| `SEED_SCHEMA_VERSION` | `POSITIONS_SCHEMA_VERSION` |
+| `MEMBERSHIP_SCHEMA_VERSION`, `PRODUCER_SCHEMA_VERSION` | unchanged |
+
+`tests/test_artifacts.py` belongs to P-B; the two fingerprint tests this plan
+originally carried were moved into it.
 
 **Files:**
-- Create: `src/ioplace/artifacts.py`
-- Test: `tests/test_artifacts.py`
+- Create: nothing.
+- Read: `src/ioplace/artifacts.py`.
 
 **Interfaces:**
-- Consumes: nothing from earlier tasks.
-- Produces:
-  - `placedb_fingerprint(placedb) -> str` (hex SHA-256)
-  - `save_seed(path, node_x, node_y, die, shift_factor, scale_factor, placedb_sha256) -> None`
-  - `load_seed(path) -> dict` with keys `node_x`, `node_y`, `die`, `shift_factor`, `scale_factor`, `placedb_sha256`, `schema_version`
-  - `save_membership(path, part, source, k, seed, epsilon) -> None`
-  - `load_membership(path) -> dict` with keys `part`, `source`, `k`, `seed`, `epsilon`, `schema_version`
-  - `save_producer_json(path, payload: dict) -> None`
-  - Module constants `SEED_SCHEMA_VERSION = 1`, `MEMBERSHIP_SCHEMA_VERSION = 1`, `PRODUCER_SCHEMA_VERSION = 1`
+- Consumes: `src/ioplace/artifacts.py` from P-B Task 1.
+- Produces: nothing. Tasks 10 and 11 import
+  `artifacts.{placedb_identity_sha256, save_positions, load_positions,
+  save_membership, load_membership, save_producer_json, load_producer_json}`.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Check that P-B Task 1 has landed**
 
-Create `tests/test_artifacts.py`:
+```bash
+source src/scripts/env.sh && export CUDA_VISIBLE_DEVICES=3
+"$IOPLACE_PYTHON" - <<'PY'
+from ioplace.artifacts import (MEMBERSHIP_SCHEMA_VERSION,
+                               POSITIONS_SCHEMA_VERSION, PRODUCER_FIELDS,
+                               PRODUCER_SCHEMA_VERSION, Membership, Positions,
+                               load_membership, load_positions,
+                               load_producer_json, placedb_identity_sha256,
+                               save_membership, save_positions,
+                               save_producer_json)
 
-```python
-import json
-import numpy as np
-import pytest
-from types import SimpleNamespace
-from ioplace import artifacts
-
-
-def _fake_placedb(**over):
-    base = dict(
-        num_movable_nodes=3, num_physical_nodes=4, num_terminals=1,
-        num_terminal_NIs=0, net_names=np.array([b"n0", b"n1"]),
-        pin2node_map=np.array([0, 1, 2, 3], dtype=np.int32),
-        pin2net_map=np.array([0, 0, 1, 1], dtype=np.int32),
-        flat_net2pin_map=np.array([0, 1, 2, 3], dtype=np.int32),
-        flat_net2pin_start_map=np.array([0, 2, 4], dtype=np.int32))
-    base.update(over)
-    return SimpleNamespace(**base)
-
-
-def test_fingerprint_is_stable_and_connectivity_sensitive():
-    a = artifacts.placedb_fingerprint(_fake_placedb())
-    assert a == artifacts.placedb_fingerprint(_fake_placedb())
-    assert len(a) == 64
-    b = artifacts.placedb_fingerprint(
-        _fake_placedb(pin2node_map=np.array([0, 1, 3, 2], dtype=np.int32)))
-    assert a != b
-
-
-def test_fingerprint_ignores_coordinates():
-    """The fingerprint must survive PlaceDB.scale(): the main flow computes it
-    on its own PlaceDB, which may be at a different point in the read/initialize
-    lifecycle than the producer's was."""
-    db = _fake_placedb()
-    before = artifacts.placedb_fingerprint(db)
-    db.node_x = np.array([1.0, 2.0, 3.0, 4.0])
-    db.xl, db.yl, db.xh, db.yh = 0.0, 0.0, 10.0, 10.0
-    assert artifacts.placedb_fingerprint(db) == before
-
-
-def test_seed_roundtrip_preserves_every_spec_field(tmp_path):
-    p = str(tmp_path / "seed.npz")
-    x = np.array([1.5, 2.5, 3.5, 4.5])
-    y = np.array([9.5, 8.5, 7.5, 6.5])
-    artifacts.save_seed(p, x, y, die=(10.0, 20.0, 110.0, 220.0),
-                        shift_factor=(10.0, 20.0), scale_factor=0.5,
-                        placedb_sha256="ab" * 32)
-    got = artifacts.load_seed(p)
-    assert np.array_equal(got["node_x"], x) and np.array_equal(got["node_y"], y)
-    assert got["die"] == (10.0, 20.0, 110.0, 220.0)
-    assert got["shift_factor"] == (10.0, 20.0)
-    assert got["scale_factor"] == 0.5
-    assert got["placedb_sha256"] == "ab" * 32
-    assert got["schema_version"] == artifacts.SEED_SCHEMA_VERSION
-
-
-def test_seed_rejects_mismatched_lengths(tmp_path):
-    with pytest.raises(AssertionError):
-        artifacts.save_seed(str(tmp_path / "s.npz"), np.zeros(3), np.zeros(4),
-                            (0., 0., 1., 1.), (0., 0.), 1.0, "0" * 64)
-
-
-def test_membership_roundtrip_and_range_check(tmp_path):
-    p = str(tmp_path / "m.npz")
-    part = np.array([0, 3, 1, 3, 2], dtype=np.int32)
-    artifacts.save_membership(p, part, source="mtkahypar", k=4, seed=7,
-                              epsilon=0.03)
-    got = artifacts.load_membership(p)
-    assert np.array_equal(got["part"], part) and got["part"].dtype == np.int32
-    assert got["source"] == "mtkahypar" and got["k"] == 4
-    assert got["seed"] == 7 and got["epsilon"] == 0.03
-    assert got["schema_version"] == artifacts.MEMBERSHIP_SCHEMA_VERSION
-    with pytest.raises(AssertionError):
-        artifacts.save_membership(str(tmp_path / "bad.npz"),
-                                  np.array([0, 4], dtype=np.int32),
-                                  "mtkahypar", 4, 0, 0.03)
-
-
-def test_producer_json_stamps_schema_version(tmp_path):
-    p = str(tmp_path / "producer.json")
-    artifacts.save_producer_json(p, {"k": 16, "extract_bins": 64})
-    obj = json.load(open(p))
-    assert obj["k"] == 16 and obj["extract_bins"] == 64
-    assert obj["schema_version"] == artifacts.PRODUCER_SCHEMA_VERSION
+required = ("config", "out_dir", "placedb_sha256", "k", "membership_source",
+            "membership_seed", "epsilon", "hierarchy_depth", "extract_bins",
+            "fine_bins", "lattice", "rect_max", "t_hull", "probe_every",
+            "alpha_pull", "alpha_push", "sa_seed", "die_native", "die_scaled",
+            "shift_factor", "scale_factor", "num_movable", "num_physical",
+            "num_nodes", "num_nets", "target_density", "n_hull_rebuilds",
+            "wt_final", "lambda_group_final", "ratio_ema_final", "probes",
+            "gp_iterations_run", "final_overflow", "hpwl_gp", "hpwl_lg", "sa",
+            "rects_per_region", "rect_max_observed", "region_bins",
+            "region_area", "region_cell_area", "region_utilisation",
+            "area_balance", "runtime_s", "peak_mem_mb", "command", "hostname",
+            "env")
+missing = [name for name in required if name not in PRODUCER_FIELDS]
+extra = [name for name in PRODUCER_FIELDS if name not in required]
+assert not missing and not extra, (missing, extra)
+print("artifacts contract ok", POSITIONS_SCHEMA_VERSION,
+      MEMBERSHIP_SCHEMA_VERSION, PRODUCER_SCHEMA_VERSION, len(PRODUCER_FIELDS))
+PY
 ```
+Expected: `artifacts contract ok 1 1 1 48`.
 
-- [ ] **Step 2: Run test to verify it fails**
+If the import raises `ModuleNotFoundError` or `ImportError`, **stop and report**:
+P-B Task 1 has not landed yet. Do **not** create `src/ioplace/artifacts.py`
+here — a second definition of these names is exactly the conflict the
+2026-09-19 reconciliation removed. If the `PRODUCER_FIELDS` assertion fires, the
+two plans have drifted: reconcile the field list with Task 10's payload before
+continuing, and fix it in P-B's plan, not by shadowing the module.
+
+- [ ] **Step 2: Run P-B's artefact tests**
 
 ```bash
 source src/scripts/env.sh && export CUDA_VISIBLE_DEVICES=3
 "$IOPLACE_PYTHON" -m pytest tests/test_artifacts.py -v
 ```
-Expected: FAIL — `ModuleNotFoundError: No module named 'ioplace.artifacts'`.
+Expected: PASS — 11 passed.
 
-- [ ] **Step 3: Write the implementation**
+- [ ] **Step 3: No commit**
 
-Create `src/ioplace/artifacts.py`:
-
-```python
-"""File-level contracts between the v2 region producer (P-C) and main flow (P-B).
-
-Field names are the artefact table of
-docs/superpowers/specs/2026-09-19-v2-io-aware-redesign-design.md section 1,
-verbatim. All coordinates are NATIVE POST-READ PlaceDB units: the die box right
-after placedb.read(params), before placedb.initialize(params), because
-PlaceDB.scale() inside initialize() rescales node_x, regions and
-flat_region_boxes together (PlaceDB.py:151-196). Convert back from the scaled
-system with x_native = x_scaled / scale_factor + shift_factor[0].
-"""
-import hashlib
-import json
-
-import numpy as np
-
-SEED_SCHEMA_VERSION = 1
-MEMBERSHIP_SCHEMA_VERSION = 1
-PRODUCER_SCHEMA_VERSION = 1
-
-
-def placedb_fingerprint(placedb) -> str:
-    """SHA-256 over a PlaceDB's structural identity, so a reader can assert that
-    a seed/membership file belongs to its own netlist.
-
-    Deliberately excludes every coordinate and size: the producer hashes its
-    PlaceDB at one point of the read/initialize lifecycle and the main flow
-    hashes its own at another, and PlaceDB.scale() would otherwise make two
-    reads of the same DEF disagree. Counts plus connectivity are enough to catch
-    the failure this guards against (a seed written for a different design).
-    """
-    h = hashlib.sha256()
-    for scalar in (placedb.num_movable_nodes, placedb.num_physical_nodes,
-                   placedb.num_terminals, placedb.num_terminal_NIs,
-                   len(placedb.net_names)):
-        h.update(np.int64(scalar).tobytes())
-    for arr in (placedb.pin2node_map, placedb.pin2net_map,
-                placedb.flat_net2pin_map, placedb.flat_net2pin_start_map):
-        h.update(np.ascontiguousarray(arr, dtype=np.int64).tobytes())
-    return h.hexdigest()
-
-
-def save_seed(path, node_x, node_y, die, shift_factor, scale_factor,
-              placedb_sha256):
-    """seed.npz: node_x/node_y over num_physical, native units, die,
-    shift_factor, scale_factor, placedb_sha256."""
-    node_x = np.ascontiguousarray(node_x, dtype=np.float64)
-    node_y = np.ascontiguousarray(node_y, dtype=np.float64)
-    assert node_x.ndim == 1 and node_x.shape == node_y.shape, \
-        f"node_x {node_x.shape} and node_y {node_y.shape} must be equal 1-D"
-    np.savez_compressed(
-        path, node_x=node_x, node_y=node_y,
-        die=np.asarray(die, dtype=np.float64),
-        shift_factor=np.asarray(shift_factor, dtype=np.float64),
-        scale_factor=np.float64(scale_factor),
-        placedb_sha256=np.str_(placedb_sha256),
-        schema_version=np.int64(SEED_SCHEMA_VERSION))
-
-
-def load_seed(path):
-    z = np.load(path, allow_pickle=False)
-    return {"node_x": z["node_x"], "node_y": z["node_y"],
-            "die": tuple(float(v) for v in z["die"]),
-            "shift_factor": tuple(float(v) for v in z["shift_factor"]),
-            "scale_factor": float(z["scale_factor"]),
-            "placedb_sha256": str(z["placedb_sha256"]),
-            "schema_version": int(z["schema_version"])}
-
-
-def save_membership(path, part, source, k, seed, epsilon):
-    """membership.npz: part int32 per movable node, plus {source,k,seed,epsilon}."""
-    part = np.ascontiguousarray(part, dtype=np.int32)
-    assert part.ndim == 1 and part.size > 0, "part must be a non-empty 1-D array"
-    assert int(part.min()) >= 0 and int(part.max()) < int(k), \
-        f"part values must lie in [0,{k}), got [{part.min()},{part.max()}]"
-    np.savez_compressed(
-        path, part=part, source=np.str_(source), k=np.int64(k),
-        seed=np.int64(seed), epsilon=np.float64(epsilon),
-        schema_version=np.int64(MEMBERSHIP_SCHEMA_VERSION))
-
-
-def load_membership(path):
-    z = np.load(path, allow_pickle=False)
-    return {"part": z["part"], "source": str(z["source"]), "k": int(z["k"]),
-            "seed": int(z["seed"]), "epsilon": float(z["epsilon"]),
-            "schema_version": int(z["schema_version"])}
-
-
-def save_producer_json(path, payload):
-    """producer.json: the producer's own run record. Keys are set by
-    run_region_producer.py; this function only stamps the schema version and
-    writes deterministically ordered JSON."""
-    obj = dict(payload)
-    obj["schema_version"] = PRODUCER_SCHEMA_VERSION
-    with open(path, "w") as f:
-        json.dump(obj, f, indent=1, sort_keys=True)
-```
-
-- [ ] **Step 4: Run test to verify it passes**
-
-```bash
-source src/scripts/env.sh && export CUDA_VISIBLE_DEVICES=3
-"$IOPLACE_PYTHON" -m pytest tests/test_artifacts.py -v
-```
-Expected: PASS — 6 passed.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/ioplace/artifacts.py tests/test_artifacts.py
-git commit -m "feat(artifacts): seed/membership/producer.json file contract for v2
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
-```
+This task produces no diff. Record
+`git log -1 --format=%h -- src/ioplace/artifacts.py` and quote it in Task 10's
+commit message, so the contract revision the producer was built against is
+traceable.
 
 ---
 
@@ -2809,7 +2682,7 @@ Sequences everything: read → prior → flat GP with the grouping term attached
 
 Three integration rules that must be respected exactly:
 
-1. **The coordinate flip.** Everything inside the GP (hull tables, `ea_scaled`, the die passed to `anchor_tables`) is in the **scaled** post-`initialize()` system. Everything written out (`regions.json`, `seed.npz`) and everything from extraction onward (`extract`, SA `bin_area`/`ea`, `rects_to_regionset`) is in the **native** post-`read()` system: `x_native = x_scaled / scale_factor + shift_factor[0]`, `size_native = size_scaled / scale_factor`.
+1. **The coordinate flip.** Everything inside the GP (hull tables, `ea_scaled`, the die passed to `anchor_tables`) is in the **scaled** post-`initialize()` system. Everything written out (`regions.json`, `seed.npz`) and everything from extraction onward (`extract`, SA `bin_area`/`ea`, `rects_to_regionset`) is in the **native** post-`read()` system: `x_native = x_scaled / scale_factor + shift_factor[0]`, `size_native = size_scaled / scale_factor`. This is what P-B consumes: its `init_pos.apply_init(..., "seed")` writes these native values straight into `placedb.node_x`/`node_y` after `read()` and before `initialize()`, and `fence_phase.build_fence_placedb` rejects a `regions.json` whose die is not the native post-read die. The fingerprint is likewise taken in the `read` phase below, before `initialize()` rescales the node sizes it digests.
 2. **The obj_version discipline** (`dp_hook.py:36-59`, design v2 §6.4). A hull rebuild and a λ update are both discrete objective changes. Let the new tables and λ take effect first, *then* call `refresh_nesterov_secant(placer.optimizer)` and `mark_refreshed()` — the same order `run_placement_io.py:584-588` uses.
 3. **Centre init, no fence.** GrandPlan §4.2 initialises the flat placement at the chiplet centre, so `random_center_init_flag` is left at its configured value and no fence data is injected. `np.random.seed(params.random_seed)` immediately before `NonLinearPlace(...)`, because BasicPlace draws centre noise and filler positions from numpy's *global* RNG (`run_placement._place`'s comment).
 
@@ -2818,7 +2691,7 @@ Three integration rules that must be respected exactly:
 - Test: `tests/test_run_region_producer.py`
 
 **Interfaces:**
-- Consumes: `artifacts.{placedb_fingerprint,save_seed,save_membership,save_producer_json}` (Task 1); `hull.{reduce_candidates_torch,macro_pseudo_points,build_hull,anchor_tables}` (Tasks 2, 3, 9); `grouping_term.{GroupingTerm,GroupingWeight}` (Task 4); `extract.extract` (Task 5); `sa.{SaConfig,anneal}` (Task 6); `rectify.{enforce_rect_max,rects_to_regionset,region_rect_counts}` (Task 7); `membership.build_membership` (Task 8); `run_placement.{_load_dreamplace,extract_final_positions}`; `dp_hook.{attach_terms,assert_optimizer_lock,refresh_nesterov_secant}`; `profile.PhaseTimer`.
+- Consumes: `artifacts.{placedb_identity_sha256,save_positions,save_membership,save_producer_json}` (P-B Task 1, verified in Task 1; this task's tests also use `artifacts.{load_positions,load_membership,load_producer_json}`); `hull.{reduce_candidates_torch,macro_pseudo_points,build_hull,anchor_tables}` (Tasks 2, 3, 9); `grouping_term.{GroupingTerm,GroupingWeight}` (Task 4); `extract.extract` (Task 5); `sa.{SaConfig,anneal}` (Task 6); `rectify.{enforce_rect_max,rects_to_regionset,region_rect_counts}` (Task 7); `membership.build_membership` (Task 8); `run_placement.{_load_dreamplace,extract_final_positions}`; `dp_hook.{attach_terms,assert_optimizer_lock,refresh_nesterov_secant}`; `profile.PhaseTimer`.
 - Produces:
   - `LATTICE = 512`
   - `class VersionState` with `obj_version`, `refreshed_version`, `bump()`, `needs_refresh()`, `mark_refreshed()`
@@ -2867,17 +2740,19 @@ def test_producer_emits_all_four_artefacts_on_simple(tmp_path):
     for r in rs.regions:
         assert 1 <= len(np.asarray(r.rects)) <= 8
 
-    seed = artifacts.load_seed(os.path.join(out, "seed.npz"))
-    assert seed["node_x"].shape == seed["node_y"].shape
-    assert len(seed["node_x"]) == res["num_physical"]
-    assert seed["die"] == tuple(res["die_native"])
-    assert seed["placedb_sha256"] == res["placedb_sha256"]
+    seed = artifacts.load_positions(os.path.join(out, "seed.npz"),
+                                    expect_num_physical=res["num_physical"],
+                                    expect_sha256=res["placedb_sha256"])
+    assert seed.kind == "seed"
+    assert seed.node_x.shape == seed.node_y.shape
+    assert seed.die == tuple(res["die_native"])
 
-    mem = artifacts.load_membership(os.path.join(out, "membership.npz"))
-    assert mem["k"] == 2 and mem["source"] == "mtkahypar"
-    assert len(mem["part"]) == res["num_movable"]
+    mem = artifacts.load_membership(os.path.join(out, "membership.npz"),
+                                    expect_num_movable=res["num_movable"],
+                                    expect_k=2)
+    assert mem.source == "mtkahypar"
 
-    doc = json.load(open(os.path.join(out, "producer.json")))
+    doc = artifacts.load_producer_json(os.path.join(out, "producer.json"))
     assert doc["k"] == 2 and doc["extract_bins"] == 32 and doc["rect_max"] == 8
     assert doc["n_hull_rebuilds"] >= 1
     assert max(doc["rects_per_region"]) <= 8
@@ -2895,10 +2770,10 @@ def test_seed_is_in_native_units_and_inside_the_die(tmp_path):
     res = run_producer(CFG, out, k=2, extract_bins=32, t_hull=20, probe_every=20)
     xl, yl, xh, yh = res["die_native"]
     assert (xl, yl) != (0.0, 0.0), "simple.json's die does not start at the origin"
-    s = artifacts.load_seed(os.path.join(out, "seed.npz"))
-    assert s["shift_factor"] == (xl, yl)
-    assert (s["node_x"] >= xl - 1e-6).all() and (s["node_x"] <= xh + 1e-6).all()
-    assert (s["node_y"] >= yl - 1e-6).all() and (s["node_y"] <= yh + 1e-6).all()
+    s = artifacts.load_positions(os.path.join(out, "seed.npz"))
+    assert s.shift_factor == (xl, yl)
+    assert (s.node_x >= xl - 1e-6).all() and (s.node_x <= xh + 1e-6).all()
+    assert (s.node_y >= yl - 1e-6).all() and (s.node_y <= yh + 1e-6).all()
 
 
 @pytest.mark.slow
@@ -2924,8 +2799,8 @@ def test_producer_is_reproducible_with_the_same_seeds(tmp_path):
     for out in (a, b):
         run_producer(CFG, out, k=2, extract_bins=32, seed=0, sa_seed=0,
                      t_hull=20, probe_every=20, dp_seed=1000, deterministic=1)
-    pa = artifacts.load_membership(os.path.join(a, "membership.npz"))["part"]
-    pb = artifacts.load_membership(os.path.join(b, "membership.npz"))["part"]
+    pa = artifacts.load_membership(os.path.join(a, "membership.npz")).part
+    pb = artifacts.load_membership(os.path.join(b, "membership.npz")).part
     assert np.array_equal(pa, pb)
     ja = json.load(open(os.path.join(a, "regions.json")))
     jb = json.load(open(os.path.join(b, "regions.json")))
@@ -2966,8 +2841,8 @@ import time
 
 import numpy as np
 
-from ioplace.artifacts import (placedb_fingerprint, save_membership,
-                               save_producer_json, save_seed)
+from ioplace.artifacts import (placedb_identity_sha256, save_membership,
+                               save_positions, save_producer_json)
 from ioplace.dp_hook import (assert_optimizer_lock, attach_terms,
                              refresh_nesterov_secant)
 from ioplace.drivers.run_placement import (_load_dreamplace,
@@ -3025,7 +2900,10 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
         die_native = (float(placedb.xl), float(placedb.yl),
                       float(placedb.xh), float(placedb.yh))
         nl0 = netlist_from_placedb(placedb)
-        fingerprint = placedb_fingerprint(placedb)
+        # Before initialize(): the digest covers node sizes, which PlaceDB.scale()
+        # multiplies by scale_factor (PlaceDB.py:160-161). Hashing here is what
+        # makes the main flow's expect_sha256 check agree across processes.
+        fingerprint = placedb_identity_sha256(placedb)
         node_names = getattr(placedb, "node_names", None)
 
     import NonLinearPlace   # importable only after _load_dreamplace's setup
@@ -3177,10 +3055,11 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
 
     # ---- artefacts -------------------------------------------------------
     rs.to_json(os.path.join(out_dir, "regions.json"))
-    save_seed(os.path.join(out_dir, "seed.npz"), x_n, y_n, die_native, shift,
-              scale, fingerprint)
+    save_positions(os.path.join(out_dir, "seed.npz"), x_n, y_n, die=die_native,
+                   shift_factor=shift, scale_factor=scale,
+                   placedb_sha256=fingerprint, kind="seed")
     save_membership(os.path.join(out_dir, "membership.npz"), part,
-                    membership_source, k, seed, epsilon)
+                    source=membership_source, k=k, seed=seed, epsilon=epsilon)
 
     counts = rectify_mod.region_rect_counts(labels, k)
     bins_per_region = np.bincount(labels.ravel(), minlength=k)[:k]
@@ -3295,6 +3174,10 @@ Expected: no new failures relative to the pre-task baseline. Record the baseline
 git add src/ioplace/drivers/run_region_producer.py tests/test_run_region_producer.py
 git commit -m "feat(producer): run_region_producer driver emitting the four v2 artefacts
 
+Writes regions.json, seed.npz, membership.npz and producer.json through
+src/ioplace/artifacts.py (P-B Task 1, contract revision <sha from P-C Task 1
+Step 3>); this plan defines no artefact I/O of its own.
+
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
@@ -3305,6 +3188,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 Spec §2's runtime budget and §10 risk 6 are both empirical claims; this task measures them. `mempool_tile_wrap` is 127,453 components — small enough to run twice in a review cycle, large enough that `K=16` on `64²` bins really does give ~256 bins/region, which is exactly the ratio risk 6 says is unvalidated.
 
 The checked-in `benchmarks/ispd25/mempool_tile_wrap.json` still points at the retired `/nashome/NVL4/...` paths. A host-local copy with `gpu: 1` already exists at `results/route_gp_20260914/mempool_tile_wrap.json`; promote it into `benchmarks/` so the acceptance run has a stable, checked-in input.
+
+**This task is the single owner of that repair** (2026-09-19 reconciliation). P-B names the same dead config in its "Small test input" note but only to forbid its use — P-B runs on GCD and creates nothing under `benchmarks/`. Any later plan that needs a host-local ISPD-25 config adds it to `benchmarks/ispd25/h100/` alongside this one rather than re-deriving it.
 
 **Files:**
 - Create: `benchmarks/ispd25/h100/mempool_tile_wrap.json`
@@ -3369,8 +3254,7 @@ Expected: exit 0; four artefacts written.
 ```bash
 source src/scripts/env.sh && export CUDA_VISIBLE_DEVICES=3
 "$IOPLACE_PYTHON" - <<'PY'
-import json, os
-import numpy as np
+import os
 from ioplace import artifacts
 from ioplace.regions import RegionSet
 from ioplace.region_grid import RegionGrid
@@ -3379,20 +3263,22 @@ root = "results/p_c_producer_20260919"
 rows = []
 for name in ("tile_wrap_k16_b64", "tile_wrap_k16_b32"):
     d = os.path.join(root, name)
-    doc = json.load(open(os.path.join(d, "producer.json")))
+    doc = artifacts.load_producer_json(os.path.join(d, "producer.json"))
     rs = RegionSet.from_json(os.path.join(d, "regions.json"))
     rs.validate()
     RegionGrid(rs)                        # also asserts a full, gapless tiling
     assert rs.k == 16 and rs.lattice == 512
     assert doc["rect_max_observed"] <= 8, doc["rects_per_region"]
-    seed = artifacts.load_seed(os.path.join(d, "seed.npz"))
-    mem = artifacts.load_membership(os.path.join(d, "membership.npz"))
-    assert len(seed["node_x"]) == doc["num_physical"]
-    assert len(mem["part"]) == doc["num_movable"]
-    assert seed["placedb_sha256"] == doc["placedb_sha256"]
-    xl, yl, xh, yh = seed["die"]
-    assert seed["node_x"].min() >= xl - 1e-6 and seed["node_x"].max() <= xh + 1e-6
-    assert seed["node_y"].min() >= yl - 1e-6 and seed["node_y"].max() <= yh + 1e-6
+    seed = artifacts.load_positions(os.path.join(d, "seed.npz"),
+                                    expect_num_physical=doc["num_physical"],
+                                    expect_sha256=doc["placedb_sha256"])
+    mem = artifacts.load_membership(os.path.join(d, "membership.npz"),
+                                    expect_num_movable=doc["num_movable"],
+                                    expect_k=16)
+    assert mem.source == "mtkahypar"
+    xl, yl, xh, yh = seed.die
+    assert seed.node_x.min() >= xl - 1e-6 and seed.node_x.max() <= xh + 1e-6
+    assert seed.node_y.min() >= yl - 1e-6 and seed.node_y.max() <= yh + 1e-6
     r = doc["runtime_s"]
     rows.append((name, doc["extract_bins"], doc["n_hull_rebuilds"],
                  doc["rect_max_observed"], round(doc["area_balance"]["max_over_min"], 3),
@@ -3439,8 +3325,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 | Spec requirement (§2 unless noted) | Task |
 |---|---|
-| §1 artefact table verbatim (`regions.json`, `seed.npz`, `membership.npz`, `producer.json`) | 1 |
-| §1 coordinate contract, native post-read units | 1 (docstring), 10 (the flip), test in 10 |
+| §1 artefact table verbatim (`regions.json`, `seed.npz`, `membership.npz`, `producer.json`) | P-B Task 1 owns the I/O; verified here in 1, written in 10 |
+| §1 coordinate contract, native post-read units | P-B Task 1 (docstring), 10 (the flip), test in 10 |
 | Prior: `partition_netlist`, K=16, ε=0.03, or RTL hierarchy prefixes, run before the flat GP | 8, 10 |
 | No block→region matching | 8 (documented and not implemented) |
 | Grouping loss attached via `dp_hook.attach_terms`, Eq.1/Eq.2, `α_pull=α_push=1` | 4, 10 |
@@ -3469,7 +3355,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 3. **The discrete corner definition for `C_ij`** (Task 6) is ours; the paper defines corners only pictorially. The rule is pinned by three unit tests (straight → 0, L-turn → 1, one-bin notch → 4).
 4. **Corner-filling's "corner detected" test** is "the window carries ≥2 labels" (Task 6). A strict corner test is undefined for a 1×2 window, which digest §5 explicitly allows; `E_boundary` does the real corner accounting and rejects moves that make things worse.
 5. **Morphology uses the full `3×3` square structuring element**, not the 4-connected cross (Task 5, verified on this host: the cross strips every rectangle's corners during opening; the square does not).
-6. **λ for the grouping term lives in a local `GroupingWeight`**, but its ramp and EMA are P-H's `norm.grandplan_weight` / `norm.ema_update` (spec §4), so Eq.3's schedule has exactly one implementation. P-C therefore depends on `src/ioplace/norm.py` existing — it does on this branch (untracked at the time of writing, with those two helpers present but `TermNormalizer` not yet). Task 4 says to stop and report rather than reimplement if it is absent, and states the one-line migration to `TermNormalizer.register("group", ...)`.
+6. **λ for the grouping term lives in a local `GroupingWeight`**, but its ramp and EMA are P-H's `norm.grandplan_weight` / `norm.ema_update` (spec §4), so Eq.3's schedule has exactly one implementation. P-C therefore depends on `src/ioplace/norm.py` existing — it does on this branch, and as of 2026-09-19 it is committed, with `ema_update(prev, inst, ema=0.5)` and `grandplan_weight(iteration, it_activate, wt0, wt_step, ramp_period, wt_max)` matching P-H Task 1's Interfaces block character-for-character, but `TermNormalizer` not yet. Task 4 says to stop and report rather than reimplement if it is absent, and states the one-line migration to `TermNormalizer.register("group", ...)`.
 
 **Known gap, deliberate:** spec §2's runtime targets ("group ≤25 min, cluster ≤60 min") are not exercised here. Task 11 measures `mempool_tile_wrap` only; the group-scale numbers are produced by the joint P-B+P-C acceptance (§9 "Done": "the 2×2 on `mempool_group`"), which is P-B's plan. Task 11 Step 5 states the tile-wrap SA time against the "<60 s CPU" budget and the producer overhead against "flat GP+LG +<3%" so the extrapolation is at least anchored.
 
@@ -3488,7 +3374,7 @@ Cross-checked every name a later task uses against the task that defines it:
 - `sa.SaConfig(seed=)` and `sa.anneal(labels0, k, ea, bin_area, cfg)` returning `(labels, report)` with keys `t0`, `levels_run`, `e_raw_initial`, `e_raw_final`, `beta` — Task 6, used in Tasks 6's tests and 10.
 - `rectify.enforce_rect_max(labels, k, rect_max=)`, `rectify.rects_to_regionset(labels, k, die, lattice=)`, `rectify.region_rect_counts(labels, k)`, `rectify.mask_to_rects(mask)` — Task 7, used in Task 10 and Task 11's verifier.
 - `membership.build_membership(source, *, nl, node_names, num_movable, k, epsilon, seed, depth, threads)` — Task 8, called in Task 10 without `threads` (default 8, itself overridden by `IOPLACE_MTKAHYPAR_THREADS=1`).
-- `artifacts.save_seed(path, node_x, node_y, die, shift_factor, scale_factor, placedb_sha256)` and `artifacts.save_membership(path, part, source, k, seed, epsilon)` — Task 1, called positionally in Task 10 in exactly that order; `load_seed`/`load_membership` key names match Task 11's verifier.
+- `artifacts.save_positions(path, node_x, node_y, *, die, shift_factor, scale_factor, placedb_sha256, kind)`, `artifacts.save_membership(path, part, *, source, k, seed, epsilon)`, `artifacts.placedb_identity_sha256(placedb)` and `artifacts.save_producer_json(path, payload)` — all **P-B Task 1**, all called by keyword in Task 10; `load_positions`/`load_membership` return the `Positions`/`Membership` dataclasses Task 11's verifier reads by attribute, and `load_producer_json` validates the same `PRODUCER_FIELDS` that Task 10's payload fills (checked key-for-key by Task 1 Step 1).
 - Existing-code borrowings verified against source: `run_placement._load_dreamplace`, `run_placement.extract_final_positions`, `dp_hook.attach_terms` / `assert_optimizer_lock` / `refresh_nesterov_secant`, `profile.PhaseTimer` (`timer.phases[name]["t_s"]`, as `run_placement._phase_summary` reads it), `profile.env_metadata(repo_root, dp_root, input_paths=...)`, `ioplace.paths.REPO_ROOT`, `regions.RegionSet`/`RegionSpec`/`validate`/`to_json`/`from_json`, `region_grid.RegionGrid`, `partition.mtkahypar_runner.partition_netlist(nl, k, epsilon, seed, threads)`.
 - Host API assumptions verified by probe on 2026-09-19: `scipy.spatial.QhullError` importable (scipy 1.17.1); `ndimage.generate_binary_structure(2,2)` is the full `3×3` and opening a rectangle with it is a no-op while the cross is not; `torch.quantile` on a strided slice matches `np.quantile`; `params.shift_factor`/`params.scale_factor` are set by `PlaceDB.initialize` (`simple.json`: die `(459,459,555,555)` → `(0,0,96,96)`, shift `(459,459)`, scale `1.0`); `placedb.node_names` is an array of `np.bytes_`.
 
