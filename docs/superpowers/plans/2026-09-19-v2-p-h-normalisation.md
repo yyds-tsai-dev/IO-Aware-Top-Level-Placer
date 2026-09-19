@@ -19,7 +19,7 @@
 - Policy A `grandplan`: `λ_t = wt_t·‖∇WL‖_p/‖∇T_t‖_p`, `wt_t` starting at 0.05, stepped +0.05 every `ramp_period=100` iterations up to `wt_max=1.0`, gated on the activation overflow threshold.
 - Policy B `adaptive`: target force shares `f_t`; `λ_t ← λ_t·(f_t·G/(λ_t‖∇T_t‖))^0.5` with momentum `λ_t ← 0.75·λ_t^prev + 0.25·λ_t^new`.
 - Lipschitz cap survives in form: `lipschitz_cap(tau, gamma, c_lip, Cmax)` with `Cmax = 1 + Σ_t κ_t(curv_t−1)_+`, generalising `derive_cmax`. Declared curvatures: IO 1, FT `ecc_max`, capacity `max_s pen''`, pseudo-FT 1. λ's are clipped so their *sum* respects the cap; which term bound the cap is logged.
-- Exactly one `obj_version` bump per transaction, followed by a required `refresh_nesterov_secant` then `mark_refreshed()`.
+- Exactly one `obj_version` bump per transaction, followed by a required `refresh_nesterov_secant` then `mark_refreshed()`. This invariant holds per counter, not per callback: under the normalizer policies, `ScheduleState.obj_version` (τ/ρ) and `TermNormalizer.obj_version` (λ) each bump independently within one iteration; `VersionPair(state, normalizer)` is what makes summing them safe for `install_version_invariant` (Task 2).
 - The three legacy paths (`schedules.py:94-104,159-176`; `schedules.py:66-81,178-237`; `ops/routing_gp_controller.py:64-78`) end as thin adapters over the new module or are deleted; the routing one is kept only behind `IOPLACE_ENABLE_GR_IN_LOOP=1`.
 - The host is shared: check `nvidia-smi` and select a free device with `CUDA_VISIBLE_DEVICES` before any GPU work. At the time of writing GPU 3 was the only idle device.
 - Python floor stays `>=3.9` (`pyproject.toml:8`); do not use 3.10+ syntax (`X | Y` annotations, `match`).
@@ -54,6 +54,8 @@
 **Deliberately unchanged:** `src/ioplace/schedules.py` (τ/ρ schedules and the legacy `ScheduleState` stay; they become the thing the legacy adapter delegates to), `src/ioplace/ops/ft_callback.py` (`publish_atomic` *is* the legacy adapter body), `src/ioplace/dp_hook.py` (`install_version_invariant` is reused, not modified).
 
 **One deliberate refinement of the spec's interface:** section 4 lists `term.grad_l1(pos)` alongside `term.value(pos, ctx)`. This plan implements the protocol as `value(pos, ctx)` **only**, with `TermNormalizer.probe` owning the backward, the fixed/filler masking and the `norm_p` choice. Rationale: one gradient definition for all five terms, and the cached gradient tensors are what `cancellation_ratio` needs. `IoTerm.io_grad_l1` stays in place for the legacy path.
+
+**A second refinement:** the spec's `probe(iteration, pos, obj_and_grad)` becomes `probe(iteration, pos, wl_fn, ctx, probe_terms=None)` (Task 4) — `wl_fn`/`ctx` replace the single `obj_and_grad` callable so every term's `value(pos, ctx)` call shares one context dict, and `probe_terms` lets a caller measure a subset.
 
 ---
 
@@ -329,13 +331,13 @@ git commit -m "feat(norm): add pure gradient-norm normalisation maths" \
 **Interfaces:**
 - Consumes: `ema_update`, `grandplan_weight`, `grandplan_lambda`, `cmax_from_curvatures`, `clip_sum_to_cap`, `EPS` from Task 1; `schedules.activation_ramp(iteration, it_activate, n_ramp=20)` and `schedules.lipschitz_cap(tau, gamma, c_lip=1.0, cmax=1.0)`; `dp_hook.install_version_invariant(optimizer, state)`.
 - Produces:
-  - `TermConfig(name, curvature=1.0, kappa=1.0, target_share=0.0, activate_overflow=0.90, n_ramp=20)` — dataclass
+  - `TermConfig(name, curvature=1.0, target_share=0.0, activate_overflow=0.90, n_ramp=20)` — dataclass
   - `TermState(grad_norm=0.0, ratio_inst=None, ratio_ema=None, wt=0.0, lam=0.0, active=False, it_activate=None)` — dataclass
   - `NormTransaction(lambdas, cmax, cap, cap_binding, cancellation_ratio, obj_version, row, legacy_record=None, needs_refresh=True)` — dataclass
   - `VersionPair(*states)` with `.obj_version` / `.refreshed_version` properties
-  - `TermNormalizer(policy="grandplan", norm_p=1, ema=0.5, probe_every=50, wt0=0.05, wt_step=0.05, ramp_period=100, wt_max=1.0, momentum=0.75, c_lip=1.0, eps_rel=1e-3, length_scale=1.0, num_movable=None, num_nodes=None, track_cancellation=True, legacy_state=None, trace=None)` with:
-    - `register(name, term, curvature, kappa=1.0, target_share=0.0, activate_overflow=0.90, n_ramp=20) -> None`
-    - `update_grad_norms(iteration, grad_norms) -> None`
+  - `TermNormalizer(policy="grandplan", norm_p=1, ema=0.5, probe_every=50, wt0=0.05, wt_step=0.05, ramp_period=100, wt_max=1.0, momentum=0.75, c_lip=1.0, eps_rel=1e-3, num_movable=None, num_nodes=None, track_cancellation=True, legacy_state=None, trace=None)` with:
+    - `register(name, term, curvature, target_share=0.0, activate_overflow=0.90, n_ramp=20) -> None` (`kappa` is not a registration input — see below)
+    - `update_grad_norms(grad_norms) -> None`
     - `should_probe(iteration) -> bool`
     - `weights(iteration, overflow, tau, gamma) -> dict`
     - `transaction(iteration, overflow, tau, gamma, grad_norms=None, legacy_publish=None) -> NormTransaction`
@@ -373,42 +375,43 @@ def test_register_rejects_duplicates_and_seeds_state():
     n = _norm_a()
     assert n.lambdas == {"io": 0.0}
     assert n.states["io"] == TermState()
-    assert n.configs["io"] == TermConfig("io", 1.0, 1.0, 0.0, 0.90, 0)
+    assert n.configs["io"] == TermConfig("io", 1.0, 0.0, 0.90, 0)
     with pytest.raises(ValueError):
         n.register("io", object(), 1.0)
 
 
 def test_update_grad_norms_sets_instant_ratio_and_ema():
     n = _norm_a(ema=0.5)
-    n.update_grad_norms(0, {"wl": 1000.0, "io": 10.0})
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
     assert n.states["io"].ratio_inst == pytest.approx(100.0, rel=1e-12)
     assert n.states["io"].ratio_ema == pytest.approx(100.0, rel=1e-12)
-    n.update_grad_norms(50, {"wl": 1000.0, "io": 20.0})
+    n.update_grad_norms({"wl": 1000.0, "io": 20.0})
     assert n.states["io"].ratio_inst == pytest.approx(50.0, rel=1e-12)
     assert n.states["io"].ratio_ema == pytest.approx(75.0, rel=1e-12)
 
 
 def test_zero_grad_norm_does_not_divide_by_zero():
     n = _norm_a()
-    n.update_grad_norms(0, {"wl": 1000.0, "io": 0.0})
-    assert n.states["io"].ratio_ema == n.states["io"].ratio_ema   # not NaN
+    n.update_grad_norms({"wl": 1000.0, "io": 0.0})
+    assert math.isfinite(n.states["io"].ratio_ema)
+    assert n.states["io"].ratio_ema == pytest.approx(1e33)   # wl_norm / EPS
 
 
 def test_term_stays_inactive_above_the_activation_overflow():
     n = _norm_a()
-    n.update_grad_norms(0, {"wl": 1000.0, "io": 10.0})
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
     assert n.weights(0, overflow=0.95, tau=1000.0, gamma=1e-12) == {"io": 0.0}
     assert n.states["io"].active is False
 
 
 def test_policy_a_lambda_is_stepped_weight_times_ema_ratio():
     n = _norm_a()
-    n.update_grad_norms(0, {"wl": 1000.0, "io": 10.0})
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
     txn = n.transaction(0, 0.85, tau=1000.0, gamma=1e-12)
     assert n.states["io"].it_activate == 0
     assert txn.lambdas["io"] == pytest.approx(0.05 * 100.0, rel=1e-12)
     n.mark_refreshed()
-    n.update_grad_norms(100, {"wl": 1000.0, "io": 20.0})       # ratio_ema -> 75
+    n.update_grad_norms({"wl": 1000.0, "io": 20.0})       # ratio_ema -> 75
     txn = n.transaction(100, 0.60, tau=1000.0, gamma=1e-12)
     assert txn.lambdas["io"] == pytest.approx(0.10 * 75.0, rel=1e-12)
 
@@ -416,7 +419,7 @@ def test_policy_a_lambda_is_stepped_weight_times_ema_ratio():
 def test_activation_ramp_is_shared_by_the_policy():
     n = TermNormalizer(policy="grandplan")
     n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=20)
-    n.update_grad_norms(0, {"wl": 1000.0, "io": 10.0})
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
     txn = n.transaction(0, 0.85, tau=1000.0, gamma=1e-12)
     assert txn.lambdas["io"] == 0.0                            # ramp(0, 0, 20) == 0
     n.mark_refreshed()
@@ -426,10 +429,12 @@ def test_activation_ramp_is_shared_by_the_policy():
 
 def test_cap_uses_per_term_curvature_and_clips_the_sum():
     n = TermNormalizer(policy="grandplan", wt0=1.0, wt_max=1.0)
-    n.register("io", object(), 1.0, kappa=1.0, activate_overflow=0.90, n_ramp=0)
-    n.register("ft", object(), 6.0, kappa=0.5, activate_overflow=0.90, n_ramp=0)
-    n.update_grad_norms(0, {"wl": 1000.0, "io": 5.0, "ft": 10.0})   # ratios 200, 100
+    n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.register("ft", object(), 6.0, activate_overflow=0.90, n_ramp=0)
+    n.update_grad_norms({"wl": 1000.0, "io": 5.0, "ft": 10.0})   # ratios 200, 100
     txn = n.transaction(0, 0.85, tau=100.0, gamma=10.0)
+    # pre-clip lambdas: io = wt*ratio_io = 1.0*200 = 200, ft = 1.0*100 = 100
+    # derived kappa: kappa_io = 1.0 (by definition), kappa_ft = 100/200 = 0.5
     assert txn.cmax == pytest.approx(3.5, rel=1e-12)                # 1 + 0.5*(6-1)
     assert txn.cap == pytest.approx(lipschitz_cap(100.0, 10.0, 1.0, 3.5), rel=1e-12)
     assert sum(txn.lambdas.values()) == pytest.approx(txn.cap, rel=1e-12)
@@ -439,7 +444,7 @@ def test_cap_uses_per_term_curvature_and_clips_the_sum():
 
 def test_cap_does_not_bind_when_gamma_is_tiny():
     n = _norm_a()
-    n.update_grad_norms(0, {"wl": 1000.0, "io": 10.0})
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
     txn = n.transaction(0, 0.85, tau=1000.0, gamma=0.0)
     assert txn.cap == float("inf")
     assert txn.cap_binding is None
@@ -448,7 +453,7 @@ def test_cap_does_not_bind_when_gamma_is_tiny():
 
 def test_transaction_bumps_obj_version_exactly_once_and_demands_refresh():
     n = _norm_a()
-    n.update_grad_norms(0, {"wl": 1000.0, "io": 10.0})
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
     assert n.obj_version == 0 and n.needs_refresh() is False
     txn = n.transaction(0, 0.85, tau=1000.0, gamma=1e-12)
     assert txn.obj_version == 1 and n.obj_version == 1
@@ -470,7 +475,7 @@ def test_transaction_accepts_grad_norms_inline():
 
 def test_weights_is_a_pure_preview_that_does_not_bump_the_version():
     n = _norm_a()
-    n.update_grad_norms(0, {"wl": 1000.0, "io": 10.0})
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
     preview = n.weights(0, 0.85, tau=1000.0, gamma=1e-12)
     assert preview == {"io": pytest.approx(5.0, rel=1e-12)}
     assert n.obj_version == 0
@@ -487,7 +492,7 @@ def test_should_probe_follows_probe_every():
 
 def test_row_carries_every_logged_field():
     n = _norm_a()
-    n.update_grad_norms(0, {"wl": 1000.0, "io": 10.0})
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
     row = n.transaction(0, 0.85, tau=1000.0, gamma=1e-12).row
     assert row["iteration"] == 0 and row["overflow"] == pytest.approx(0.85)
     assert row["policy"] == "grandplan" and row["norm_p"] == 1
@@ -509,7 +514,7 @@ def test_version_pair_is_equal_only_when_both_members_are_refreshed():
     a, b = _norm_a(), _norm_a()
     pair = VersionPair(a, b)
     assert pair.obj_version == pair.refreshed_version
-    a.update_grad_norms(0, {"wl": 1000.0, "io": 10.0})
+    a.update_grad_norms({"wl": 1000.0, "io": 10.0})
     a.transaction(0, 0.85, tau=1000.0, gamma=1e-12)
     assert pair.obj_version != pair.refreshed_version
     a.mark_refreshed()
@@ -546,7 +551,7 @@ def test_install_version_invariant_guards_the_normalizer():
     opt.step()
     n = _norm_a()
     uninstall = install_version_invariant(opt, n)
-    n.update_grad_norms(0, {"wl": 1000.0, "io": 10.0})
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
     n.transaction(0, 0.85, tau=1000.0, gamma=1e-12)
     with pytest.raises(AssertionError):
         opt.step()
@@ -563,16 +568,24 @@ Expected: collection error — `ImportError: cannot import name 'TermNormalizer'
 - [ ] **Step 3: Write the implementation**
 
 Append to `src/ioplace/norm.py` (and add the two imports at the top of the file,
-below the docstring: `from dataclasses import dataclass, field` and
+below the docstring: `from dataclasses import dataclass` and
 `from ioplace.schedules import activation_ramp, lipschitz_cap`):
 
 ```python
+def _json_cap(cap):
+    """`inf` is not valid JSON; normalise it to `None` for logging. Shared by
+    `TermNormalizer._row` and the driver's non-legacy trajectory entry (Task 7
+    Step 3d)."""
+    return None if cap == float("inf") else cap
+
+
 @dataclass
 class TermConfig:
-    """Static registration data for one extra objective term."""
+    """Static registration data for one extra objective term. `kappa` is not
+    stored here: it is derived every transaction from the live lambdas (see
+    `register`'s docstring)."""
     name: str
     curvature: float = 1.0
-    kappa: float = 1.0
     target_share: float = 0.0
     activate_overflow: float = 0.90
     n_ramp: int = 20
@@ -639,7 +652,7 @@ class TermNormalizer:
 
     def __init__(self, policy="grandplan", norm_p=1, ema=0.5, probe_every=50,
                  wt0=0.05, wt_step=0.05, ramp_period=100, wt_max=1.0,
-                 momentum=0.75, c_lip=1.0, eps_rel=1e-3, length_scale=1.0,
+                 momentum=0.75, c_lip=1.0, eps_rel=1e-3,
                  num_movable=None, num_nodes=None, track_cancellation=True,
                  legacy_state=None, trace=None):
         if policy not in self.POLICIES:
@@ -658,7 +671,6 @@ class TermNormalizer:
         self.ramp_period, self.wt_max = int(ramp_period), float(wt_max)
         self.momentum = float(momentum)
         self.c_lip, self.eps_rel = float(c_lip), float(eps_rel)
-        self.length_scale = float(length_scale)
         self.num_movable, self.num_nodes = num_movable, num_nodes
         self.track_cancellation = bool(track_cancellation)
         self.trace = trace
@@ -670,6 +682,7 @@ class TermNormalizer:
         self._refreshed_version = 0
         self._pending_row = None
         self._grad_cache = {}
+        self._probed_this_callback = False
 
     # -- version discipline -------------------------------------------------
     @property
@@ -700,16 +713,18 @@ class TermNormalizer:
                 self.trace.write(row)
 
     # -- registration and measurement --------------------------------------
-    def register(self, name, term, curvature, kappa=1.0, target_share=0.0,
+    def register(self, name, term, curvature, target_share=0.0,
                  activate_overflow=0.90, n_ramp=20):
         """Register one term. `term` exposes `value(pos, ctx) -> Tensor`;
         `probe()` owns the backward, the masking and the norm order.
 
         Declared curvatures (design sec 4): IO 1, FT `ecc_max`, capacity
-        `max_s pen''`, pseudo-FT 1."""
+        `max_s pen''`, pseudo-FT 1. `kappa_t` is derived each transaction as
+        `lambda_t / lambda_io` (pre-clip), generalising
+        `derive_cmax(kappa_ft, ecc_max)` -- it is not a registration input."""
         if name in self.configs:
             raise ValueError("term %r already registered" % (name,))
-        self.configs[name] = TermConfig(name, float(curvature), float(kappa),
+        self.configs[name] = TermConfig(name, float(curvature),
                                         float(target_share), float(activate_overflow),
                                         int(n_ramp))
         self.terms[name] = term
@@ -719,7 +734,7 @@ class TermNormalizer:
     def should_probe(self, iteration):
         return iteration % self.probe_every == 0
 
-    def update_grad_norms(self, iteration, grad_norms):
+    def update_grad_norms(self, grad_norms):
         """Absorb one probe's measurements. `grad_norms` maps `"wl"` and each
         registered term name to its `||.||_p` gradient norm; unmentioned terms
         keep their previous measurement (this is how `probe_terms` subsetting
@@ -769,9 +784,16 @@ class TermNormalizer:
                                                 weights[name], total_force,
                                                 self.wl_norm, self.momentum,
                                                 self.eps_rel)
+        # kappa is derived, not declared: kappa_io = 1.0 by definition, and
+        # kappa_t = lambda_t / lambda_io (both pre-clip) for every other term,
+        # generalising derive_cmax(kappa_ft, ecc_max)'s live ratio reading.
+        # kappa_t = 0.0 when lambda_io is 0.0 (no IO signal to scale against).
+        lam_io_preclip = lambdas.get("io", 0.0)
         cmax = cmax_from_curvatures(
-            [(self.configs[n].kappa, self.configs[n].curvature)
-             for n in self.configs if self.states[n].active])
+            [(1.0 if name == "io" else
+              (lambdas[name] / lam_io_preclip if lam_io_preclip != 0.0 else 0.0),
+              self.configs[name].curvature)
+             for name in self.configs if self.states[name].active])
         cap = lipschitz_cap(tau, gamma, self.c_lip, cmax)
         lambdas, binding = clip_sum_to_cap(lambdas, cap)
         return lambdas, weights, cmax, cap, binding
@@ -788,8 +810,12 @@ class TermNormalizer:
 
     def _cancellation_ratio(self, lambdas):
         """`||sum_t lam_t grad T_t||_p / sum_t lam_t ||grad T_t||_p`, the N-term
-        generalisation of `ScheduleState.cancellation_ratio`. `None` when the
-        probe kept no gradient tensors (`track_cancellation=False`)."""
+        generalisation of `ScheduleState.cancellation_ratio`. `None` when this
+        callback did not call `probe()` (the cache would otherwise mix stale
+        gradients from an earlier probe with this transaction's coefficients)
+        or when the probe kept no gradient tensors (`track_cancellation=False`)."""
+        if not self._probed_this_callback:
+            return None
         merged, denom = None, 0.0
         for name, grad in self._grad_cache.items():
             lam = lambdas.get(name, 0.0)
@@ -815,7 +841,7 @@ class TermNormalizer:
             "norm_p": self.norm_p,
             "grad_l1_wl": self.wl_norm,
             "cmax": cmax,
-            "cap": None if cap == float("inf") else cap,
+            "cap": _json_cap(cap),
             "cap_binding": binding,
             "cancellation_ratio": cancellation,
             "obj_version": self.obj_version,
@@ -841,7 +867,7 @@ class TermNormalizer:
                 "previous transaction was not refreshed: call "
                 "refresh_nesterov_secant(optimizer) then mark_refreshed()")
         if grad_norms is not None:
-            self.update_grad_norms(iteration, grad_norms)
+            self.update_grad_norms(grad_norms)
         if self._legacy is not None:
             return self._legacy_transaction(iteration, overflow, tau, gamma,
                                             legacy_publish)
@@ -851,6 +877,7 @@ class TermNormalizer:
             state.lam, state.wt = lambdas[name], weights[name]
         self.lambdas = dict(lambdas)
         cancellation = self._cancellation_ratio(lambdas)
+        self._probed_this_callback = False
         self._obj_version += 1
         row = self._row(iteration, overflow, tau, gamma, cmax, cap, binding,
                         cancellation)
@@ -880,7 +907,7 @@ cleanly before Task 6 fills it in — put it directly above `oneshot_lambda`:
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `source src/scripts/env.sh && "$IOPLACE_PYTHON" -m pytest tests/test_norm.py -v`
-Expected: 31 passed (15 from Task 1 + 16 new).
+Expected: 32 passed (15 from Task 1 + 17 new).
 
 - [ ] **Step 5: Commit**
 
@@ -932,7 +959,7 @@ def test_policy_b_applies_sqrt_update_with_momentum_on_the_second_probe():
 
 def test_policy_b_converges_to_the_requested_force_share():
     n = _norm_b(share=0.2)
-    for iteration in range(0, 50 * 60, 50):
+    for iteration in range(0, 50 * 150, 50):
         n.transaction(iteration, 0.85, tau=1000.0, gamma=0.0,
                       grad_norms={"wl": 1000.0, "io": 10.0})
         n.mark_refreshed()
@@ -962,15 +989,19 @@ def test_policy_b_zero_target_share_leaves_the_term_off():
 
 def test_policy_b_obeys_the_same_cap_as_policy_a():
     n = TermNormalizer(policy="adaptive")
-    n.register("io", object(), 1.0, kappa=1.0, target_share=0.9,
+    n.register("io", object(), 1.0, target_share=0.9,
                activate_overflow=0.90, n_ramp=0)
-    n.register("ft", object(), 6.0, kappa=0.5, target_share=0.9,
+    n.register("ft", object(), 6.0, target_share=0.9,
                activate_overflow=0.90, n_ramp=0)
-    txn = n.transaction(0, 0.85, tau=100.0, gamma=10.0,
+    txn = n.transaction(0, 0.85, tau=100.0, gamma=20.0,
                         grad_norms={"wl": 1000.0, "io": 5.0, "ft": 10.0})
+    # pre-clip lambdas (bootstrap): io = 0.9*1000/5 = 180, ft = 0.9*1000/10 = 90
+    # derived kappa: kappa_io = 1.0, kappa_ft = 90/180 = 0.5
     assert txn.cmax == pytest.approx(3.5, rel=1e-12)
+    assert txn.cap == pytest.approx(100.0 * 100.0 / (20.0 * 3.5), rel=1e-12)  # 142.857...
     assert sum(txn.lambdas.values()) == pytest.approx(txn.cap, rel=1e-12)
-    assert txn.cap_binding == "io"
+    assert txn.cap_binding == "io"                                  # 180 > 90
+    assert txn.lambdas["io"] / txn.lambdas["ft"] == pytest.approx(2.0, rel=1e-12)
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -978,33 +1009,15 @@ def test_policy_b_obeys_the_same_cap_as_policy_a():
 Run: `source src/scripts/env.sh && "$IOPLACE_PYTHON" -m pytest tests/test_norm.py -k policy_b -v`
 Expected: several FAIL. The `_compute` branch written in Task 2 already implements the formula, so the likely failure is in `test_policy_b_converges_to_the_requested_force_share` and `test_policy_b_ramp_scales_the_target_share_not_the_coefficient` if `total_force` was computed after committing, or if the ramp was applied to the coefficient. If every test passes on the first run, that is a valid outcome — record it and move to Step 4.
 
-- [ ] **Step 3: Confirm or fix the implementation**
+- [ ] **Step 3: Confirm the implementation**
 
-The required `_compute` body for the adaptive branch (already written in Task 2;
-verify it reads exactly this, and fix it if not):
-
-```python
-            else:
-                weights[name] = ramp * config.target_share
-                lambdas[name] = adaptive_lambda(state.lam, state.grad_norm,
-                                                weights[name], total_force,
-                                                self.wl_norm, self.momentum,
-                                                self.eps_rel)
-```
-
-and `total_force` must be computed once, before the loop, from the *pre-update*
-coefficients:
-
-```python
-        total_force = self.wl_norm + sum(
-            self.states[n].lam * self.states[n].grad_norm
-            for n in self.configs if self.states[n].active)
-```
+Task 2's `_compute` already contains this branch; make no edit unless a
+Task 3 test fails.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `source src/scripts/env.sh && "$IOPLACE_PYTHON" -m pytest tests/test_norm.py -v`
-Expected: 37 passed.
+Expected: 38 passed.
 
 - [ ] **Step 5: Commit**
 
@@ -1112,6 +1125,12 @@ def test_cancellation_ratio_is_one_for_aligned_terms():
     n.probe(0, pos, wl_fn, ctx)
     txn = n.transaction(0, 0.85, tau=1000.0, gamma=0.0)
     assert txn.cancellation_ratio == pytest.approx(1.0, rel=1e-12)
+    n.mark_refreshed()
+    # No probe() this callback -- the cache from iteration 0 must not be
+    # reused against iteration 50's coefficients.
+    txn2 = n.transaction(50, 0.80, tau=1000.0, gamma=0.0,
+                         grad_norms={"wl": 1000.0, "a": 8.0, "b": 4.0})
+    assert txn2.cancellation_ratio is None
 
 
 def test_track_cancellation_off_keeps_no_tensors():
@@ -1143,10 +1162,19 @@ def test_norm_term_adapters_expose_the_production_terms():
     ft = FtTerm(io, distance)
     ft.set_home([0])
     pos = _pos(nl)
-    ctx = {"iteration": 0, "overflow": 0.5, "tau": 8.0, "gamma": 1.0}
-    assert float(IoNormTerm(io).value(pos, ctx)) == pytest.approx(
+    ctx_a = {"iteration": 0, "overflow": 0.5, "tau": 8.0, "gamma": 1.0}
+    ctx_b = {"iteration": 0, "overflow": 0.5, "tau": 4.0, "gamma": 1.0}
+    # value(pos, ctx) reads ctx["tau"]: two different taus must not agree.
+    assert float(IoNormTerm(io).value(pos, ctx_a)) != pytest.approx(
+        float(IoNormTerm(io).value(pos, ctx_b)))
+    assert float(FtNormTerm(ft).value(pos, ctx_a)) != pytest.approx(
+        float(FtNormTerm(ft).value(pos, ctx_b)))
+    # value(pos, ctx) is unweighted (lambda_io=1): io(pos, tau, 2.0) is 2x it.
+    assert float(IoNormTerm(io).value(pos, ctx_a)) == pytest.approx(
         float(io(pos, 8.0, 1.0)), rel=1e-12)
-    assert float(FtNormTerm(ft).value(pos, ctx)) == pytest.approx(
+    assert float(io(pos, 8.0, 2.0)) == pytest.approx(
+        2.0 * float(IoNormTerm(io).value(pos, ctx_a)), rel=1e-12)
+    assert float(FtNormTerm(ft).value(pos, ctx_a)) == pytest.approx(
         float(ft.ft_only(pos, 8.0)), rel=1e-12)
 ```
 
@@ -1172,8 +1200,9 @@ Add to `TermNormalizer` in `src/ioplace/norm.py`, directly above `_norm`:
 
         Returns the `||.||_p` norms and, with `track_cancellation` set, caches
         the gradient tensors so `transaction()` can report
-        `cancellation_ratio`. The cache holds one tensor per probed term for
-        the duration of a single callback."""
+        `cancellation_ratio`. The cache (and the fact that this callback
+        probed) live only until the next `transaction()`, which clears the
+        flag once it has used them for `cancellation_ratio`."""
         names = list(self.configs) if probe_terms is None else list(probe_terms)
         self._grad_cache = {}
         norms = {"wl": self._norm(self._grad(wl_fn, pos, "wl"))}
@@ -1183,7 +1212,8 @@ Add to `TermNormalizer` in `src/ioplace/norm.py`, directly above `_norm`:
             norms[name] = self._norm(grad)
             if self.track_cancellation:
                 self._grad_cache[name] = grad
-        self.update_grad_norms(iteration, norms)
+        self.update_grad_norms(norms)
+        self._probed_this_callback = True
         return norms
 
     def _grad(self, fn, pos, label):
@@ -1241,7 +1271,7 @@ class FtNormTerm(object):
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `source src/scripts/env.sh && "$IOPLACE_PYTHON" -m pytest tests/test_norm.py -v`
-Expected: 46 passed.
+Expected: 47 passed.
 
 - [ ] **Step 5: Commit**
 
@@ -1382,12 +1412,14 @@ Expected: collection error — `ModuleNotFoundError: No module named 'ioplace.no
 Create `src/ioplace/norm_trace.py`:
 
 ```python
-"""`norm_trace.jsonl`: one row per normalisation probe (design sec 4).
+"""`norm_trace.jsonl`: one row per coefficient transaction (>= one per probe;
+design sec 4).
 
-Append-only, flushed after every row, so a run killed mid-GP keeps everything
-it logged. Non-finite values are serialised as `NaN`/`Infinity`; `json.loads`
-accepts them, strict JSON parsers do not -- this is a diagnostic log, and
-failing a multi-hour placement over one NaN would be worse than logging it.
+One file per run, rewritten on open; flushed after every row, so a run killed
+mid-GP keeps everything it logged. Non-finite values are serialised as
+`NaN`/`Infinity`; `json.loads` accepts them, strict JSON parsers do not -- this
+is a diagnostic log, and failing a multi-hour placement over one NaN would be
+worse than logging it.
 """
 import json
 import os
@@ -1398,7 +1430,9 @@ ROW_FIELDS = ("iteration", "overflow", "tau", "gamma", "policy", "norm_p",
 
 #: `grad_l1` holds the `||.||_p` norm with `p` = the row's `norm_p`; the name is
 #: kept for continuity with the retired `grad_l1_io`/`grad_l1_ft` trajectory
-#: fields. `wt` is policy A's stepped weight or policy B's ramped target share.
+#: fields. `wt` is policy A's stepped weight, policy B's ramped target share,
+#: or (policy "legacy") `rho * activation_ramp(iteration, it_activate, n_ramp)`
+#: -- the retired path's own ramped weight, for the same slot.
 TERM_FIELDS = ("grad_l1", "ratio_inst", "ratio_ema", "wt", "target_share",
                "lam", "share", "active")
 
@@ -1488,9 +1522,11 @@ from ioplace.ops.ft_callback import publish_atomic
 from ioplace.ops.ft_term import FtTerm
 from ioplace.schedules import ScheduleState
 
-# Recorded on 2026-09-19 from the retired path at HEAD: ScheduleState(rho_max=0.4,
-# n_ramp=20, f_ft_max=0.25, c_lip=1.0) driven with L_R=1000, gamma=100 through
-# update_continuous + apply_ft_transaction + mark_refreshed.
+# Recorded on 2026-09-19 from the retired path at HEAD (commit 13246d8):
+# ScheduleState(rho_max=0.4, n_ramp=20, f_ft_max=0.25, c_lip=1.0) driven with
+# L_R=1000, gamma=100 through update_continuous + apply_ft_transaction +
+# mark_refreshed. Deterministic, no RNG -- regenerate by running the loop in
+# test_retired_path_golden_lambda_trajectory and printing `got`.
 # (iteration, overflow, g_wl, g_io, g_ft, merged)
 EVENTS = [(0, 0.95, 1000.0, 8.0, 3.0, 9.0),
           (50, 0.80, 1000.0, 10.0, 4.0, 12.0),
@@ -1567,8 +1603,7 @@ def test_legacy_policy_reproduces_the_retired_lambda_exactly():
 
     io_term2, ft_term2, pos2, ecc_max2 = _toy()
     adapted_state = ScheduleState(rho_max=0.4, n_ramp=20, f_ft_max=0.25, c_lip=1e6)
-    normalizer = TermNormalizer(policy="legacy", legacy_state=adapted_state,
-                                length_scale=100.0)
+    normalizer = TermNormalizer(policy="legacy", legacy_state=adapted_state)
     normalizer.register("io", object(), 1.0)
     normalizer.register("ft", object(), ecc_max2)
     adapted = _drive(adapted_state, normalizer, io_term2, ft_term2, pos2, ecc_max2)
@@ -1580,8 +1615,7 @@ def test_legacy_policy_reproduces_the_retired_lambda_exactly():
 def test_legacy_policy_delegates_the_version_counters():
     io_term, ft_term, pos, ecc_max = _toy()
     state = ScheduleState(rho_max=0.4, n_ramp=20, f_ft_max=0.25, c_lip=1e6)
-    normalizer = TermNormalizer(policy="legacy", legacy_state=state,
-                                length_scale=100.0)
+    normalizer = TermNormalizer(policy="legacy", legacy_state=state)
     normalizer.register("io", object(), 1.0)
     normalizer.register("ft", object(), ecc_max)
     state.update_continuous(0, 0.5, 100.0, 1.0)
@@ -1611,7 +1645,7 @@ def test_legacy_policy_fills_the_trace_row(tmp_path):
     path = tmp_path / "legacy.norm_trace.jsonl"
     with NormTraceWriter(str(path)) as writer:
         normalizer = TermNormalizer(policy="legacy", legacy_state=state,
-                                    length_scale=100.0, trace=writer)
+                                    trace=writer)
         normalizer.register("io", object(), 1.0)
         normalizer.register("ft", object(), ecc_max)
         state.update_continuous(100, 0.10, 100.0, 1.0)
@@ -1658,7 +1692,8 @@ Replace the `_legacy_transaction` stub in `src/ioplace/norm.py` with:
             io.ratio_inst = record["ratio_inst"]
             io.ratio_ema = record["ratio_ema"]
             io.lam = state.lambda_io
-            io.wt = state.rho
+            io.wt = state.rho * activation_ramp(iteration, state.it_activate,
+                                                state.n_ramp)
             io.active = state.active
             io.it_activate = state.it_activate
         ft = self.states.get("ft")
@@ -1687,7 +1722,7 @@ Replace the `_legacy_transaction` stub in `src/ioplace/norm.py` with:
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `source src/scripts/env.sh && "$IOPLACE_PYTHON" -m pytest tests/test_norm_legacy_adapter.py tests/test_schedules.py tests/test_ft_callback.py -v`
-Expected: all pass (5 new + 34 existing schedules tests + 3 ft_callback tests).
+Expected: all pass (5 new + 32 existing schedules tests + 3 ft_callback tests).
 
 - [ ] **Step 5: Commit**
 
@@ -1702,7 +1737,7 @@ git commit -m "feat(norm): add legacy policy adapter with golden lambda regressi
 ### Task 7: Driver wiring, CLI flags and documentation
 
 **Files:**
-- Modify: `src/ioplace/drivers/run_placement_io.py` (signature `:122-139`, validation `:140-154`, normalizer construction after `:279`, `term_fn` `:281-288`, callback `:458-461`, refresh `:584-590`, invariant `:592-594`, `lambda_io_final` `:612`, result dict `:683-734`, `RESULT_FIELDS` `:21-42`)
+- Modify: `src/ioplace/drivers/run_placement_io.py` (signature `:122-139`, validation `:140-154`, normalizer construction after `:279`, `term_fn` `:281-288`, callback `:458-461`, refresh `:584-588`, refreshed_version stamp `:589-590`, invariant `:592-594`, `lambda_io_final` `:612`, result dict `:683-734`, `RESULT_FIELDS` `:21-42`)
 - Modify: `src/ioplace/drivers/run_placement.py:448-537`
 - Modify: `docs/dev-env.md`
 - Test: `tests/test_norm_driver.py`
@@ -1908,7 +1943,8 @@ In `run_io`, immediately after the `observer_mode = (...)` assignment (`:279`),
 insert:
 
 ```python
-        from ioplace.norm import TermNormalizer, VersionPair, parse_target_shares
+        from ioplace.norm import (TermNormalizer, VersionPair, _json_cap,
+                                 parse_target_shares)
         from ioplace.norm_trace import NormTraceWriter
         from ioplace.ops.norm_terms import FtNormTerm, IoNormTerm
         shares = parse_target_shares(norm_target_share)
@@ -1922,14 +1958,14 @@ insert:
         normalizer = TermNormalizer(
             policy=norm_policy, norm_p=norm_p, ema=state.ema,
             probe_every=norm_probe_every, ramp_period=norm_ramp_period,
-            wt_max=norm_wt_max, c_lip=state.c_lip, length_scale=L_R,
+            wt_max=norm_wt_max, c_lip=state.c_lip,
             num_movable=io_term.num_movable, num_nodes=io_term.num_nodes,
             # One cached gradient tensor per term is ~8 B/node/term; above 5M
             # nodes the cancellation diagnostic is not worth the residency.
             track_cancellation=(placedb.num_nodes <= 5_000_000),
             legacy_state=state if norm_policy == "legacy" else None,
             trace=trace_writer)
-        normalizer.register("io", IoNormTerm(io_term), 1.0, kappa=1.0,
+        normalizer.register("io", IoNormTerm(io_term), 1.0,
                             target_share=shares.get("io", 0.3),
                             activate_overflow=of_on, n_ramp=state.n_ramp)
         if ft_term is not None:
@@ -1938,7 +1974,7 @@ insert:
             # tau_rel_from_overflow to overflow 0.57 -> 0.25, and 0.30 is the
             # same threshold the capacity term uses (design sec 5).
             normalizer.register("ft", FtNormTerm(ft_term), float(distance.max()),
-                                kappa=1.0, target_share=shares.get("ft", f_ft_max),
+                                target_share=shares.get("ft", f_ft_max),
                                 activate_overflow=0.30, n_ramp=state.n_ramp)
 ```
 
@@ -1959,6 +1995,9 @@ Replace `term_fn` (`:281-288`) with:
                     raise RuntimeError(
                         "FtTerm expresses the FT coefficient as lambda_io*kappa, so "
                         "a nonzero lambda_ft with lambda_io == 0 cannot be applied")
+                # Non-legacy: this path has no bit-exact guarantee to preserve
+                # (unlike legacy above), so recovering kappa by division here,
+                # accepting last-ulp rounding against the traced lambda_ft, is fine.
                 kappa = lam_ft / lam_io if lam_io > 0.0 else 0.0
             if not state.active or (lam_io == 0.0 and state.lambda_margin == 0.0):
                 return pos.new_zeros(())
@@ -2002,7 +2041,7 @@ Replace the `from ioplace.ops.ft_callback import publish_atomic` /
                                      obj_version=txn.obj_version)
                     entry.update(lambda_ft=txn.lambdas.get("ft", 0.),
                                  norm_cmax=txn.cmax,
-                                 norm_cap=None if txn.cap == float("inf") else txn.cap,
+                                 norm_cap=_json_cap(txn.cap),
                                  cap_binding=txn.cap_binding,
                                  cancellation_ratio=txn.cancellation_ratio)
 ```
@@ -2021,10 +2060,30 @@ Replace the refresh block (`:584-588`) with:
                 cb_state["num_refreshes"] += 1
 ```
 
+Replace the pre-existing `refreshed_version` stamp (`:589-590`,
+`trajectory[-1]["refreshed_version"] = state.refreshed_version`) with:
+
+```python
+            if callback_order == "atomic" and trajectory and trajectory[-1]["iteration"] == iteration:
+                trajectory[-1]["refreshed_version"] = (
+                    state.refreshed_version if norm_policy == "legacy"
+                    else normalizer.refreshed_version)
+```
+
+This keeps the trajectory row's `obj_version`/`refreshed_version` pair on the
+same counter: legacy already writes `obj_version=txn.obj_version` from
+`state` via `txn.legacy_record`/`state` delegation, and non-legacy writes
+`obj_version=txn.obj_version` from the normalizer (Step 3d) -- so its
+`refreshed_version` must come from the same source, not from `state`.
+
 Replace the invariant install (`:592-594`) with:
 
 ```python
             if check_invariant and not cb_state["installed_invariant"]:
+                # Under policy="legacy" the normalizer's obj_version/
+                # refreshed_version delegate to `state`, so this VersionPair
+                # sums the same counter twice; equality still holds iff both
+                # are refreshed, so the invariant stays sound.
                 cleanup.callback(install_version_invariant(
                     placer.optimizer, VersionPair(state, normalizer)))
                 cb_state["installed_invariant"] = True
@@ -2101,6 +2160,12 @@ and extend the `run_io(...)` call in `main()` with:
 `main()` starts with `args = build_parser().parse_args()`; everything else in
 the dispatch is unchanged.
 
+**Default note:** `--norm-policy` defaults to `legacy` here so P-H ships
+without changing production behaviour. The default flips to `grandplan` only
+when P-B's `run_main_flow.py` lands (see
+`docs/superpowers/plans/2026-09-19-v2-p-b-main-flow.md`) -- that switch is
+P-B's responsibility, not this task's.
+
 - [ ] **Step 3g: Document the flags**
 
 In `docs/dev-env.md`, immediately after the paragraph ending "Report missing
@@ -2122,16 +2187,17 @@ through `ioplace.norm.TermNormalizer` (v2 design section 4):
 | `--norm-target-share` | unset | Policy `adaptive`: `io=0.3,ft=0.1` |
 | `--norm-trace` | unset | Trace path; defaults to `<out>.norm_trace.jsonl` for non-legacy policies |
 
-Non-legacy policies require `--callback-order atomic`. Each probe appends one
-row to `norm_trace.jsonl` with the per-term gradient norm, instantaneous and
-EMA ratio, weight, coefficient, realised force share, `cap_binding`,
-`cancellation_ratio` and the objective/refresh versions.
+Non-legacy policies require `--callback-order atomic`. `norm_trace.jsonl` gets
+one row per coefficient transaction (>= one per probe, since a transaction may
+reuse the previous probe's measurements), with the per-term gradient norm,
+instantaneous and EMA ratio, weight, coefficient, realised force share,
+`cap_binding`, `cancellation_ratio` and the objective/refresh versions.
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `source src/scripts/env.sh && "$IOPLACE_PYTHON" -m pytest tests/test_norm_driver.py -m "not slow" -v`
-Expected: 8 passed.
+Expected: 9 passed.
 
 Then, with a free GPU (`nvidia-smi`, then `export CUDA_VISIBLE_DEVICES=<idle>`):
 Run: `source src/scripts/env.sh && "$IOPLACE_PYTHON" -m pytest tests/test_norm_driver.py tests/test_driver_io.py -v`
@@ -2153,6 +2219,7 @@ git commit -m "feat(driver): route IO/FT coefficients through TermNormalizer" \
 **Files:**
 - Modify: `src/ioplace/ops/routing_gp_controller.py:1-8` (imports), `:17-35` (`__init__` gate), `:64-78` (`_calibrate`)
 - Modify: `src/scripts/run_route_gp.py:1` (module docstring)
+- Modify: `tests/test_routing_gp_driver.py:41` (subprocess `env=` for the now-gated construction)
 - Test: `tests/test_routing_gp_retirement.py`
 
 **Interfaces:**
@@ -2280,6 +2347,23 @@ unmaintained. The supported protocol is one GRT call after placement.
 """
 ```
 
+- [ ] **Step 3b: Keep the driver integration test exercising the gated path**
+
+`tests/test_routing_gp_driver.py`'s `test_real_gp_route_gradient_and_two_later_router_observations`
+launches `src/scripts/run_route_gp.py` as a subprocess, which now constructs
+`RoutingGPController` and would raise unless the escape hatch is set. Pass it
+through explicitly on that test's `subprocess.run` call:
+
+```python
+        run = subprocess.run(command, capture_output=True, text=True,
+                             env={**os.environ, "IOPLACE_ENABLE_GR_IN_LOOP": "1"})
+```
+
+Note for a later plan: P-B's Task 8
+(`docs/superpowers/plans/2026-09-19-v2-p-b-main-flow.md`) relocates this gate
+into `src/ioplace/gr_in_loop.py` as the single source of truth; the env var
+name stays the same, only its enforcement point moves.
+
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `source src/scripts/env.sh && "$IOPLACE_PYTHON" -m pytest tests/test_routing_gp_retirement.py -v`
@@ -2287,13 +2371,16 @@ Expected: 5 passed.
 
 Then confirm nothing else constructs the controller:
 Run: `source src/scripts/env.sh && grep -rn "RoutingGPController" src/ tests/ && "$IOPLACE_PYTHON" -m pytest -m "not slow" -q`
-Expected: only `src/ioplace/ops/routing_gp_controller.py`, `src/scripts/run_route_gp.py` and `tests/test_routing_gp_retirement.py` match; the suite passes.
+Expected: `src/ioplace/ops/routing_gp_controller.py`, `src/scripts/run_route_gp.py`,
+`tests/test_routing_gp_retirement.py` and `tests/test_routing_gp_driver.py:46`
+(a pre-existing source-hash string literal naming the module path, not a
+construction) match; the suite passes.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/ioplace/ops/routing_gp_controller.py src/scripts/run_route_gp.py \
-        tests/test_routing_gp_retirement.py
+        tests/test_routing_gp_retirement.py tests/test_routing_gp_driver.py
 git commit -m "refactor(routing): reduce the one-shot route lambda to a norm adapter" \
            -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -2311,6 +2398,16 @@ git commit -m "refactor(routing): reduce the one-shot route lambda to a norm ada
 - Produces: the design's "done" evidence for P-H. Nothing imports this test.
 
 **Why `--norm-wt-max 0.4`:** policy A's `wt` and the legacy path's `ρ_max` occupy the same slot in `λ = weight · ratio_ema`. Running policy A at `wt_max=1.0` against `--rho-max .40` would compare a deliberately different ramp, not the normalisation machinery, and would sit at 2.5× by construction. Matching them isolates what this subproject actually changed.
+
+**Interpretation caveat:** matching `wt_max` to `rho_max` does not make the two
+paths' `ratio_ema` denominators equal. Legacy's `ratio_ema` denominator is the
+*merged* `‖∇IO + κ_FT·∇FT‖` (schedules.py's cancellation-aware measurement),
+while policy A's `ratio_ema` denominator is the *isolated* `‖∇IO‖` that
+`probe()` measures per term (C-1's derived-`kappa` `Cmax` also differs from
+legacy's stored `Cmax` in general). A 2x miss in this acceptance test may
+therefore stem from either the normalisation change itself or from this
+pre-existing difference in what the two paths measure — do not attribute a
+failure to one cause without checking both traces.
 
 - [ ] **Step 1: Write the failing test**
 
