@@ -4,6 +4,8 @@ import pytest
 from ioplace.norm import (EPS, adaptive_lambda, clip_sum_to_cap, cmax_from_curvatures,
                           ema_update, grandplan_lambda, grandplan_weight,
                           parse_target_shares)
+from ioplace.norm import NormTransaction, TermConfig, TermNormalizer, TermState, VersionPair
+from ioplace.schedules import activation_ramp, lipschitz_cap
 
 
 def test_ema_update_seeds_then_damps():
@@ -105,3 +107,204 @@ def test_parse_target_shares():
     assert parse_target_shares(None) == {}
     with pytest.raises(ValueError):
         parse_target_shares("io")
+
+
+def _norm_a(**kwargs):
+    """Policy-A normalizer with one IO term, cap effectively disabled."""
+    n = TermNormalizer(policy="grandplan", **kwargs)
+    n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=0)
+    return n
+
+
+def test_normalizer_rejects_unknown_policy_and_norm_order():
+    with pytest.raises(ValueError):
+        TermNormalizer(policy="bogus")
+    with pytest.raises(ValueError):
+        TermNormalizer(norm_p=3)
+    with pytest.raises(ValueError):
+        TermNormalizer(policy="legacy")          # legacy needs a ScheduleState
+
+
+def test_register_rejects_duplicates_and_seeds_state():
+    n = _norm_a()
+    assert n.lambdas == {"io": 0.0}
+    assert n.states["io"] == TermState()
+    assert n.configs["io"] == TermConfig("io", 1.0, 0.0, 0.90, 0)
+    with pytest.raises(ValueError):
+        n.register("io", object(), 1.0)
+
+
+def test_update_grad_norms_sets_instant_ratio_and_ema():
+    n = _norm_a(ema=0.5)
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
+    assert n.states["io"].ratio_inst == pytest.approx(100.0, rel=1e-12)
+    assert n.states["io"].ratio_ema == pytest.approx(100.0, rel=1e-12)
+    n.update_grad_norms({"wl": 1000.0, "io": 20.0})
+    assert n.states["io"].ratio_inst == pytest.approx(50.0, rel=1e-12)
+    assert n.states["io"].ratio_ema == pytest.approx(75.0, rel=1e-12)
+
+
+def test_zero_grad_norm_does_not_divide_by_zero():
+    n = _norm_a()
+    n.update_grad_norms({"wl": 1000.0, "io": 0.0})
+    assert math.isfinite(n.states["io"].ratio_ema)
+    assert n.states["io"].ratio_ema == pytest.approx(1e33)   # wl_norm / EPS
+
+
+def test_term_stays_inactive_above_the_activation_overflow():
+    n = _norm_a()
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
+    assert n.weights(0, overflow=0.95, tau=1000.0, gamma=1e-12) == {"io": 0.0}
+    assert n.states["io"].active is False
+
+
+def test_policy_a_lambda_is_stepped_weight_times_ema_ratio():
+    n = _norm_a()
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
+    txn = n.transaction(0, 0.85, tau=1000.0, gamma=1e-12)
+    assert n.states["io"].it_activate == 0
+    assert txn.lambdas["io"] == pytest.approx(0.05 * 100.0, rel=1e-12)
+    n.mark_refreshed()
+    n.update_grad_norms({"wl": 1000.0, "io": 20.0})       # ratio_ema -> 75
+    txn = n.transaction(100, 0.60, tau=1000.0, gamma=1e-12)
+    assert txn.lambdas["io"] == pytest.approx(0.10 * 75.0, rel=1e-12)
+
+
+def test_activation_ramp_is_shared_by_the_policy():
+    n = TermNormalizer(policy="grandplan")
+    n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=20)
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
+    txn = n.transaction(0, 0.85, tau=1000.0, gamma=1e-12)
+    assert txn.lambdas["io"] == 0.0                            # ramp(0, 0, 20) == 0
+    n.mark_refreshed()
+    txn = n.transaction(10, 0.85, tau=1000.0, gamma=1e-12)
+    assert txn.lambdas["io"] == pytest.approx(0.05 * 0.5 * 100.0, rel=1e-12)
+
+
+def test_cap_uses_per_term_curvature_and_clips_the_sum():
+    n = TermNormalizer(policy="grandplan", wt0=1.0, wt_max=1.0)
+    n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.register("ft", object(), 6.0, activate_overflow=0.90, n_ramp=0)
+    n.update_grad_norms({"wl": 1000.0, "io": 5.0, "ft": 10.0})   # ratios 200, 100
+    txn = n.transaction(0, 0.85, tau=100.0, gamma=10.0)
+    # pre-clip lambdas: io = wt*ratio_io = 1.0*200 = 200, ft = 1.0*100 = 100
+    # derived kappa: kappa_io = 1.0 (by definition), kappa_ft = 100/200 = 0.5
+    assert txn.cmax == pytest.approx(3.5, rel=1e-12)                # 1 + 0.5*(6-1)
+    assert txn.cap == pytest.approx(lipschitz_cap(100.0, 10.0, 1.0, 3.5), rel=1e-12)
+    assert sum(txn.lambdas.values()) == pytest.approx(txn.cap, rel=1e-12)
+    assert txn.cap_binding == "io"                                  # 200 > 100
+    assert txn.lambdas["io"] / txn.lambdas["ft"] == pytest.approx(2.0, rel=1e-12)
+
+
+def test_cap_does_not_bind_when_gamma_is_tiny():
+    n = _norm_a()
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
+    txn = n.transaction(0, 0.85, tau=1000.0, gamma=0.0)
+    assert txn.cap == float("inf")
+    assert txn.cap_binding is None
+    assert txn.row["cap"] is None                                   # inf is not JSON
+
+
+def test_transaction_bumps_obj_version_exactly_once_and_demands_refresh():
+    n = _norm_a()
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
+    assert n.obj_version == 0 and n.needs_refresh() is False
+    txn = n.transaction(0, 0.85, tau=1000.0, gamma=1e-12)
+    assert txn.obj_version == 1 and n.obj_version == 1
+    assert txn.needs_refresh is True and n.needs_refresh() is True
+    with pytest.raises(RuntimeError):
+        n.transaction(50, 0.80, tau=1000.0, gamma=1e-12)
+    n.mark_refreshed()
+    assert n.needs_refresh() is False
+    n.transaction(50, 0.80, tau=1000.0, gamma=1e-12)
+    assert n.obj_version == 2
+
+
+def test_transaction_accepts_grad_norms_inline():
+    n = _norm_a()
+    txn = n.transaction(0, 0.85, tau=1000.0, gamma=1e-12,
+                        grad_norms={"wl": 1000.0, "io": 10.0})
+    assert txn.lambdas["io"] == pytest.approx(5.0, rel=1e-12)
+
+
+def test_weights_is_a_pure_preview_that_does_not_bump_the_version():
+    n = _norm_a()
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
+    preview = n.weights(0, 0.85, tau=1000.0, gamma=1e-12)
+    assert preview == {"io": pytest.approx(5.0, rel=1e-12)}
+    assert n.obj_version == 0
+    assert n.lambdas == {"io": 0.0}                                  # not committed
+    assert n.transaction(0, 0.85, tau=1000.0, gamma=1e-12).lambdas == preview
+    assert n.lambdas == preview                                      # now committed
+
+
+def test_should_probe_follows_probe_every():
+    n = _norm_a(probe_every=50)
+    assert n.should_probe(0) and n.should_probe(100)
+    assert not n.should_probe(51)
+
+
+def test_row_carries_every_logged_field():
+    n = _norm_a()
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
+    row = n.transaction(0, 0.85, tau=1000.0, gamma=1e-12).row
+    assert row["iteration"] == 0 and row["overflow"] == pytest.approx(0.85)
+    assert row["policy"] == "grandplan" and row["norm_p"] == 1
+    assert row["grad_l1_wl"] == pytest.approx(1000.0)
+    assert row["obj_version"] == 1 and row["refreshed_version"] == 0
+    io = row["terms"]["io"]
+    assert io["grad_l1"] == pytest.approx(10.0)
+    assert io["ratio_inst"] == pytest.approx(100.0)
+    assert io["ratio_ema"] == pytest.approx(100.0)
+    assert io["wt"] == pytest.approx(0.05)
+    assert io["lam"] == pytest.approx(5.0)
+    # realised share lam*||grad T|| / (||grad WL|| + sum lam*||grad T||)
+    assert io["share"] == pytest.approx(50.0 / 1050.0, rel=1e-12)
+    assert io["active"] is True
+    assert row["cancellation_ratio"] is None                         # no probe cache
+
+
+def test_version_pair_is_equal_only_when_both_members_are_refreshed():
+    a, b = _norm_a(), _norm_a()
+    pair = VersionPair(a, b)
+    assert pair.obj_version == pair.refreshed_version
+    a.update_grad_norms({"wl": 1000.0, "io": 10.0})
+    a.transaction(0, 0.85, tau=1000.0, gamma=1e-12)
+    assert pair.obj_version != pair.refreshed_version
+    a.mark_refreshed()
+    assert pair.obj_version == pair.refreshed_version
+
+
+def test_oneshot_lambda_reproduces_the_retired_route_expression():
+    assert TermNormalizer.oneshot_lambda(0.1, 1000.0, 4.0) == 0.1 * 1000.0 / 4.0
+    assert TermNormalizer.oneshot_lambda(0.1, 1000.0, 0.0) == 0.0
+
+
+def test_install_version_invariant_guards_the_normalizer():
+    torch = pytest.importorskip("torch")
+    from ioplace.dreamplace_env import setup_dreamplace
+    setup_dreamplace()
+    from NesterovAcceleratedGradientOptimizer import NesterovAcceleratedGradientOptimizer as NAG
+    from ioplace.dp_hook import install_version_invariant
+
+    def obj_and_grad_fn(p):
+        if p.grad is not None:
+            p.grad.zero_()
+        o = 0.5 * (p * p).sum()
+        o.backward()
+        return o.detach(), p.grad
+
+    p = torch.nn.Parameter(torch.tensor([2.0, -3.0]))
+    opt = NAG([p], lr=0.01, obj_and_grad_fn=obj_and_grad_fn,
+              constraint_fn=lambda t: None, use_bb=False)
+    obj_and_grad_fn(p)
+    opt.step()
+    n = _norm_a()
+    uninstall = install_version_invariant(opt, n)
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
+    n.transaction(0, 0.85, tau=1000.0, gamma=1e-12)
+    with pytest.raises(AssertionError):
+        opt.step()
+    n.mark_refreshed()
+    opt.step()
+    uninstall()

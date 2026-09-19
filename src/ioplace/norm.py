@@ -10,6 +10,10 @@ Everything above `TermNormalizer` is a total function of floats: no torch, no
 DREAMPlace, no CUDA, so the policy maths is testable on any host.
 """
 
+from dataclasses import dataclass
+
+from ioplace.schedules import activation_ramp, lipschitz_cap
+
 EPS = 1e-30
 
 
@@ -102,3 +106,330 @@ def parse_target_shares(spec):
             raise ValueError("target share must be name=value, got %r" % (item,))
         shares[name.strip()] = float(value)
     return shares
+
+
+def _json_cap(cap):
+    """`inf` is not valid JSON; normalise it to `None` for logging. Shared by
+    `TermNormalizer._row` and the driver's non-legacy trajectory entry (Task 7
+    Step 3d)."""
+    return None if cap == float("inf") else cap
+
+
+@dataclass
+class TermConfig:
+    """Static registration data for one extra objective term. `kappa` is not
+    stored here: it is derived every transaction from the live lambdas (see
+    `register`'s docstring)."""
+    name: str
+    curvature: float = 1.0
+    target_share: float = 0.0
+    activate_overflow: float = 0.90
+    n_ramp: int = 20
+
+
+@dataclass
+class TermState:
+    """Live per-term state. `wt` holds policy A's stepped weight or policy B's
+    ramped target share, whichever the active policy produced."""
+    grad_norm: float = 0.0
+    ratio_inst: float = None
+    ratio_ema: float = None
+    wt: float = 0.0
+    lam: float = 0.0
+    active: bool = False
+    it_activate: int = None
+
+
+@dataclass
+class NormTransaction:
+    """Result of one atomic coefficient update."""
+    lambdas: dict
+    cmax: float
+    cap: float
+    cap_binding: str
+    cancellation_ratio: float
+    obj_version: int
+    row: dict
+    legacy_record: dict = None
+    needs_refresh: bool = True
+
+
+class VersionPair:
+    """Expose several version-carrying states as one, so a single
+    `dp_hook.install_version_invariant` covers all of them. Stacking two
+    invariant wrappers would not work: `refresh_nesterov_secant` unwraps only
+    one `__wrapped__` level and the inner wrapper would assert against the
+    refresh itself. Summation is sound because `refreshed_version <=
+    obj_version` holds for every member, so the sums are equal iff every member
+    is refreshed."""
+
+    def __init__(self, *states):
+        self.states = states
+
+    @property
+    def obj_version(self):
+        return sum(s.obj_version for s in self.states)
+
+    @property
+    def refreshed_version(self):
+        return sum(s.refreshed_version for s in self.states)
+
+
+class TermNormalizer:
+    """Gradient-norm normalisation for N extra objective terms (design sec 4).
+
+    Generalises `ScheduleState.apply_ft_transaction`'s seven-step atomic
+    discipline: measure norms, derive every coefficient, bump `obj_version`
+    exactly once, hand the caller a flag to call `refresh_nesterov_secant`, then
+    `mark_refreshed()`.
+    """
+
+    POLICIES = ("legacy", "grandplan", "adaptive")
+
+    def __init__(self, policy="grandplan", norm_p=1, ema=0.5, probe_every=50,
+                 wt0=0.05, wt_step=0.05, ramp_period=100, wt_max=1.0,
+                 momentum=0.75, c_lip=1.0, eps_rel=1e-3,
+                 num_movable=None, num_nodes=None, track_cancellation=True,
+                 legacy_state=None, trace=None):
+        if policy not in self.POLICIES:
+            raise ValueError("policy must be one of %r, got %r" % (self.POLICIES, policy))
+        if norm_p not in (1, 2):
+            raise ValueError("norm_p must be 1 or 2, got %r" % (norm_p,))
+        if probe_every <= 0:
+            raise ValueError("probe_every must be positive")
+        if policy == "legacy" and legacy_state is None:
+            raise ValueError("policy 'legacy' requires legacy_state=<ScheduleState>")
+        self.policy = policy
+        self.norm_p = int(norm_p)
+        self.ema = float(ema)
+        self.probe_every = int(probe_every)
+        self.wt0, self.wt_step = float(wt0), float(wt_step)
+        self.ramp_period, self.wt_max = int(ramp_period), float(wt_max)
+        self.momentum = float(momentum)
+        self.c_lip, self.eps_rel = float(c_lip), float(eps_rel)
+        self.num_movable, self.num_nodes = num_movable, num_nodes
+        self.track_cancellation = bool(track_cancellation)
+        self.trace = trace
+        self._legacy = legacy_state
+        self.configs, self.terms, self.states = {}, {}, {}
+        self.lambdas = {}
+        self.wl_norm = 0.0
+        self._obj_version = 0
+        self._refreshed_version = 0
+        self._pending_row = None
+        self._grad_cache = {}
+        self._probed_this_callback = False
+
+    # -- version discipline -------------------------------------------------
+    @property
+    def obj_version(self):
+        return self._legacy.obj_version if self._legacy is not None else self._obj_version
+
+    @property
+    def refreshed_version(self):
+        return (self._legacy.refreshed_version if self._legacy is not None
+                else self._refreshed_version)
+
+    def needs_refresh(self):
+        return self.obj_version != self.refreshed_version
+
+    def mark_refreshed(self):
+        """Second half of the transaction: call this *after*
+        `refresh_nesterov_secant(optimizer)`. Also finalises and emits the
+        pending trace row, so a row is only written once its objective version
+        is actually live in the optimizer's cache."""
+        if self._legacy is not None:
+            self._legacy.mark_refreshed()
+        else:
+            self._refreshed_version = self._obj_version
+        row, self._pending_row = self._pending_row, None
+        if row is not None:
+            row["refreshed_version"] = self.refreshed_version
+            if self.trace is not None:
+                self.trace.write(row)
+
+    # -- registration and measurement --------------------------------------
+    def register(self, name, term, curvature, target_share=0.0,
+                 activate_overflow=0.90, n_ramp=20):
+        """Register one term. `term` exposes `value(pos, ctx) -> Tensor`;
+        `probe()` owns the backward, the masking and the norm order.
+
+        Declared curvatures (design sec 4): IO 1, FT `ecc_max`, capacity
+        `max_s pen''`, pseudo-FT 1. `kappa_t` is derived each transaction as
+        `lambda_t / lambda_io` (pre-clip), generalising
+        `derive_cmax(kappa_ft, ecc_max)` -- it is not a registration input."""
+        if name in self.configs:
+            raise ValueError("term %r already registered" % (name,))
+        self.configs[name] = TermConfig(name, float(curvature),
+                                        float(target_share), float(activate_overflow),
+                                        int(n_ramp))
+        self.terms[name] = term
+        self.states[name] = TermState()
+        self.lambdas[name] = 0.0
+
+    def should_probe(self, iteration):
+        return iteration % self.probe_every == 0
+
+    def update_grad_norms(self, grad_norms):
+        """Absorb one probe's measurements. `grad_norms` maps `"wl"` and each
+        registered term name to its `||.||_p` gradient norm; unmentioned terms
+        keep their previous measurement (this is how `probe_terms` subsetting
+        stays correct)."""
+        self.wl_norm = float(grad_norms["wl"])
+        for name, state in self.states.items():
+            if name not in grad_norms:
+                continue
+            grad_norm = float(grad_norms[name])
+            state.grad_norm = grad_norm
+            state.ratio_inst = self.wl_norm / max(grad_norm, EPS)
+            state.ratio_ema = ema_update(state.ratio_ema, state.ratio_inst, self.ema)
+
+    # -- coefficient computation -------------------------------------------
+    def _activate(self, iteration, overflow):
+        """Latch each term on the first iteration at or below its activation
+        overflow threshold. Monotone and idempotent, so both `weights()` and
+        `transaction()` may call it."""
+        for name, config in self.configs.items():
+            state = self.states[name]
+            if not state.active and overflow <= config.activate_overflow:
+                state.active, state.it_activate = True, iteration
+
+    def _compute(self, iteration, tau, gamma):
+        """Pure: returns `(lambdas, weights, cmax, cap, cap_binding)` from the
+        current measurements without mutating anything."""
+        total_force = self.wl_norm + sum(
+            self.states[n].lam * self.states[n].grad_norm
+            for n in self.configs if self.states[n].active)
+        lambdas, weights = {}, {}
+        for name, config in self.configs.items():
+            state = self.states[name]
+            if not state.active or state.ratio_ema is None:
+                lambdas[name], weights[name] = 0.0, 0.0
+                continue
+            ramp = activation_ramp(iteration, state.it_activate, config.n_ramp)
+            if self.policy == "grandplan":
+                weights[name] = ramp * grandplan_weight(
+                    iteration, state.it_activate, self.wt0, self.wt_step,
+                    self.ramp_period, self.wt_max)
+                lambdas[name] = grandplan_lambda(weights[name], state.ratio_ema,
+                                                 self.wl_norm, state.grad_norm,
+                                                 self.eps_rel)
+            else:
+                weights[name] = ramp * config.target_share
+                lambdas[name] = adaptive_lambda(state.lam, state.grad_norm,
+                                                weights[name], total_force,
+                                                self.wl_norm, self.momentum,
+                                                self.eps_rel)
+        # kappa is derived, not declared: kappa_io = 1.0 by definition, and
+        # kappa_t = lambda_t / lambda_io (both pre-clip) for every other term,
+        # generalising derive_cmax(kappa_ft, ecc_max)'s live ratio reading.
+        # kappa_t = 0.0 when lambda_io is 0.0 (no IO signal to scale against).
+        lam_io_preclip = lambdas.get("io", 0.0)
+        cmax = cmax_from_curvatures(
+            [(1.0 if name == "io" else
+              (lambdas[name] / lam_io_preclip if lam_io_preclip != 0.0 else 0.0),
+              self.configs[name].curvature)
+             for name in self.configs if self.states[name].active])
+        cap = lipschitz_cap(tau, gamma, self.c_lip, cmax)
+        lambdas, binding = clip_sum_to_cap(lambdas, cap)
+        return lambdas, weights, cmax, cap, binding
+
+    def weights(self, iteration, overflow, tau, gamma):
+        """Pure preview of the coefficients. Latches activation (monotone) but
+        commits nothing and never bumps `obj_version`."""
+        self._activate(iteration, overflow)
+        return self._compute(iteration, tau, gamma)[0]
+
+    def _norm(self, tensor):
+        return (float(tensor.abs().sum()) if self.norm_p == 1
+                else float(tensor.norm(p=2)))
+
+    def _cancellation_ratio(self, lambdas):
+        """`||sum_t lam_t grad T_t||_p / sum_t lam_t ||grad T_t||_p`, the N-term
+        generalisation of `ScheduleState.cancellation_ratio`. `None` when this
+        callback did not call `probe()` (the cache would otherwise mix stale
+        gradients from an earlier probe with this transaction's coefficients)
+        or when the probe kept no gradient tensors (`track_cancellation=False`)."""
+        if not self._probed_this_callback:
+            return None
+        merged, denom = None, 0.0
+        for name, grad in self._grad_cache.items():
+            lam = lambdas.get(name, 0.0)
+            if lam == 0.0:
+                continue
+            merged = grad * lam if merged is None else merged + grad * lam
+            denom += lam * self.states[name].grad_norm
+        if merged is None or denom <= 0.0:
+            return None
+        return self._norm(merged) / denom
+
+    def _row(self, iteration, overflow, tau, gamma, cmax, cap, binding, cancellation):
+        """One `norm_trace.jsonl` row. `grad_l1` keeps its name for continuity
+        with the retired `grad_l1_io`/`grad_l1_ft` trajectory fields; it holds
+        the `||.||_p` norm with `p` = this row's `norm_p`."""
+        denom = self.wl_norm + sum(s.lam * s.grad_norm for s in self.states.values())
+        return {
+            "iteration": int(iteration),
+            "overflow": float(overflow),
+            "tau": float(tau),
+            "gamma": float(gamma),
+            "policy": self.policy,
+            "norm_p": self.norm_p,
+            "grad_l1_wl": self.wl_norm,
+            "cmax": cmax,
+            "cap": _json_cap(cap),
+            "cap_binding": binding,
+            "cancellation_ratio": cancellation,
+            "obj_version": self.obj_version,
+            "refreshed_version": self.refreshed_version,
+            "terms": dict(
+                (name, {"grad_l1": s.grad_norm, "ratio_inst": s.ratio_inst,
+                        "ratio_ema": s.ratio_ema, "wt": s.wt,
+                        "target_share": self.configs[name].target_share,
+                        "lam": s.lam,
+                        "share": (s.lam * s.grad_norm / denom) if denom > 0.0 else 0.0,
+                        "active": s.active})
+                for name, s in self.states.items()),
+        }
+
+    def transaction(self, iteration, overflow, tau, gamma, grad_norms=None,
+                    legacy_publish=None):
+        """Atomic coefficient update: derive every lambda, commit it, bump
+        `obj_version` exactly once, and hand the driver a transaction whose
+        `needs_refresh` flag means "call `refresh_nesterov_secant(optimizer)`
+        then `mark_refreshed()` before the next optimizer step"."""
+        if self._pending_row is not None:
+            raise RuntimeError(
+                "previous transaction was not refreshed: call "
+                "refresh_nesterov_secant(optimizer) then mark_refreshed()")
+        if grad_norms is not None:
+            self.update_grad_norms(grad_norms)
+        if self._legacy is not None:
+            return self._legacy_transaction(iteration, overflow, tau, gamma,
+                                            legacy_publish)
+        self._activate(iteration, overflow)
+        lambdas, weights, cmax, cap, binding = self._compute(iteration, tau, gamma)
+        for name, state in self.states.items():
+            state.lam, state.wt = lambdas[name], weights[name]
+        self.lambdas = dict(lambdas)
+        cancellation = self._cancellation_ratio(lambdas)
+        self._probed_this_callback = False
+        self._obj_version += 1
+        row = self._row(iteration, overflow, tau, gamma, cmax, cap, binding,
+                        cancellation)
+        self._pending_row = row
+        return NormTransaction(lambdas=dict(lambdas), cmax=cmax, cap=cap,
+                               cap_binding=binding, cancellation_ratio=cancellation,
+                               obj_version=self.obj_version, row=row)
+
+    def _legacy_transaction(self, iteration, overflow, tau, gamma, legacy_publish):
+        raise NotImplementedError(
+            "policy 'legacy' delegation is installed by the legacy adapter task")
+
+    @staticmethod
+    def oneshot_lambda(strength, wl_norm, grad_norm, floor=1e-12):
+        """One-shot ratio normalisation for a term that is calibrated once per
+        rebuild rather than every probe. The expression is written exactly as
+        the retired `routing_gp_controller._calibrate` wrote it, so the adapter
+        is bit-for-bit identical."""
+        return strength * wl_norm / grad_norm if grad_norm > floor else 0.0
