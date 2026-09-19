@@ -1,30 +1,37 @@
 """P-H acceptance (design sec 9, "Done per subproject" H) at group scale.
 
-Redefined by controller ruling F2 (progress.md) after the first attempt failed
-for reasons that were never the acceptance's target. The original criterion --
-grandplan's lambda within 2x of legacy's at matched iterations -- compared two
-schedules that differ *by design*: legacy's rho is driven by overflow
-(`rho_from_overflow`), policy A's wt is an iteration-count step ramp
-(`grandplan_weight`). Matching `--norm-wt-max` to `--rho-max` matches the
-ceiling, not the trajectory, so a lambda ratio was never evidence about
-normalisation.
+Gates set by controller ruling F2' (progress.md, fix wave round 2), replacing
+both the original "λ within 2× at matched iterations" criterion and the first
+redefinition. Two things changed the question:
 
-What the normalisation module actually owns is the *measured* ratio
-`||grad WL||_p / ||grad T_t||_p` and the discipline that keeps a coefficient
-alive and bounded. So:
+1. λ parity was never the right target. Legacy's ρ is overflow-driven
+   (`rho_from_overflow`), policy A's `wt` is an iteration-count step ramp
+   (`grandplan_weight`); matching `--norm-wt-max` to `--rho-max` matches the
+   ceiling, not the trajectory. What the normalisation module owns is the
+   *measured* ratio ‖∇WL‖_p / ‖∇T_t‖_p.
+2. The r2 rerun showed an arm can satisfy every coefficient-shaped criterion
+   while stalling global placement, and that comparing *absolute* iteration
+   numbers across arms of different length is meaningless. Hence gate (c) and
+   the fraction-of-own-run form of gate (b).
 
-* **Gate (a) -- measured normalisation parity.** Grandplan's `ratio_ema`
-  within 2x of legacy's at >= 20 matched active iterations. The two
+Gates:
+
+* **(a) measured normalisation parity** — grandplan's `terms.io.ratio_ema`
+  within 2× of legacy's `trajectory[*].ratio_ema` at
+  `max(15, 0.8 × the shorter arm's active callbacks)` matched iterations. The
   denominators are not identical (legacy measures the *merged*
-  `||grad IO + kappa_FT grad FT||`, policy A the *isolated* `||grad IO||`),
-  which is exactly why the bound is 2x rather than something tight.
-* **Gate (b) -- no premature collapse.** The last iteration with `lambda_io >
-  0` under grandplan must reach 0.9x legacy's. This is the regression the
-  first attempt exposed: the pre-F1 tiny-gradient rule zeroed lambda_io around
-  iteration 800-1000, where legacy instead let `ratio_inst` explode and sat at
-  the Lipschitz cap.
-* **Informational (not gating):** the worst lambda ratio and where it occurs,
-  and each arm's realised FT force share at three iterations.
+  ‖∇IO + κ_FT·∇FT‖, policy A the *isolated* ‖∇IO‖), which is why the bound is
+  2× and not something tight.
+* **(b) no premature collapse** — each arm's last `λ_io > 0` iteration as a
+  fraction of its *own* `gp_iterations_run`; grandplan's fraction ≥ 0.9 ×
+  legacy's.
+* **(c) placement quality** — grandplan's final overflow ≤ 1.5 × legacy's and
+  final HPWL ≤ 1.2 × legacy's. A normalisation policy that stalls GP fails
+  P-H however well-behaved its coefficients look.
+
+Informational (printed, never gating): worst λ ratio and where, each arm's FT
+force share at three iterations, and `io_count`/`ft_count`/`hpwl` per arm --
+including the adaptive arm, which no gate covers.
 
 Opt-in: produce the runs with the commands in
 `.superpowers/sdd/2026-09-19-v2-p-h-normalisation/task-9-brief.md` Steps 3-6
@@ -32,6 +39,7 @@ Opt-in: produce the runs with the commands in
 directory holding them. The test skips deterministically when they are absent.
 """
 import json
+import math
 import os
 import pathlib
 
@@ -55,12 +63,42 @@ def _load():
         "compare matched weight ceilings, not different ramps"
     rows = read_norm_trace(grandplan["norm_trace"])
     assert rows, "grandplan wrote no normalisation rows"
-    return legacy, grandplan, rows
+    adaptive = None
+    if (root / "adaptive.json").exists():
+        adaptive = json.loads((root / "adaptive.json").read_text())
+    return legacy, grandplan, rows, adaptive
+
+
+def _legacy_series(result):
+    """`(ratio_ema, lambda_io)` per iteration from a legacy trajectory."""
+    ratio, lam = {}, {}
+    for event in result["trajectory"]:
+        iteration = int(event["iteration"])
+        value = event.get("ratio_ema")
+        if value is not None and float(value) > 0.:
+            ratio[iteration] = float(value)
+        if float(event.get("lambda_io", 0.) or 0.) > 0.:
+            lam[iteration] = float(event["lambda_io"])
+    return ratio, lam
+
+
+def _trace_series(rows):
+    """The same two series from a non-legacy `norm_trace.jsonl`."""
+    ratio, lam = {}, {}
+    for row in rows:
+        iteration = int(row["iteration"])
+        term = row["terms"]["io"]
+        value = term.get("ratio_ema")
+        if value is not None and float(value) > 0.:
+            ratio[iteration] = float(value)
+        if float(term["lam"]) > 0.:
+            lam[iteration] = float(term["lam"])
+    return ratio, lam
 
 
 def _legacy_ft_share(event):
-    """lambda_FT * ||grad FT|| / (||grad WL|| + sum_t lambda_t ||grad T_t||),
-    the same quantity the trace's `terms.ft.share` reports for the new arms."""
+    """λ_FT·‖∇FT‖ / (‖∇WL‖ + Σ_t λ_t‖∇T_t‖), the quantity the trace's
+    `terms.ft.share` reports for the new arms."""
     lam_ft = float(event.get("lambda_ft", 0.) or 0.)
     lam_io = float(event.get("lambda_io", 0.) or 0.)
     g_wl = float(event.get("grad_l1_wl", 0.) or 0.)
@@ -70,30 +108,29 @@ def _legacy_ft_share(event):
     return (lam_ft * g_ft / denominator) if denominator > 0. else 0.
 
 
+def _active_fraction(lam, result):
+    """Last iteration with λ_io > 0, as a fraction of this arm's own GP
+    length -- the only cross-arm-comparable form when the two arms run for
+    different numbers of iterations."""
+    length = float(result["gp_iterations_run"])
+    return (max(lam) / length) if lam and length > 0 else 0.
+
+
 @pytest.mark.slow
-def test_grandplan_matches_the_retired_paths_measured_ratio_and_stays_alive():
-    legacy, grandplan, rows = _load()
-
-    legacy_ratio, legacy_lambda = {}, {}
-    for event in legacy["trajectory"]:
-        iteration = int(event["iteration"])
-        ratio = event.get("ratio_ema")
-        if ratio is not None and float(ratio) > 0.:
-            legacy_ratio[iteration] = float(ratio)
-        if float(event.get("lambda_io", 0.) or 0.) > 0.:
-            legacy_lambda[iteration] = float(event["lambda_io"])
-
-    new_ratio, new_lambda = {}, {}
-    for row in rows:
-        iteration = int(row["iteration"])
-        term = row["terms"]["io"]
-        ratio = term.get("ratio_ema")
-        if ratio is not None and float(ratio) > 0.:
-            new_ratio[iteration] = float(ratio)
-        if float(term["lam"]) > 0.:
-            new_lambda[iteration] = float(term["lam"])
+def test_grandplan_matches_the_retired_path_and_does_not_degrade_placement():
+    legacy, grandplan, rows, adaptive = _load()
+    legacy_ratio, legacy_lambda = _legacy_series(legacy)
+    new_ratio, new_lambda = _trace_series(rows)
 
     # -- informational -----------------------------------------------------
+    for name, result in (("legacy", legacy), ("grandplan", grandplan),
+                         ("adaptive", adaptive)):
+        if result is None:
+            continue
+        print("[info] %-9s io_count=%d ft_count=%d hpwl=%.6g final_overflow=%.4f "
+              "gp_iterations_run=%d" % (name, result["io_count"], result["ft_count"],
+                                        result["hpwl"], result["final_overflow"],
+                                        result["gp_iterations_run"]))
     matched_lambda = sorted(set(legacy_lambda) & set(new_lambda))
     if matched_lambda:
         worst_it = max(matched_lambda,
@@ -114,11 +151,26 @@ def test_grandplan_matches_the_retired_paths_measured_ratio_and_stays_alive():
               % (iteration, _legacy_ft_share(legacy_by_iter[iteration]),
                  float(rows_by_iter[iteration]["terms"].get("ft", {})
                        .get("share", 0.) or 0.)))
+    if adaptive is not None and adaptive.get("norm_trace"):
+        a_ratio, a_lambda = _trace_series(read_norm_trace(adaptive["norm_trace"]))
+        a_matched = sorted(set(legacy_ratio) & set(a_ratio))
+        if a_matched:
+            worst = max(max(a_ratio[i] / legacy_ratio[i], legacy_ratio[i] / a_ratio[i])
+                        for i in a_matched)
+            print("[info] adaptive: worst ratio_ema ratio %.3fx over %d matched, "
+                  "active fraction %.3f (legacy %.3f), overflow %.3fx, hpwl %.3fx"
+                  % (worst, len(a_matched), _active_fraction(a_lambda, adaptive),
+                     _active_fraction(legacy_lambda, legacy),
+                     adaptive["final_overflow"] / legacy["final_overflow"],
+                     adaptive["hpwl"] / legacy["hpwl"]))
 
     # -- gate (a): measured normalisation parity ---------------------------
     matched = sorted(set(legacy_ratio) & set(new_ratio))
-    assert len(matched) >= 20, (
-        "only %d matched iterations with a ratio_ema on both arms" % (len(matched),))
+    required = max(15, int(math.ceil(0.8 * min(len(legacy_ratio), len(new_ratio)))))
+    assert len(matched) >= required, (
+        "only %d matched iterations with a ratio_ema on both arms, need %d "
+        "(legacy %d active callbacks, grandplan %d)"
+        % (len(matched), required, len(legacy_ratio), len(new_ratio)))
     worst_iteration = max(matched, key=lambda i: max(new_ratio[i] / legacy_ratio[i],
                                                      legacy_ratio[i] / new_ratio[i]))
     worst = max(new_ratio[worst_iteration] / legacy_ratio[worst_iteration],
@@ -129,10 +181,25 @@ def test_grandplan_matches_the_retired_paths_measured_ratio_and_stays_alive():
                                         legacy_ratio[worst_iteration],
                                         new_ratio[worst_iteration], len(matched)))
 
-    # -- gate (b): no premature collapse of the IO coefficient -------------
+    # -- gate (b): no premature collapse, measured per arm's own length ----
     assert legacy_lambda, "legacy never activated lambda_io"
     assert new_lambda, "grandplan never activated lambda_io"
-    legacy_last, new_last = max(legacy_lambda), max(new_lambda)
-    assert new_last >= 0.9 * legacy_last, (
-        "grandplan's lambda_io dies at iteration %d, legacy's survives to %d "
-        "(need >= %.1f)" % (new_last, legacy_last, 0.9 * legacy_last))
+    legacy_fraction = _active_fraction(legacy_lambda, legacy)
+    new_fraction = _active_fraction(new_lambda, grandplan)
+    assert new_fraction >= 0.9 * legacy_fraction, (
+        "grandplan's last active lambda_io is at iteration %d of %d (%.3f of "
+        "its own run); legacy's is %d of %d (%.3f) -- need >= %.3f"
+        % (max(new_lambda), grandplan["gp_iterations_run"], new_fraction,
+           max(legacy_lambda), legacy["gp_iterations_run"], legacy_fraction,
+           0.9 * legacy_fraction))
+
+    # -- gate (c): placement quality ---------------------------------------
+    overflow_ratio = grandplan["final_overflow"] / legacy["final_overflow"]
+    hpwl_ratio = grandplan["hpwl"] / legacy["hpwl"]
+    assert overflow_ratio <= 1.5, (
+        "grandplan final overflow %.4f is %.3fx legacy's %.4f (limit 1.5x) -- "
+        "a normalisation policy that stalls GP fails P-H"
+        % (grandplan["final_overflow"], overflow_ratio, legacy["final_overflow"]))
+    assert hpwl_ratio <= 1.2, (
+        "grandplan final hpwl %.6g is %.3fx legacy's %.6g (limit 1.2x)"
+        % (grandplan["hpwl"], hpwl_ratio, legacy["hpwl"]))

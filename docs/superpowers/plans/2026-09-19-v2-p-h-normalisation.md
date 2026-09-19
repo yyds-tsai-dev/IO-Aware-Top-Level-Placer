@@ -2579,35 +2579,46 @@ print(rows[-1]['iteration'], {n: round(t['share'], 4) for n, t in rows[-1]['term
 
 - [ ] **Step 7: Run the acceptance test**
 
-> **Redefined by controller ruling F2** (`progress.md`, Task 9 diagnosis). The
-> original criterion — grandplan's λ within 2× of legacy's at matched
-> iterations — compared two schedules that differ *by design* (legacy's ρ is
-> overflow-driven, policy A's `wt` is an iteration-count step ramp), so a λ
-> ratio was never evidence about normalisation. Step 1's embedded test code is
-> superseded by the version in `tests/test_norm_group_validation.py`.
+> **Redefined by controller rulings F2 and F2'** (`progress.md`, Task 9
+> diagnosis and fix-wave round 2). The original criterion — grandplan's λ
+> within 2× of legacy's at matched iterations — compared two schedules that
+> differ *by design* (legacy's ρ is overflow-driven, policy A's `wt` is an
+> iteration-count step ramp), so a λ ratio was never evidence about
+> normalisation. F2' then added a quality gate and made the liveness gate
+> length-relative, after the r2 rerun showed an arm can satisfy every
+> coefficient-shaped criterion while stalling global placement. Step 1's
+> embedded test code is superseded by `tests/test_norm_group_validation.py`.
 
 ```bash
 IOPLACE_NORM_VALIDATION_DIR=runs/norm-validation \
   "$IOPLACE_PYTHON" -m pytest tests/test_norm_group_validation.py -v -s
 ```
 
-The test now gates on two properties and prints the rest:
+Three gates, everything else printed:
 
 - **(a) measured normalisation parity** — grandplan's `terms.io.ratio_ema`
-  within 2× of legacy's `trajectory[*].ratio_ema` at ≥ 20 matched active
-  iterations. This is the quantity the normalisation module owns. The 2× bound
-  (rather than something tight) absorbs the known denominator difference:
-  legacy measures the *merged* ‖∇IO + κ_FT·∇FT‖, policy A the *isolated* ‖∇IO‖.
-- **(b) no premature collapse** — the last iteration with `λ_io > 0` under
-  grandplan is ≥ 0.9 × legacy's last active iteration. This is the regression
-  the first attempt exposed (the pre-F1 tiny-gradient rule zeroed λ_io around
-  iteration 800–1000, where legacy sat at the Lipschitz cap instead).
+  within 2× of legacy's `trajectory[*].ratio_ema` at
+  `max(15, 0.8 × the shorter arm's active callbacks)` matched iterations. This
+  is the quantity the normalisation module owns. The 2× bound (rather than
+  something tight) absorbs the known denominator difference: legacy measures
+  the *merged* ‖∇IO + κ_FT·∇FT‖, policy A the *isolated* ‖∇IO‖. The
+  count floor is relative because the two arms need not run the same number of
+  GP iterations.
+- **(b) no premature collapse** — each arm's last iteration with `λ_io > 0`,
+  expressed as a fraction of that arm's *own* `gp_iterations_run`; grandplan's
+  fraction ≥ 0.9 × legacy's. Absolute iteration numbers are not comparable
+  across arms of different length.
+- **(c) placement quality** — grandplan's final overflow ≤ 1.5 × legacy's
+  **and** final HPWL ≤ 1.2 × legacy's. A normalisation policy that stalls GP
+  fails P-H no matter how well-behaved its coefficients look; this gate exists
+  because ruling F1 passed every coefficient-shaped check while leaving the
+  arm at overflow 0.71 and 7.1× legacy's HPWL.
 - **informational, not gating** — the worst λ ratio and the iteration it occurs
-  at, plus each arm's realised FT force share (λ_FT·‖∇FT‖ / total) at three
-  iterations. Report these numbers; they are what a reader needs to judge the
-  two arms, but they are not pass/fail.
+  at, each arm's realised FT force share (λ_FT·‖∇FT‖ / total) at three
+  iterations, `io_count`/`ft_count`/`hpwl`/`final_overflow` per arm, and the
+  adaptive arm's own parity/liveness/quality ratios (no gate covers adaptive).
 
-Expected: 1 passed. On failure the message names the offending iteration and
+Expected: 1 passed. On failure the message names the offending quantity and
 both values — report that, do not loosen the thresholds.
 
 - [ ] **Step 8: Run the full suite**

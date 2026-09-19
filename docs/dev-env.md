@@ -81,10 +81,13 @@ comes from `ScheduleState`'s per-iteration activation, not from the first
 `--every`-gated callback, so both arms ramp off the same instant. The trace
 records both: `terms.<t>.lam` (committed) and `terms.<t>.lam_applied` (ramped);
 the result trajectory adds `lambda_io_applied`/`lambda_ft_applied`.
-A term whose measured gradient is at or below `eps_rel·‖∇WL‖` but not exactly
-zero takes the Lipschitz cap's remaining headroom rather than dropping to 0
-(the retired path let `ratio_inst` explode and saturated at the same cap); a
-gradient of exactly 0 still gives λ = 0. `norm_trace.jsonl` gets
+There is no relative deadness threshold on the non-legacy arm: every probe
+measures `ratio_inst = ‖∇WL‖/‖∇T‖` and updates the EMA, and λ is
+`min(policy(ratio_ema), the term's share of the Lipschitz cap)` — the retired
+path's own `min(base, cap)` shape. Only a gradient of exactly 0 gives λ = 0 and
+skips the EMA. (The earlier `eps_rel·‖∇WL‖` test was removed after it was
+measured to track WL's growth rather than the term: on `mempool_group` it
+misclassified a flat IO gradient as dead for the last quarter of GP.) `norm_trace.jsonl` gets
 one row per coefficient transaction (>= one per probe, since a transaction may
 reuse the previous probe's measurements), with the per-term gradient norm,
 instantaneous and EMA ratio, weight, coefficient, realised force share,

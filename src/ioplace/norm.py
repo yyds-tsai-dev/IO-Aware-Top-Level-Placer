@@ -39,20 +39,28 @@ def grandplan_weight(iteration, it_activate, wt0=0.05, wt_step=0.05,
     return min(wt0 + wt_step * steps, wt_max)
 
 
-def grandplan_lambda(wt, ratio, wl_norm, grad_norm, eps_rel=1e-3):
+def grandplan_lambda(wt, ratio, grad_norm):
     """Policy A coefficient: `lambda_t = wt_t * ratio`, where `ratio` is the
-    (EMA-damped) `||grad WL||_p / ||grad T_t||_p`. The raw norms are passed
-    separately only for the zero-gradient guard inherited from
-    `schedules.derive_kappa_ft`: a term whose gradient is below
-    `eps_rel * ||grad WL||_p` has no local signal and must never manufacture a
-    penalty (and the division that produced `ratio` is then meaningless)."""
-    if grad_norm <= eps_rel * wl_norm:
+    (EMA-damped) `||grad WL||_p / ||grad T_t||_p`.
+
+    Controller ruling F1' (2026-09-19, round 2) removed the *relative*
+    deadness guard this function used to carry (`grad_norm <= eps_rel *
+    wl_norm`, inherited from `schedules.derive_kappa_ft`). That threshold
+    tracked `||grad WL||`, not the term: over a group-scale GP run
+    `||grad WL||` grows by ~6x while `||grad IO||` stays flat, so a perfectly
+    healthy term was classified dead in late GP and its coefficient either
+    collapsed to 0 or (under the superseded ruling F1) jumped to the Lipschitz
+    cap. The retired path has no such classification -- it lets the ratio grow
+    and bounds the result with `min(base, cap)` -- and this is now faithful to
+    it. Only an exactly-zero gradient still returns 0: there is nothing to pull
+    on, so any coefficient is inert."""
+    if grad_norm == 0.0:
         return 0.0
     return wt * ratio
 
 
 def adaptive_lambda(lam_prev, grad_norm, target_share, total_force, wl_norm,
-                    momentum=0.75, eps_rel=1e-3):
+                    momentum=0.75):
     """Policy B coefficient: one DREAMPlace-4.0-style multiplicative force-share
     update `lam_new = lam_prev * sqrt(f_t * G / (lam_prev * ||grad T_t||))`
     followed by the momentum blend `momentum*lam_prev + (1-momentum)*lam_new`.
@@ -64,7 +72,10 @@ def adaptive_lambda(lam_prev, grad_norm, target_share, total_force, wl_norm,
     the first value is taken from policy A's form at `wt = f_t` and returned
     undamped -- blending a bootstrap against `lam_prev == 0` would halve it for
     no reason."""
-    if target_share <= 0.0 or grad_norm <= eps_rel * wl_norm:
+    # Controller ruling F1' (round 2): only an exactly-zero gradient is dead
+    # -- see `grandplan_lambda` for why the relative `eps_rel` threshold was
+    # removed from both policies.
+    if target_share <= 0.0 or grad_norm == 0.0:
         return 0.0
     if lam_prev <= 0.0:
         return target_share * wl_norm / grad_norm
@@ -250,7 +261,7 @@ class TermNormalizer:
 
     def __init__(self, policy="grandplan", norm_p=1, ema=0.5, probe_every=50,
                  wt0=0.05, wt_step=0.05, ramp_period=100, wt_max=1.0,
-                 momentum=0.75, c_lip=1.0, eps_rel=1e-3, kappa_max=100.0,
+                 momentum=0.75, c_lip=1.0, kappa_max=100.0,
                  num_movable=None, num_nodes=None, track_cancellation=True,
                  legacy_state=None, trace=None):
         if policy not in self.POLICIES:
@@ -268,7 +279,10 @@ class TermNormalizer:
         self.wt0, self.wt_step = float(wt0), float(wt_step)
         self.ramp_period, self.wt_max = int(ramp_period), float(wt_max)
         self.momentum = float(momentum)
-        self.c_lip, self.eps_rel = float(c_lip), float(eps_rel)
+        # No `eps_rel`: controller ruling F1' (round 2) removed the relative
+        # deadness threshold from the non-legacy coefficient path entirely.
+        # `ScheduleState.eps_rel` still governs the legacy arm, untouched.
+        self.c_lip = float(c_lip)
         # Mirrors ScheduleState.kappa_max (schedules.py): the non-legacy arm
         # recovers kappa = lam_dependent/lam_base, which a denormal base
         # coefficient would blow up (review M2).
@@ -407,20 +421,25 @@ class TermNormalizer:
         keep their previous measurement (this is how `probe_terms` subsetting
         stays correct).
 
-        Controller ruling (fix round 1): a term whose measured gradient is at
-        or below `eps_rel * wl_norm` (including exactly zero) has no local
-        signal, and dividing by it would seed the EMA with a huge, meaningless
-        ratio (`wl_norm / EPS` ~ 1e30-ish) that then poisons `ratio_ema` for
-        many probes. Such a probe leaves `ratio_ema` untouched (`None` if
-        never seeded) and records `ratio_inst = None` so the trace row shows
-        the dead probe rather than a manufactured number."""
+        Controller ruling F1' (round 2) -- supersedes the fix-round-1 ruling
+        that skipped the EMA whenever `grad_norm <= eps_rel * wl_norm`. That
+        skip was measured to misfire: `eps_rel * wl_norm` grows with
+        `||grad WL||` (~6x over a group-scale GP run) while a healthy term's
+        gradient stays flat, so late-GP probes were systematically
+        misclassified and `ratio_ema` froze for the last quarter of the run.
+        The retired path (`ScheduleState.update_ratio` /
+        `apply_ft_transaction`) applies no such test -- `raw = g_wl /
+        max(merged, EPS)`, EMA every callback -- and this is now the same.
+        Only an exactly-zero gradient is dead: it records `ratio_inst = None`
+        and leaves `ratio_ema` untouched, because `wl_norm / EPS` really is a
+        manufactured number and there is no force to scale anyway."""
         self.wl_norm = float(grad_norms["wl"])
         for name, state in self.states.items():
             if name not in grad_norms:
                 continue
             grad_norm = float(grad_norms[name])
             state.grad_norm = grad_norm
-            if grad_norm <= self.eps_rel * self.wl_norm:
+            if grad_norm == 0.0:
                 state.ratio_inst = None
                 continue
             state.ratio_inst = self.wl_norm / max(grad_norm, EPS)
@@ -497,27 +516,23 @@ class TermNormalizer:
         `lam_states` are policy B's momentum states, which a dead or
         dependency-zeroed probe leaves untouched (review I7).
 
-        Tiny-gradient handling (controller ruling F1): a term whose gradient
-        is at or below `eps_rel * ||grad WL||` but not exactly zero has no
-        usable ratio, but it is *not* dead -- the retired path let `ratio_inst`
-        explode in that regime and simply saturated `lambda_io` at the
-        Lipschitz cap, which is why its IO force persisted to the end of GP.
-        Zeroing the coefficient instead (the pre-F1 behaviour) collapsed the
-        IO term around iteration 1000 of the group-scale acceptance run. Such
-        a term therefore takes the cap's remaining headroom, and `ratio_ema`
-        stays untouched. A gradient of exactly 0.0 still gets 0: there is no
-        crossing to pull on, so any coefficient is inert.
-
-        Caveat on the headroom: `Cmax` (and so the cap) is derived from the
-        other terms' pre-clip lambdas, as the ruling specifies, so a saturating
-        term with `curvature > Cmax` can push the realised weighted mean above
-        the bound. `io` (curvature 1) is the term that saturates in practice;
-        for it the bound is exact."""
+        Dead-term handling (controller ruling F1', round 2): only a gradient of
+        exactly 0.0 zeroes a coefficient. Everything else goes through the
+        policy at the live `ratio_ema` and is then bounded by the shared
+        Lipschitz cap -- `min(policy value, this term's share of the cap)`,
+        which is what `clip_sum_to_cap`'s common rescale computes. That is the
+        retired path's own shape (`lambda_io = min(rho*ramp*ratio_ema, cap)`).
+        The two superseded rules both keyed on `grad <= eps_rel*||grad WL||`, a
+        threshold that tracks WL rather than the term: measured on
+        `mempool_group`, it misclassified a flat ~1140 IO gradient as dead from
+        iteration 850 on, which either switched the IO penalty off for the last
+        quarter of GP (fix round 1) or jumped its coefficient to 14x the last
+        healthy value (ruling F1), stalling GP at overflow 0.71."""
         total_force = self.wl_norm + sum(
             self.states[n].lam_state * self.states[n].grad_norm
             for n in self.configs if self.states[n].active)
         lambdas, weights, lam_states = {}, {}, {}
-        saturating, healthy = [], []
+        healthy = []
         for name, config in self.configs.items():
             state = self.states[name]
             lam_states[name] = state.lam_state
@@ -530,30 +545,20 @@ class TermNormalizer:
                     self._schedule(name, "wt_step"),
                     self._schedule(name, "ramp_period"),
                     self._schedule(name, "wt_max"))
+                lambdas[name] = grandplan_lambda(weights[name], state.ratio_ema,
+                                                 state.grad_norm)
             elif self.policy == "adaptive":
                 weights[name] = config.target_share
+                lambdas[name] = adaptive_lambda(state.lam_state, state.grad_norm,
+                                                weights[name], total_force,
+                                                self.wl_norm, self.momentum)
             else:
                 raise ValueError(
                     "policy %r has no coefficient rule ('grandplan' and "
                     "'adaptive' compute here; 'legacy' must delegate before "
                     "reaching _compute)" % (self.policy,))
-            if state.grad_norm == 0.0:
-                lambdas[name] = 0.0
-                continue
-            if state.grad_norm <= self.eps_rel * self.wl_norm:
-                lambdas[name] = 0.0          # placeholder; resolved after the cap
-                saturating.append(name)
-                continue
-            if self.policy == "grandplan":
-                lambdas[name] = grandplan_lambda(weights[name], state.ratio_ema,
-                                                 self.wl_norm, state.grad_norm,
-                                                 self.eps_rel)
-            else:
-                lambdas[name] = adaptive_lambda(state.lam_state, state.grad_norm,
-                                                weights[name], total_force,
-                                                self.wl_norm, self.momentum,
-                                                self.eps_rel)
-            healthy.append(name)
+            if state.grad_norm != 0.0:
+                healthy.append(name)
         # Cmax is the pre-clip lambda-weighted mean curvature (controller
         # ruling 2026-09-19, fix round 1): Cmax = sum_t lambda_t*curv_t /
         # sum_t lambda_t. This replaces the derived-kappa form
@@ -579,17 +584,6 @@ class TermNormalizer:
         else:
             binding = None
         lambdas, _ = clip_sum_to_cap(preclip, cap)
-        if saturating:
-            if math.isfinite(cap):
-                headroom = max(cap - sum(lambdas.values()), 0.0) / len(saturating)
-                for name in saturating:
-                    lambdas[name] = headroom
-            else:
-                # gamma <= 0: there is no Lipschitz bound to saturate against,
-                # so hold the last published coefficient rather than invent an
-                # unbounded one.
-                for name in saturating:
-                    lambdas[name] = max(self.states[name].lam_state, 0.0)
         for name in healthy:
             lam_states[name] = lambdas[name]
         # Review C1: a term registered with `requires=<base>` expresses its

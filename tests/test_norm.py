@@ -37,11 +37,15 @@ def test_grandplan_weight_rejects_nonpositive_period():
         grandplan_weight(500, 100, ramp_period=0)
 
 
-def test_grandplan_lambda_scales_ratio_and_guards_dead_terms():
-    assert grandplan_lambda(0.05, 100.0, 1000.0, 10.0) == pytest.approx(5.0, rel=1e-12)
-    # grad_norm <= eps_rel * wl_norm -> the term has no local signal
-    assert grandplan_lambda(0.05, 1e9, 1000.0, 1.0) == 0.0
-    assert grandplan_lambda(0.05, 1e9, 1000.0, 0.0) == 0.0
+def test_grandplan_lambda_scales_ratio_and_only_zero_is_dead():
+    """Controller ruling F1' (round 2): the relative `eps_rel * wl_norm`
+    deadness threshold is gone -- it tracked `||grad WL||` rather than the
+    term, and misclassified a healthy gradient in late GP. A tiny-but-nonzero
+    gradient now yields the ordinary `wt * ratio` (bounded downstream by the
+    Lipschitz cap, exactly as the retired path's `min(base, cap)` does)."""
+    assert grandplan_lambda(0.05, 100.0, 10.0) == pytest.approx(5.0, rel=1e-12)
+    assert grandplan_lambda(0.05, 1e9, 1.0) == pytest.approx(0.05e9, rel=1e-12)
+    assert grandplan_lambda(0.05, 1e9, 0.0) == 0.0
 
 
 def test_adaptive_lambda_is_a_fixed_point_at_the_target_share():
@@ -64,7 +68,9 @@ def test_adaptive_lambda_bootstraps_undamped_from_the_grandplan_form():
 
 def test_adaptive_lambda_guards_zero_share_and_dead_gradient():
     assert adaptive_lambda(1.0, 10.0, 0.0, 100.0, 1000.0) == 0.0
-    assert adaptive_lambda(1.0, 0.5, 0.2, 100.0, 1000.0) == 0.0
+    assert adaptive_lambda(1.0, 0.0, 0.2, 100.0, 1000.0) == 0.0
+    # Ruling F1': a tiny-but-nonzero gradient is measured, not discarded.
+    assert adaptive_lambda(1.0, 0.5, 0.2, 100.0, 1000.0) > 0.0
 
 
 def test_cmax_is_the_lambda_weighted_mean_curvature():
@@ -198,10 +204,10 @@ def test_update_grad_norms_sets_instant_ratio_and_ema():
 
 
 def test_zero_grad_norm_does_not_divide_by_zero():
-    # Controller ruling (fix round 1): a dead (<= eps_rel * wl_norm) gradient
-    # is never divided into a ratio at all -- `ratio_inst` is None and
-    # `ratio_ema` is left exactly as it was (None here, since this is the
-    # first measurement) rather than seeded with a huge, meaningless number.
+    # Controller ruling F1' (round 2): an *exactly* zero gradient is the only
+    # dead case left -- `ratio_inst` is None and `ratio_ema` is left exactly as
+    # it was (None here, since this is the first measurement) rather than
+    # seeded with `wl_norm / EPS`.
     n = _norm_a()
     n.update_grad_norms({"wl": 1000.0, "io": 0.0})
     assert n.states["io"].ratio_inst is None
@@ -332,13 +338,15 @@ def test_dependent_term_is_zeroed_when_its_base_dies():
     assert recovered.lambdas["io"] > 0.0 and recovered.lambdas["ft"] > 0.0
 
 
-def test_a_tiny_but_nonzero_gradient_saturates_at_the_cap_instead_of_dying():
-    """Controller ruling F1: the pre-fix behaviour (lambda := 0 whenever
-    `grad <= eps_rel * ||grad WL||`) collapsed the IO term around iteration
-    1000 of the group-scale run, where the retired path instead let
-    `ratio_inst` explode and simply sat at the Lipschitz cap. The term now
-    takes the cap's remaining headroom, `ratio_ema` is left untouched, and a
-    dependent term stays alive because its base is still nonzero."""
+def test_a_tiny_but_nonzero_gradient_is_measured_and_only_bounded_by_the_cap():
+    """Controller ruling F1' (round 2), superseding both earlier rules for
+    `0 < grad <= eps_rel * ||grad WL||`: neither zero the coefficient (fix
+    round 1) nor hand it the cap's whole headroom (ruling F1). The ratio is
+    perfectly computable, so measure it, feed it through the policy, and let
+    the shared Lipschitz cap bound the result -- which is the retired path's
+    own `min(base, cap)`. Measured on `mempool_group`, the two superseded rules
+    respectively switched the IO penalty off for the last quarter of GP and
+    jumped it to 14x its last healthy value (stalling GP at overflow 0.71)."""
     n = TermNormalizer(policy="grandplan", wt0=1.0)
     n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=0)
     n.register("ft", object(), 1.0, activate_overflow=0.90, n_ramp=0,
@@ -347,16 +355,22 @@ def test_a_tiny_but_nonzero_gradient_saturates_at_the_cap_instead_of_dying():
                   grad_norms={"wl": 1000.0, "io": 10.0, "ft": 20.0})
     n.mark_refreshed()
     assert n.states["io"].ratio_ema == pytest.approx(100.0, rel=1e-12)
-    # 0.5 <= eps_rel(1e-3) * 1000 == 1.0, but not exactly zero
+    # 0.5 is below the retired eps_rel(1e-3) * 1000 == 1.0 threshold, and is
+    # now an ordinary measurement.
     txn = n.transaction(50, 0.80, tau=100.0, gamma=20.0,
                         grad_norms={"wl": 1000.0, "io": 0.5, "ft": 20.0})
-    assert n.states["io"].ratio_inst is None                    # dead probe
-    assert n.states["io"].ratio_ema == pytest.approx(100.0, rel=1e-12)  # untouched
-    assert txn.cap == pytest.approx(lipschitz_cap(100.0, 20.0, 1.0, 1.0), rel=1e-12)
-    assert txn.lambdas["ft"] == pytest.approx(50.0, rel=1e-12)  # 1.0 * 1000/20
-    assert txn.lambdas["io"] == pytest.approx(txn.cap - 50.0, rel=1e-12)
-    assert txn.lambdas["io"] > 0.0
-    assert sum(txn.lambdas.values()) == pytest.approx(txn.cap, rel=1e-12)
+    assert n.states["io"].ratio_inst == pytest.approx(2000.0, rel=1e-12)
+    assert n.states["io"].ratio_ema == pytest.approx(1050.0, rel=1e-12)
+    cap = lipschitz_cap(100.0, 20.0, 1.0, 1.0)
+    assert txn.cap == pytest.approx(cap, rel=1e-12)             # 500.0
+    # pre-clip io = 1.0*1050, ft = 1.0*50 -> sum 1100 > cap, one common rescale
+    assert sum(txn.lambdas.values()) == pytest.approx(cap, rel=1e-12)
+    assert txn.lambdas["io"] == pytest.approx(cap * 1050.0 / 1100.0, rel=1e-12)
+    assert txn.lambdas["ft"] == pytest.approx(cap * 50.0 / 1100.0, rel=1e-12)
+    assert txn.lambdas["io"] / txn.lambdas["ft"] == pytest.approx(21.0, rel=1e-12)
+    assert txn.cap_binding == "io"
+    # not ruling F1's "take the whole headroom" behaviour
+    assert txn.lambdas["io"] != pytest.approx(cap, rel=1e-6)
 
 
 def test_an_exactly_zero_gradient_still_zeroes_the_coefficient():
