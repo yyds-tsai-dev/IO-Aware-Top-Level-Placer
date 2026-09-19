@@ -45,6 +45,17 @@ P-B produces `soft.npz` (a `seed.npz`-schema file with `kind="soft"`), `frozen_m
 
 **Terms after the freeze are OFF.** Phase 3 runs WL + density + fence only. Capacity (P-D) and pseudo-FT (P-E) attach at the documented hook point `run_fence_gp(..., extra_terms=())`; do **not** implement them here.
 
+**Normalisation policy (controller ruling, 2026-09-19).** `run_main_flow`'s
+`--norm-policy` default is **`grandplan`**, not `legacy`. Design §4's unified
+gradient-norm normalisation is the v2 main flow's coefficient path, and the
+landed P-H surface (`src/ioplace/norm.py` after commits `16b8ca1` and
+`5e07cdf`) is what Task 5 wraps; keeping `legacy` as the default would make the
+v2 driver's headline number a retired path's. `legacy` stays fully reachable as
+the bit-for-bit regression arm, so **Task 9's end-to-end test is parametrised
+over `{legacy, grandplan}`**. `adaptive` (policy B) is **ablation-only**:
+reachable from the CLI, covered by Task 5's unit tests, and deliberately absent
+from the e2e matrix — its target shares are a research knob, not a default.
+
 **Two independent drivers.** `src/ioplace/drivers/run_placement_io.py` stays as the legacy single-phase driver and must not be modified. `run_main_flow.py` is a fork that imports the small shared helpers rather than duplicating them.
 
 **Retired-path gating.** `IOPLACE_ENABLE_GR_IN_LOOP=1` is required to import `src/scripts/run_route_gp.py` or `src/ioplace/ops/routing_gp_controller.py` (Task 8). **Stated deviation from spec §1 (controller ruling C-8, 2026-09-19).** Spec §1 lists five retired modules; this plan gates only those two. `ops/route_gp.py`, `ops/joint_route_feedback.py` and `ops/route_feedback.py` stay ungated: they are import-side-effect-free libraries that live unit tests exercise directly, so an import-time gate there would fail those tests at collection for no safety gain. Accepted and recorded; revisit only if a v2 driver ever imports them.
@@ -1654,10 +1665,11 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Test: `tests/test_norm_adapter.py`
 
 **Interfaces:**
-- Consumes: `ioplace.schedules.ScheduleState`; `ioplace.ops.ft_callback.publish_atomic` (`src/ioplace/ops/ft_callback.py:18-49`); P-H's `ioplace.norm.TermNormalizer` / `VersionPair` / `parse_target_shares` (`src/ioplace/norm.py:169-188,190-630,108-119`), `ioplace.norm_trace.NormTraceWriter` (`src/ioplace/norm_trace.py:27-54`), `ioplace.ops.norm_terms.IoNormTerm` / `FtNormTerm` (`src/ioplace/ops/norm_terms.py:10-28`).
+- Consumes: `ioplace.schedules.ScheduleState` (`src/ioplace/schedules.py:108-237`); `ioplace.ops.ft_callback.publish_atomic` (`src/ioplace/ops/ft_callback.py:18-49`); P-H's `ioplace.norm.TermNormalizer` / `VersionPair` / `parse_target_shares` (`src/ioplace/norm.py:251-906,230-248,120-149`), `ioplace.norm_trace.NormTraceWriter` / `ROW_FIELDS` / `TERM_FIELDS` (`src/ioplace/norm_trace.py:12-31,33-61`), `ioplace.ops.norm_terms.IoNormTerm` / `FtNormTerm` (`src/ioplace/ops/norm_terms.py:12-28`).
 - Produces:
   - `NORM_POLICIES = TermNormalizer.POLICIES` — `("legacy", "grandplan", "adaptive")`
   - `LEGACY_TRACE_NAME = "legacy_trace.jsonl"`, `NORM_TRACE_NAME = "norm_trace.jsonl"`
+  - `DEFAULT_IO_TARGET_SHARE = 0.3`, `FT_ACTIVATE_OVERFLOW = 0.30`
   - `make_norm_adapter(policy, **config) -> LegacyNormAdapter | TermNormalizerAdapter`
   - `class LegacyNormAdapter`, `class TermNormalizerAdapter` — both implementing the adapter protocol below.
 
@@ -1668,29 +1680,43 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 | `policy: str` | name recorded in `result.json` and in every trace row |
 | `active: bool` | the term has been switched on (the `ScheduleState` latch, in both adapters) |
 | `tau: float`, `tau_rel: float` | soft-assign temperature, absolute and relative to `L_R` |
-| `lambda_io: float`, `kappa_ft: float` | coefficients the driver feeds to `IoTerm`/`FtTerm`; `FtTerm.forward` multiplies the FT part by `lambda_io * kappa_ft`, so `kappa_ft` is `lambda_ft / lambda_io` |
+| `lambda_io: float`, `kappa_ft: float` | coefficients the driver feeds to `IoTerm`/`FtTerm` **at the current iteration**; `FtTerm.forward` multiplies the FT part by `lambda_io * kappa_ft`, so `kappa_ft` is `lambda_ft / lambda_io`. Under the non-legacy policies both are `TermNormalizer.applied_lambda(name, iteration)`, i.e. the committed λ times this iteration's activation ramp — see "Applied vs committed λ" below |
 | `obj_version: int`, `refreshed_version: int` | objective version and the version the Nesterov cache was last refreshed at; `dp_hook.install_version_invariant(optimizer, adapter)` reads both off the adapter |
-| `begin_iteration(iteration, overflow, gamma) -> bool` | continuous update; `True` when a discrete change happened |
-| `probe(iteration, pos, *, io_term, ft_term, wirelength_op, ecc_max, gamma) -> dict` | one isolated backward per term, one atomic coefficient publication, one `obj_version` bump; returns the policy's trace row |
-| `write_trace_row(row, extra) -> dict | None` | the adapter, not the driver, owns the trace file; `extra` is the driver's per-probe `{io_count, ft_count, churn, …}` |
+| `begin_iteration(iteration, overflow, gamma) -> bool` | per-iteration update (continuous schedule **plus** the normalizer's activation clock); `True` when a discrete change happened. Must run on **every** GP iteration, before anything reads `lambda_io`/`kappa_ft` |
+| `probe(iteration, pos, *, io_term, ft_term, wirelength_op, ecc_max, gamma) -> dict` | one isolated backward per term **on the probe cadence**, one atomic coefficient publication, one `obj_version` bump; returns the policy's trace row |
+| `write_trace_row(row, extra) -> dict | None` | the adapter, not the driver, owns the trace file; `extra` is the driver's per-probe `{io_count, ft_count, churn, lambda_io, kappa_ft, …}` |
 | `trace_path: str | None`, `close() -> None` | where this policy's trace went, and its teardown |
 | `needs_refresh() -> bool`, `mark_refreshed() -> None` | Nesterov-secant discipline (`dp_hook.py:36-59`) |
 
-**Why two classes, not one (pre-flight B-1/A-10/A-11, cross-plan ruling 2 as revised).** The original text deferred `TermNormalizerAdapter` to P-H and raised `NotImplementedError` for `grandplan`/`adaptive`. Both halves of that were wrong: P-H's plan never touches `norm_adapter.py` (its Task 7 modifies `run_placement_io.py`, `run_placement.py`, `docs/dev-env.md` and `tests/test_norm_driver.py`), so the deferral pointed at nobody, and spec §4's policy-A/B ablation would have been permanently unreachable from `run_main_flow`. Ruling 2's literal form — "build on `TermNormalizer` directly, no adapter" — is not implementable either: the live `TermNormalizer` (`src/ioplace/norm.py`) owns coefficients and nothing else. It has no τ schedule, no `L_R`, no activation trigger, no `lambda_io`/`kappa_ft` names, and its `probe(iteration, pos, wl_fn, ctx, probe_terms=None)` signature differs from the driver's. Something must still map overflow onto τ and latch activation, and that something is `ScheduleState`. So `TermNormalizerAdapter` keeps a `ScheduleState` **solely** for τ/ρ/activation (`update_continuous`) and hands every coefficient to a `TermNormalizer`.
+`probe`'s `io_term`/`ft_term`/`ecc_max` arguments are `LegacyNormAdapter`'s: `publish_atomic` needs them on every call. `TermNormalizerAdapter` registers its terms **in the constructor** (they are passed to `make_norm_adapter` as `io_term=`/`ft_term=`/`ecc_max=`, which the legacy branch drops like every other normalizer-only key) and only checks that `probe` is still being handed the same objects.
+
+**Re-synced against the landed P-H surface (2026-09-19, at `e06e754`).** This task was originally written against `norm.py` as it stood at `da83162`, before P-H's fix wave (`16b8ca1` "dependent terms, external activation clock…", `5e07cdf` "legacy-faithful gradient ratio on the non-legacy arm"). Six things in that surface changed and every one of them is load-bearing here:
+
+1. **`TermNormalizer.__init__` no longer takes `eps_rel`** (controller ruling F1' removed the relative deadness threshold from the non-legacy arm entirely — `norm.py:282-284`). Passing it is now a `TypeError`. `ScheduleState.eps_rel` survives (`schedules.py:128`) and still governs the legacy arm's `derive_kappa_ft`, so it stays in `_SCHEDULE_KEYS` and is deliberately *not* forwarded.
+2. **The activation clock is external.** `set_activation(name, it_activate)` / `update_activation(iteration, overflow)` (`norm.py:461-485`) replace the old "reach into `normalizer.states` and set `active`/`it_activate` by hand" sync. The driver calls both **every GP iteration, right after `ScheduleState.update_continuous`** (`run_placement_io.py:570-577`), which is what makes `it_activate` the true activation instant instead of the first `every`-gated callback (review I1a: with `every=50` and `n_ramp=20` the whole soft start was aliased away).
+3. **Applied vs committed λ.** `applied_lambda(name, iteration)` (`norm.py:487-507`) = the committed λ × this term's activation ramp. `transaction()` commits an *un-ramped* λ every `probe_every` iterations; the objective must re-scale it every iteration, exactly as the retired path's `ρ·ramp·ratio_ema` drifted continuously. So `lambda_io`/`kappa_ft` are `applied_lambda`, not `normalizer.lambdas[...]`, and the adapter records the driver's current iteration in `begin_iteration`. The drift carries no `obj_version` bump.
+4. **`lam` vs `lam_applied`.** `norm_trace.TERM_FIELDS` gained `lam_applied` and `wt_max` (`norm_trace.py:29-31`); `lam` is the committed coefficient, `lam_applied` the ramped one. Whatever P-B logs per probe must carry the *applied* pair, which is why `run_soft_phase`'s `probe_samples` entry gains `lambda_io`/`kappa_ft` (Task 7).
+5. **`ft` is a dependent term with its own gate and its own ceiling.** `register(..., requires="io")` makes the normalizer publish `lambda_ft = 0` whenever `lambda_io` is 0 (review C1) and bounds the recovered `κ = λ_ft/λ_io` by `kappa_max` (review M2, `norm.py:608-619`); `ft`'s activation gate is `FT_ACTIVATE_OVERFLOW = 0.30`, not `of_on`; and under `grandplan` its weight ceiling is `f_ft_max × wt_max` (review I4) so the FT force share mirrors the legacy `f_ft_max` instead of converging to IO's ceiling.
+6. **Validation moved forward.** `register` range-checks `curvature >= 1`, `n_ramp >= 0`, `activate_overflow > 0`, `target_share ∈ [0,1]` and every `wt*` override; `parse_target_shares` rejects duplicates, non-finite values and values outside `[0,1]`, and the *caller* must reject names that no registered term answers to; `transaction()` raises `FloatingPointError` on a non-finite λ before committing anything.
+
+The flag-combination rules `run_io` enforces (`run_placement_io.py:232-265`) move into this module: `make_norm_adapter` rejects `legacy` + `norm_p != 1`, and `TermNormalizerAdapter.__init__` rejects `rho_max == 0`. The other two — `rho_margin > 0` and `callback_order != "atomic"` — cannot arise: the main flow has no margin term and no legacy callback order. `probe_every % every` is satisfied by construction, because Task 7 passes `probe_every=every`.
+
+**Why two classes, not one (pre-flight B-1/A-10/A-11, cross-plan ruling 2 as revised).** The original text deferred `TermNormalizerAdapter` to P-H and raised `NotImplementedError` for `grandplan`/`adaptive`. Both halves of that were wrong: P-H's plan never touches `norm_adapter.py` (its Task 7 modifies `run_placement_io.py`, `run_placement.py`, `docs/dev-env.md` and `tests/test_norm_driver.py`), so the deferral pointed at nobody, and spec §4's policy-A/B ablation would have been permanently unreachable from `run_main_flow`. Ruling 2's literal form — "build on `TermNormalizer` directly, no adapter" — is not implementable either: the live `TermNormalizer` owns coefficients and nothing else. It has no τ schedule, no `L_R`, no activation trigger, no `lambda_io`/`kappa_ft` names, and its `probe(iteration, pos, wl_fn, ctx, probe_terms=None)` signature differs from the driver's. Something must still map overflow onto τ and latch activation, and that something is `ScheduleState` — which is exactly what the landed `run_placement_io.py` does too (it keeps its `ScheduleState` and feeds `state.it_activate` to `normalizer.set_activation`). So `TermNormalizerAdapter` keeps a `ScheduleState` **solely** for τ/ρ/activation (`update_continuous`) and hands every coefficient to a `TermNormalizer`.
 
 **Division of labour inside `TermNormalizerAdapter`.**
 
-- `ScheduleState` — τ from `tau_rel_from_overflow` (`schedules.py:9-14`), ρ, and the single activation latch. Its own `lambda_io`/`kappa_ft`/`Cmax` are never read.
+- `ScheduleState` — τ from `tau_rel_from_overflow` (`schedules.py:9-14`), ρ, and the single activation instant for `io`. Its own `lambda_io`/`kappa_ft`/`Cmax` are never read.
 - `TermNormalizer` — every coefficient, the Lipschitz cap, `Cmax`, the cancellation ratio, and `norm_trace.jsonl`. Rows are emitted by `mark_refreshed()`, i.e. only once the objective version is live in the optimizer's cache.
-- `VersionPair(state, normalizer)` (`norm.py:169-188`) — one version pair covering both, so a single `install_version_invariant(optimizer, adapter)` sees an activation bump from `update_continuous` *and* a coefficient bump from `transaction()`. Stacking two invariant wrappers would not work: `refresh_nesterov_secant` unwraps exactly one `__wrapped__` level.
-- Activation is synchronised **down** from the schedule every iteration. `TermNormalizer._activate` only runs inside `weights()`/`transaction()`, i.e. on the probe cadence, so a term left to latch itself would set `it_activate` tens of iterations late and restart policy A's `activation_ramp` (and policy B's ramped share) from the first probe instead of from the schedule's own activation.
-- Terms are registered on the **first probe**, which is the first moment the driver hands over `io_term`/`ft_term` and the FT curvature `ecc_max`. Declared curvatures (design sec 4): IO 1, FT `ecc_max`.
-- Target shares (policy B) default to the legacy knobs: `io <- rho_max`, `ft <- rho_max * f_ft_max`. `TermNormalizer`'s shares are fractions of the *total* force `G = ‖∇WL‖ + Σ λ_t‖∇T_t‖`, and `rho_max` is already "IO force as a fraction of the WL force", while legacy's `f_ft_max` is the FT force as a fraction of the *IO* force — hence the product. `--norm-target-share io=…,ft=…` (`norm.parse_target_shares`) overrides either.
-- The τ_rel-driven FT window (`--tau-start`/`--tau-full`, `schedules.ft_activation_ramp`) applies to `--norm-policy legacy` only. Policies A and B replace it with the unified iteration ramp plus the target share, which is the whole point of design sec 4.
+- `VersionPair(state, normalizer)` (`norm.py:230-248`) — one version pair covering both, so a single `install_version_invariant(optimizer, adapter)` sees an activation bump from `update_continuous` *and* a coefficient bump from `transaction()`. Stacking two invariant wrappers would not work: `refresh_nesterov_secant` unwraps exactly one `__wrapped__` level.
+- Activation is synchronised **down** from the schedule every iteration, through the normalizer's public clock: `set_activation("io", state.it_activate)` makes `io`'s clock external (so the normalizer's own overflow gate skips it) and `update_activation(iteration, overflow)` latches every other term — today just `ft`, tomorrow P-D's capacity and P-E's pseudo-FT — on its own threshold, per iteration rather than per probe.
+- Terms are registered in the **constructor**, not on the first probe. A term registered at the first `every`-gated probe cannot have its gate evaluated on the iterations before it, which is review I1a's defect all over again. `io_term`/`ft_term`/`ecc_max` are available at the call site (Task 7 builds them immediately before `make_norm_adapter`), so there is nothing to defer.
+- Curvatures are design sec 4's declared values: IO 1, FT `ecc_max` floored at 1 (`register` rejects a curvature below 1, the curvature of a term with no eccentricity spread).
+- Target shares (policy B) default to the landed driver's: `io ← DEFAULT_IO_TARGET_SHARE = 0.3`, `ft ← f_ft_max` (`run_placement_io.py:74-76,102-111`, documented in docs/dev-env.md's P-H flag table). **This supersedes the plan's earlier `io ← rho_max`, `ft ← rho_max·f_ft_max` mapping**: that mapping is defensible in the abstract (shares are fractions of the total force `G = ‖∇WL‖ + Σ λ_t‖∇T_t‖`, and `rho_max` is already "IO force as a fraction of the WL force") but it would give the two v2 drivers different policy-B defaults for the same benchmark, which defeats the point of an ablation. `--norm-target-share io=…,ft=…` overrides either, and a name no registered term answers to is now an error rather than a silent fallback.
+- The τ_rel-driven FT window (`--tau-start`/`--tau-full`, `schedules.ft_activation_ramp`) applies to `--norm-policy legacy` only. Policies A and B replace it with `FT_ACTIVATE_OVERFLOW` plus the unified iteration ramp and the weight ceiling, which is the whole point of design sec 4.
 
-**One trace schema per file name (pre-flight A-9).** `norm_trace.jsonl` is spec §1's artefact and P-H's `NormTraceWriter` validates every row against `norm_trace.ROW_FIELDS`, rejecting extra or missing keys. The legacy path's row is `publish_atomic`'s dict, which shares almost none of those keys, so it goes to `legacy_trace.jsonl` instead. The driver never formats a row: it calls `adapter.write_trace_row(row, sample)` and the adapter decides. Under `grandplan`/`adaptive` that call is a no-op (the normalizer already wrote the validated row) and the driver's per-probe extras reach `result.json` through `soft_summary["probe_samples"]` instead.
+**One trace schema per file name (pre-flight A-9).** `norm_trace.jsonl` is spec §1's artefact and P-H's `NormTraceWriter` validates every row against `norm_trace.ROW_FIELDS`, rejecting extra or missing keys. The legacy path's row is `publish_atomic`'s dict, which shares almost none of those keys, so it goes to `legacy_trace.jsonl` instead. The driver never formats a row: it calls `adapter.write_trace_row(row, sample)` and the adapter decides. Under `grandplan`/`adaptive` that call is a no-op (the normalizer already wrote the validated row) and the driver's per-probe extras reach `result.json` through `soft_summary["probe_samples"]` instead. One consequence to keep in mind for Task 9: under the non-legacy policies a row is held until `mark_refreshed()`, and the freeze raise deliberately skips that last refresh (amendment D-13), so the final transaction's row is never written — by design, because those coefficients never reached the objective.
 
-**Checked against P-H (2026-09-19, at `da83162`).** `NORM_POLICIES` is bound to `TermNormalizer.POLICIES` rather than re-spelled, so it cannot drift. Under `legacy` the normalizer owns no coefficient maths and delegates `obj_version`/`refreshed_version` to a `ScheduleState` (`norm.py:566-622`) — exactly what `LegacyNormAdapter` does here — so the two legacy paths agree by construction and `LegacyNormAdapter` keeps `publish_atomic` as its single source of truth (`tests/test_norm_legacy_adapter.py`'s golden trajectory is the regression lock). P-C's `GroupingWeight` (its Task 4) uses `norm.py`'s pure helpers `grandplan_weight` and `ema_update` at a different level; no name clash. P-H Task 7 (the `run_placement_io.py` wiring) had **not** landed when this task was written, so the wiring below is derived from `norm.py` itself; if it has landed by the time you implement, cross-check `probe`/`transaction`/`mark_refreshed` ordering against that driver and report any difference rather than silently diverging.
+**`FT_ACTIVATE_OVERFLOW` is duplicated, not imported.** The constant lives in `run_placement_io.py:77-80`, and importing that module would drag DREAMPlace, numpy, scipy and the GPU evaluator into every consumer of `norm_adapter.py`. Step 1's `test_the_ft_activation_gate_matches_the_legacy_driver` is the lock that stops the copy from drifting.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1702,8 +1728,9 @@ import json
 import pytest
 torch = pytest.importorskip("torch")
 
-from ioplace.norm_adapter import (NORM_POLICIES, LegacyNormAdapter,
-                                  TermNormalizerAdapter, make_norm_adapter)
+from ioplace.norm_adapter import (FT_ACTIVATE_OVERFLOW, NORM_POLICIES,
+                                  LegacyNormAdapter, TermNormalizerAdapter,
+                                  make_norm_adapter)
 from ioplace.norm_trace import ROW_FIELDS, read_norm_trace
 
 
@@ -1712,6 +1739,22 @@ class _FakeIoTerm:
 
     def __call__(self, pos, tau, lambda_io, *args):
         return lambda_io * (pos ** 2).sum()
+
+
+class _DeadIoTerm(_FakeIoTerm):
+    """An IO term with an exactly-zero gradient -- the only thing the P-H fix
+    wave (controller ruling F1') still classifies as dead."""
+
+    def __call__(self, pos, tau, lambda_io, *args):
+        return lambda_io * (pos * 0.0).sum()
+
+
+class _FakeFtTerm:
+    """`FtNormTerm` measures `ft_only(pos, tau)`; `FtTerm.forward`'s own
+    signature is the driver's business, not the normalizer's."""
+
+    def ft_only(self, pos, tau):
+        return (pos ** 2).sum()
 
 
 def _wirelength(pos):
@@ -1728,25 +1771,30 @@ def _pos():
 def _config(**override):
     config = dict(L_R=100.0, rho_max=0.1, tau_hi=0.30, tau_lo=0.03, of_on=2.0,
                   of_end=0.5, of_full=1.0, f_ft_max=0.0, ft_ramp_mode="window",
-                  tau_start=0.12, tau_full=0.05)
+                  tau_start=0.12, tau_full=0.05, io_term=_FakeIoTerm())
     config.update(override)
     return config
 
 
-def _probe(adapter, iteration):
-    return adapter.probe(iteration, _pos(), io_term=_FakeIoTerm(), ft_term=None,
-                         wirelength_op=_wirelength, ecc_max=0.0, gamma=1.0)
+def _probe(adapter, iteration, config=None):
+    config = _config() if config is None else config
+    return adapter.probe(iteration, _pos(), io_term=config["io_term"],
+                         ft_term=config.get("ft_term"),
+                         wirelength_op=_wirelength,
+                         ecc_max=config.get("ecc_max", 0.0), gamma=1.0)
 
 
 def _activated(policy, **override):
     """Activate at iteration 0 so policy A's 20-iteration activation ramp is
     complete by the first probe at 50. Without the adapter's activation sync
-    the term would latch at the probe itself and ramp to exactly 0."""
-    adapter = make_norm_adapter(policy, **_config(**override))
+    `io` would latch at the probe itself and its applied lambda would be
+    exactly 0 there."""
+    config = _config(**override)
+    adapter = make_norm_adapter(policy, **config)
     adapter.begin_iteration(0, overflow=1.5, gamma=1.0)
     adapter.mark_refreshed()
     adapter.begin_iteration(50, overflow=1.5, gamma=1.0)
-    return adapter
+    return adapter, config
 
 
 def test_policies_are_declared():
@@ -1765,9 +1813,9 @@ def test_legacy_adapter_activates_once_and_reports_tau():
 
 
 def test_probe_bumps_obj_version_exactly_once_and_needs_a_refresh():
-    adapter = _activated("legacy")
+    adapter, config = _activated("legacy")
     before = adapter.obj_version
-    row = _probe(adapter, 50)
+    row = _probe(adapter, 50, config)
     assert adapter.obj_version == before + 1
     assert adapter.needs_refresh() is True
     assert adapter.refreshed_version != adapter.obj_version
@@ -1791,21 +1839,50 @@ def test_unknown_policy_and_unknown_knob_are_rejected():
         TermNormalizerAdapter("legacy", **_config())
 
 
+def test_flag_combinations_the_landed_driver_rejects_are_rejected_here():
+    """The `run_io` validation block (run_placement_io.py:237-265), minus the
+    two rules the main flow cannot reach: it has no `--rho-margin` and no
+    `--callback-order`, and its probe cadence *is* `--every`, so
+    `probe_every % every` holds by construction."""
+    with pytest.raises(ValueError, match="norm_p must be 1"):
+        make_norm_adapter("legacy", norm_p=2, **_config())
+    with pytest.raises(ValueError, match="rho-max"):
+        make_norm_adapter("grandplan", **_config(rho_max=0.0))
+    with pytest.raises(ValueError, match="io_term"):
+        make_norm_adapter("grandplan", **_config(io_term=None))
+    with pytest.raises(ValueError, match="unregistered"):
+        make_norm_adapter("adaptive", target_shares="io=0.3,ft=0.05",
+                          **_config())
+    with pytest.raises(ValueError, match=r"\[0, 1\]"):
+        make_norm_adapter("adaptive", target_shares="io=1.5", **_config())
+
+
+def test_the_ft_activation_gate_matches_the_legacy_driver():
+    """The constant is duplicated to keep this module free of DREAMPlace
+    imports; this is the lock that stops the copy from drifting."""
+    run_io = pytest.importorskip("ioplace.drivers.run_placement_io")
+    assert FT_ACTIVATE_OVERFLOW == run_io.FT_ACTIVATE_OVERFLOW
+
+
 def test_grandplan_adapter_normalises_a_positive_lambda_io(tmp_path):
     """Policy A end to end: one probe of a term with a real positive gradient
     must leave a non-zero lambda_io and one schema-valid norm_trace row."""
-    adapter = _activated("grandplan", out_dir=str(tmp_path))
+    adapter, config = _activated("grandplan", out_dir=str(tmp_path))
     assert isinstance(adapter, TermNormalizerAdapter)
-    row = _probe(adapter, 50)
+    row = _probe(adapter, 50, config)
     assert adapter.lambda_io > 0.0
     assert adapter.kappa_ft == 0.0                      # no FT term registered
     assert row["policy"] == "grandplan" and set(row) == set(ROW_FIELDS)
     assert row["grad_l1_wl"] == pytest.approx(12.0)
     assert row["terms"]["io"]["grad_l1"] == pytest.approx(24.0)
     assert row["terms"]["io"]["ratio_ema"] == pytest.approx(0.5)
-    assert row["terms"]["io"]["lam"] == pytest.approx(adapter.lambda_io)
-    # wt = activation_ramp(50, 0, 20) * grandplan_weight(...) = 1.0 * 0.05, so
-    # lambda_io = wt * ratio_ema = 0.025, well under the Lipschitz cap.
+    # wt = grandplan_weight(50, it_activate=0, wt0=0.05, ramp_period=100) =
+    # 0.05, so the committed lam = wt * ratio_ema = 0.025, well under the
+    # Lipschitz cap; the activation ramp is complete at iteration 50, so the
+    # applied lambda equals it.
+    assert row["terms"]["io"]["wt"] == pytest.approx(0.05)
+    assert row["terms"]["io"]["lam"] == pytest.approx(0.025)
+    assert row["terms"]["io"]["lam_applied"] == pytest.approx(0.025)
     assert adapter.lambda_io == pytest.approx(0.025)
     # the row reaches disk only once the Nesterov cache has been refreshed
     assert not (tmp_path / "norm_trace.jsonl").read_text()
@@ -1816,11 +1893,104 @@ def test_grandplan_adapter_normalises_a_positive_lambda_io(tmp_path):
     assert rows[0]["obj_version"] == rows[0]["refreshed_version"]
 
 
+def test_io_activates_from_the_schedule_not_from_the_first_probe():
+    """Review I1a. `ScheduleState` latches on every iteration; the normalizer's
+    own gate would only run on the probe cadence, putting `it_activate` up to
+    `probe_every` iterations late and aliasing the whole n_ramp soft start."""
+    config = _config(io_term=_FakeIoTerm())
+    adapter = make_norm_adapter("grandplan", **config)
+    adapter.begin_iteration(0, overflow=3.0, gamma=1.0)       # above of_on
+    assert adapter.normalizer.states["io"].active is False
+    adapter.begin_iteration(7, overflow=1.5, gamma=1.0)       # schedule latches
+    assert adapter.state.it_activate == 7
+    assert adapter.normalizer.states["io"].it_activate == 7
+    for iteration in (8, 30, 50):
+        adapter.begin_iteration(iteration, overflow=1.5, gamma=1.0)
+    assert adapter.normalizer.states["io"].it_activate == 7   # monotone
+
+
+def test_the_applied_lambda_drifts_through_the_ramp_between_transactions(tmp_path):
+    """Review I1b: `transaction()` commits an un-ramped lambda every
+    `probe_every` iterations and `applied_lambda` re-scales it every
+    iteration, so `adapter.lambda_io` moves without a new probe -- the same
+    continuous drift the legacy arm gets from `update_continuous`."""
+    config = _config(out_dir=str(tmp_path), io_term=_FakeIoTerm())
+    adapter = make_norm_adapter("grandplan", **config)
+    adapter.begin_iteration(50, overflow=1.5, gamma=1.0)      # activates at 50
+    assert adapter.lambda_io == 0.0                           # ramp(50, 50) == 0
+    _probe(adapter, 50, config)
+    adapter.mark_refreshed()
+    committed = adapter.normalizer.lambdas["io"]
+    assert committed == pytest.approx(0.025)
+    for iteration, fraction in ((55, 0.25), (60, 0.5), (70, 1.0), (90, 1.0)):
+        adapter.begin_iteration(iteration, overflow=1.5, gamma=1.0)
+        assert adapter.lambda_io == pytest.approx(committed * fraction)
+        assert adapter.normalizer.lambdas["io"] == committed   # no new commit
+    assert adapter.needs_refresh() is False                    # drift is not a bump
+    adapter.close()
+
+
+def test_ft_is_dependent_gated_and_ceilinged(tmp_path):
+    """The three FT registration details the landed `_register_norm_terms`
+    carries: `requires="io"`, its own `FT_ACTIVATE_OVERFLOW` gate, and the
+    `f_ft_max * wt_max` weight ceiling under grandplan."""
+    config = _config(out_dir=str(tmp_path), f_ft_max=0.2,
+                     ft_term=_FakeFtTerm(), ecc_max=3.0)
+    adapter = make_norm_adapter("grandplan", **config)
+    assert adapter.normalizer.configs["ft"].requires == "io"
+    assert adapter.normalizer.configs["ft"].wt_max == pytest.approx(0.2)
+    assert adapter.normalizer.configs["ft"].curvature == pytest.approx(3.0)
+    assert adapter.normalizer.configs["io"].wt_max is None    # normalizer-wide 1.0
+
+    adapter.begin_iteration(0, overflow=1.5, gamma=1.0)       # io on, ft off
+    assert adapter.normalizer.states["ft"].active is False
+    adapter.mark_refreshed()
+    adapter.begin_iteration(50, overflow=0.2, gamma=1.0)      # below 0.30
+    assert adapter.normalizer.states["ft"].it_activate == 50
+    row = _probe(adapter, 50, config)
+    # both terms measure ||grad||_1 = 24 against ||grad WL||_1 = 12, so both
+    # ratios are 0.5 and both weights are the first grandplan step 0.05
+    assert row["terms"]["ft"]["wt_max"] == pytest.approx(0.2)
+    assert row["terms"]["ft"]["lam"] == pytest.approx(0.025)
+    # cmax = (0.025*1 + 0.025*3)/0.05 = 2, tau = tau_lo*L_R = 3, so the cap is
+    # 3^2/2 = 4.5 and does not bind on a total lambda of 0.05
+    assert row["cmax"] == pytest.approx(2.0)
+    assert row["cap"] == pytest.approx(4.5) and row["cap_binding"] is None
+    # ft's ramp starts at 50, io's at 0, so the applied kappa is still 0 here
+    assert row["terms"]["ft"]["lam_applied"] == pytest.approx(0.0)
+    assert adapter.kappa_ft == pytest.approx(0.0)
+    adapter.mark_refreshed()
+    adapter.begin_iteration(70, overflow=0.2, gamma=1.0)      # ft fully ramped
+    assert adapter.kappa_ft == pytest.approx(1.0)
+    assert adapter.lambda_io * adapter.kappa_ft == pytest.approx(0.025)
+    adapter.close()
+
+
+def test_a_dead_io_gradient_zeroes_the_dependent_ft_term(tmp_path):
+    """Review C1: `FtTerm` applies `lambda_io * kappa`, so FT is unapplicable
+    once lambda_io is 0. The normalizer publishes 0 for it rather than letting
+    the driver assert."""
+    config = _config(out_dir=str(tmp_path), io_term=_DeadIoTerm(),
+                     f_ft_max=0.2, ft_term=_FakeFtTerm(), ecc_max=3.0)
+    adapter = make_norm_adapter("grandplan", **config)
+    adapter.begin_iteration(0, overflow=0.2, gamma=1.0)
+    adapter.mark_refreshed()
+    adapter.begin_iteration(50, overflow=0.2, gamma=1.0)
+    row = _probe(adapter, 50, config)
+    assert row["terms"]["io"]["grad_l1"] == 0.0
+    assert row["terms"]["io"]["lam"] == 0.0
+    assert row["terms"]["ft"]["grad_l1"] == pytest.approx(24.0)
+    assert row["terms"]["ft"]["lam"] == 0.0                   # requires="io"
+    assert adapter.lambda_io == 0.0 and adapter.kappa_ft == 0.0
+    adapter.mark_refreshed()
+    adapter.close()
+
+
 def test_term_normalizer_adapter_bumps_obj_version_once_per_probe(tmp_path):
-    adapter = _activated("grandplan", out_dir=str(tmp_path))
+    adapter, config = _activated("grandplan", out_dir=str(tmp_path))
     assert adapter.needs_refresh() is False
     before = adapter.obj_version
-    _probe(adapter, 50)
+    _probe(adapter, 50, config)
     # VersionPair sums the ScheduleState's counter and the normalizer's, so one
     # transaction is one bump even though two objects carry versions.
     assert adapter.obj_version == before + 1
@@ -1829,27 +1999,49 @@ def test_term_normalizer_adapter_bumps_obj_version_once_per_probe(tmp_path):
     assert adapter.needs_refresh() is False
     assert adapter.refreshed_version == adapter.obj_version
     adapter.begin_iteration(100, overflow=1.5, gamma=1.0)
-    _probe(adapter, 100)
+    _probe(adapter, 100, config)
     assert adapter.obj_version == before + 2
     adapter.mark_refreshed()
     adapter.close()
     assert len(read_norm_trace(str(tmp_path / "norm_trace.jsonl"))) == 2
 
 
+def test_a_transaction_without_a_probe_reuses_the_previous_measurements(tmp_path):
+    """`probe_every` gates the gradient probe, not the transaction: the
+    landed driver's `if normalizer.should_probe(iteration)` (:657). The main
+    flow's forced last-iteration callback lands off the cadence and must not
+    re-measure."""
+    config = _config(out_dir=str(tmp_path), probe_every=50)
+    adapter = make_norm_adapter("grandplan", **config)
+    adapter.begin_iteration(0, overflow=1.5, gamma=1.0)
+    adapter.mark_refreshed()
+    adapter.begin_iteration(50, overflow=1.5, gamma=1.0)
+    first = _probe(adapter, 50, config)
+    adapter.mark_refreshed()
+    adapter.begin_iteration(77, overflow=1.5, gamma=1.0)
+    second = _probe(adapter, 77, config)
+    adapter.mark_refreshed()
+    adapter.close()
+    assert second["probe_iteration"] == 50 and second["iteration"] == 77
+    assert second["terms"]["io"]["ratio_ema"] == first["terms"]["io"]["ratio_ema"]
+    assert len(read_norm_trace(str(tmp_path / "norm_trace.jsonl"))) == 2
+
+
 def test_adaptive_policy_constructs_and_bootstraps_its_coefficient(tmp_path):
-    """Policy B: target shares default to the legacy knobs (io <- rho_max,
-    ft <- rho_max*f_ft_max) and the first update takes adaptive_lambda's
-    bootstrap branch, so one probe leaves a positive coefficient."""
-    adapter = _activated("adaptive", out_dir=str(tmp_path))
+    """Policy B: `io` defaults to `DEFAULT_IO_TARGET_SHARE` and `ft` to
+    `f_ft_max`, the landed driver's defaults (run_placement_io.py:102-111), and
+    the first update takes `adaptive_lambda`'s bootstrap branch."""
+    adapter, config = _activated("adaptive", out_dir=str(tmp_path))
     assert adapter.policy == "adaptive" and adapter.normalizer.policy == "adaptive"
-    assert adapter.target_shares == {"io": 0.1, "ft": 0.0}
-    _probe(adapter, 50)
-    # bootstrap: target_share * ||grad WL|| / ||grad T|| = 0.1 * 12 / 24
-    assert adapter.lambda_io == pytest.approx(0.05)
+    assert adapter.target_shares == {"io": 0.3}      # no FT term registered
+    _probe(adapter, 50, config)
+    # bootstrap: target_share * ||grad WL|| / ||grad T|| = 0.3 * 12 / 24
+    assert adapter.lambda_io == pytest.approx(0.15)
     adapter.mark_refreshed()
     adapter.close()
     override = make_norm_adapter("adaptive", target_shares="io=0.3,ft=0.05",
-                                 **_config())
+                                 **_config(f_ft_max=0.2, ft_term=_FakeFtTerm(),
+                                           ecc_max=3.0))
     assert override.target_shares == {"io": 0.3, "ft": 0.05}
     assert override.trace_path is None
 
@@ -1859,9 +2051,9 @@ def test_each_policy_writes_its_own_trace_file(tmp_path):
     schema NormTraceWriter validates; the legacy row is publish_atomic's own
     dict and goes to legacy_trace.jsonl."""
     legacy_dir, norm_dir = str(tmp_path / "legacy"), str(tmp_path / "grandplan")
-    legacy = _activated("legacy", out_dir=legacy_dir)
+    legacy, legacy_config = _activated("legacy", out_dir=legacy_dir)
     assert legacy.trace_path.endswith("legacy_trace.jsonl")
-    written = legacy.write_trace_row(_probe(legacy, 50),
+    written = legacy.write_trace_row(_probe(legacy, 50, legacy_config),
                                      {"io_count": 7, "churn": 0.0})
     legacy.mark_refreshed()
     legacy.close()
@@ -1871,10 +2063,10 @@ def test_each_policy_writes_its_own_trace_file(tmp_path):
     assert lines[0]["grad_l1_io"] > 0 and written["policy"] == "legacy"
     assert not (tmp_path / "legacy" / "norm_trace.jsonl").exists()
 
-    grandplan = _activated("grandplan", out_dir=norm_dir)
+    grandplan, gp_config = _activated("grandplan", out_dir=norm_dir)
     assert grandplan.trace_path.endswith("norm_trace.jsonl")
     # the driver's extras must not contaminate the validated schema
-    assert grandplan.write_trace_row(_probe(grandplan, 50),
+    assert grandplan.write_trace_row(_probe(grandplan, 50, gp_config),
                                      {"io_count": 7, "churn": 0.0}) is None
     grandplan.mark_refreshed()
     grandplan.close()
@@ -1911,8 +2103,17 @@ Two adapters, one protocol (the plan's Task 5 table):
   `TermNormalizer` owns no temperature and no activation trigger, so something
   still has to map overflow onto tau. Every coefficient comes from the
   normalizer. Writes `norm_trace.jsonl` through `norm_trace.NormTraceWriter`.
+
+`TermNormalizerAdapter` mirrors, call for call, the wiring P-H Task 7 landed in
+`src/ioplace/drivers/run_placement_io.py` (`_register_norm_terms:83-116`, the
+per-iteration `set_activation`/`update_activation` pair at `:570-577`, the
+`should_probe`/`transaction` pair at `:657-659`, `term_fn`'s
+`applied_lambda` reads at `:450-456`, and the
+`refresh_nesterov_secant`/`mark_refreshed` gate at `:823-828`). Anything that
+differs between the two drivers is a bug in this module.
 """
 import json
+import math
 import os
 
 from ioplace.norm import TermNormalizer, VersionPair, parse_target_shares
@@ -1927,7 +2128,26 @@ NORM_POLICIES = TermNormalizer.POLICIES
 LEGACY_TRACE_NAME = "legacy_trace.jsonl"
 NORM_TRACE_NAME = "norm_trace.jsonl"
 
+#: Policy B's IO share when `--norm-target-share` is silent. Same value and
+#: same meaning as `run_placement_io.DEFAULT_IO_TARGET_SHARE` (:74-76) and
+#: docs/dev-env.md's P-H flag table, so the two drivers' `adaptive` arms are
+#: comparable.
+DEFAULT_IO_TARGET_SHARE = 0.3
+
+#: FT's own activation gate, the ledger ruling of 2026-09-19 that
+#: `run_placement_io.FT_ACTIVATE_OVERFLOW` (:77-80) records: the legacy
+#: tau_rel window 0.12 -> 0.05 maps through `tau_rel_from_overflow` to overflow
+#: 0.57 -> 0.25, and 0.30 is the threshold the capacity term uses (design sec
+#: 5). Duplicated rather than imported: importing the legacy driver would pull
+#: DREAMPlace, numpy, scipy and the GPU evaluator into every consumer of this
+#: module. `tests/test_norm_adapter.py` locks the two constants together.
+FT_ACTIVATE_OVERFLOW = 0.30
+
 #: Keys `_ScheduleBacked` -- and therefore both adapters -- understands.
+#: `eps_rel` is still a `ScheduleState` field (schedules.py:128) and still
+#: governs the legacy arm's `derive_kappa_ft`; the P-H fix wave removed it from
+#: `TermNormalizer` entirely (controller ruling F1'), so it is deliberately not
+#: forwarded to the normalizer below.
 _SCHEDULE_KEYS = ("L_R", "rho_max", "tau_hi", "tau_lo", "of_on", "of_end",
                   "of_full", "f_ft_max", "ft_ramp_mode", "tau_start",
                   "tau_full", "ema", "c_lip", "n_ramp", "kappa_max", "eps_rel",
@@ -1936,9 +2156,10 @@ _SCHEDULE_KEYS = ("L_R", "rho_max", "tau_hi", "tau_lo", "of_on", "of_end",
 #: Keys only `TermNormalizerAdapter` understands. The driver builds one kwarg
 #: set for every policy, so under `legacy` these are accepted and dropped
 #: rather than raising -- `--norm-policy` must stay a one-word change.
-_NORMALIZER_KEYS = ("num_movable", "num_nodes", "norm_p", "probe_every", "wt0",
-                    "wt_step", "ramp_period", "wt_max", "momentum",
-                    "target_shares", "track_cancellation")
+_NORMALIZER_KEYS = ("io_term", "ft_term", "ecc_max", "num_movable",
+                    "num_nodes", "norm_p", "probe_every", "wt0", "wt_step",
+                    "ramp_period", "wt_max", "momentum", "target_shares",
+                    "track_cancellation")
 
 
 class _ScheduleBacked(object):
@@ -2058,62 +2279,145 @@ class LegacyNormAdapter(_ScheduleBacked):
 class TermNormalizerAdapter(_ScheduleBacked):
     """Policies `grandplan` (A) and `adaptive` (B) over `norm.TermNormalizer`.
 
-    `ScheduleState` supplies tau, rho and the single activation latch; the
-    normalizer supplies every coefficient, the Lipschitz cap, the cancellation
-    ratio and `norm_trace.jsonl`. `VersionPair` presents both version counters
-    as one, so a single `dp_hook.install_version_invariant(optimizer, adapter)`
-    covers an activation bump from `update_continuous` *and* a coefficient bump
-    from `transaction()` -- stacking two invariant wrappers would not work,
-    because `refresh_nesterov_secant` unwraps exactly one `__wrapped__` level.
+    `ScheduleState` supplies tau, rho and the single activation instant for
+    `io`; the normalizer supplies every coefficient, the Lipschitz cap, the
+    cancellation ratio and `norm_trace.jsonl`. `VersionPair` presents both
+    version counters as one, so a single
+    `dp_hook.install_version_invariant(optimizer, adapter)` covers an
+    activation bump from `update_continuous` *and* a coefficient bump from
+    `transaction()` -- stacking two invariant wrappers would not work, because
+    `refresh_nesterov_secant` unwraps exactly one `__wrapped__` level.
+
+    Terms are registered in the constructor, not on the first probe: every
+    registered term's activation gate must be evaluated on *every* GP
+    iteration (`update_activation`), and a term registered at the first
+    `every`-gated probe would latch up to `every` iterations late -- which is
+    review I1a's defect, with `n_ramp=20` aliased away by `every=50`.
     """
 
     TRACE_NAME = NORM_TRACE_NAME
 
-    def __init__(self, policy, *, num_movable=None, num_nodes=None, norm_p=1,
-                 probe_every=50, wt0=0.05, wt_step=0.05, ramp_period=100,
-                 wt_max=1.0, momentum=0.75, target_shares=None,
-                 track_cancellation=True, **config):
+    def __init__(self, policy, *, io_term=None, ft_term=None, ecc_max=0.0,
+                 num_movable=None, num_nodes=None, norm_p=1, probe_every=50,
+                 wt0=0.05, wt_step=0.05, ramp_period=100, wt_max=1.0,
+                 momentum=0.75, target_shares=None, track_cancellation=True,
+                 **config):
         if policy not in ("grandplan", "adaptive"):
             raise ValueError(
                 "TermNormalizerAdapter serves 'grandplan' and 'adaptive'; "
                 "'legacy' is LegacyNormAdapter's (got %r)" % (policy,))
+        if io_term is None:
+            raise ValueError(
+                "TermNormalizerAdapter needs io_term (and ft_term/ecc_max when "
+                "FT is on) at construction: terms are registered before the GP "
+                "loop so update_activation() sees every gate on every iteration")
         super().__init__(**config)
         self.policy = policy
-        # Policy B's shares are fractions of the *total* force
-        # G = ||grad WL|| + sum_t lam_t ||grad T_t||, so the legacy knobs map
-        # across directly: rho_max is already "IO force as a fraction of the WL
-        # force", and legacy's f_ft_max is the FT force as a fraction of the
-        # *IO* force, i.e. rho_max * f_ft_max of the whole.
-        self.target_shares = {"io": float(self.state.rho_max),
-                              "ft": float(self.state.rho_max) * float(self.state.f_ft_max)}
-        self.target_shares.update(parse_target_shares(target_shares))
+        # Same validation the landed driver applies in `run_io`
+        # (run_placement_io.py:257-265): with a non-legacy policy every
+        # coefficient comes from the normalizer, so `--rho-max 0` -- the
+        # reweight-only "IO off" setting under legacy -- would silently turn
+        # the IO penalty on at full normalizer strength. The main flow has no
+        # `--rho-margin` and no `--callback-order`, so the other two
+        # combination rules the driver checks cannot arise here.
+        if not float(self.state.rho_max) > 0.0:
+            raise ValueError(
+                "--rho-max 0 means 'IO off' only under --norm-policy legacy; "
+                "policy %r derives lambda_io from gradient norms and would run "
+                "the IO penalty at full strength" % (policy,))
+        self._io_term, self._ft_term = io_term, ft_term
+        if num_movable is None:
+            num_movable = io_term.num_movable
+        if num_nodes is None:
+            num_nodes = io_term.num_nodes
+        self._trace = (None if self.trace_path is None
+                       else NormTraceWriter(self.trace_path))
+        # No `eps_rel`: the P-H fix wave (commit 5e07cdf, controller ruling
+        # F1') removed the relative deadness threshold from the non-legacy
+        # coefficient path, and `TermNormalizer.__init__` no longer accepts the
+        # keyword. `kappa_max` is forwarded so the recovered
+        # kappa = lambda_ft/lambda_io is bounded by the same constant the
+        # legacy arm's `derive_kappa_ft` uses (review M2).
         self.normalizer = TermNormalizer(
             policy=policy, norm_p=norm_p, ema=self.state.ema,
             probe_every=probe_every, wt0=wt0, wt_step=wt_step,
             ramp_period=ramp_period, wt_max=wt_max, momentum=momentum,
-            c_lip=self.state.c_lip, eps_rel=self.state.eps_rel,
-            num_movable=num_movable, num_nodes=num_nodes,
-            track_cancellation=track_cancellation,
-            trace=(None if self.trace_path is None
-                   else NormTraceWriter(self.trace_path)))
+            c_lip=self.state.c_lip, kappa_max=self.state.kappa_max,
+            num_movable=int(num_movable), num_nodes=int(num_nodes),
+            track_cancellation=track_cancellation, trace=self._trace)
+        self._register(ft_term, ecc_max, parse_target_shares(target_shares))
         self._versions = VersionPair(self.state, self.normalizer)
+        self._iteration = -1
         self._overflow = float("nan")
-        self._registered = False
+
+    def _register(self, ft_term, ecc_max, overrides):
+        """`run_placement_io._register_norm_terms` (:83-116), term for term.
+
+        Curvatures are design sec 4's declared values: 1 for IO, `ecc_max` for
+        FT, floored at 1 because `register` rejects a curvature below 1 (the
+        curvature of a term with no eccentricity spread).
+
+        Three load-bearing details, all from the landed driver:
+
+        * `ft` declares `requires="io"`. `FtTerm` can only express the FT force
+          as `lambda_io * kappa`, so a `lambda_ft > 0` with `lambda_io == 0` is
+          unapplicable; the normalizer publishes 0 for `ft` instead of the
+          driver aborting a multi-hour run on one transient probe (review C1).
+        * `ft`'s activation gate is `FT_ACTIVATE_OVERFLOW`, not `of_on`: FT
+          must not switch on with IO.
+        * Under `grandplan`, `ft`'s weight ceiling is `f_ft_max * wt_max`, so
+          the FT force share mirrors the legacy `f_ft_max` instead of
+          converging to IO's ceiling (review I4). Under `adaptive` the target
+          shares already say what each term's share is, so no override is
+          installed.
+        """
+        self.normalizer.register(
+            "io", IoNormTerm(self._io_term), 1.0,
+            target_share=overrides.get("io", DEFAULT_IO_TARGET_SHARE),
+            activate_overflow=self.state.of_on, n_ramp=self.state.n_ramp)
+        if ft_term is not None:
+            ceiling = float(self.state.f_ft_max) * float(self.normalizer.wt_max)
+            self.normalizer.register(
+                "ft", FtNormTerm(ft_term), max(float(ecc_max), 1.0),
+                target_share=overrides.get("ft", float(self.state.f_ft_max)),
+                activate_overflow=FT_ACTIVATE_OVERFLOW,
+                n_ramp=self.state.n_ramp, requires="io",
+                wt_max=(ceiling if self.policy == "grandplan" and ceiling > 0.0
+                        else None))
+        unknown = sorted(set(overrides) - set(self.normalizer.configs))
+        if unknown:
+            raise ValueError("target shares name unregistered terms %r "
+                             "(registered: %r)"
+                             % (unknown, sorted(self.normalizer.configs)))
+        #: Effective share per *registered* term, for the record and the tests.
+        self.target_shares = dict(
+            (name, config.target_share)
+            for name, config in self.normalizer.configs.items())
 
     @property
     def lambda_io(self):
-        return float(self.normalizer.lambdas.get("io", 0.0))
+        """The coefficient `term_fn` must apply *at this iteration*: the
+        committed lambda times the activation ramp (`applied_lambda`, review
+        I1b). `self.normalizer.lambdas` only moves on an `every`-gated
+        transaction, so reading it directly would step the coefficient once
+        instead of drifting it through the ramp window, exactly the aliasing
+        the legacy arm never had."""
+        return float(self.normalizer.applied_lambda("io", self._iteration))
 
     @property
     def kappa_ft(self):
-        """`lambda_ft / lambda_io` -- the ratio `ops/ft_term.FtTerm.forward`
-        wants, since it scales the FT part by `lambda_io * kappa_ft`. 0.0 when
-        `lambda_io == 0`: there is no IO coefficient to divide by, and the
-        driver's `term_fn` is gated on `lambda_io != 0` anyway."""
-        lambda_io = float(self.normalizer.lambdas.get("io", 0.0))
-        if lambda_io == 0.0:
+        """`lambda_ft / lambda_io`, both *applied* -- the ratio
+        `ops/ft_term.FtTerm.forward` wants, since it scales the FT part by
+        `lambda_io * kappa_ft`, so the product is exactly FT's applied
+        coefficient. 0.0 when the applied `lambda_io` is 0: there is nothing to
+        divide by, and `term_fn` is gated on `lambda_io != 0` anyway. The ratio
+        stays inside `kappa_max`: `_compute` bounds the committed ratio, and
+        FT's gate (0.30) is below IO's (`of_on`), so FT's ramp is never ahead
+        of IO's."""
+        lambda_io = self.normalizer.applied_lambda("io", self._iteration)
+        if lambda_io <= 0.0:
             return 0.0
-        return float(self.normalizer.lambdas.get("ft", 0.0)) / lambda_io
+        return float(self.normalizer.applied_lambda("ft", self._iteration)) / lambda_io
 
     @property
     def obj_version(self):
@@ -2124,69 +2428,51 @@ class TermNormalizerAdapter(_ScheduleBacked):
         return int(self._versions.refreshed_version)
 
     def begin_iteration(self, iteration, overflow, gamma):
+        """`run_placement_io.cb`'s first four statements (:565-577), in order:
+        record the iteration `applied_lambda` is answered against, run the
+        continuous schedule, hand `io` the schedule's own activation instant,
+        and latch every other term's overflow gate."""
+        self._iteration = int(iteration)
         self._overflow = float(overflow)
         discrete = bool(self.state.update_continuous(iteration, overflow,
                                                      self.L_R, gamma))
-        self._sync_activation()
+        # Review I1a: `set_activation` is monotone and idempotent and makes
+        # `io`'s clock external, so `update_activation`'s own overflow gate
+        # skips it; the remaining terms (`ft`) latch on their own threshold,
+        # every iteration rather than every `probe_every`.
+        self.normalizer.set_activation("io", self.state.it_activate)
+        self.normalizer.update_activation(self._iteration, self._overflow)
         return discrete
-
-    def _sync_activation(self):
-        """`ScheduleState` is the single activation authority.
-
-        `TermNormalizer._activate` latches a term the first time it *sees* an
-        overflow at or below the threshold, and it only runs inside
-        `weights()`/`transaction()` -- i.e. on the probe cadence, tens of
-        iterations after the schedule activated. Left alone, policy A's
-        `activation_ramp` would restart from that probe (and policy B's ramped
-        share with it). Latching here, every iteration, keeps one
-        `it_activate` for the whole adapter; the normalizer's own latch is
-        monotone and idempotent, so it becomes a no-op afterwards.
-        """
-        if not self.state.active:
-            return
-        for term_state in self.normalizer.states.values():
-            if not term_state.active:
-                term_state.active = True
-                term_state.it_activate = int(self.state.it_activate)
-
-    def _register(self, io_term, ft_term, ecc_max):
-        """Register the production terms on the first probe -- the first moment
-        the driver hands over the terms and the FT curvature.
-
-        Curvatures are design sec 4's declared values: 1 for IO, `ecc_max` for
-        FT (floored at 1, the curvature of a term with no eccentricity spread,
-        matching `schedules.derive_cmax`'s `max(ecc_max - 1, 0)`).
-        `num_movable`/`num_nodes` fall back to the IO term's, which is where
-        `ops/ft_callback.publish_atomic` reads them from too; without them
-        `TermNormalizer.probe` refuses to run, because the fixed/filler mask
-        would silently become a no-op.
-        """
-        if self.normalizer.num_movable is None:
-            self.normalizer.num_movable = int(io_term.num_movable)
-        if self.normalizer.num_nodes is None:
-            self.normalizer.num_nodes = int(io_term.num_nodes)
-        self.normalizer.register(
-            "io", IoNormTerm(io_term), 1.0,
-            target_share=self.target_shares.get("io", 0.0),
-            activate_overflow=self.state.of_on, n_ramp=self.state.n_ramp)
-        if ft_term is not None:
-            self.normalizer.register(
-                "ft", FtNormTerm(ft_term), max(float(ecc_max), 1.0),
-                target_share=self.target_shares.get("ft", 0.0),
-                activate_overflow=self.state.of_on, n_ramp=self.state.n_ramp)
-        self._registered = True
-        self._sync_activation()
 
     def probe(self, iteration, pos, *, io_term, ft_term, wirelength_op,
               ecc_max, gamma):
-        """One WL backward plus one isolated backward per term, then one atomic
-        coefficient transaction. Returns the pending `norm_trace.jsonl` row;
-        `mark_refreshed()` is what actually writes it."""
-        if not self._registered:
-            self._register(io_term, ft_term, ecc_max)
+        """One WL backward plus one isolated backward per term on the probe
+        cadence, then one atomic coefficient transaction -- the landed driver's
+        `should_probe`/`transaction` pair (run_placement_io.py:657-659). A
+        transaction on a callback that did not probe reuses the previous
+        probe's norms, which is why `norm_trace.jsonl` has one row per
+        transaction rather than one per probe.
+
+        `io_term`/`ft_term`/`ecc_max` are the protocol's, i.e.
+        `LegacyNormAdapter`'s, arguments; this adapter registered its terms at
+        construction and only checks that the driver is still handing over the
+        same objects. Returns the pending `norm_trace.jsonl` row;
+        `mark_refreshed()` is what actually writes it.
+
+        A non-finite coefficient raises `FloatingPointError` out of
+        `transaction()` before anything is committed (review I6). The driver
+        does not catch it: a `nan` lambda silently passes every downstream
+        `lam <= 0` guard and poisons the whole objective."""
+        if io_term is not self._io_term or ft_term is not self._ft_term:
+            raise ValueError(
+                "probe() was handed different term objects than the ones "
+                "registered at construction")
+        if not math.isfinite(self._overflow):
+            raise RuntimeError("begin_iteration() must run before probe()")
         ctx = {"iteration": int(iteration), "overflow": self._overflow,
                "tau": self.tau, "gamma": float(gamma)}
-        self.normalizer.probe(iteration, pos, wirelength_op, ctx)
+        if self.normalizer.should_probe(iteration):
+            self.normalizer.probe(iteration, pos, wirelength_op, ctx)
         transaction = self.normalizer.transaction(iteration, self._overflow,
                                                   self.tau, gamma)
         return transaction.row
@@ -2196,13 +2482,14 @@ class TermNormalizerAdapter(_ScheduleBacked):
         `NormTraceWriter` at `mark_refreshed()` time, and that writer rejects
         any row whose keys are not exactly `norm_trace.ROW_FIELDS` (pre-flight
         amendment A-9: one schema per file name). The driver's per-probe
-        extras -- `io_count`, `ft_count`, `churn` -- reach `result.json`
-        through `soft_summary["probe_samples"]` instead."""
+        extras -- `io_count`, `ft_count`, `churn`, `lambda_io`, `kappa_ft` --
+        reach `result.json` through `soft_summary["probe_samples"]` instead."""
         return None
 
     def close(self):
-        if self.normalizer.trace is not None:
-            self.normalizer.trace.close()
+        if self._trace is not None:
+            self._trace.close()
+            self._trace = None
             self.normalizer.trace = None
 
     def needs_refresh(self):
@@ -2221,6 +2508,13 @@ def make_norm_adapter(policy, **config):
         raise TypeError(f"make_norm_adapter got unexpected keyword(s): {unknown}")
     schedule = {key: value for key, value in config.items() if key in _SCHEDULE_KEYS}
     if policy == "legacy":
+        # `publish_atomic` measures L1 gradients internally, so an L2 request
+        # under legacy would be silently ignored -- the landed driver rejects
+        # the same pair (run_placement_io.py:237-239).
+        if int(config.get("norm_p", 1)) != 1:
+            raise ValueError("norm policy 'legacy' measures L1 gradients inside "
+                             "publish_atomic; norm_p must be 1, got %r"
+                             % (config.get("norm_p"),))
         return LegacyNormAdapter(**schedule)
     extra = {key: value for key, value in config.items() if key in _NORMALIZER_KEYS}
     return TermNormalizerAdapter(policy, **schedule, **extra)
@@ -2229,12 +2523,12 @@ def make_norm_adapter(policy, **config):
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_norm_adapter.py -v`
-Expected: PASS — 8 passed.
+Expected: PASS — 15 passed. (Verified on 2026-09-19 at `e06e754`: the module and the test above were extracted into a scratch package, grafted onto the live `ioplace` namespace and run against the landed `norm.py`/`norm_trace.py`/`ops/norm_terms.py` on CPU — 15 passed in 1.3 s.)
 
 - [ ] **Step 5: Run P-H's own normalisation tests for regressions**
 
-Run: `"$IOPLACE_PYTHON" -m pytest tests/test_norm.py tests/test_norm_trace.py tests/test_norm_legacy_adapter.py -q`
-Expected: PASS — unchanged. This task adds a consumer of `norm.py`/`norm_trace.py`; it must not edit either.
+Run: `"$IOPLACE_PYTHON" -m pytest tests/test_norm.py tests/test_norm_trace.py tests/test_norm_legacy_adapter.py tests/test_norm_driver.py -q`
+Expected: PASS — unchanged. This task adds a consumer of `norm.py`/`norm_trace.py`; it must not edit either, and it must not change `run_placement_io.py`'s behaviour.
 
 - [ ] **Step 6: Commit**
 
@@ -2244,10 +2538,14 @@ git commit -m "feat(norm-adapter): legacy and TermNormalizer adapters behind one
 
 LegacyNormAdapter wraps ScheduleState + publish_atomic; TermNormalizerAdapter
 drives P-H's TermNormalizer for --norm-policy grandplan|adaptive, keeping a
-ScheduleState only for tau/rho/activation and exposing lambda_io, kappa_ft and
-a VersionPair over both version counters so the Nesterov invariant still
-holds. Each policy writes its own trace file: norm_trace.jsonl through
-NormTraceWriter, legacy_trace.jsonl for the retired row schema.
+ScheduleState only for tau/rho/activation and mirroring run_placement_io's
+landed wiring call for call: terms registered up front with requires='io' and
+FT's own overflow gate and weight ceiling, set_activation/update_activation
+every iteration, should_probe-gated probes, and lambda_io/kappa_ft read from
+applied_lambda so the coefficient drifts through the activation ramp. A
+VersionPair over both version counters keeps the Nesterov invariant. Each
+policy writes its own trace file: norm_trace.jsonl through NormTraceWriter,
+legacy_trace.jsonl for the retired row schema.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -2522,7 +2820,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Consumes: everything from Tasks 1–6, plus `run_placement._load_dreamplace` / `get_regions_for` / `extract_final_positions` / `_pack_eval_metrics` / `_legalization_diagnostics` / `_effective_scale_fields` / `_stop_overflow_reached` / `_gp_iteration_budget` / `_t8a_provenance`, `run_placement_io._io_cleanup` / `_install_attribute` / `_cleanup_once`, `run_placement_two_stage.assign_blocks_to_regions`, `dp_hook`, `ops/io_term`, `ops/ft_term`, `ops/soft_assign.rect_table`, `evaluator_gpu.GpuEvalContext`, `export/evaluation.save_evaluation`.
 - Produces:
   - `build_parser() -> argparse.ArgumentParser`
-  - `run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None, init="die_center", seed_npz=None, membership_npz=None, remap_blocks="auto", norm_policy="legacy", norm_target_share=None, every=50, home_period=None, rho_max=0.1, f_ft_max=0.0, tau_hi=0.30, tau_lo=0.03, of_on=0.90, of_end=None, of_full=0.20, ft_ramp_mode="window", tau_start=0.12, tau_full=0.05, freeze_window=50, freeze_overflow=0.15, freeze_tau_rel=0.05, freeze_churn=0.005, argmax_chunk=4, ignore_net_degree=None, w_mode="unit", dp_seed=None, deterministic=None, check_invariant=False, timer=None) -> dict` returning `{"freeze", "part", "soft_npz", "membership_npz", "regions_json", "region_source", "init", "prior", "norm_policy", "trace_path", "probe_samples", "num_probes", "num_refreshes", "gp_iterations_soft", "density_weight_soft", "placedb_sha256", "die_native"}`
+  - `run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None, init="die_center", seed_npz=None, membership_npz=None, remap_blocks="auto", norm_policy="grandplan", norm_target_share=None, every=50, home_period=None, rho_max=0.1, f_ft_max=0.0, tau_hi=0.30, tau_lo=0.03, of_on=0.90, of_end=None, of_full=0.20, ft_ramp_mode="window", tau_start=0.12, tau_full=0.05, freeze_window=50, freeze_overflow=0.15, freeze_tau_rel=0.05, freeze_churn=0.005, argmax_chunk=4, ignore_net_degree=None, w_mode="unit", dp_seed=None, deterministic=None, check_invariant=False, timer=None) -> dict` returning `{"freeze", "part", "soft_npz", "membership_npz", "regions_json", "region_source", "init", "prior", "norm_policy", "trace_path", "probe_samples", "num_probes", "num_refreshes", "gp_iterations_soft", "density_weight_soft", "placedb_sha256", "die_native"}`
   - `run_fence_gp(config_json, out_dir, *, region_set, part, positions, reference_density_weight, k, density_clamp_lo, density_clamp_hi, dp_seed, deterministic, extra_terms=(), timer) -> dict`
 
   `sampler` is gone from both: neither ever read it, only `run_main_flow`'s own sampler reaches `phase_summary` (pre-flight amendment D-3).
@@ -2536,7 +2834,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 3. **IO and FT are off after the freeze.** `run_fence_gp` attaches nothing unless the caller passes `extra_terms` — the hook point where P-D's capacity term and P-E's pseudo-FT term will attach.
 4. **`io_fence_gp` is measured exactly.** The `legalize_op` wrapper evaluates the GP positions immediately before legalisation, so `lg_loss` is never contaminated by a stale periodic callback.
 5. **Soft-assign geometry lives in scaled units.** `IoTerm`, the freeze argmax and the evaluator all work on the optimizer's coordinates, so the native `RegionSet` is converted once with `artifacts.scaled_region_set(rs, params.shift_factor, params.scale_factor)`. Everything written to disk is converted back. The two *area* statistics are the exception: `region_cell_stats`/`region_area_balance` are called with **native-unit** sizes and the native `RegionSet` at both call sites, because `region_area`/`region_cell_area` are not scale-invariant and `freeze.json` and `result.json` must quote the same numbers (amendment D-2).
-6. **One normalisation trace per policy, written by the adapter.** `--norm-policy legacy` writes `legacy_trace.jsonl` (`publish_atomic`'s keys plus the driver's per-probe extras); `grandplan`/`adaptive` write `norm_trace.jsonl` strictly through `norm_trace.NormTraceWriter`, whose rows `TermNormalizer` emits at `mark_refreshed()` time. The driver never formats or opens a trace file: it hands `adapter.write_trace_row(row, sample)` the extras and lets the adapter decide, and registers `adapter.close` on the cleanup stack. The per-probe `io_count`/`ft_count`/`churn` samples always reach `result.json` through `soft_summary["probe_samples"]`, whichever policy ran (amendment A-9).
+6. **One normalisation trace per policy, written by the adapter.** `--norm-policy legacy` writes `legacy_trace.jsonl` (`publish_atomic`'s keys plus the driver's per-probe extras); `grandplan`/`adaptive` write `norm_trace.jsonl` strictly through `norm_trace.NormTraceWriter`, whose rows `TermNormalizer` emits at `mark_refreshed()` time. The driver never formats or opens a trace file: it hands `adapter.write_trace_row(row, sample)` the extras and lets the adapter decide, and registers `adapter.close` on the cleanup stack. The per-probe `io_count`/`ft_count`/`churn`/`lambda_io`/`kappa_ft` samples always reach `result.json` through `soft_summary["probe_samples"]`, whichever policy ran (amendment A-9). Under the non-legacy policies the last transaction's row stays pending when the freeze criterion fires, because the freeze raise deliberately skips that iteration's `mark_refreshed()` (amendment D-13) — Task 9's row count accounts for it.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2556,7 +2854,7 @@ def test_parser_exposes_the_v2_switches():
     parser = build_parser()
     args = parser.parse_args(["--config", "c.json", "--out-dir", "o"])
     assert args.k == 16 and args.rtype == "grid" and args.phase == "all"
-    assert args.init == "die_center" and args.norm_policy == "legacy"
+    assert args.init == "die_center" and args.norm_policy == "grandplan"
     assert args.every == 50 and args.freeze_window == 50
     assert args.freeze_overflow == 0.15 and args.freeze_tau_rel == 0.05
     assert args.freeze_churn == 0.005
@@ -2790,7 +3088,7 @@ def _to_native(values, shift, scale):
 
 def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
                    init="die_center", seed_npz=None, membership_npz=None,
-                   remap_blocks="auto", norm_policy="legacy",
+                   remap_blocks="auto", norm_policy="grandplan",
                    norm_target_share=None, every=50,
                    home_period=None, rho_max=0.1, f_ft_max=0.0, tau_hi=0.30,
                    tau_lo=0.03, of_on=0.90, of_end=None, of_full=0.20,
@@ -2885,10 +3183,14 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
 
         # The adapter owns its own trace file (legacy_trace.jsonl or
         # norm_trace.jsonl, amendment A-9) and, under grandplan/adaptive, the
-        # TermNormalizer that needs num_movable/num_nodes for its fixed/filler
+        # TermNormalizer: it registers `io`/`ft` here, in the constructor, so
+        # every term's activation gate is evaluated on every GP iteration
+        # (review I1a), and it needs num_movable/num_nodes for the fixed/filler
         # gradient mask. `out_dir` is where the trace lands; unknown-to-legacy
-        # keys are dropped by make_norm_adapter, so this one call serves every
-        # policy.
+        # keys -- io_term/ft_term/ecc_max included -- are dropped by
+        # make_norm_adapter, so this one call serves every policy. It also owns
+        # the flag-combination validation the legacy driver keeps in `run_io`
+        # (legacy + norm_p != 1, non-legacy + rho_max == 0).
         adapter = make_norm_adapter(norm_policy, L_R=L_R, rho_max=rho_max,
                                     tau_hi=tau_hi, tau_lo=tau_lo, of_on=of_on,
                                     of_end=of_end, of_full=of_full,
@@ -2896,6 +3198,8 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
                                     tau_start=tau_start, tau_full=tau_full,
                                     out_dir=out_dir, probe_every=every,
                                     target_shares=norm_target_share,
+                                    io_term=io_term, ft_term=ft_term,
+                                    ecc_max=ecc_max,
                                     num_movable=nl.num_movable,
                                     num_nodes=placedb.num_nodes)
         _cleanup_once(cleanup, adapter.close)
@@ -2964,9 +3268,16 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
                                     wirelength_op=placer.model.op_collections.wirelength_op,
                                     ecc_max=ecc_max, gamma=gamma)
                 argmax = centre_argmax(pos)
+                # lambda_io/kappa_ft are the *applied* coefficients under
+                # every policy (review I1: the non-legacy adapters read them
+                # off TermNormalizer.applied_lambda, the legacy one bakes its
+                # ramp into lambda_io), so the two arms' probe_samples are
+                # directly comparable. lambda_ft is their product.
                 sample = {"iteration": int(iteration), "overflow": overflow,
                           "io_count": int(res.io_count),
                           "ft_count": int(res.ft_count),
+                          "lambda_io": adapter.lambda_io,
+                          "kappa_ft": adapter.kappa_ft,
                           "churn": monitor.observe(iteration, argmax)}
                 cb_state["probe_samples"].append(sample)
                 # The adapter owns the trace: under legacy this writes
@@ -3182,7 +3493,7 @@ def run_fence_gp(config_json, out_dir, *, region_set, part, positions,
 def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
                   regions_json=None, phase="all", init="die_center",
                   seed_npz=None, membership_npz=None, remap_blocks="auto",
-                  norm_policy="legacy", norm_target_share=None, every=50,
+                  norm_policy="grandplan", norm_target_share=None, every=50,
                   home_period=None, rho_max=0.1,
                   f_ft_max=0.0, tau_hi=0.30, tau_lo=0.03, of_on=0.90,
                   of_end=None, of_full=0.20, ft_ramp_mode="window",
@@ -3334,12 +3645,14 @@ def build_parser():
     parser.add_argument("--seed-npz", default=None)
     parser.add_argument("--membership", default=None)
     parser.add_argument("--remap-blocks", choices=["auto", "on", "off"], default="auto")
-    parser.add_argument("--norm-policy", choices=list(NORM_POLICIES), default="legacy")
+    parser.add_argument("--norm-policy", choices=list(NORM_POLICIES),
+                        default="grandplan")
     parser.add_argument("--norm-target-share", default=None,
                         help="policy B force shares as fractions of the total "
-                             "force, e.g. 'io=0.3,ft=0.1'; default io=--rho-max, "
-                             "ft=--rho-max*--f-ft-max. Ignored by --norm-policy "
-                             "legacy")
+                             "force, e.g. 'io=0.3,ft=0.1'; defaults io=0.3, "
+                             "ft=--f-ft-max, and a name no registered term "
+                             "answers to is an error. Ignored by "
+                             "--norm-policy legacy")
     parser.add_argument("--every", type=int, default=50)
     parser.add_argument("--home-period", type=int, default=None)
     parser.add_argument("--rho-max", type=float, default=0.1)
@@ -3637,24 +3950,32 @@ from pathlib import Path
 
 
 @pytest.mark.slow
-def test_main_flow_end_to_end_on_gcd_closes_the_io_identity(tmp_path):
+@pytest.mark.parametrize("norm_policy", ["legacy", "grandplan"])
+def test_main_flow_end_to_end_on_gcd_closes_the_io_identity(tmp_path, norm_policy):
     """Design v2 sec 9's small end-to-end case: producer-free grid K=4 on GCD,
     full main flow, asserting the artefacts exist and
-    io(final) = io(soft) + io_delta_at_freeze + lg_loss."""
+    io(final) = io(soft) + io_delta_at_freeze + lg_loss.
+
+    Parametrised over the two shipped policies (Global Constraints ruling
+    2026-09-19): `grandplan` is the driver's default and design sec 4's
+    coefficient path, `legacy` is the bit-for-bit regression arm. `adaptive`
+    is ablation-only and is covered by tests/test_norm_adapter.py, not here."""
     from ioplace.artifacts import MAIN_FLOW_RESULT_FIELDS
     from ioplace.paths import REPO_ROOT
     config = Path(REPO_ROOT) / "results/route_feedback_20260914/gcd.json"
     if not config.exists():
         pytest.skip("GCD benchmark required")
-    out = tmp_path / "gcd_k4"
+    out = tmp_path / f"gcd_k4_{norm_policy}"
     result = run_main_flow(str(config), str(out), k=4, rtype="grid", seed=0,
                            init="die_center", every=25, freeze_window=50,
-                           rho_max=0.05, dp_seed=1000, deterministic=1)
+                           rho_max=0.05, norm_policy=norm_policy,
+                           dp_seed=1000, deterministic=1)
+    assert result["norm_policy"] == norm_policy
 
     # the normalisation trace's file name is the policy's, not a constant:
     # legacy writes legacy_trace.jsonl, grandplan/adaptive norm_trace.jsonl
-    # (amendment A-9). This run is legacy, the driver's default.
-    trace_name = ("legacy_trace.jsonl" if result["norm_policy"] == "legacy"
+    # (amendment A-9).
+    trace_name = ("legacy_trace.jsonl" if norm_policy == "legacy"
                   else "norm_trace.jsonl")
     for name in ("regions.json", "soft.npz", "freeze.json",
                  "frozen_membership.npz", "placement.npz", "evaluation.npz",
@@ -3697,10 +4018,10 @@ def test_main_flow_end_to_end_on_gcd_closes_the_io_identity(tmp_path):
     # norm_trace.jsonl carries exactly norm_trace.ROW_FIELDS and nothing else,
     # because NormTraceWriter validates every row. The else branch is what the
     # --norm-policy grandplan|adaptive arms of the spec section 4 ablation hit.
-    from ioplace.norm_trace import ROW_FIELDS, read_norm_trace
+    from ioplace.norm_trace import ROW_FIELDS, TERM_FIELDS, read_norm_trace
     rows = read_norm_trace(str(out / trace_name))
     assert rows
-    if result["norm_policy"] == "legacy":
+    if norm_policy == "legacy":
         for row in rows:
             for key in ("iteration", "overflow", "tau", "tau_rel", "lambda_io",
                         "grad_l1_wl", "grad_l1_io", "obj_version", "policy",
@@ -3709,13 +4030,28 @@ def test_main_flow_end_to_end_on_gcd_closes_the_io_identity(tmp_path):
     else:
         for row in rows:
             assert set(row) == set(ROW_FIELDS)
-            assert row["policy"] == result["norm_policy"] and "io" in row["terms"]
+            assert row["policy"] == norm_policy and "io" in row["terms"]
+            assert set(row["terms"]["io"]) == set(TERM_FIELDS)
+        # design sec 4's point: the IO coefficient is derived from a measured
+        # gradient ratio, and the committed lambda is un-ramped while the
+        # applied one carries the activation ramp (review I1).
+        assert any(row["terms"]["io"]["ratio_ema"] for row in rows)
+        assert any(row["terms"]["io"]["lam"] > 0.0 for row in rows)
+        assert all(row["terms"]["io"]["lam_applied"] <= row["terms"]["io"]["lam"]
+                   for row in rows)
 
     # soft-phase provenance survives into result.json (amendment D-6)
     summary = result["soft_summary"]
     assert summary["region_source"] == "builtin"
     assert summary["init"]["mode"] == "die_center" and summary["prior"] is None
-    assert summary["num_probes"] == len(rows) == len(summary["probe_samples"])
+    assert summary["num_probes"] == len(summary["probe_samples"])
+    # Under legacy the adapter writes each row as the driver hands it over.
+    # Under grandplan/adaptive TermNormalizer holds the row until
+    # mark_refreshed(), and the freeze raise deliberately skips that last
+    # refresh (amendment D-13), so a criterion freeze drops exactly one row --
+    # by design: those coefficients never reached the objective.
+    dropped = int(norm_policy != "legacy" and freeze["reason"] == "criterion")
+    assert len(rows) == summary["num_probes"] - dropped
     assert summary["trace_path"].endswith(trace_name)
 
     # --phase fence reproduces the fence half from the artefacts alone
@@ -3729,14 +4065,15 @@ def test_main_flow_end_to_end_on_gcd_closes_the_io_identity(tmp_path):
 - [ ] **Step 2: Run the test to verify it fails or passes for the right reason**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_main_flow_driver.py::test_main_flow_end_to_end_on_gcd_closes_the_io_identity -v`
-Expected on first run: it exercises the real flow. If it fails, the failure must be a real defect in Tasks 1–7 — fix that code, not the assertions. The two failure modes to expect and how to handle them:
+Expected on first run: it exercises the real flow, twice (once per policy). If it fails, the failure must be a real defect in Tasks 1–7 — fix that code, not the assertions. The three failure modes to expect and how to handle them:
 - `IndexError: index -1 is out of bounds for axis 0 with size 0`, raised by `np.percentile` inside `PlaceDB.calc_num_filler_for_fence_region` at `PlaceDB.py:687` → an empty region survived; `ensure_nonempty_regions` (Task 3) is not being applied to the membership that reaches `save_membership`. Do **not** go looking for a `ValueError` at `:729`: under the installed numpy (1.26.4) the percentile call raises before `int(round(nan))` is ever reached (pre-flight amendment E-3).
 - `result["io_fence_gp_source"] == "fallback"` → `io_fence_gp` was not captured in the `legalize_op` wrapper, so it fell back to the post-LG count and `lg_loss` is 0 by definition rather than by measurement. The cause is `legalize_flag = 0` in phase 3; check the config. (`io_identity_residual` cannot report this — it is 0 either way.)
+- On the `grandplan` arm only, `RuntimeError: previous transaction was not refreshed` out of `TermNormalizer.transaction` → the driver reached a second `every`-gated callback without running the `discrete or adapter.needs_refresh()` refresh block in between. That block is not optional under the non-legacy policies; check Task 7's `cb` did not `return` or `continue` past it.
 
 - [ ] **Step 3: Run the whole main-flow test module**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_main_flow_driver.py -v`
-Expected: PASS — 7 passed (6 fast + 1 slow). Wall time dominated by two GCD placements, roughly 2–5 minutes.
+Expected: PASS — 8 passed (6 fast + 2 slow: one per `--norm-policy` arm). Wall time dominated by four GCD placements, roughly 5–10 minutes.
 
 - [ ] **Step 4: Run the full suite**
 
@@ -3793,7 +4130,7 @@ export IOPLACE_MTKAHYPAR_THREADS=1 CUDA_VISIBLE_DEVICES=3
 "$IOPLACE_PYTHON" -m ioplace.drivers.run_main_flow \
   --config results/route_feedback_20260914/gcd.json \
   --out-dir runs/gcd/ours --k 4 --rtype grid --init die_center \
-  --norm-policy legacy
+  --norm-policy grandplan
 ```
 ````
 
@@ -3872,6 +4209,6 @@ Three more were found by the 2026-09-19 pre-flight scan and fixed in the amendme
 - `freeze.region_cell_stats` and `main_flow_metrics.region_area_balance` were two implementations of the same arithmetic evaluated in *different coordinate frames*, so `result.json` carried `region_area` in scaled units and `freeze.json` the same quantity in native units. One implementation now, called in native units from both sites.
 - `_resolve_prior` took a materialised netlist and the driver built it unconditionally, a multi-GB copy at 10M–30M cells even with `--remap-blocks off`; it now takes a zero-arg factory.
 
-A second residual risk, flagged rather than hidden: the end-to-end test runs `--norm-policy legacy` only, because a second GCD flow would double its wall time. `TermNormalizerAdapter` is therefore covered by Task 5's unit tests (real gradients, real `NormTraceWriter` rows, the version-pair discipline) and by Task 9's policy branch, but the first full `grandplan` GP run happens in the spec §4 ablation campaign. If that run surprises, the first two things to check are the activation sync (`_sync_activation`, which keeps `it_activate` on the schedule's iteration rather than the first probe's) and the default target shares.
+A second residual risk, flagged rather than hidden: `adaptive` (policy B) never runs end to end. Task 9 is parametrised over `{legacy, grandplan}` only (Global Constraints ruling 2026-09-19), so policy B is covered by Task 5's unit tests — real gradients, real `NormTraceWriter` rows, the bootstrap branch of `adaptive_lambda`, the version-pair discipline — and by nothing larger until the spec §4 ablation campaign. If that campaign surprises, the two things to check first are the target shares (`io=0.3`, `ft=--f-ft-max` by default, fractions of the *total* force `G`, not of `‖∇WL‖`) and `lam_state`, the momentum state a dead or dependency-zeroed probe deliberately leaves untouched (review I7) — a policy-B run whose coefficient re-bootstraps every probe is reading `lam`, not `lam_state`.
 
 One residual risk, flagged rather than hidden: Task 9's `--phase fence` re-run asserts bit-identical IO counts across two processes-in-one-process runs. It relies on `deterministic_flag = 1` plus the `np.random.seed(params.random_seed)` guard, the same determinism the existing `tests/test_driver_io.py::test_lifetime_out_is_bit_exact_with_run_without_it` depends on. If it proves flaky on this host, weaken that one assertion to `abs(rerun["io_count"] - result["io_count"]) <= 1` and record the observed spread — do not weaken the identity assertions, which must hold exactly.
