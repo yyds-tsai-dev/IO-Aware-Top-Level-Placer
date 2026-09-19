@@ -43,13 +43,31 @@ in this plan touches it), and **Task 11 is the single owner of the dead
 under `benchmarks/`. The coordinate contract in Task 10 rule 1 was checked
 against P-B's warm-start write and needed no change.
 
+**Pre-flight amendments (2026-09-19).** Every python block in this plan was
+extracted into a scratch package and the plan's own tests were run against it
+(`.superpowers/sdd/2026-09-19-v2-p-c-region-producer/preflight.md`): 72 passed,
+3 failed. The rulings recorded at the end of that directory's `progress.md` are
+folded in here and are **binding**, not advisory: Algorithm-1 keeps each
+direction's support point (D1, Tasks 2 and 9); the morphology no longer erodes
+the die border (D2, Task 5); `extract()` canonicalises connectivity and asserts
+it (D7, Task 5); `enforce_rect_max` gains a shedding move and the driver falls
+back to `--extract-bins 32` automatically instead of aborting (D3, Tasks 7, 10,
+11); the potential-function termination proof is replaced by the pass-budget
+guard (D4, Task 7); `GroupingWeight` and `VersionState` are deleted and the
+grouping coefficient is derived by `norm.TermNormalizer` with
+`dp_hook.install_version_invariant` installed (D5/D6, Tasks 4 and 10);
+`anchor_tables` clamps its chunk by hull vertex count and `GroupingTerm` drops
+`num_physical` (D9/D11, Tasks 3 and 4); the expected test counts in Tasks 4 and
+8 are corrected and two weak assertions tightened (D8/D12). With those applied
+the scratch package runs **75 passed, 0 failed** for Tasks 2-9.
+
 **New files**
 
 | File | Responsibility |
 |---|---|
 | `src/ioplace/producer/__init__.py` | Empty package marker. |
 | `src/ioplace/producer/hull.py` | Algorithm-1 candidate reduction, quickhull via `scipy.spatial.ConvexHull`, area cap by centroid bisection, macro pseudo points, and the rasterised `512²` anchor tables (Eq.1's two anchor fields). Pure geometry — no DREAMPlace, no netlist. |
-| `src/ioplace/producer/grouping_term.py` | `GroupingTerm` (Eq.1/Eq.2 quadratic springs to frozen, table-read anchors; a `torch.nn.Module` callable as a `dp_hook.attach_terms` term) and `GroupingWeight` (Eq.3 gradient-norm ratio with §4.3's ramp). |
+| `src/ioplace/producer/grouping_term.py` | `GroupingTerm` (Eq.1/Eq.2 quadratic springs to frozen, table-read anchors; a `torch.nn.Module` callable as a `dp_hook.attach_terms` term). Eq.3's coefficient is **not** derived here: `norm.TermNormalizer` owns it (spec §0's single-owner normalisation, ruling D5). |
 | `src/ioplace/producer/extract.py` | Density maps → per-bin argmax → majority downsample → morphological open/close → largest connected component → non-empty guard → whitespace to nearest. Pure numpy/scipy on a label grid. |
 | `src/ioplace/producer/sa.py` | Eq.4–8 energies, min-max normalisation, the two move types, fragmentation rejection, and the annealing schedule. Pure numpy/scipy. |
 | `src/ioplace/producer/rectify.py` | Label grid → maximal-horizontal-strip rectangles → `rect_max=8` enforcement by smallest-notch filling → `RegionSet` on the 512 lattice + `validate()`. Pure numpy/scipy. |
@@ -61,7 +79,7 @@ against P-B's warm-start write and needed no change.
 
 `tests/test_producer_hull.py`, `tests/test_producer_anchor_tables.py`, `tests/test_producer_grouping_term.py`, `tests/test_producer_extract.py`, `tests/test_region_producer.py` (SA, per spec §9's named file), `tests/test_producer_rectify.py`, `tests/test_producer_membership.py`, `tests/test_run_region_producer.py`.
 
-**Files read but never modified:** `src/ioplace/artifacts.py` (P-B Task 1 — the file contract; imported by Tasks 10 and 11, never edited), `src/ioplace/regions.py`, `src/ioplace/region_grid.py`, `src/ioplace/region_graph.py`, `src/ioplace/dp_hook.py`, `src/ioplace/netlist.py`, `src/ioplace/paths.py`, `src/ioplace/profile.py`, `src/ioplace/norm.py` (P-H; `ema_update` and `grandplan_weight` are imported by Task 4), `src/ioplace/partition/mtkahypar_runner.py`, `src/ioplace/drivers/run_placement.py`.
+**Files read but never modified:** `src/ioplace/artifacts.py` (P-B Task 1 — the file contract; imported by Tasks 10 and 11, never edited), `src/ioplace/regions.py`, `src/ioplace/region_grid.py`, `src/ioplace/region_graph.py`, `src/ioplace/dp_hook.py`, `src/ioplace/netlist.py`, `src/ioplace/paths.py`, `src/ioplace/profile.py`, `src/ioplace/norm.py` (P-H; `TermNormalizer` is instantiated by Task 10 — ruling D5), `src/ioplace/partition/mtkahypar_runner.py`, `src/ioplace/drivers/run_placement.py`.
 
 **Boundary rule:** `hull.py`/`extract.py`/`sa.py`/`rectify.py` take arrays and return arrays. Only `run_region_producer.py` knows what a `PlaceDB` is. That is what makes every geometric step testable in milliseconds with a hand-built input.
 
@@ -197,8 +215,8 @@ def test_reduce_candidates_keeps_the_extreme_points():
     out = hull.reduce_candidates(pts)
     for corner in ([-5., -5.], [5., -5.], [5., 5.], [-5., 5.]):
         assert (np.abs(out - corner).sum(axis=1) < 1e-12).any(), corner
-    # Algorithm 1's own bound: 2 bands x m directions x K_dir, before dedup.
-    assert len(out) <= 2 * hull.DIRECTIONS_M * hull.K_DIR
+    # Algorithm 1's own bound, plus ruling D1's one support point per band.
+    assert len(out) <= 2 * hull.DIRECTIONS_M * (hull.K_DIR + 1)
 
 
 def test_reduce_candidates_is_deterministic_and_passes_small_sets_through():
@@ -270,7 +288,12 @@ def test_build_hull_applies_reduction_then_cap():
     rng = np.random.default_rng(2)
     pts = rng.uniform(0.0, 10.0, size=(20000, 2))
     v = hull.build_hull(pts, a_max=25.0)
-    assert hull.polygon_area(v) <= 25.0 + 1e-9
+    area = hull.polygon_area(v)
+    assert area <= 25.0 + 1e-9
+    # Ruling D12: the upper bound alone is satisfied by a hull that collapsed
+    # onto the dense cluster, which is exactly how D1 slipped through. The cap
+    # binds here (the uncapped hull is ~100), so the shrink must land ON it.
+    assert area >= 0.9 * 25.0
     assert len(v) >= 3
 ```
 
@@ -308,10 +331,11 @@ def reduce_candidates(pts, m=DIRECTIONS_M, q=QUANTILE_Q, alpha=BAND_ALPHA,
                       k_dir=K_DIR):
     """Algorithm 1. For each of m equally spaced directions, keep the quantile
     band [t, t + alpha*(s_max - t)] with t = quantile(s, q), capped at the k_dir
-    projections closest to t; repeat with the mirrored direction (which is the
-    paper's t_lo = quantile(s, 1-q) branch); dedup.
+    projections closest to t, PLUS that direction's support point (ruling D1);
+    repeat with the mirrored direction (which is the paper's
+    t_lo = quantile(s, 1-q) branch); dedup.
 
-    The output bound is 2*m*k_dir before dedup; antipodal direction pairs select
+    The output bound is 2*m*(k_dir + 1) before dedup; antipodal direction pairs select
     largely the same points, which is why the spec quotes "<=1024 points/region"
     at these defaults. Fully deterministic: no RNG, and np.unique sorts.
     """
@@ -331,6 +355,13 @@ def reduce_candidates(pts, m=DIRECTIONS_M, q=QUANTILE_Q, alpha=BAND_ALPHA,
                 order = np.argsort(ss[band] - t, kind="stable")
                 band = band[order[:k_dir]]
             keep[band] = True
+            # Ruling D1, a NAMED DEVIATION from the digest's literal band: the
+            # band [t, t+alpha*(s_max-t)] plus the "keep the k_dir closest to
+            # t" cap selects a shell just above the q-quantile and throws the
+            # support points away -- measured, the hull of the reduced set
+            # collapses onto the dense cluster (area 0.95 on a cloud whose
+            # true hull is 100). Always retain this direction's argmax.
+            keep[int(np.argmax(ss))] = True
     return np.unique(pts[keep], axis=0)
 
 
@@ -666,7 +697,13 @@ def anchor_tables(hulls, die, lattice, device="cuda", bin_chunk=16384):
 
     zero2 = torch.zeros((B, 2), dtype=torch.float64, device=device)
     for k, verts in enumerate(hulls):
-        proj, inside = nearest_on_polygon_boundary(gx, gy, verts, chunk=bin_chunk)
+        # Ruling D11: nearest_on_polygon_boundary builds (chunk, V) temporaries
+        # and nothing bounds V below 2*m*(k_dir+1); at V=2048 a 16384 chunk
+        # would be ~268 MiB per temporary. Measured V after reduction is 6-13,
+        # so this clamp never binds in practice and costs nothing.
+        v_count = len(np.asarray(verts, dtype=np.float64).reshape(-1, 2))
+        chunk = max(1024, bin_chunk // max(1, v_count // 16))
+        proj, inside = nearest_on_polygon_boundary(gx, gy, verts, chunk=chunk)
         off = proj - centre
         pull_off[k] = torch.where(inside.unsqueeze(1), zero2, off).half()
         pull_on[k] = ~inside
@@ -712,11 +749,11 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ### Task 4: Grouping objective term (`producer/grouping_term.py`)
 
-GrandPlan Eq.1/Eq.2 (digest §4.1): quadratic springs to a frozen anchor — pull when the cell is outside its own hull, push when it is inside a foreign hull, `α_pull = α_push = 1`. Anchors come from Task 3's tables and are rebuilt every `T_hull = 50` iterations by the driver; between rebuilds they are constants, which is what makes Eq.2 the exact gradient (digest §4.1: "Eq. (2) is the *exact* gradient for a fixed convex set (Moreau envelope)"). Weighting is Eq.3 with §4.3's ramp.
+GrandPlan Eq.1/Eq.2 (digest §4.1): quadratic springs to a frozen anchor — pull when the cell is outside its own hull, push when it is inside a foreign hull, `α_pull = α_push = 1`. Anchors come from Task 3's tables and are rebuilt every `T_hull = 50` iterations by the driver; between rebuilds they are constants, which is what makes Eq.2 the exact gradient (digest §4.1: "Eq. (2) is the *exact* gradient for a fixed convex set (Moreau envelope)"). Eq.3's coefficient is owned by `norm.TermNormalizer` and injected by Task 10's driver (ruling D5) — nothing in this module schedules anything.
 
 The soft-assign anchor is the **cell centre** per spec §7 (`x + 0.5·node_size_x`, `y + 0.5·node_size_y`), not the lower-left corner.
 
-**Dependency on P-H.** `src/ioplace/norm.py` (spec §4, subproject P-H) already exists on this branch and exports the pure helpers `ema_update(prev, inst, ema=0.5)` and `grandplan_weight(iteration, it_activate, wt0, wt_step, ramp_period, wt_max)`. `GroupingWeight` **delegates** to those two rather than re-deriving Eq.3's ramp and EMA; it keeps only the `lam = wt · ratio_ema` composition locally, so P-C does not have to wait for P-H's `TermNormalizer` class. If `src/ioplace/norm.py` is missing when you start this task, stop and report it — do not reimplement the helpers.
+**Dependency on P-H — ruling D5.** `src/ioplace/norm.py` (spec §4, subproject P-H) already exists on this branch and `TermNormalizer` is committed at HEAD, with `register(name, term, curvature, target_share=…, activate_overflow=…, n_ramp=…)`, `probe(iteration, pos, wl_fn, ctx, probe_terms=None)`, `transaction(iteration, overflow, tau, gamma)`, a live `lambdas` dict and the `needs_refresh()`/`mark_refreshed()` pair. Spec §0's normalisation row makes it the **single owner** of every extra term's coefficient, so this task defines **no** weight class: an earlier draft's `GroupingWeight` re-implemented policy A's `wt · ratio_ema` composition and is deleted. `GroupingTerm` stays exactly as written here — a pure energy — and Task 10 registers it with the normalizer through a three-line adapter. If `src/ioplace/norm.py` or `TermNormalizer` is missing when you start Task 10, stop and report it; do not reimplement the schedule.
 
 **Files:**
 - Create: `src/ioplace/producer/grouping_term.py`
@@ -726,15 +763,12 @@ The soft-assign anchor is the **cell centre** per spec §7 (`x + 0.5·node_size_
 - Consumes: `hull.AnchorTables`, `hull.anchor_tables` (Task 3).
 - Produces (used by Task 9):
   - `class GroupingTerm(torch.nn.Module)` with
-    `__init__(part, node_size_x, node_size_y, num_movable, num_physical, num_nodes, alpha_pull=1.0, alpha_push=1.0, device="cuda")`,
+    `__init__(part, node_size_x, node_size_y, num_movable, num_nodes, alpha_pull=1.0, alpha_push=1.0, device="cuda")` — `num_physical` is **not** a parameter (ruling D9: it was stored and never read),
     `set_tables(tables: AnchorTables) -> None`,
     `forward(pos: torch.Tensor, lam: float) -> torch.Tensor` (0-d),
-    `grad_l1(pos: torch.Tensor) -> float`,
+    `grad_l1(pos: torch.Tensor) -> float` (standalone diagnostic; the production gradient probe is `TermNormalizer.probe`, which owns the fixed/filler masking and the norm order),
     attribute `n_rebuilds: int`
-  - `class GroupingWeight` with
-    `__init__(wt0=0.05, wt_step=0.05, wt_max=1.0, ramp_period=100, ema=0.5)`,
-    `wt(iteration) -> float`, `update(iteration, g_wl_l1, g_group_l1) -> float`,
-    attributes `lam: float`, `ratio_ema: float | None`
+  - No weight/schedule class: Eq.3's coefficient comes from `norm.TermNormalizer` in Task 10 (ruling D5).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -745,7 +779,7 @@ import numpy as np
 import pytest
 import torch
 from ioplace.producer import hull
-from ioplace.producer.grouping_term import GroupingTerm, GroupingWeight
+from ioplace.producer.grouping_term import GroupingTerm
 
 DIE = (0.0, 0.0, 8.0, 8.0)
 SQ = np.array([[2., 2.], [6., 2.], [6., 6.], [2., 6.]])
@@ -755,8 +789,8 @@ BIG = np.array([[0., 0.], [8., 0.], [8., 8.], [0., 8.]])
 def _one_cell_term(device="cpu"):
     """One zero-size movable cell in region 0, one dummy fixed node."""
     t = GroupingTerm(part=np.array([0]), node_size_x=np.zeros(1),
-                     node_size_y=np.zeros(1), num_movable=1, num_physical=2,
-                     num_nodes=2, device=device)
+                     node_size_y=np.zeros(1), num_movable=1, num_nodes=2,
+                     device=device)
     t.set_tables(hull.anchor_tables([SQ, BIG], DIE, lattice=8, device=device))
     return t
 
@@ -805,8 +839,8 @@ def test_lambda_scales_the_value_and_zero_short_circuits():
 
 def test_term_is_zero_before_the_first_rebuild():
     t = GroupingTerm(part=np.array([0]), node_size_x=np.zeros(1),
-                     node_size_y=np.zeros(1), num_movable=1, num_physical=2,
-                     num_nodes=2, device="cpu")
+                     node_size_y=np.zeros(1), num_movable=1, num_nodes=2,
+                     device="cpu")
     assert t.n_rebuilds == 0
     assert float(t(_pos(0.5, 0.5), lam=1.0)) == 0.0
 
@@ -816,8 +850,8 @@ def test_cell_centre_anchoring_uses_node_size():
     corner. A 1x1 cell placed at (0,0) has its centre at (0.5,0.5), so it must
     score exactly the closed form above."""
     t = GroupingTerm(part=np.array([0]), node_size_x=np.ones(1),
-                     node_size_y=np.ones(1), num_movable=1, num_physical=2,
-                     num_nodes=2, device="cpu")
+                     node_size_y=np.ones(1), num_movable=1, num_nodes=2,
+                     device="cpu")
     t.set_tables(hull.anchor_tables([SQ, BIG], DIE, lattice=8, device="cpu"))
     assert float(t(_pos(0.0, 0.0), lam=1.0)) == pytest.approx(2.375, rel=1e-6)
 
@@ -836,8 +870,8 @@ def test_anchors_stay_frozen_between_rebuilds():
 
 def test_fixed_and_filler_nodes_never_receive_gradient():
     t = GroupingTerm(part=np.array([0, 1]), node_size_x=np.zeros(2),
-                     node_size_y=np.zeros(2), num_movable=2, num_physical=3,
-                     num_nodes=5, device="cpu")
+                     node_size_y=np.zeros(2), num_movable=2, num_nodes=5,
+                     device="cpu")
     t.set_tables(hull.anchor_tables([SQ, BIG], DIE, lattice=8, device="cpu"))
     p = torch.full((10,), 0.5, dtype=torch.float64).requires_grad_(True)
     t(p, lam=1.0).backward()
@@ -864,7 +898,7 @@ def test_gradient_matches_central_differences_on_a_200_cell_toy():
     hulls = [hull.build_hull(xy[part == k] if (part == k).any() else xy,
                              a_max=1024.0 * 1024.0) for k in range(3)]
     t = GroupingTerm(part=part, node_size_x=np.zeros(n), node_size_y=np.zeros(n),
-                     num_movable=n, num_physical=n, num_nodes=n, device=dev)
+                     num_movable=n, num_nodes=n, device=dev)
     t.set_tables(hull.anchor_tables(hulls, die, lattice=lattice, device=dev))
     p = torch.tensor(np.concatenate([xy[:, 0], xy[:, 1]]), dtype=torch.float64,
                      device=dev).requires_grad_(True)
@@ -878,29 +912,12 @@ def test_gradient_matches_central_differences_on_a_200_cell_toy():
         fd = (float(t(up, lam=1.0)) - float(t(dn, lam=1.0))) / (2 * h)
         assert fd == pytest.approx(g[int(i)], rel=1e-5, abs=1e-6)
 
-
-def test_grouping_weight_ramp_and_ratio():
-    w = GroupingWeight()
-    assert w.wt(0) == pytest.approx(0.05)
-    assert w.wt(99) == pytest.approx(0.05)
-    assert w.wt(100) == pytest.approx(0.10)
-    assert w.wt(1_000_000) == pytest.approx(1.0)
-    # first update: ratio_ema == the instantaneous ratio
-    lam = w.update(0, g_wl_l1=100.0, g_group_l1=10.0)
-    assert w.ratio_ema == pytest.approx(10.0)
-    assert lam == pytest.approx(0.05 * 10.0)
-    # second: ema = 0.5*10 + 0.5*20 = 15
-    lam = w.update(100, g_wl_l1=100.0, g_group_l1=5.0)
-    assert w.ratio_ema == pytest.approx(15.0)
-    assert lam == pytest.approx(0.10 * 15.0)
-
-
-def test_grouping_weight_ignores_a_zero_group_gradient():
-    w = GroupingWeight()
-    w.update(0, 100.0, 10.0)
-    before = w.lam
-    assert w.update(0, 100.0, 0.0) == before
 ```
+
+Ruling D5 deletes the two `GroupingWeight` tests an earlier draft carried here;
+`tests/test_norm.py` already covers `grandplan_weight`, `ema_update` and the
+`wt · ratio_ema` composition inside `TermNormalizer`, and Task 10's fast test
+pins the `_GroupAdapter` + `TermNormalizer` wiring.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -924,11 +941,13 @@ are FROZEN in between, which is the paper's own semantics (digest section 2.1:
 the hull is "recomputed from the current cells each time and then held constant
 inside the gradient"). With a frozen anchor Eq.2 is the exact gradient, so the
 implementation is literally a quadratic spring and autograd gets it right.
+
+Eq.3's coefficient lambda is NOT computed here (ruling D5 / spec section 0):
+norm.TermNormalizer is the single owner of every extra term's coefficient, and
+run_region_producer registers this term with it. This module is a pure energy.
 """
 import numpy as np
 import torch
-
-from ioplace import norm
 
 
 class GroupingTerm(torch.nn.Module):
@@ -941,13 +960,13 @@ class GroupingTerm(torch.nn.Module):
     """
 
     def __init__(self, part, node_size_x, node_size_y, num_movable,
-                 num_physical, num_nodes, alpha_pull=1.0, alpha_push=1.0,
-                 device="cuda"):
+                 num_nodes, alpha_pull=1.0, alpha_push=1.0, device="cuda"):
         super().__init__()
         m = int(num_movable)
         assert len(part) == m, f"part has {len(part)} entries, expected {m}"
         self.num_movable = m
-        self.num_physical = int(num_physical)
+        # No num_physical (ruling D9): only the movable prefix and the total
+        # node count index into `pos`, so storing it was dead state.
         self.num_nodes = int(num_nodes)
         self.alpha_pull = float(alpha_pull)
         self.alpha_push = float(alpha_push)
@@ -1010,59 +1029,15 @@ class GroupingTerm(torch.nn.Module):
         return (float(lam) * (pull + push)).to(pos.dtype)
 
     def grad_l1(self, pos):
-        """||grad Group||_1 at lam=1, for GroupingWeight's Eq.3 ratio. Runs an
-        independent fwd+bwd on a detached clone, exactly like
-        IoTerm.io_grad_l1."""
+        """||grad Group||_1 at lam=1 on a detached clone. Standalone diagnostic
+        only: the production probe is norm.TermNormalizer.probe, which does the
+        same isolated fwd+bwd and additionally zeroes the fixed and filler
+        entries before taking the norm (ruling D5)."""
         if self.tables is None:
             return 0.0
         p = pos.detach().clone().requires_grad_(True)
         self.forward(p, lam=1.0).backward()
         return float(p.grad.abs().sum())
-
-
-class GroupingWeight:
-    """GrandPlan Eq.3 with the schedule of digest section 4.1:
-    lam = wt * ||grad WL||_p / ||grad Group||_p, wt starting at 0.05 and stepped
-    +0.05 every 100 iterations up to 1.0.
-
-    The ramp and the EMA are P-H's (src/ioplace/norm.py, spec section 4); this
-    class only composes them and holds the state, so there is exactly one
-    implementation of Eq.3's schedule in the repo. When P-H's TermNormalizer
-    class lands, register the term with
-    TermNormalizer.register("group", term, curvature=1) and delete this class --
-    the driver reads only `.lam`, `.wt(...)` and `.update(...)`.
-
-    norm_p = 1, matching spec section 4's "Norm order" decision (every
-    calibrated constant in this repo was fitted under L1) and the existing
-    io_grad_l1/g_wl_l1 probe in run_placement_io.py:472-481.
-    """
-
-    def __init__(self, wt0=0.05, wt_step=0.05, wt_max=1.0, ramp_period=100,
-                 ema=0.5):
-        self.wt0 = float(wt0)
-        self.wt_step = float(wt_step)
-        self.wt_max = float(wt_max)
-        self.ramp_period = int(ramp_period)
-        self.ema = float(ema)
-        self.ratio_ema = None
-        self.lam = 0.0
-
-    def wt(self, iteration):
-        # it_activate=0: the grouping term is on from iteration 0 (unlike IO/FT,
-        # it has no overflow activation gate -- digest section 5 runs it for the
-        # whole flat GP).
-        return norm.grandplan_weight(int(iteration), 0, wt0=self.wt0,
-                                     wt_step=self.wt_step,
-                                     ramp_period=self.ramp_period,
-                                     wt_max=self.wt_max)
-
-    def update(self, iteration, g_wl_l1, g_group_l1):
-        if not (g_group_l1 > 0.0) or not np.isfinite(g_wl_l1):
-            return self.lam
-        r = float(g_wl_l1) / float(g_group_l1)
-        self.ratio_ema = norm.ema_update(self.ratio_ema, r, ema=self.ema)
-        self.lam = self.wt(iteration) * self.ratio_ema
-        return self.lam
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -1071,13 +1046,13 @@ class GroupingWeight:
 source src/scripts/env.sh && export CUDA_VISIBLE_DEVICES=3
 "$IOPLACE_PYTHON" -m pytest tests/test_producer_grouping_term.py -v
 ```
-Expected: PASS — 12 passed (the `gpu`-marked finite-difference test runs on CUDA device 3).
+Expected: PASS — 9 passed (rulings D8 + D5: the plan originally said 12, pytest collected 11, and D5 removes the two `GroupingWeight` tests). The `gpu`-marked finite-difference test runs on CUDA device 3.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/ioplace/producer/grouping_term.py tests/test_producer_grouping_term.py
-git commit -m "feat(producer): GrandPlan Eq.1-3 grouping term with frozen table anchors
+git commit -m "feat(producer): GrandPlan Eq.1/Eq.2 grouping term with frozen table anchors
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -1088,10 +1063,14 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 Digest §2.2 / spec §2: `2048²` per-partition density maps → per-bin argmax → majority vote to `--extract-bins` (64 default, 32 for arm (e)) → morphological opening then closing → largest connected component per partition → whitespace bins to the nearest partition.
 
-Two decisions this task locks in:
+Four decisions this task locks in — the last two are pre-flight rulings D2 and D7:
 
 - **Structuring element = the full `3×3` square** (`scipy.ndimage.generate_binary_structure(2, 2)`), not the 4-connected cross. Opening a solid rectangle with the cross erodes its four corners (erosion leaves the interior, dilation cannot put the corners back), manufacturing exactly the one-bin notches that `E_boundary` and the `rect_max=8` budget exist to avoid. Connected components and region adjacency stay 4-connected, matching `region_graph.region_graph`'s unit-edge adjacency (`region_graph.py:62-71`).
 - **A non-empty guard** after the largest-CC step. Spec §10 risk 6: at K=16 on `64²` bins a partition can lose every bin, which would produce an empty `RegionSpec` and fail `RegionSet.validate()`. Each empty partition gets back the single bin where its own coarse density is highest among bins whose current owner still has ≥2 bins.
+- **The erosion border is `1`, not scipy's default `0` (ruling D2).** `ndimage.binary_erosion` treats everything outside the array as background, so a composed `binary_closing(binary_opening(...))` erodes the *entire die border* and dilation cannot restore it — at `64²` that is 252 of 4096 bins handed to `fill_whitespace` on every call, and `border_value=1` on `binary_opening` does **not** fix it (scipy applies that to the output border, not to the erosion). `_open_close_one` therefore spells the four steps out: `erosion(border_value=1) → dilation → dilation → erosion(border_value=1)`. Measured: with this form, opening a two-region tiling is the identity, and the speck/never-delete tests still pass.
+- **Connectivity is canonicalised at the end, then asserted (ruling D7).** `ensure_nonempty` takes a bin off a donor with only a `counts ≥ 2` guard and `fill_whitespace` is a nearest-labelled-bin EDT, not a connected dilation — neither preserves 4-connectivity. But `sa.SaState._breaks_a_region` and `rectify._feasible` both *require* it: a violation turns SA into a silent no-op (every `try_move` rejected, `calibrate` collects no probes, `t0` falls back to 1.0) and rectification into a `RuntimeError`. `canonicalise_connectivity` reassigns every non-largest component to the majority label among its own 4-neighbours until stable, and `extract()` then asserts every region is non-empty and 4-connected.
+
+**Host memory.** `density_maps` allocates `k · fine_bins² · 8` bytes of float64 (plus an equal-sized `np.bincount` output): **537 MiB at K=16 / 2048², 1.07 GiB at K=32**. This is host RAM, once, after the GP — it is the extraction's dominant cost and the reason `fine_bins` is a parameter (ruling D11).
 
 **Files:**
 - Create: `src/ioplace/producer/extract.py`
@@ -1109,6 +1088,7 @@ Two decisions this task locks in:
   - `largest_component(labels, k) -> (B, B) int16`
   - `ensure_nonempty(labels, coarse_dens, k) -> (B, B) int16`
   - `fill_whitespace(labels) -> (B, B) int16`
+  - `canonicalise_connectivity(labels, k) -> (B, B) int16` (ruling D7)
   - `extract(node_x, node_y, node_w, node_h, part, k, die, out_bins, fine_bins=FINE_BINS) -> (out_bins, out_bins) int16`
 
 - [ ] **Step 1: Write the failing test**
@@ -1118,6 +1098,7 @@ Create `tests/test_producer_extract.py`:
 ```python
 import numpy as np
 import pytest
+from scipy import ndimage
 from ioplace.producer import extract
 
 DIE = (0.0, 0.0, 16.0, 16.0)
@@ -1245,6 +1226,38 @@ def test_extract_end_to_end_tiles_the_die_with_both_l_shapes():
     assert (out[:4, :] == 0).all()
 
 
+def test_canonicalise_connectivity_reattaches_a_stray_component():
+    """Ruling D7: SA and rectification both require every region to be
+    4-connected, and neither ensure_nonempty nor fill_whitespace guarantees it.
+    Region 1's stray corner bin has no region-1 4-neighbour, so it must be
+    handed to the majority label among its own 4-neighbours (region 0)."""
+    lab = np.zeros((8, 8), dtype=np.int16)
+    lab[:, 4:] = 1
+    lab[0, 0] = 1
+    out = extract.canonicalise_connectivity(lab, 2)
+    st = ndimage.generate_binary_structure(2, 1)
+    for k in range(2):
+        m = out == k
+        assert m.any(), k
+        assert ndimage.label(m, structure=st)[1] == 1, k
+    assert out[0, 0] == 0
+
+
+def test_extract_asserts_every_region_is_connected():
+    lab = np.zeros((8, 8), dtype=np.int16)
+    lab[:, 4:] = 1
+    lab[0, 0] = 1                       # a disconnected speck of region 1
+    lab[7, 0] = 1
+    x, y, w, h, part = _cells_from_labels(lab, die=(0.0, 0.0, 8.0, 8.0))
+    out = extract.extract(x, y, w, h, part, 2, (0.0, 0.0, 8.0, 8.0),
+                          out_bins=8, fine_bins=8)
+    st = ndimage.generate_binary_structure(2, 1)
+    for k in range(2):
+        m = out == k
+        assert m.any(), k
+        assert ndimage.label(m, structure=st)[1] == 1, k
+
+
 def test_extract_is_deterministic():
     lab = _two_l_shapes(16)
     x, y, w, h, part = _cells_from_labels(lab)
@@ -1336,15 +1349,39 @@ def majority_downsample(fine, out_bins, k):
     return out.reshape(out_bins, out_bins)
 
 
+def _halo(mask):
+    """4-neighbourhood of a boolean mask (the mask itself is not excluded)."""
+    out = np.zeros_like(mask)
+    out[1:, :] |= mask[:-1, :]
+    out[:-1, :] |= mask[1:, :]
+    out[:, 1:] |= mask[:, :-1]
+    out[:, :-1] |= mask[:, 1:]
+    return out
+
+
+def _open_close_one(m):
+    """Opening then closing, with the die border treated as SET during erosion.
+
+    Ruling D2: ndimage.binary_erosion defaults to border_value=0, i.e. it
+    treats everything outside the array as background and erodes the whole
+    outer ring of the die; the dilations cannot put it back, and border_value=1
+    on binary_opening does not help (scipy applies that to the OUTPUT border,
+    not to the erosion). At 64^2 the default discards 252 of 4096 bins on every
+    call and hands them to fill_whitespace. Spelling the four steps out is the
+    only form that preserves the border.
+    """
+    e = ndimage.binary_erosion(m, _SE, border_value=1)
+    d = ndimage.binary_dilation(e, _SE, border_value=0)
+    d = ndimage.binary_dilation(d, _SE, border_value=0)
+    return ndimage.binary_erosion(d, _SE, border_value=1)
+
+
 def morph_open_close(labels, k):
     """Per-partition binary opening then closing (digest section 2.2). Bins
     claimed by more than one partition afterwards go to the partition with the
     most 4-neighbours in the pre-morphology map (tie -> lowest id); bins claimed
     by none become -1."""
-    masks = np.stack([
-        ndimage.binary_closing(
-            ndimage.binary_opening(labels == kk, structure=_SE), structure=_SE)
-        for kk in range(k)])
+    masks = np.stack([_open_close_one(labels == kk) for kk in range(k)])
     n_claim = masks.sum(axis=0)
     out = np.full(labels.shape, -1, dtype=np.int16)
     single = n_claim == 1
@@ -1424,11 +1461,57 @@ def fill_whitespace(labels):
     return labels[idx[0], idx[1]].astype(np.int16)
 
 
+def canonicalise_connectivity(labels, k):
+    """Make every region 4-connected (ruling D7).
+
+    While any region has more than one component, reassign every component but
+    the largest to the majority label among that component's own 4-neighbours
+    (ties -> lowest label id). Neither ensure_nonempty (which takes a bin off a
+    donor with only a counts >= 2 guard) nor fill_whitespace (a nearest-
+    labelled-bin EDT, not a connected dilation) preserves connectivity, yet
+    sa.SaState._breaks_a_region and rectify._feasible both require it: a
+    violation turns SA into a silent no-op and rectification into a
+    RuntimeError. Each pass strictly reduces the total component count, so the
+    loop is bounded; the outer range is a belt-and-braces guard.
+    """
+    out = np.asarray(labels, dtype=np.int16).copy()
+    for _ in range(out.size):
+        changed = False
+        for kk in range(k):
+            m = out == kk
+            if not m.any():
+                continue
+            cc, n = ndimage.label(m, structure=_CC)
+            if n <= 1:
+                continue
+            sizes = np.bincount(cc.ravel(), minlength=n + 1)
+            sizes[0] = 0
+            keep = int(np.argmax(sizes))
+            for c in range(1, n + 1):
+                if c == keep:
+                    continue
+                sel = cc == c
+                nb = out[_halo(sel) & ~sel]
+                nb = nb[nb != kk]
+                if not nb.size:
+                    continue
+                out[sel] = np.int16(np.bincount(nb, minlength=k).argmax())
+                changed = True
+        if not changed:
+            break
+    return out
+
+
 def extract(node_x, node_y, node_w, node_h, part, k, die, out_bins,
             fine_bins=FINE_BINS):
     """The whole digest section 2.2 pipeline. Returns an (out_bins, out_bins)
     int16 label grid with every bin owned by exactly one partition, so the
-    result tiles the die with zero whitespace by construction."""
+    result tiles the die with zero whitespace by construction, and every region
+    is non-empty and 4-connected (ruling D7 -- asserted below).
+
+    Host memory: density_maps holds k * fine_bins^2 float64 (537 MiB at K=16 /
+    2048^2, 1.07 GiB at K=32) plus an equal-sized bincount output.
+    """
     dens = density_maps(node_x, node_y, node_w, node_h, part, k, die,
                         bins=fine_bins)
     coarse_dens = block_sum(dens, out_bins)
@@ -1437,7 +1520,15 @@ def extract(node_x, node_y, node_w, node_h, part, k, die, out_bins,
     lab = largest_component(lab, k)
     lab = ensure_nonempty(lab, coarse_dens, k)
     lab = fill_whitespace(lab)
+    lab = canonicalise_connectivity(lab, k)
     assert (lab >= 0).all()
+    # Ruling D7: this is the precondition Tasks 6 and 7 rely on. Assert it here
+    # rather than discovering it as a silent SA no-op or a rectify RuntimeError.
+    for kk in range(k):
+        m = lab == kk
+        assert m.any(), "region %d is empty after extraction" % kk
+        assert ndimage.label(m, structure=_CC)[1] == 1, \
+            "region %d is not 4-connected after extraction" % kk
     return lab
 ```
 
@@ -1447,13 +1538,13 @@ def extract(node_x, node_y, node_w, node_h, part, k, die, out_bins,
 source src/scripts/env.sh && export CUDA_VISIBLE_DEVICES=3
 "$IOPLACE_PYTHON" -m pytest tests/test_producer_extract.py -v
 ```
-Expected: PASS — 13 passed.
+Expected: PASS — 15 passed (13 from the original plan plus ruling D7's two connectivity tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/ioplace/producer/extract.py tests/test_producer_extract.py
-git commit -m "feat(producer): density-argmax bin-map extraction with non-empty guard
+git commit -m "feat(producer): density-argmax bin-map extraction with non-empty and connectivity guards
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -1464,9 +1555,10 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 Digest §4.2 Eq.4–8 and §5's move set, with spec §2's defaults for everything the paper leaves unspecified: `β=(1.0, 0.3, 0.5, 0.2)`, min-max normalisation over the first 200 samples, `T_0` = mean `|ΔE|` of those 200 probe moves, cooling `0.92`, 50 moves/level, 150 levels, stop after 3 idle levels.
 
-Two things to be explicit about:
+Three things to be explicit about:
 
 - **Corner definition on a bin grid.** Eq.6 needs `C_ij`, a corner count, which the paper never defines discretely. Here: at each interior lattice vertex, look at the four surrounding bins and the four incident unit edges; pair `(i,j)` has a corner at that vertex iff exactly two of those edges separate `i` from `j` **and** they are perpendicular (one horizontal, one vertical). A straight shared boundary scores 0 (and Eq.6 then charges `0.1·(0−2)² = 0.4`, which digest §4.2 flags as the paper's own intentional slack), an L-turn scores 1, a one-bin notch scores 4.
+- **A known flake candidate.** `test_anneal_reduces_the_area_imbalance_it_is_given` asserts `E_area` is monotone non-increasing across the run, which SA does **not** guarantee: the annealer minimises the β-weighted, min-max-normalised *total* `β·(E_area, E_boundary, E_compact, E_diff)`, so a move that trades a little `E_area` for a lot of `E_boundary`/`E_compact` is a legitimate accept. It passed on this host at the pinned seed (`seed=3`, 40 levels × 30 moves) during the pre-flight scan, and it is the only test in this file whose postcondition is not implied by the code. If it fails on a future seed or numpy version, that is the assertion being wrong, not the annealer — re-pin the seed or weaken it to "the final total is not worse", and record the change; do not "fix" the schedule.
 - **Corner-filling's trigger.** Digest §5 says "if a corner is detected in the window, all bins in the window are reassigned to the majority partition". The operational test here is that the window carries ≥2 distinct labels, i.e. it straddles a boundary; reassigning to the majority then removes the protrusion. This is a superset of a strict corner test (it also flattens straight boundaries, which is a no-op for the energy), and it is the only test that is well-defined for a 1×2 window. `E_boundary` does the actual corner accounting.
 
 **Files:**
@@ -1614,7 +1706,6 @@ def test_anneal_is_deterministic_under_a_fixed_seed():
 
 
 def test_anneal_keeps_every_region_non_empty_and_connected():
-    rng = np.random.default_rng(7)
     lab = np.zeros((16, 16), dtype=np.int16)
     lab[:8, :8] = 0
     lab[:8, 8:] = 1
@@ -1632,7 +1723,6 @@ def test_anneal_keeps_every_region_non_empty_and_connected():
     assert rep["levels_run"] <= cfg.levels
     assert rep["t0"] > 0.0
     assert len(rep["e_raw_final"]) == 4 and len(rep["beta"]) == 4
-    _ = rng     # the map above is fixed on purpose; no randomness in the input
 
 
 def test_anneal_reduces_the_area_imbalance_it_is_given():
@@ -2029,7 +2119,18 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 Spec §2's hard requirement and §10 risk 1: "decompose each region into maximal horizontal strips, merge, and enforce `rect_max=8` by filling the smallest notches; re-run `validate()`". Risk 1 is a memory contract, not cosmetics — `ops/soft_assign.py:19-31` builds `(N, r)` temporaries with `r` = rects per k-chunk, and 11M × 1024 fp32 is ≈45 GB.
 
-**Termination argument (must hold, it is why the loop is safe):** an accepted notch fill adds bins that lie strictly inside the target region's own bounding box and removes none from it, so `|bbox(r) \ r|` strictly decreases while `bbox(r)` is unchanged; every other region only shrinks, so its bbox only shrinks. Therefore `Σ_r |bbox(r) \ r|` strictly decreases on every pass and is bounded by `k·B²`. A candidate is **feasible** only if every donor region stays non-empty and 4-connected *and* the target stays 4-connected; if a region still exceeds `rect_max` and has no feasible candidate, the function raises with the region id and count rather than emitting geometry that would blow up `region_sdf_l1`.
+**Two moves, not one (ruling D3).** Measured on synthetic K=16 extractions, absorption alone aborts: `_feasible` requires *every* donor of a bbox hole to stay non-empty **and** 4-connected, and on a 16-region `64²` map almost every hole straddles several donors, so nothing is feasible long before the budget is reached (pre-flight: `64²` → 1/6 `RuntimeError` with SA in the loop, 3/8 without; post-SA max rect counts of 12–24 against a budget of 8, i.e. enforcement always has real work to do). `enforce_rect_max` therefore tries, on the region with the most rectangles:
+
+1. **absorption** — `_fill_one_notch`, the smallest bbox-hole component that passes the feasibility test; then, only if that fails,
+2. **shedding** — `_shed_one_strip`, hand the region's *smallest maximal strip* to the majority label among that strip's 4-neighbours, accepted only if the shedding region and the receiver both stay non-empty and 4-connected.
+
+Shedding reduces the target's rect count by **exactly one by construction**: `mask_to_rects` decomposes a region into maximal horizontal strips merged vertically, so every rect is a set of whole row runs, and deleting one deletes exactly those runs while leaving every other rect's decomposition untouched. It needs one surviving receiver where absorption needs every donor to survive, which is why it is feasible in the cases absorption is not — and that construction argument, not any trial count, is what the budget rests on.
+
+Re-measured while writing this amendment (16 clusters, 120–200 k cells, full `extract → anneal → enforce_rect_max`, both moves live): **0/6 failures** at `64²` and `32²`, with and without SA, `max_rects ≤ 8` on every run. The same harness with `_shed_one_strip` stubbed out still failed 1/6 at `64²` without SA, so shedding is doing real work; the pre-flight's higher rates came from a slightly different cluster generator and predate ruling D7's connectivity canonicalisation, which independently reduces the number of pathological maps reaching this function. Treat the counts as directional.
+
+**Termination (ruling D4 — the earlier potential-function argument was wrong and is deleted).** There is no monotone potential here. A donor `j` that extends beyond `r`'s bbox loses `j ∩ bbox(r)` without changing `bbox(j)`, so `|bbox(j) \ j|` *increases* by exactly what `r` gained and `Σ_r |bbox(r) \ r|` stays flat; with the arg-max target switching between regions, no stated potential excludes a cycle. What makes the loop safe is the explicit **`k·B²` pass budget**: every pass strictly grows (absorption) or strictly shrinks (shedding) the current target region, and the budget bound is the guard. The `RuntimeError` at budget exhaustion already existed; only the proof was wrong.
+
+**Exhaustion is the driver's problem, not an abort (ruling D3).** If both moves fail, `enforce_rect_max` still raises — but Task 10's driver catches that `RuntimeError` and automatically re-runs extraction + SA at `--extract-bins 32` before letting it escape, recording which path was taken in `producer.json`. Task 11 Step 2's "re-run with `--extract-bins 32`" is therefore driver behaviour, not an operator instruction.
 
 **Files:**
 - Create: `src/ioplace/producer/rectify.py`
@@ -2040,7 +2141,8 @@ Spec §2's hard requirement and §10 risk 1: "decompose each region into maximal
 - Produces (used by Task 9):
   - `mask_to_rects(mask) -> (R,4) int64` half-open `[x0, y0, x1, y1)` in bin coordinates, raster order
   - `region_rect_counts(labels, k) -> list[int]`
-  - `enforce_rect_max(labels, k, rect_max=8) -> (B,B) int16`
+  - `_shed_one_strip(lab, r) -> bool` — ruling D3's second move; mutates `lab` in place
+  - `enforce_rect_max(labels, k, rect_max=8) -> (B,B) int16` — raises `RuntimeError` when both moves are exhausted; Task 10 turns that into the `--extract-bins 32` fallback
   - `rects_to_regionset(labels, k, die, lattice=512, name_fmt="P{}") -> RegionSet` (already `validate()`d)
 
 - [ ] **Step 1: Write the failing test**
@@ -2122,6 +2224,46 @@ def test_enforce_rect_max_is_deterministic():
     a = rectify.enforce_rect_max(lab, 2, rect_max=8)
     b = rectify.enforce_rect_max(lab, 2, rect_max=8)
     assert np.array_equal(a, b)
+
+
+def test_shed_one_strip_gives_the_smallest_strip_to_the_majority_neighbour():
+    """Ruling D3's second move. Region 1 is the right block plus a one-row
+    overhang; the overhang is the smaller maximal strip, so it is the one that
+    goes, and it goes to region 0 (its only foreign 4-neighbour)."""
+    lab = np.zeros((6, 6), dtype=np.int16)
+    lab[:, 3:] = 1
+    lab[5, 2] = 1
+    assert rectify.region_rect_counts(lab, 2)[1] == 2
+    out = lab.copy()
+    assert rectify._shed_one_strip(out, 1) is True
+    assert rectify.region_rect_counts(out, 2)[1] == 1
+    assert (out[5, 2:6] == 0).all()
+    st = ndimage.generate_binary_structure(2, 1)
+    for k in range(2):
+        m = out == k
+        assert m.any() and ndimage.label(m, structure=st)[1] == 1
+
+
+def test_repeated_shedding_drops_exactly_one_rect_a_time_and_terminates():
+    """The construction argument in the task prose: mask_to_rects' rects are
+    whole row runs, so removing one removes exactly those runs and the count
+    falls by exactly one. Both regions must stay non-empty and 4-connected at
+    every step, and the loop must stop on its own."""
+    lab = _comb()
+    st = ndimage.generate_binary_structure(2, 1)
+    start = rectify.region_rect_counts(lab, 2)[1]
+    previous = start
+    for _ in range(30):
+        if not rectify._shed_one_strip(lab, 1):
+            break
+        count = rectify.region_rect_counts(lab, 2)[1]
+        assert count == previous - 1
+        previous = count
+        for k in range(2):
+            m = lab == k
+            assert m.any()
+            assert ndimage.label(m, structure=st)[1] == 1
+    assert previous < start
 
 
 @pytest.mark.parametrize("bins", [32, 64])
@@ -2262,14 +2404,71 @@ def _fill_one_notch(lab, r):
     return True
 
 
-def enforce_rect_max(labels, k, rect_max=8):
-    """spec section 2's hard rect cap. Repeatedly fill the smallest notch of
-    the region with the most rectangles.
+def _halo(mask):
+    """4-neighbourhood of a boolean mask (the mask itself is not excluded)."""
+    out = np.zeros_like(mask)
+    out[1:, :] |= mask[:-1, :]
+    out[:-1, :] |= mask[1:, :]
+    out[:, 1:] |= mask[:, :-1]
+    out[:, :-1] |= mask[:, 1:]
+    return out
 
-    Termination: an accepted fill adds bins strictly inside the target's own
-    bounding box and removes none, so |bbox(r) \\ r| strictly decreases while
-    bbox(r) is unchanged, and every other region only shrinks -- so
-    sum_r |bbox(r) \\ r| strictly decreases every pass, bounded by k*B^2.
+
+def _shed_one_strip(lab, r):
+    """Second move (ruling D3): give away region r's SMALLEST maximal strip.
+
+    mask_to_rects decomposes r into maximal horizontal strips merged
+    vertically, so every rect is a set of whole row runs; deleting one deletes
+    exactly those runs and leaves every other rect's decomposition untouched,
+    i.e. r's rect count falls by exactly one whenever this fires. The strip
+    goes to the majority label among its own 4-neighbours outside r (ties ->
+    lowest id, np.argmax's rule), and the move is accepted only if r and the
+    receiver both stay non-empty and 4-connected.
+
+    This is feasible where absorption is not: _fill_one_notch needs a bbox hole
+    whose EVERY donor survives losing it, and on a 16-region 64^2 map almost
+    every hole straddles several donors; shedding needs one receiver. Mutates
+    `lab` in place and returns whether it fired.
+    """
+    mask = lab == r
+    rects = mask_to_rects(mask)
+    if len(rects) <= 1:
+        return False
+    area = (rects[:, 2] - rects[:, 0]) * (rects[:, 3] - rects[:, 1])
+    order = sorted(range(len(rects)),
+                   key=lambda i: (int(area[i]), int(rects[i, 1]),
+                                  int(rects[i, 0])))
+    for i in order:
+        x0, y0, x1, y1 = (int(v) for v in rects[i])
+        sel = np.zeros_like(mask)
+        sel[y0:y1, x0:x1] = True
+        nb = lab[_halo(sel) & ~sel]
+        nb = nb[nb != r]
+        if not nb.size:
+            continue
+        d = int(np.bincount(nb).argmax())
+        if not _connected(mask & ~sel):
+            continue
+        if not _connected((lab == d) | sel):
+            continue
+        lab[sel] = np.int16(d)
+        return True
+    return False
+
+
+def enforce_rect_max(labels, k, rect_max=8):
+    """spec section 2's hard rect cap, on the region with the most rectangles:
+    absorption (_fill_one_notch) first, then shedding (_shed_one_strip).
+
+    Termination (ruling D4): there is NO monotone potential here -- a donor
+    that extends beyond r's bbox keeps its own bbox while losing bins to r, so
+    sum_r |bbox(r) \\ r| can stay flat, and the arg-max target switches between
+    regions. What makes the loop safe is the k*B^2 pass budget below: every
+    pass strictly grows (absorption) or strictly shrinks (shedding) the current
+    target region, and the budget bound is the guard.
+
+    On exhaustion this raises; run_region_producer catches that and re-runs the
+    whole extraction at --extract-bins 32 before letting it escape (ruling D3).
     """
     lab = np.asarray(labels, dtype=np.int16).copy()
     budget = k * lab.size + 1
@@ -2278,10 +2477,11 @@ def enforce_rect_max(labels, k, rect_max=8):
         worst = int(np.argmax(counts))
         if counts[worst] <= rect_max:
             return lab
-        if not _fill_one_notch(lab, worst):
+        if not _fill_one_notch(lab, worst) and not _shed_one_strip(lab, worst):
             raise RuntimeError(
-                f"region {worst} has {counts[worst]} rects (> {rect_max}) and no "
-                "feasible notch fill remains; lower --extract-bins or K")
+                f"region {worst} has {counts[worst]} rects (> {rect_max}) and "
+                "neither a feasible notch fill nor a feasible shed remains; "
+                "lower --extract-bins or K")
     raise RuntimeError(
         f"enforce_rect_max did not converge within {budget} passes")
 
@@ -2315,13 +2515,13 @@ def rects_to_regionset(labels, k, die, lattice=512, name_fmt="P{}"):
 source src/scripts/env.sh && export CUDA_VISIBLE_DEVICES=3
 "$IOPLACE_PYTHON" -m pytest tests/test_producer_rectify.py -v
 ```
-Expected: PASS — 11 passed.
+Expected: PASS — 13 passed (11 from the original plan plus ruling D3's two shedding tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/ioplace/producer/rectify.py tests/test_producer_rectify.py
-git commit -m "feat(producer): strip decomposition and hard rect_max=8 notch filling
+git commit -m "feat(producer): strip decomposition and hard rect_max=8 by notch filling plus shedding
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -2343,7 +2543,7 @@ Spec §2: "`partition_netlist` (`partition/mtkahypar_runner.py:14`), `K=16`, `ep
 - Produces (used by Task 9):
   - `mtkahypar_membership(nl, k, epsilon=0.03, seed=0, threads=8) -> (num_movable,) int32`
   - `hierarchy_membership(node_names, num_movable, k, depth=1) -> (num_movable,) int32`
-  - `build_membership(source, *, nl, node_names, num_movable, k, epsilon=0.03, seed=0, depth=1) -> (num_movable,) int32`
+  - `build_membership(source, *, nl, node_names, num_movable, k, epsilon=0.03, seed=0, depth=1, threads=8) -> (num_movable,) int32` — `threads` is only a request; `mtkahypar_runtime` honours `IOPLACE_MTKAHYPAR_THREADS` (`src/scripts/env.sh` pins it to 1)
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2542,7 +2742,7 @@ def build_membership(source, *, nl, node_names, num_movable, k, epsilon=0.03,
 source src/scripts/env.sh && export CUDA_VISIBLE_DEVICES=3
 "$IOPLACE_PYTHON" -m pytest tests/test_producer_membership.py -v
 ```
-Expected: PASS — 8 passed.
+Expected: PASS — 7 passed (ruling D8: the plan originally said 8; `mtkahypar` is installed on this host, so `pytest.importorskip` skips nothing and the file collects exactly 7).
 
 - [ ] **Step 5: Commit**
 
@@ -2635,6 +2835,9 @@ def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
     torch.quantile has an input-element limit, so above QUANTILE_SUBSAMPLE the
     threshold is estimated from a deterministic stride subsample -- a threshold
     estimate, not a filter: the band test still runs over every point.
+
+    Like the numpy path, each direction's support point is always kept
+    (ruling D1), so the output bound is 2*m*(k_dir + 1) before dedup.
     """
     n = int(x.numel())
     if n <= k_dir:
@@ -2653,6 +2856,10 @@ def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
                 sel = torch.topk(ss[idx] - t, k_dir, largest=False, sorted=True).indices
                 idx = idx[sel]
             keep[idx] = True
+            # Ruling D1, same named deviation as the numpy path: the band plus
+            # the k_dir cap drops the support points, and the hull of the
+            # reduced set collapses (measured area 95.78 against a true 100).
+            keep[int(torch.argmax(ss))] = True
     return np.unique(
         torch.stack([x[keep], y[keep]], dim=1).double().cpu().numpy(), axis=0)
 ```
@@ -2680,23 +2887,30 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 Sequences everything: read → prior → flat GP with the grouping term attached and the hull tables rebuilt every `T_hull` from the iteration callback → flat LG → extraction → SA → rectification → four artefacts. This is the only file that touches DREAMPlace.
 
-Three integration rules that must be respected exactly:
+Four integration rules that must be respected exactly:
 
 1. **The coordinate flip.** Everything inside the GP (hull tables, `ea_scaled`, the die passed to `anchor_tables`) is in the **scaled** post-`initialize()` system. Everything written out (`regions.json`, `seed.npz`) and everything from extraction onward (`extract`, SA `bin_area`/`ea`, `rects_to_regionset`) is in the **native** post-`read()` system: `x_native = x_scaled / scale_factor + shift_factor[0]`, `size_native = size_scaled / scale_factor`. This is what P-B consumes: its `init_pos.apply_init(..., "seed")` writes these native values straight into `placedb.node_x`/`node_y` after `read()` and before `initialize()`, and `fence_phase.build_fence_placedb` rejects a `regions.json` whose die is not the native post-read die. The fingerprint is likewise taken in the `read` phase below, before `initialize()` rescales the node sizes it digests.
-2. **The obj_version discipline** (`dp_hook.py:36-59`, design v2 §6.4). A hull rebuild and a λ update are both discrete objective changes. Let the new tables and λ take effect first, *then* call `refresh_nesterov_secant(placer.optimizer)` and `mark_refreshed()` — the same order `run_placement_io.py:584-588` uses.
+2. **The obj_version discipline** (`dp_hook.py:36-59`, design v2 §6.4). A hull rebuild and a λ update are both discrete objective changes. Let the new tables and λ take effect first, *then* call `refresh_nesterov_secant(placer.optimizer)` and `mark_refreshed()` — the same order `run_placement_io.py:690-694` uses. Two consequences of ruling D5/D6 that the code below depends on: (i) only `TermNormalizer.transaction()` bumps `obj_version`, so a rebuild-without-probe iteration must still run a transaction, otherwise the objective changes with no bump and the guard has nothing to catch; (ii) `dp_hook.install_version_invariant(placer.optimizer, normalizer)` is installed so a missed bump is an assertion, not a silently stale Nesterov secant. `placer.optimizer` is created inside `NonLinearPlace.__call__` (`NonLinearPlace.py:235`), **not** in the constructor, so the install happens on the first iteration callback — the same lazy install `run_placement_io.py:704-708` does, and after that callback's `mark_refreshed()` so it never asserts against its own pending bump.
+
+4. **Normalisation is `TermNormalizer`'s, not the driver's (ruling D5, spec §0).** `TermNormalizer(policy="grandplan", norm_p=1, probe_every=probe_every, num_movable=m, num_nodes=n_all)` with `register("group", _GroupAdapter(term), curvature=1.0, activate_overflow=1.0)`. `_GroupAdapter.value(pos, ctx)` returns `term.forward(pos, 1.0)` — the normalizer owns the backward, the fixed/filler masking and the L1 norm. `tau = gamma = 0` in the transaction disables the Lipschitz cap (`lipschitz_cap` returns `inf` for `gamma <= 0`): that cap bounds λ against the IO term's smoothing τ, and the grouping term is an exact quadratic with no smoothing parameter — GrandPlan Eq.3 has no cap either. `overflow = 0` with `activate_overflow = 1.0` latches the term on at the first callback, reproducing the grouping loss's `it_activate = 0` "on for the whole flat GP" semantics (digest §5).
+
+   **Named consequence of adopting the normalizer:** `register`'s default `n_ramp = 20` multiplies λ by `activation_ramp(iteration, it_activate=0, 20)`, so λ is exactly 0 on the first transaction and full from the next one; at the default `t_hull = probe_every = 50` the grouping term is inert for iterations 0–49. The deleted `GroupingWeight` had no such ramp (λ was `0.05 · ratio` from iteration 0). This is a deliberate soft start, not an oversight — record it in Task 11's results note alongside the measured `n_hull_rebuilds`.
 3. **Centre init, no fence.** GrandPlan §4.2 initialises the flat placement at the chiplet centre, so `random_center_init_flag` is left at its configured value and no fence data is injected. `np.random.seed(params.random_seed)` immediately before `NonLinearPlace(...)`, because BasicPlace draws centre noise and filler positions from numpy's *global* RNG (`run_placement._place`'s comment).
+
+**Macro enrichment is movable-macros-only.** `size_x`/`size_y` are the `[:num_movable]` prefix, so `is_macro` can only ever select *movable* macros; fixed macros are outside the slice, never enrich a hull, and their occupied area is likewise absent from `EA_k = Σ cell_area / target_density`. On the acceptance case this whole branch is dead: `mempool_tile_wrap` has **0** movable nodes with `node_size_y > 2·row_height` (all `fakeram45` instances are fixed terminals), so `macro_idx` is empty — Task 11 Step 5 records that it did not fire.
 
 **Files:**
 - Create: `src/ioplace/drivers/run_region_producer.py`
 - Test: `tests/test_run_region_producer.py`
 
 **Interfaces:**
-- Consumes: `artifacts.{placedb_identity_sha256,save_positions,save_membership,save_producer_json}` (P-B Task 1, verified in Task 1; this task's tests also use `artifacts.{load_positions,load_membership,load_producer_json}`); `hull.{reduce_candidates_torch,macro_pseudo_points,build_hull,anchor_tables}` (Tasks 2, 3, 9); `grouping_term.{GroupingTerm,GroupingWeight}` (Task 4); `extract.extract` (Task 5); `sa.{SaConfig,anneal}` (Task 6); `rectify.{enforce_rect_max,rects_to_regionset,region_rect_counts}` (Task 7); `membership.build_membership` (Task 8); `run_placement.{_load_dreamplace,extract_final_positions}`; `dp_hook.{attach_terms,assert_optimizer_lock,refresh_nesterov_secant}`; `profile.PhaseTimer`.
+- Consumes: `artifacts.{placedb_identity_sha256,save_positions,save_membership,save_producer_json}` (P-B Task 1, verified in Task 1; this task's tests also use `artifacts.{load_positions,load_membership,load_producer_json}`); `hull.{reduce_candidates_torch,reduce_candidates,macro_pseudo_points,build_hull,anchor_tables}` (Tasks 2, 3, 9); `grouping_term.GroupingTerm` (Task 4); `extract.extract` (Task 5); `sa.{SaConfig,anneal}` (Task 6); `rectify.{enforce_rect_max,rects_to_regionset,region_rect_counts}` (Task 7); `membership.build_membership` (Task 8); `norm.TermNormalizer` (P-H, ruling D5); `run_placement.{_load_dreamplace,extract_final_positions}`; `dp_hook.{attach_terms,assert_optimizer_lock,refresh_nesterov_secant,install_version_invariant}`; `profile.{PhaseTimer,env_metadata}`.
 - Produces:
   - `LATTICE = 512`
-  - `class VersionState` with `obj_version`, `refreshed_version`, `bump()`, `needs_refresh()`, `mark_refreshed()`
-  - `run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar", extract_bins=64, rect_max=8, seed=0, epsilon=0.03, t_hull=50, probe_every=50, hierarchy_depth=1, sa_seed=0, alpha_pull=1.0, alpha_push=1.0, skip_sa=False, dp_seed=None, deterministic=None) -> dict`
-  - `main()` CLI
+  - `class _GroupAdapter` with `value(pos, ctx) -> Tensor` — `TermNormalizer`'s term protocol over `GroupingTerm` (ruling D5). **No `VersionState`**: `TermNormalizer` already carries `obj_version`/`refreshed_version`/`needs_refresh()`/`mark_refreshed()`.
+  - `rectify_with_fallback(build, rectify_fn, requested_bins, fallback_bins=32) -> (bins_used, labels, sa_report, path, reason)` — ruling D3's automatic `--extract-bins 32` retry
+  - `run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar", extract_bins=64, rect_max=8, seed=0, epsilon=0.03, t_hull=50, probe_every=50, hierarchy_depth=1, sa_seed=0, alpha_pull=1.0, alpha_push=1.0, skip_sa=False, dp_seed=None, deterministic=None, gp_iterations=None) -> dict`
+  - `main()` CLI, with `--gp-iterations` added
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2714,14 +2928,88 @@ DP = os.environ.get("DREAMPLACE_ROOT", "/ldaphome/yyds-tsai-dev/DREAMPlace")
 CFG = os.path.join(DP, "install", "test", "simple.json")
 
 
-def test_version_state_tracks_the_refresh_contract():
-    from ioplace.drivers.run_region_producer import VersionState
-    v = VersionState()
-    assert not v.needs_refresh()
-    v.bump()
-    assert v.needs_refresh()
-    v.mark_refreshed()
-    assert not v.needs_refresh()
+class _StubTerm:
+    """A one-line stand-in for GroupingTerm's forward(pos, lam) contract."""
+
+    def forward(self, pos, lam):
+        return float(lam) * 0.5 * (pos[:2] ** 2).sum()
+
+
+def test_group_adapter_exposes_the_unweighted_term():
+    """Ruling D5: TermNormalizer's term protocol is value(pos, ctx) returning
+    the UNWEIGHTED objective, i.e. forward(pos, 1.0)."""
+    import torch
+    from ioplace.drivers.run_region_producer import _GroupAdapter
+    pos = torch.tensor([1.0, 2.0], dtype=torch.float64)
+    assert float(_GroupAdapter(_StubTerm()).value(pos, {})) == pytest.approx(2.5)
+
+
+def test_normalizer_wiring_derives_eq3_and_tracks_the_refresh_contract():
+    """Rulings D5/D6. The driver holds no schedule state; TermNormalizer does.
+    ||grad WL||_1 = 20 and ||grad Group||_1 = 3 on this input, so ratio = 20/3.
+    activation_ramp zeroes wt on the activating transaction, then Eq.3's wt0 =
+    0.05 applies. A transaction leaves the version pair out of sync until
+    mark_refreshed() -- exactly what install_version_invariant asserts on."""
+    import torch
+    from ioplace.norm import TermNormalizer
+    from ioplace.drivers.run_region_producer import _GroupAdapter
+    nz = TermNormalizer(policy="grandplan", norm_p=1, probe_every=20,
+                        num_movable=2, num_nodes=4)
+    nz.register("group", _GroupAdapter(_StubTerm()), curvature=1.0,
+                activate_overflow=1.0)
+    pos = torch.zeros(8, dtype=torch.float64)
+    pos[0], pos[1] = 1.0, 2.0
+    wl = lambda p: 10.0 * p.abs().sum()
+    ctx = {"iteration": 0, "overflow": 0.0, "tau": 0.0, "gamma": 0.0}
+    assert not nz.needs_refresh()
+    assert nz.probe(0, pos, wl, ctx) == {"wl": 20.0, "group": 3.0}
+    nz.transaction(0, 0.0, 0.0, 0.0)
+    assert nz.needs_refresh()
+    nz.mark_refreshed()
+    assert not nz.needs_refresh()
+    assert nz.states["group"].ratio_ema == pytest.approx(20.0 / 3.0)
+    assert nz.lambdas["group"] == 0.0          # activation ramp at it_activate
+    nz.probe(20, pos, wl, dict(ctx, iteration=20))
+    nz.transaction(20, 0.0, 0.0, 0.0)
+    nz.mark_refreshed()
+    assert nz.states["group"].wt == pytest.approx(0.05)
+    assert nz.lambdas["group"] == pytest.approx(0.05 * 20.0 / 3.0)
+
+
+def test_rectify_falls_back_to_32_bins_and_records_the_path():
+    """Ruling D3: exhausting the rect budget at 64 bins is a driver fallback,
+    not an abort and not an operator instruction."""
+    from ioplace.drivers.run_region_producer import rectify_with_fallback
+    lab32 = np.zeros((32, 32), dtype=np.int16)
+    lab32[:, 16:] = 1
+    seen = []
+
+    def build(bins):
+        seen.append(bins)
+        if bins == 64:
+            raise RuntimeError("region 8 has 18 rects (> 8) and neither a "
+                               "feasible notch fill nor a feasible shed remains")
+        return lab32, {"levels_run": 3}
+
+    bins_used, labels, report, path, reason = rectify_with_fallback(
+        build, lambda lab: lab, 64)
+    assert seen == [64, 32]
+    assert bins_used == 32 and path == "fallback_32"
+    assert "18 rects" in reason
+    assert labels.shape == (32, 32) and report["levels_run"] == 3
+
+
+def test_rectify_does_not_fall_back_at_or_below_32_bins():
+    from ioplace.drivers.run_region_producer import rectify_with_fallback
+    seen = []
+
+    def build(bins):
+        seen.append(bins)
+        raise RuntimeError("no feasible move remains")
+
+    with pytest.raises(RuntimeError, match="no feasible move"):
+        rectify_with_fallback(build, lambda lab: lab, 32)
+    assert seen == [32]
 
 
 @pytest.mark.slow
@@ -2730,7 +3018,7 @@ def test_producer_emits_all_four_artefacts_on_simple(tmp_path):
     out = str(tmp_path / "run")
     res = run_producer(CFG, out, k=2, membership_source="mtkahypar",
                        extract_bins=32, rect_max=8, seed=0, t_hull=20,
-                       probe_every=20, sa_seed=0)
+                       probe_every=20, sa_seed=0, gp_iterations=200)
     for name in ("regions.json", "seed.npz", "membership.npz", "producer.json"):
         assert os.path.exists(os.path.join(out, name)), name
 
@@ -2754,6 +3042,7 @@ def test_producer_emits_all_four_artefacts_on_simple(tmp_path):
 
     doc = artifacts.load_producer_json(os.path.join(out, "producer.json"))
     assert doc["k"] == 2 and doc["extract_bins"] == 32 and doc["rect_max"] == 8
+    assert doc["sa"]["rect_max_path"] == "direct"
     assert doc["n_hull_rebuilds"] >= 1
     assert max(doc["rects_per_region"]) <= 8
     assert doc["runtime_s"]["total"] > 0.0
@@ -2767,7 +3056,8 @@ def test_seed_is_in_native_units_and_inside_the_die(tmp_path):
     the post-initialize scaled one."""
     from ioplace.drivers.run_region_producer import run_producer
     out = str(tmp_path / "run")
-    res = run_producer(CFG, out, k=2, extract_bins=32, t_hull=20, probe_every=20)
+    res = run_producer(CFG, out, k=2, extract_bins=32, t_hull=20,
+                       probe_every=20, gp_iterations=200)
     xl, yl, xh, yh = res["die_native"]
     assert (xl, yl) != (0.0, 0.0), "simple.json's die does not start at the origin"
     s = artifacts.load_positions(os.path.join(out, "seed.npz"))
@@ -2784,7 +3074,7 @@ def test_extract_bins_32_and_64_both_produce_valid_geometry(tmp_path):
     for bins in (32, 64):
         out = str(tmp_path / f"b{bins}")
         res = run_producer(CFG, out, k=2, extract_bins=bins, t_hull=20,
-                           probe_every=20)
+                           probe_every=20, gp_iterations=200)
         rs = RegionSet.from_json(os.path.join(out, "regions.json"))
         rs.validate()
         assert res["extract_bins"] == bins
@@ -2798,7 +3088,8 @@ def test_producer_is_reproducible_with_the_same_seeds(tmp_path):
     b = str(tmp_path / "b")
     for out in (a, b):
         run_producer(CFG, out, k=2, extract_bins=32, seed=0, sa_seed=0,
-                     t_hull=20, probe_every=20, dp_seed=1000, deterministic=1)
+                     t_hull=20, probe_every=20, dp_seed=1000, deterministic=1,
+                     gp_iterations=200)
     pa = artifacts.load_membership(os.path.join(a, "membership.npz")).part
     pb = artifacts.load_membership(os.path.join(b, "membership.npz")).part
     assert np.array_equal(pa, pb)
@@ -2832,6 +3123,15 @@ callback) -> flat LG -> density-argmax extraction -> SA -> rect_max -> RegionSet
 Coordinate contract: everything inside the GP is in the SCALED post-initialize()
 system; everything written out is in the NATIVE post-read() system
 (x_native = x_scaled / scale_factor + shift_factor[0]).
+
+Normalisation: Eq.3's coefficient for the grouping term is derived by
+ioplace.norm.TermNormalizer (policy "grandplan", norm_p=1) -- spec section 0's
+single-owner rule, ruling D5. This driver holds no schedule state of its own.
+
+dp_hook.assert_optimizer_lock passes on mempool_tile_wrap (use_bb -> 0,
+macro_place_flag -> 0, no movable macros) and would FAIL on any design that has
+movable macros, because DREAMPlace then selects the bb optimizer and the
+surrogate-only forward is not behaviourally equivalent under it.
 """
 import argparse
 import os
@@ -2844,15 +3144,17 @@ import numpy as np
 from ioplace.artifacts import (placedb_identity_sha256, save_membership,
                                save_positions, save_producer_json)
 from ioplace.dp_hook import (assert_optimizer_lock, attach_terms,
+                             install_version_invariant,
                              refresh_nesterov_secant)
 from ioplace.drivers.run_placement import (_load_dreamplace,
                                            extract_final_positions)
 from ioplace.netlist import netlist_from_placedb
+from ioplace.norm import TermNormalizer
 from ioplace.producer import extract as extract_mod
 from ioplace.producer import hull as hull_mod
 from ioplace.producer import rectify as rectify_mod
 from ioplace.producer import sa as sa_mod
-from ioplace.producer.grouping_term import GroupingTerm, GroupingWeight
+from ioplace.producer.grouping_term import GroupingTerm
 from ioplace.producer.membership import build_membership
 from ioplace.paths import REPO_ROOT
 from ioplace.profile import PhaseTimer, env_metadata
@@ -2860,30 +3162,54 @@ from ioplace.profile import PhaseTimer, env_metadata
 LATTICE = 512
 
 
-class VersionState:
-    """dp_hook's obj_version / refreshed_version discipline (design v2 sec 6.4):
-    a hull rebuild or a lambda change is a DISCRETE objective change, so the
-    Nesterov secant cache must be recomputed before the next optimizer step."""
+class _GroupAdapter(object):
+    """TermNormalizer's term protocol is one method, `value(pos, ctx) -> Tensor`
+    returning the term's UNWEIGHTED objective; the normalizer owns the backward,
+    the fixed/filler masking and the norm order (ioplace/ops/norm_terms.py).
+    GroupingTerm's unweighted energy is `forward(pos, 1.0)`; `ctx` carries the
+    driver's {iteration, overflow, tau, gamma} and this term needs none of it.
+    """
 
-    def __init__(self):
-        self.obj_version = 0
-        self.refreshed_version = 0
+    def __init__(self, term):
+        self.term = term
 
-    def bump(self):
-        self.obj_version += 1
+    def value(self, pos, ctx):
+        return self.term.forward(pos, 1.0)
 
-    def needs_refresh(self):
-        return self.obj_version != self.refreshed_version
 
-    def mark_refreshed(self):
-        self.refreshed_version = self.obj_version
+def rectify_with_fallback(build, rectify_fn, requested_bins, fallback_bins=32):
+    """Ruling D3: `--extract-bins 32` is a driver fallback, not an operator
+    instruction.
+
+    `build(bins) -> (labels, sa_report)` runs extraction + SA at `bins`;
+    `rectify_fn(labels) -> labels` enforces the rect budget. A RuntimeError
+    from either half at the requested bin count -- in practice
+    `enforce_rect_max` exhausting both its moves (spec section 10 risk 1) --
+    retries the WHOLE thing at `fallback_bins` before it is allowed to escape.
+    At or below `fallback_bins` there is nothing left to fall back to, so the
+    error propagates.
+
+    Returns `(bins_used, labels, sa_report, path, reason)` with `path` one of
+    "direct" / "fallback_32" and `reason` the first failure's message (None on
+    the direct path).
+    """
+    try:
+        labels, report = build(requested_bins)
+        return requested_bins, rectify_fn(labels), report, "direct", None
+    except RuntimeError as exc:
+        if requested_bins <= fallback_bins:
+            raise
+        reason = str(exc)
+    labels, report = build(fallback_bins)
+    return (fallback_bins, rectify_fn(labels), report,
+            "fallback_%d" % fallback_bins, reason)
 
 
 def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
                  extract_bins=64, rect_max=8, seed=0, epsilon=0.03, t_hull=50,
                  probe_every=50, hierarchy_depth=1, sa_seed=0, alpha_pull=1.0,
                  alpha_push=1.0, skip_sa=False, dp_seed=None,
-                 deterministic=None):
+                 deterministic=None, gp_iterations=None):
     import torch
 
     t_start = time.time()
@@ -2897,6 +3223,11 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
             params.random_seed = dp_seed
         if deterministic is not None:
             params.deterministic_flag = deterministic
+        if gp_iterations is not None:
+            # simple.json does not set global_place_stages, so DREAMPlace's
+            # params.json default (iteration: 1000) applies; the slow tests
+            # pass 200 so five end-to-end runs stay in review-cycle time.
+            params.global_place_stages[0]["iteration"] = int(gp_iterations)
         die_native = (float(placedb.xl), float(placedb.yl),
                       float(placedb.xh), float(placedb.yh))
         nl0 = netlist_from_placedb(placedb)
@@ -2916,6 +3247,10 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
     # ---- initialize: scaled coordinate system ----------------------------
     with timer.phase("initialize"):
         placedb.initialize(params)
+        # Passes on the acceptance case: mempool_tile_wrap resolves use_bb -> 0
+        # and macro_place_flag -> 0 because it has NO movable macros. It would
+        # FAIL on any design that does -- DREAMPlace then selects the bb
+        # optimizer, which the surrogate-only forward is not equivalent under.
         assert_optimizer_lock(params)
         die_scaled = (float(placedb.xl), float(placedb.yl),
                       float(placedb.xh), float(placedb.yh))
@@ -2935,16 +3270,29 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
         is_std = ~is_macro
         pitch_x = float(size_x[is_std].mean()) if is_std.any() else float(size_x.mean())
         pitch_y = float(size_y[is_std].mean()) if is_std.any() else float(size_y.mean())
+        # MOVABLE macros only: `size_x`/`size_y` are the [:num_movable] prefix,
+        # so fixed macros (all of mempool_tile_wrap's fakeram45 instances are
+        # fixed terminals) are outside this slice and never enrich a hull --
+        # and their occupied area is likewise absent from EA_k. On the
+        # acceptance case macro_idx is empty and this whole branch is dead.
         macro_idx = np.nonzero(is_macro)[0]
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     term = GroupingTerm(part=part, node_size_x=size_x, node_size_y=size_y,
-                        num_movable=m, num_physical=n_phys, num_nodes=n_all,
-                        alpha_pull=alpha_pull, alpha_push=alpha_push,
-                        device=device)
-    weight = GroupingWeight()
-    version = VersionState()
-    attach_terms(params, [lambda pos: term(pos, weight.lam)])
+                        num_movable=m, num_nodes=n_all, alpha_pull=alpha_pull,
+                        alpha_push=alpha_push, device=device)
+    # Ruling D5: one owner for every extra term's coefficient. policy
+    # "grandplan" is Eq.3 (lam = wt * EMA(||grad WL||_1 / ||grad Group||_1)) with
+    # digest section 4.1's stepped ramp; activate_overflow=1.0 latches the term
+    # on the first transaction, reproducing the grouping loss's it_activate=0
+    # "on for the whole flat GP" semantics (digest section 5). curvature=1.0
+    # because the term is an exact quadratic spring.
+    normalizer = TermNormalizer(policy="grandplan", norm_p=1,
+                                probe_every=probe_every, num_movable=m,
+                                num_nodes=n_all)
+    normalizer.register("group", _GroupAdapter(term), curvature=1.0,
+                        activate_overflow=1.0)
+    attach_terms(params, [lambda pos: term(pos, normalizer.lambdas.get("group", 0.0))])
 
     part_t = torch.as_tensor(part.astype(np.int64), device=device)
     half_x = torch.as_tensor(0.5 * size_x, dtype=torch.float64, device=device)
@@ -2978,31 +3326,56 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
             hulls.append(hull_mod.build_hull(pts, a_max=float(ea_scaled[kk])))
         term.set_tables(hull_mod.anchor_tables(hulls, die_scaled, LATTICE,
                                                device=device))
-        version.bump()
 
     probes = []
-    cb_state = {"last_iteration": -1}
+    cb_state = {"last_iteration": -1, "invariant": False}
 
     def cb(iteration, pos):
         cb_state["last_iteration"] = iteration
+        # A hull rebuild and a lambda change are both DISCRETE objective
+        # changes. `normalizer.transaction` is what bumps obj_version, so a
+        # rebuild iteration must run one too even when it is not a probe
+        # iteration -- otherwise the install_version_invariant below would have
+        # nothing to catch and the secant cache would go stale silently.
+        discrete = False
         if iteration % t_hull == 0:
             rebuild(pos)
-        if iteration % probe_every == 0 and term.tables is not None:
-            placer.model.op_collections.wirelength_op(pos).backward()
-            g_wl = float(pos.grad.abs().sum())
-            pos.grad.zero_()
-            g_group = term.grad_l1(pos.detach())
-            weight.update(iteration, g_wl, g_group)
-            version.bump()
-            probes.append({"iteration": int(iteration), "grad_l1_wl": g_wl,
-                           "grad_l1_group": g_group,
-                           "wt": weight.wt(iteration),
-                           "lambda_group": weight.lam})
+            discrete = True
+        ctx = {"iteration": iteration, "overflow": 0.0, "tau": 0.0,
+               "gamma": 0.0}
+        if normalizer.should_probe(iteration) and term.tables is not None:
+            normalizer.probe(iteration, pos,
+                             placer.model.op_collections.wirelength_op, ctx)
+            discrete = True
+        if discrete:
+            # tau/gamma = 0 disables the Lipschitz cap (lipschitz_cap returns
+            # inf for gamma <= 0): that cap bounds lambda against the IO term's
+            # smoothing tau, and the grouping term is an exact quadratic with
+            # no smoothing parameter -- GrandPlan Eq.3 has no cap either.
+            # overflow = 0 with activate_overflow = 1.0 keeps the term latched
+            # on from the first callback; the producer has no overflow gate.
+            txn = normalizer.transaction(iteration, 0.0, 0.0, 0.0)
+            st = normalizer.states["group"]
+            probes.append({"iteration": int(iteration),
+                           "grad_l1_wl": normalizer.wl_norm,
+                           "grad_l1_group": st.grad_norm,
+                           "ratio_ema": st.ratio_ema, "wt": st.wt,
+                           "lambda_group": txn.lambdas["group"],
+                           "obj_version": txn.obj_version})
         # Order is fixed: the new tables / lambda take effect first, then the
-        # secant cache is rebuilt under the new objective (run_placement_io.py:584).
-        if version.needs_refresh():
+        # secant cache is rebuilt under the new objective
+        # (run_placement_io.py:690-694, design v2 sec 6.4).
+        if normalizer.needs_refresh():
             refresh_nesterov_secant(placer.optimizer)
-            version.mark_refreshed()
+            normalizer.mark_refreshed()
+        if not cb_state["invariant"]:
+            # Ruling D6. NonLinearPlace sets self.optimizer inside __call__
+            # (NonLinearPlace.py:235), not in the constructor, so this is the
+            # earliest point it exists -- the same lazy install
+            # run_placement_io.py:704-708 does. Installing AFTER the refresh
+            # above means it never sees a pending bump of its own making.
+            install_version_invariant(placer.optimizer, normalizer)
+            cb_state["invariant"] = True
 
     np.random.seed(params.random_seed)
     placer = NonLinearPlace.NonLinearPlace(params, placedb, None)
@@ -3030,28 +3403,45 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
     final_overflow = float(placer.model.overflow.max())
 
     # ---- back to native units -------------------------------------------
-    with timer.phase("extract"):
-        x_s, y_s = extract_final_positions(placer, placedb)
-        x_n = x_s / scale + shift[0]
-        y_n = y_s / scale + shift[1]
-        w_n = np.asarray(placedb.node_size_x[:n_phys], dtype=np.float64) / scale
-        h_n = np.asarray(placedb.node_size_y[:n_phys], dtype=np.float64) / scale
-        labels0 = extract_mod.extract(x_n[:m], y_n[:m], w_n[:m], h_n[:m],
-                                      part, k, die_native, out_bins=extract_bins)
-
-    bin_area = ((die_native[2] - die_native[0]) / extract_bins) * \
-               ((die_native[3] - die_native[1]) / extract_bins)
+    x_s, y_s = extract_final_positions(placer, placedb)
+    x_n = x_s / scale + shift[0]
+    y_n = y_s / scale + shift[1]
+    w_n = np.asarray(placedb.node_size_x[:n_phys], dtype=np.float64) / scale
+    h_n = np.asarray(placedb.node_size_y[:n_phys], dtype=np.float64) / scale
     ea_native = ea_scaled / (scale * scale)
-    with timer.phase("sa"):
-        if skip_sa:
-            labels, sa_report = labels0.copy(), {"skipped": True}
-        else:
-            labels, sa_report = sa_mod.anneal(
-                labels0, k, ea_native, bin_area, sa_mod.SaConfig(seed=sa_seed))
 
-    with timer.phase("rectify"):
-        labels = rectify_mod.enforce_rect_max(labels, k, rect_max=rect_max)
-        rs = rectify_mod.rects_to_regionset(labels, k, die_native, lattice=LATTICE)
+    def _bin_area(bins):
+        return (((die_native[2] - die_native[0]) / bins) *
+                ((die_native[3] - die_native[1]) / bins))
+
+    def build(bins):
+        """Extraction + SA at `bins`. Re-entering a PhaseTimer phase overwrites
+        it, so runtime_s["extract"]/["sa"] always describe the run that
+        produced the emitted geometry, not a discarded first attempt."""
+        with timer.phase("extract"):
+            labels0 = extract_mod.extract(x_n[:m], y_n[:m], w_n[:m], h_n[:m],
+                                          part, k, die_native, out_bins=bins)
+        with timer.phase("sa"):
+            if skip_sa:
+                return labels0.copy(), {"skipped": True}
+            return sa_mod.anneal(labels0, k, ea_native, _bin_area(bins),
+                                 sa_mod.SaConfig(seed=sa_seed))
+
+    def _rectify(labels):
+        with timer.phase("rectify"):
+            return rectify_mod.enforce_rect_max(labels, k, rect_max=rect_max)
+
+    requested_bins = int(extract_bins)
+    bins_used, labels, sa_report, rect_max_path, fallback_reason = \
+        rectify_with_fallback(build, _rectify, requested_bins)
+    # Ruling D3: which path was taken is recorded inside the existing `sa`
+    # dict, so artifacts.PRODUCER_FIELDS is unchanged.
+    sa_report["extract_bins_requested"] = requested_bins
+    sa_report["rect_max_path"] = rect_max_path
+    if fallback_reason is not None:
+        sa_report["rect_max_fallback_reason"] = fallback_reason
+    bin_area = _bin_area(bins_used)
+    rs = rectify_mod.rects_to_regionset(labels, k, die_native, lattice=LATTICE)
 
     # ---- artefacts -------------------------------------------------------
     rs.to_json(os.path.join(out_dir, "regions.json"))
@@ -3071,21 +3461,22 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
                      out=np.zeros(k), where=region_area > 0)
     runtime = {name: float(p["t_s"]) for name, p in timer.phases.items()}
     runtime["total"] = time.time() - t_start
+    group_state = normalizer.states["group"]
 
     payload = {
         "config": os.path.abspath(config_json), "out_dir": os.path.abspath(out_dir),
         "k": int(k), "membership_source": membership_source,
         "membership_seed": int(seed), "epsilon": float(epsilon),
         "hierarchy_depth": int(hierarchy_depth),
-        "extract_bins": int(extract_bins), "fine_bins": int(extract_mod.FINE_BINS),
+        "extract_bins": int(bins_used), "fine_bins": int(extract_mod.FINE_BINS),
         "lattice": LATTICE, "rect_max": int(rect_max),
         "t_hull": int(t_hull), "probe_every": int(probe_every),
         "n_hull_rebuilds": int(term.n_rebuilds),
         "alpha_pull": float(alpha_pull), "alpha_push": float(alpha_push),
-        "wt_final": weight.wt(cb_state["last_iteration"]),
-        "lambda_group_final": float(weight.lam),
-        "ratio_ema_final": (None if weight.ratio_ema is None
-                            else float(weight.ratio_ema)),
+        "wt_final": float(group_state.wt),
+        "lambda_group_final": float(normalizer.lambdas.get("group", 0.0)),
+        "ratio_ema_final": (None if group_state.ratio_ema is None
+                            else float(group_state.ratio_ema)),
         "die_native": list(die_native), "die_scaled": list(die_scaled),
         "shift_factor": list(shift), "scale_factor": scale,
         "placedb_sha256": fingerprint,
@@ -3124,7 +3515,9 @@ def main():
     ap.add_argument("--membership", choices=["mtkahypar", "hierarchy"],
                     default="mtkahypar")
     ap.add_argument("--extract-bins", type=int, choices=[32, 64], default=64,
-                    help="64 = spec default; 32 = faithful GrandPlan for arm (e)")
+                    help="64 = spec default; 32 = faithful GrandPlan for arm "
+                         "(e), and the automatic fallback if the rect budget "
+                         "is unreachable at 64")
     ap.add_argument("--rect-max", type=int, default=8)
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=0)
@@ -3138,6 +3531,8 @@ def main():
     ap.add_argument("--no-sa", action="store_true")
     ap.add_argument("--dp-seed", type=int, default=None)
     ap.add_argument("--deterministic", type=int, default=None)
+    ap.add_argument("--gp-iterations", type=int, default=None,
+                    help="override global_place_stages[0]['iteration']")
     a = ap.parse_args()
     run_producer(a.config, a.out, k=a.k, membership_source=a.membership,
                  extract_bins=a.extract_bins, rect_max=a.rect_max, seed=a.seed,
@@ -3145,7 +3540,7 @@ def main():
                  hierarchy_depth=a.hierarchy_depth, sa_seed=a.sa_seed,
                  alpha_pull=a.alpha_pull, alpha_push=a.alpha_push,
                  skip_sa=a.no_sa, dp_seed=a.dp_seed,
-                 deterministic=a.deterministic)
+                 deterministic=a.deterministic, gp_iterations=a.gp_iterations)
 
 
 if __name__ == "__main__":
@@ -3158,7 +3553,7 @@ if __name__ == "__main__":
 source src/scripts/env.sh && export CUDA_VISIBLE_DEVICES=3
 "$IOPLACE_PYTHON" -m pytest tests/test_run_region_producer.py -v
 ```
-Expected: PASS — 5 passed (1 fast, 4 `slow`; each `simple.json` run takes tens of seconds).
+Expected: PASS — 8 passed (4 fast, 4 `slow`). `simple.json` does **not** set `global_place_stages`, so DREAMPlace's `params.json` default of **1000** GP iterations would otherwise apply to every slow test (pre-flight E4); each slow test therefore passes `gp_iterations=200`, which with `t_hull = probe_every = 20` still gives 10 hull rebuilds and 10 probes per run.
 
 - [ ] **Step 5: Run the whole suite**
 
@@ -3193,6 +3588,8 @@ The checked-in `benchmarks/ispd25/mempool_tile_wrap.json` still points at the re
 
 **Files:**
 - Create: `benchmarks/ispd25/h100/mempool_tile_wrap.json`
+- Create: `benchmarks/ispd25/h100/mempool_group.json` (cross-plan ruling 1, Step 1b)
+- Create: `benchmarks/ispd25/h100/mempool_cluster.json` (cross-plan ruling 1, Step 1c — **unvalidated**, no run in this plan)
 - Create: `results/p_c_producer_20260919/tile_wrap_k16_b64/{regions.json,seed.npz,membership.npz,producer.json}` (run output)
 - Create: `results/p_c_producer_20260919/tile_wrap_k16_b32/{regions.json,seed.npz,membership.npz,producer.json}` (run output)
 - Create: `docs/results/2026-09-19-p-c-producer-tile-wrap.md`
@@ -3218,7 +3615,76 @@ for f in d["lef_input"] + [d["def_input"]]:
 print("ok", d["def_input"], d["global_place_stages"][0]["iteration"])
 PY
 ```
-Expected: `ok /ldaphome/yyds-tsai-dev/benchmarks/ispd25/visible/mempool_tile_wrap.def 2000`.
+Expected (verified on this host, 2026-09-19 — the source config points at the
+`archive/extracted` copy of the DEF, **not** the `visible/` one; both exist):
+
+```
+ok /ldaphome/yyds-tsai-dev/benchmarks/ispd25/archive/extracted/ISPD2025_benchmarks/visible/mempool_tile_wrap/mempool_tile_wrap.def 2000
+```
+
+- [ ] **Step 1b: Promote the host-local `mempool_group` config (cross-plan ruling 1)**
+
+`results/recovery_visible_20260906/configs/mempool_group.json` exists and points
+at a DEF that exists (`…/archive/extracted/visible/mempool_group/mempool_group.def`,
+2.33 GB), but it has **`"gpu": 0`** — promote it with `gpu` set to 1.
+
+```bash
+source src/scripts/env.sh
+"$IOPLACE_PYTHON" - <<'PY'
+import json, os
+src = "results/recovery_visible_20260906/configs/mempool_group.json"
+dst = "benchmarks/ispd25/h100/mempool_group.json"
+d = json.load(open(src))
+d["gpu"] = 1
+os.makedirs(os.path.dirname(dst), exist_ok=True)
+with open(dst, "w") as f:
+    json.dump(d, f, indent=4, sort_keys=True)
+    f.write("\n")
+print("wrote", dst, d["def_input"])
+PY
+"$IOPLACE_PYTHON" - <<'PY'
+import json, os
+for p in ("benchmarks/ispd25/h100/mempool_tile_wrap.json",
+          "benchmarks/ispd25/h100/mempool_group.json"):
+    d = json.load(open(p))
+    assert d["gpu"] == 1, (p, d["gpu"])
+    for f in d["lef_input"] + [d["def_input"]]:
+        assert os.path.exists(f), (p, f)
+    print("ok", os.path.basename(p), d["def_input"])
+PY
+```
+Expected: both lines print `ok`. The per-file loop replaces the single
+`assert d["gpu"] == 1` of Step 1, which would have failed on the group config
+as it stands in `results/`.
+
+- [ ] **Step 1c: Author the `mempool_cluster` config (cross-plan ruling 1, unvalidated)**
+
+There is **no** host-local cluster config anywhere to promote, and no
+`archive/extracted/.../mempool_cluster/` directory — only
+`/ldaphome/yyds-tsai-dev/benchmarks/ispd25/visible/mempool_cluster.def`
+(9.82 GB). Author one by copying the group config and swapping `def_input`.
+
+```bash
+source src/scripts/env.sh
+"$IOPLACE_PYTHON" - <<'PY'
+import json, os
+src = "benchmarks/ispd25/h100/mempool_group.json"
+dst = "benchmarks/ispd25/h100/mempool_cluster.json"
+d = json.load(open(src))
+d["def_input"] = ("/ldaphome/yyds-tsai-dev/benchmarks/ispd25/visible/"
+                  "mempool_cluster.def")
+assert os.path.exists(d["def_input"]), d["def_input"]
+with open(dst, "w") as f:
+    json.dump(d, f, indent=4, sort_keys=True)
+    f.write("\n")
+print("wrote", dst, "UNVALIDATED - no run in this plan")
+PY
+```
+This file is **not exercised by any step of this plan**: it exists so a later
+plan has a starting point rather than re-deriving one. Commit it separately in
+Step 7 with a message that says so (`chore(bench): unvalidated host-local
+mempool_cluster config`), so a reader never mistakes it for a config a run has
+been through.
 
 - [ ] **Step 2: Check the GPU is free, then run the 64² arm**
 
@@ -3234,7 +3700,7 @@ mkdir -p results/p_c_producer_20260919
   --out results/p_c_producer_20260919/tile_wrap_k16_b64 \
   2>&1 | tee results/p_c_producer_20260919/tile_wrap_k16_b64.log
 ```
-Expected: exit 0; the four artefacts written. If the run aborts inside `enforce_rect_max` with "no feasible notch fill remains", that is spec §10 risk 1 materialising — record the region id and rect count in the results doc and re-run with `--extract-bins 32` before escalating.
+Expected: exit 0; the four artefacts written. Ruling D3 made the `--extract-bins 32` retry **driver behaviour**: if `enforce_rect_max` exhausts both its moves at `64²`, `run_producer` automatically re-runs extraction + SA at `32²` and only raises if that fails too. Do not re-run by hand — instead read `producer.json`'s `sa.rect_max_path` (`"direct"` or `"fallback_32"`) and, when it is the fallback, `sa.rect_max_fallback_reason`, and record both in the results doc as spec §10 risk 1 materialising. Note that the emitted `extract_bins` field is then **32**, with `sa.extract_bins_requested` holding the 64 that was asked for — so the `b64` output directory may legitimately contain a 32-bin map.
 
 - [ ] **Step 3: Run the 32² arm (faithful GrandPlan, spec §8 arm (e))**
 
@@ -3296,7 +3762,24 @@ Expected: both rows print, no assertion fires, `max_rects ≤ 8` on both, and `s
 
 - [ ] **Step 5: Write the results note**
 
-Create `docs/results/2026-09-19-p-c-producer-tile-wrap.md` containing: the exact two commands, the runtime table printed in Step 4, the per-region rect counts and utilisation from both `producer.json` files, the observed `n_hull_rebuilds` and final `lambda_group`, and one explicit paragraph on spec §10 risk 6 — whether density-argmax + largest-CC extraction held up at K=16 with `64²` bins (did `ensure_nonempty` fire? check `region_bins` for any region at 1 bin) and how the `32²` map compares. State the SA time against the "<60 s CPU" budget and the producer total against "flat GP+LG +<3%" using the `gp`/`lg` phases as the flat baseline.
+Create `docs/results/2026-09-19-p-c-producer-tile-wrap.md` containing: the exact commands, the runtime table printed in Step 4, the per-region rect counts and utilisation from both `producer.json` files, the observed `n_hull_rebuilds` and final `lambda_group`, and one explicit paragraph on spec §10 risk 6 — whether density-argmax + largest-CC extraction held up at K=16 with `64²` bins (did `ensure_nonempty` fire? check `region_bins` for any region at 1 bin) and how the `32²` map compares. State the SA time against the "<60 s CPU" budget.
+
+Four things the pre-flight scan requires this note to record:
+
+1. **Producer overhead against a MATCHED flat run, not a historical number.** The `gp`/`lg` phases of the producer run are *not* a flat baseline — they already carry the grouping term. Run the same config through the flat driver with the same seeds and iteration count and compare totals:
+
+   ```bash
+   source src/scripts/env.sh && export CUDA_VISIBLE_DEVICES=3
+   "$IOPLACE_PYTHON" -m ioplace.drivers.run_placement --mode flat \
+     --config benchmarks/ispd25/h100/mempool_tile_wrap.json \
+     --dp-seed 1000 --deterministic 1 \
+     --out results/p_c_producer_20260919/tile_wrap_flat.json
+   ```
+
+   Expect ≈ **+5–7 %**, not the spec's "+<3 %", and say so plainly. The dominant cost is **not** the geometry: measured at N=3M/K=16 on device 3, candidate reduction + quickhull is 0.73 s per rebuild, `anchor_tables(512²)` 0.166 s and `GroupingTerm` fwd+bwd 1.5 ms/iteration. It is `dp_hook.refresh_nesterov_secant`, which runs **two full `obj_and_grad_fn` evaluations** every refreshing callback; at `t_hull = probe_every = 50` that alone is ≈ +4 % of GP objective evaluations, on top of the probe's own WL backward and the term's isolated fwd+bwd.
+2. **Macro enrichment did not fire.** `mempool_tile_wrap` has 0 movable macros (all `fakeram45` instances are fixed terminals), so `macro_idx` was empty and the `macro_pseudo_points` path never ran; the fixed macros' occupied area is absent from both the hulls and `EA_k`. State this explicitly so the `≤64 points/macro` spec line is not read as validated here.
+3. **The rect-budget path.** Quote `sa.rect_max_path` for both arms; if either is `fallback_32`, quote `sa.rect_max_fallback_reason` and note that arm's `extract_bins` is 32.
+4. **The λ activation ramp.** `TermNormalizer`'s `n_ramp = 20` means λ_group is 0 until the second transaction, i.e. the grouping term is inert for the first `t_hull` iterations (ruling D5's named consequence). Quote the first few `probes[]` entries so the ramp is visible in the record.
 
 - [ ] **Step 6: Run the full suite one more time**
 
@@ -3309,10 +3792,24 @@ Expected: no new failures.
 - [ ] **Step 7: Commit**
 
 ```bash
+git add benchmarks/ispd25/h100/mempool_cluster.json
+git commit -m "chore(bench): unvalidated host-local mempool_cluster config
+
+Copied from benchmarks/ispd25/h100/mempool_group.json with def_input swapped to
+/ldaphome/yyds-tsai-dev/benchmarks/ispd25/visible/mempool_cluster.def. No run in
+this plan has exercised it (cross-plan ruling 1).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+
 git add benchmarks/ispd25/h100/mempool_tile_wrap.json \
+        benchmarks/ispd25/h100/mempool_group.json \
         results/p_c_producer_20260919 \
         docs/results/2026-09-19-p-c-producer-tile-wrap.md
 git commit -m "feat(producer): mempool_tile_wrap K=16 acceptance runs at 64^2 and 32^2
+
+Also promotes the host-local mempool_group config (cross-plan ruling 1); the
+checked-in benchmarks/ispd25/*.json still point at the retired /nashome/NVL4
+paths.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -3330,8 +3827,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 | Prior: `partition_netlist`, K=16, ε=0.03, or RTL hierarchy prefixes, run before the flat GP | 8, 10 |
 | No block→region matching | 8 (documented and not implemented) |
 | Grouping loss attached via `dp_hook.attach_terms`, Eq.1/Eq.2, `α_pull=α_push=1` | 4, 10 |
-| Algorithm-1 candidate reduction on GPU, `m=16`, `q=0.90`, `α=0.25`, `K_dir=64`, ≤1024 pts/region | 2, 9 |
-| Rasterised `512²` anchor tables, `K×512²×2` fp16 ≈ 16 MB at K=16 | 3 (memory assertion in the test) |
+| Algorithm-1 candidate reduction on GPU, `m=16`, `q=0.90`, `α=0.25`, `K_dir=64`, ≤1024 pts/region | 2, 9 (with ruling D1's support point, bound `2·m·(K_dir+1)`; measured 903 points on a 50 k cloud) |
+| Rasterised `512²` anchor tables | 3 — measured: ≈**40 MiB persistent** at K=16 (`pull_off` 16 MiB + `push_off` 16 MiB + `pull_on` 4 MiB + `push_cnt` 4 MiB), i.e. **16 MiB per anchor field**, plus a 32 MiB fp32 `own_off` transient inside `anchor_tables`. Spec §2's "16 MB" is the per-field number, not the total; the unit test asserts the per-field one. |
 | Per-iteration cost O(N), independent of hull complexity | 4 (table lookups only) |
 | Rebuild every `T_hull=50`, anchors frozen in between | 4, 10 |
 | Macro pseudo points at mean std-cell pitch, ≤64/macro | 2, 10 |
@@ -3345,7 +3842,9 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 | Rect cap `rect_max=8` by filling the smallest notches, re-run `validate()` (§10 risk 1) | 7 |
 | §8 arm (e): faithful `32²` extraction and fixed membership; `--extract-bins {32,64}` | 8 (fixed membership), 10 (CLI), 11 (both runs) |
 | §9 `tests/test_region_producer.py`: SA energies vs closed forms, moves never fragment, output passes `validate()` and `rect_max`, determinism under a fixed seed | 6 (energies, fragmentation, determinism), 7 (`validate()`, `rect_max`), 10/11 (end-to-end) |
-| §10 risk 6: K=16 at `64²` bins unvalidated | 5 (`morph_open_close` restore + `ensure_nonempty`), 11 Step 5 (reported) |
+| §10 risk 6: K=16 at `64²` bins unvalidated | 5 (`morph_open_close` restore + border-preserving erosion + `ensure_nonempty` + `canonicalise_connectivity`), 11 Step 5 (reported) |
+| §10 risk 1: `rect_max=8` reachable at K=16 | 7 (absorption **and** shedding — measured 0/6 failures at `64²`/`32²`, with and without SA), 10 (automatic `--extract-bins 32` fallback), 11 Step 5 (`sa.rect_max_path` reported) |
+| §0 normalisation single-owner (`norm.TermNormalizer`) | 4 (no weight class), 10 (`register("group", …)` + `install_version_invariant`) |
 | No new DREAMPlace patch | 4, 10 (`attach_terms` + `iteration_callback` only) |
 
 **Deliberate deviations, all named in the task that makes them:**
@@ -3355,9 +3854,14 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 3. **The discrete corner definition for `C_ij`** (Task 6) is ours; the paper defines corners only pictorially. The rule is pinned by three unit tests (straight → 0, L-turn → 1, one-bin notch → 4).
 4. **Corner-filling's "corner detected" test** is "the window carries ≥2 labels" (Task 6). A strict corner test is undefined for a 1×2 window, which digest §5 explicitly allows; `E_boundary` does the real corner accounting and rejects moves that make things worse.
 5. **Morphology uses the full `3×3` square structuring element**, not the 4-connected cross (Task 5, verified on this host: the cross strips every rectangle's corners during opening; the square does not).
-6. **λ for the grouping term lives in a local `GroupingWeight`**, but its ramp and EMA are P-H's `norm.grandplan_weight` / `norm.ema_update` (spec §4), so Eq.3's schedule has exactly one implementation. P-C therefore depends on `src/ioplace/norm.py` existing — it does on this branch, and as of 2026-09-19 it is committed, with `ema_update(prev, inst, ema=0.5)` and `grandplan_weight(iteration, it_activate, wt0, wt_step, ramp_period, wt_max)` matching P-H Task 1's Interfaces block character-for-character, but `TermNormalizer` not yet. Task 4 says to stop and report rather than reimplement if it is absent, and states the one-line migration to `TermNormalizer.register("group", ...)`.
+6. **λ for the grouping term comes from P-H's `norm.TermNormalizer`** — `TermNormalizer` **exists at HEAD** (`src/ioplace/norm.py`), so the earlier draft's local `GroupingWeight` + `VersionState` pair was a fourth ad-hoc normalisation path in direct conflict with spec §0, and ruling D5/D6 deletes both. Task 10 registers the term with `policy="grandplan", norm_p=1, curvature=1.0, activate_overflow=1.0` and installs `dp_hook.install_version_invariant`. Two named consequences: `tau = gamma = 0` deliberately disables the Lipschitz cap (the grouping term is an exact quadratic with no smoothing parameter — GrandPlan Eq.3 has no cap), and `register`'s default `n_ramp = 20` makes λ zero on the activating transaction, so the term is inert for the first `t_hull` iterations where `GroupingWeight` was on from iteration 0.
+7. **Algorithm-1 keeps each direction's support point** (ruling D1, Tasks 2 and 9) on top of the digest's literal band `[t, t+α(s_max−t)]`. Without it the band-plus-cap selects a shell just above the q-quantile and the hull collapses onto the dense cluster (measured: area 0.95 against a true hull of 100 on the corner-cloud test, 95.78 against 100 on a uniform square). Cost of the deviation: ≤ `2·m` extra points per region.
+8. **The morphology erodes with `border_value=1`** (ruling D2, Task 5), spelled out as erosion/dilation/dilation/erosion instead of `binary_closing(binary_opening(...))`, because scipy's default `border_value=0` erodes the entire die border and the dilations cannot restore it (252 of 4096 bins at `64²`, every call).
+9. **`enforce_rect_max` has two moves and a driver-level fallback** (rulings D3/D4, Tasks 7 and 10): absorption then shedding, terminated by the `k·B²` pass budget rather than by a potential function — the earlier `Σ_r |bbox(r) \ r|` argument is false (a donor extending beyond `r`'s bbox keeps its own bbox while losing bins, so the sum can stay flat) and has been deleted.
 
-**Known gap, deliberate:** spec §2's runtime targets ("group ≤25 min, cluster ≤60 min") are not exercised here. Task 11 measures `mempool_tile_wrap` only; the group-scale numbers are produced by the joint P-B+P-C acceptance (§9 "Done": "the 2×2 on `mempool_group`"), which is P-B's plan. Task 11 Step 5 states the tile-wrap SA time against the "<60 s CPU" budget and the producer overhead against "flat GP+LG +<3%" so the extrapolation is at least anchored.
+**Expected-count ledger (ruling D8, after every amendment above).** Task 2: 9. Task 3: 15. Task 4: **9**. Task 5: **15**. Task 6: 15. Task 7: **13**. Task 8: **7**. Task 9: 12. Task 10: **8** (4 fast, 4 slow). Every count except Tasks 4, 5, 7, 8 and 10 is unchanged from the pre-amendment plan and was confirmed by `pytest --collect-only` in the pre-flight scan.
+
+**Known gap, deliberate:** spec §2's runtime targets ("group ≤25 min, cluster ≤60 min") are not exercised here. Task 11 measures `mempool_tile_wrap` only; the group-scale numbers are produced by the joint P-B+P-C acceptance (§9 "Done": "the 2×2 on `mempool_group`"), which is P-B's plan — Step 1b promotes the config it will need. Task 11 Step 5 states the tile-wrap SA time against the "<60 s CPU" budget and the producer overhead against a **matched flat run of the same config** (expect ≈ +5–7 %, dominated by `refresh_nesterov_secant`'s two extra objective evaluations per refreshing callback, against spec §2's "+<3 %") so the extrapolation is anchored on a measurement rather than a historical number.
 
 ### 2. Placeholder scan
 
@@ -3369,11 +3873,13 @@ Cross-checked every name a later task uses against the task that defines it:
 
 - `hull.reduce_candidates` / `reduce_candidates_torch` / `convex_hull` / `polygon_area` / `shrink_to_area` / `macro_pseudo_points` / `build_hull` / `nearest_on_polygon_boundary` / `anchor_tables` / `AnchorTables` — defined in Tasks 2, 3, 9; used in Tasks 3, 4, 9, 10.
 - `AnchorTables` fields `lattice`, `die`, `pull_off`, `pull_on`, `push_off`, `push_cnt`, property `k` — defined in Task 3, read in Task 4's `_lookup` and Task 4's `set_tables` assert.
-- `GroupingTerm.set_tables` / `.tables` / `.grad_l1` / `.n_rebuilds`; `GroupingWeight.wt` / `.update` / `.lam` / `.ratio_ema` — defined in Task 4, used in Task 10.
+- `GroupingTerm.set_tables` / `.tables` / `.grad_l1` / `.n_rebuilds` — defined in Task 4, used in Task 10. There is no weight class: Task 10 reads `normalizer.lambdas["group"]` and `normalizer.states["group"].{wt,ratio_ema,grad_norm}`.
+- `norm.TermNormalizer.{register,should_probe,probe,transaction,lambdas,states,wl_norm,needs_refresh,mark_refreshed}` and `dp_hook.install_version_invariant(optimizer, state)` — live at HEAD (`src/ioplace/norm.py`, `src/ioplace/dp_hook.py:62-78`), signatures checked against the source on 2026-09-19; `probe(iteration, pos, wl_fn, ctx)` requires `num_movable`/`num_nodes`, which Task 10 supplies.
 - `extract.extract(..., out_bins=)` and `extract.FINE_BINS` — Task 5, used in Task 10.
 - `sa.SaConfig(seed=)` and `sa.anneal(labels0, k, ea, bin_area, cfg)` returning `(labels, report)` with keys `t0`, `levels_run`, `e_raw_initial`, `e_raw_final`, `beta` — Task 6, used in Tasks 6's tests and 10.
 - `rectify.enforce_rect_max(labels, k, rect_max=)`, `rectify.rects_to_regionset(labels, k, die, lattice=)`, `rectify.region_rect_counts(labels, k)`, `rectify.mask_to_rects(mask)` — Task 7, used in Task 10 and Task 11's verifier.
-- `membership.build_membership(source, *, nl, node_names, num_movable, k, epsilon, seed, depth, threads)` — Task 8, called in Task 10 without `threads` (default 8, itself overridden by `IOPLACE_MTKAHYPAR_THREADS=1`).
+- `membership.build_membership(source, *, nl, node_names, num_movable, k, epsilon, seed, depth, threads=8)` — Task 8 (the Interfaces block now lists `threads`, ruling D8), called in Task 10 without it (default 8, itself overridden by `IOPLACE_MTKAHYPAR_THREADS=1`).
+- `rectify_with_fallback(build, rectify_fn, requested_bins, fallback_bins=32)` and `_GroupAdapter.value(pos, ctx)` — defined and tested in Task 10 (rulings D3, D5).
 - `artifacts.save_positions(path, node_x, node_y, *, die, shift_factor, scale_factor, placedb_sha256, kind)`, `artifacts.save_membership(path, part, *, source, k, seed, epsilon)`, `artifacts.placedb_identity_sha256(placedb)` and `artifacts.save_producer_json(path, payload)` — all **P-B Task 1**, all called by keyword in Task 10; `load_positions`/`load_membership` return the `Positions`/`Membership` dataclasses Task 11's verifier reads by attribute, and `load_producer_json` validates the same `PRODUCER_FIELDS` that Task 10's payload fills (checked key-for-key by Task 1 Step 1).
 - Existing-code borrowings verified against source: `run_placement._load_dreamplace`, `run_placement.extract_final_positions`, `dp_hook.attach_terms` / `assert_optimizer_lock` / `refresh_nesterov_secant`, `profile.PhaseTimer` (`timer.phases[name]["t_s"]`, as `run_placement._phase_summary` reads it), `profile.env_metadata(repo_root, dp_root, input_paths=...)`, `ioplace.paths.REPO_ROOT`, `regions.RegionSet`/`RegionSpec`/`validate`/`to_json`/`from_json`, `region_grid.RegionGrid`, `partition.mtkahypar_runner.partition_netlist(nl, k, epsilon, seed, threads)`.
 - Host API assumptions verified by probe on 2026-09-19: `scipy.spatial.QhullError` importable (scipy 1.17.1); `ndimage.generate_binary_structure(2,2)` is the full `3×3` and opening a rectangle with it is a no-op while the cross is not; `torch.quantile` on a strided slice matches `np.quantile`; `params.shift_factor`/`params.scale_factor` are set by `PlaceDB.initialize` (`simple.json`: die `(459,459,555,555)` → `(0,0,96,96)`, shift `(459,459)`, scale `1.0`); `placedb.node_names` is an array of `np.bytes_`.
