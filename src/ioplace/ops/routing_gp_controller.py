@@ -81,7 +81,7 @@ class RoutingGPController:
         # ioplace.norm; this is the third and last of the retired coefficient
         # paths, kept only as an adapter.
         self.route_lambda = TermNormalizer.oneshot_lambda(self.route_strength,
-                                                          wa_l1, norm)
+                                                           wa_l1, norm)
         if not math.isfinite(self.route_lambda):
             raise FloatingPointError("nonfinite routing coefficient")
         return dict(**stats, wa_gradient_l1=wa_l1, route_lambda=self.route_lambda,

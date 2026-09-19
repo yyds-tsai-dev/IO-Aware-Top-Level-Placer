@@ -105,7 +105,8 @@ def test_joint_cli_requires_router_before_creating_output(tmp_path):
     root = Path(REPO_ROOT)
     result = subprocess.run([sys.executable, str(root / "src/scripts/run_route_gp.py"),
         "--config", "unused.json", "--out", str(tmp_path / "missing"), "--mode", "joint"],
-        capture_output=True, text=True)
+        capture_output=True, text=True,
+        env={**os.environ, "IOPLACE_ENABLE_GR_IN_LOOP": "1"})
     assert result.returncode != 0 and "--openroad" in result.stderr
     assert not (tmp_path / "missing").exists()
 
@@ -125,7 +126,8 @@ def test_gp_modes_and_self_generated_legal_calibration(tmp_path, mode):
         "--stop-overflow", "0", "--router-every", "4"]
     if mode in ("wa_standard", "joint"):
         command += ["--openroad", binary]
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=True, text=True,
+                            env={**os.environ, "IOPLACE_ENABLE_GR_IN_LOOP": "1"})
     assert result.returncode == 0, result.stderr[-4000:] + result.stdout[-1200:]
     report = json.loads((output / "result.json").read_text())
     assert report["legal"] and report["fixed_unchanged"] and report["iterations"] == 8
