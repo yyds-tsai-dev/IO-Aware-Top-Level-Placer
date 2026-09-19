@@ -31,3 +31,7 @@ if [[ -x "$DREAMPLACE_ROOT/deps/tools/usr/bin/bison" ]]; then
 fi
 
 # CUDA_VISIBLE_DEVICES is intentionally supplied by the caller on shared hosts.
+
+# mt-kahypar 1.6.2 segfaults in parallel coarsening (see partition/mtkahypar_runtime.py);
+# default to the serial mitigation unless the caller chose a thread count.
+export IOPLACE_MTKAHYPAR_THREADS="${IOPLACE_MTKAHYPAR_THREADS:-1}"
