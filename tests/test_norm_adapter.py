@@ -3,7 +3,8 @@ import json
 import pytest
 torch = pytest.importorskip("torch")
 
-from ioplace.norm_adapter import (FT_ACTIVATE_OVERFLOW, NORM_POLICIES,
+from ioplace.norm_adapter import (DEFAULT_IO_TARGET_SHARE,
+                                  FT_ACTIVATE_OVERFLOW, NORM_POLICIES,
                                   LegacyNormAdapter, TermNormalizerAdapter,
                                   make_norm_adapter)
 from ioplace.norm_trace import ROW_FIELDS, read_norm_trace
@@ -348,3 +349,66 @@ def test_each_policy_writes_its_own_trace_file(tmp_path):
     rows = read_norm_trace(grandplan.trace_path)
     assert len(rows) == 1 and set(rows[0]) == set(ROW_FIELDS)
     assert not (tmp_path / "grandplan" / "legacy_trace.jsonl").exists()
+
+
+def test_the_default_io_target_share_matches_the_legacy_driver():
+    """Same drift lock as the FT gate above: policy B's default IO force share
+    is duplicated here so this module stays DREAMPlace-free, and the two arms
+    are only comparable while the two copies agree."""
+    run_io = pytest.importorskip("ioplace.drivers.run_placement_io")
+    assert DEFAULT_IO_TARGET_SHARE == run_io.DEFAULT_IO_TARGET_SHARE
+
+
+def test_an_ft_term_without_an_ft_ceiling_is_refused():
+    """Task 5 review (folded into Task 7): under `grandplan`, `f_ft_max <= 0`
+    makes the `f_ft_max * wt_max` ceiling 0, which `_register` drops -- FT
+    would then ramp to the normalizer-wide wt_max under a flag that reads "FT
+    off". `run_main_flow` never builds an ft_term with f_ft_max <= 0; any
+    caller that does is asking for two contradictory things."""
+    for policy in ("grandplan", "adaptive"):
+        for f_ft_max in (0.0, -1.0):
+            with pytest.raises(ValueError, match="f_ft_max"):
+                make_norm_adapter(policy, **_config(f_ft_max=f_ft_max,
+                                                    ft_term=_FakeFtTerm(),
+                                                    ecc_max=3.0))
+    # the same configuration with a positive ceiling still constructs
+    assert make_norm_adapter("grandplan", **_config(
+        f_ft_max=0.2, ft_term=_FakeFtTerm(), ecc_max=3.0)).target_shares == {
+            "io": 0.3, "ft": 0.2}
+
+
+def test_the_legacy_adapter_is_bit_exact_against_a_bare_schedule_state():
+    """The adapter's whole justification is that `--norm-policy legacy`
+    reproduces the pre-v2 coefficients *exactly*, not approximately. Drive a
+    bare `ScheduleState` + `publish_atomic` through the same call sequence the
+    adapter makes and compare with `==`, not `approx`."""
+    from ioplace.ops.ft_callback import publish_atomic
+    from ioplace.schedules import ScheduleState
+
+    config = _config(f_ft_max=0.2, ft_term=_FakeFtTerm(), ecc_max=3.0)
+    adapter = make_norm_adapter("legacy", **config)
+    assert isinstance(adapter, LegacyNormAdapter)
+    adapter.begin_iteration(0, overflow=1.5, gamma=1.0)
+    adapter.mark_refreshed()
+    adapter.begin_iteration(50, overflow=0.9, gamma=1.0)
+    row = _probe(adapter, 50, config)
+
+    # `_ScheduleBacked.__init__`'s ScheduleState, spelled out.
+    state = ScheduleState(rho_max=0.1, tau_hi=0.30, tau_lo=0.03, of_on=2.0,
+                          of_end=0.5, of_full=1.0, n_ramp=20, c_lip=1.0,
+                          f_ft_max=0.2, ft_ramp_mode="window", tau_start=0.12,
+                          tau_full=0.05, kappa_max=100.0, eps_rel=1e-3, ema=0.5)
+    state.update_continuous(0, 1.5, 100.0, 1.0)
+    state.mark_refreshed()
+    state.update_continuous(50, 0.9, 100.0, 1.0)
+    reference = publish_atomic(state, _FakeIoTerm(), _FakeFtTerm(), _wirelength,
+                               _pos(), 50, state.tau / 100.0, 3.0, 1.0)
+
+    assert adapter.lambda_io == state.lambda_io
+    assert adapter.kappa_ft == state.kappa_ft
+    assert adapter.tau == state.tau and adapter.tau_rel == state.tau / 100.0
+    assert adapter.obj_version == state.obj_version
+    # not a vacuous 0 == 0: this iteration has both coefficients switched on
+    assert adapter.lambda_io > 0.0 and adapter.kappa_ft > 0.0
+    for key, value in reference.items():
+        assert row[key] == value, key

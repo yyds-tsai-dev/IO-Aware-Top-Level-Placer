@@ -283,12 +283,27 @@ class TermNormalizerAdapter(_ScheduleBacked):
           converging to IO's ceiling (review I4). Under `adaptive` the target
           shares already say what each term's share is, so no override is
           installed.
+        * An FT term with `f_ft_max <= 0` is refused rather than registered
+          with no ceiling (Task 5 review, folded into Task 7): the `grandplan`
+          ceiling `f_ft_max * wt_max` would be 0 and is therefore dropped, so
+          FT would ramp all the way to the normalizer-wide `wt_max` under a
+          flag that reads "FT off" -- and under `adaptive` its default target
+          share would be 0, a different kind of silent nonsense. The only
+          coherent readings of `f_ft_max <= 0` are "do not build an FT term"
+          (what `run_main_flow` does) and "error".
         """
         self.normalizer.register(
             "io", IoNormTerm(self._io_term), 1.0,
             target_share=overrides.get("io", DEFAULT_IO_TARGET_SHARE),
             activate_overflow=self.state.of_on, n_ramp=self.state.n_ramp)
         if ft_term is not None:
+            if not float(self.state.f_ft_max) > 0.0:
+                raise ValueError(
+                    "ft_term was supplied with f_ft_max=%r: the grandplan FT "
+                    "ceiling f_ft_max*wt_max would be dropped and FT would ramp "
+                    "to the normalizer-wide wt_max under a flag that reads 'FT "
+                    "off'. Pass f_ft_max > 0 or no ft_term."
+                    % (float(self.state.f_ft_max),))
             ceiling = float(self.state.f_ft_max) * float(self.normalizer.wt_max)
             self.normalizer.register(
                 "ft", FtNormTerm(ft_term), max(float(ecc_max), 1.0),
