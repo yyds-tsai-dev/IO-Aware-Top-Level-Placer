@@ -1,9 +1,11 @@
 """Publish frozen route objectives and router observations between GP steps."""
 import math
+import os
 
 import torch
 
 from ioplace.dp_hook import refresh_nesterov_secant
+from ioplace.norm import TermNormalizer
 from ioplace.ops.steiner_gp import tensor_digest
 
 
@@ -16,6 +18,11 @@ class RoutingGPController:
     """
     def __init__(self, term, placer, *, mode="joint", start=200, rebuild_every=20,
                  tau=1., route_strength=.1, router_every=0, router_callback=None):
+        if os.environ.get("IOPLACE_ENABLE_GR_IN_LOOP") != "1":
+            raise RuntimeError(
+                "in-loop GR is retired by the v2 design (sec 1): the final GRT "
+                "protocol runs once, after placement. Set "
+                "IOPLACE_ENABLE_GR_IN_LOOP=1 to use this unmaintained path.")
         if mode not in ("wa_standard", "wa", "paper", "joint"):
             raise ValueError("unknown GP mode")
         if start < 1 or rebuild_every < 1 or router_every < 0:
@@ -70,7 +77,11 @@ class RoutingGPController:
         if not math.isfinite(wa_l1):
             raise FloatingPointError("nonfinite WA gradient during routing calibration")
         norm = stats["route_gradient_l1"]
-        self.route_lambda = self.route_strength * wa_l1 / norm if norm > 1e-12 else 0.
+        # v2 P-H (design sec 4): the one-shot ratio normalisation now lives in
+        # ioplace.norm; this is the third and last of the retired coefficient
+        # paths, kept only as an adapter.
+        self.route_lambda = TermNormalizer.oneshot_lambda(self.route_strength,
+                                                          wa_l1, norm)
         if not math.isfinite(self.route_lambda):
             raise FloatingPointError("nonfinite routing coefficient")
         return dict(**stats, wa_gradient_l1=wa_l1, route_lambda=self.route_lambda,

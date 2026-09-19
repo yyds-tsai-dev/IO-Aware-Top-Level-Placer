@@ -1,4 +1,8 @@
-"""WA, paper Eq.7, and routing-gradient GP with measured OpenROAD feedback."""
+"""WA, paper Eq.7, and routing-gradient GP with measured OpenROAD feedback.
+
+Retired by the v2 design (sec 1): requires IOPLACE_ENABLE_GR_IN_LOOP=1 and is
+unmaintained. The supported protocol is one GRT call after placement.
+"""
 import argparse
 import json
 import os

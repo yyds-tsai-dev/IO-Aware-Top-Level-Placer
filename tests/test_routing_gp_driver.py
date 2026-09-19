@@ -38,7 +38,8 @@ def test_real_gp_route_gradient_and_two_later_router_observations(tmp_path):
                    "--iterations", "24", "--start", "5", "--rebuild", "5",
                    "--router-every", "8", "--seed", "1000", "--stop-overflow", "0",
                    "--calibration", str(calibration_input), "--openroad", binary]
-        run = subprocess.run(command, capture_output=True, text=True)
+        run = subprocess.run(command, capture_output=True, text=True,
+                             env={**os.environ, "IOPLACE_ENABLE_GR_IN_LOOP": "1"})
         assert run.returncode == 0, run.stderr[-6000:] + run.stdout[-2000:]
         reports[mode] = json.loads((output / "result.json").read_text())
         protocol = json.loads((output / "protocol.json").read_text())
