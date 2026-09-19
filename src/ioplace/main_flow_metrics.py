@@ -78,6 +78,14 @@ def fence_compliance(rg, node_x, node_y, part, node_size_x=None, node_size_y=Non
     the number stays comparable with the legacy two-stage arm. `center` uses
     the same anchor as the freeze membership (design v2 sec 3 phase 2) and is
     the one to quote for the v2 flow; it is None when sizes are not supplied.
+
+    Coordinate frame: `rg`, `node_x`/`node_y` and the sizes must all be in the
+    **same** frame -- this function is pure geometry and cannot detect a
+    mismatch, it would just report a wrong fraction. `run_main_flow.run_fence_gp`
+    calls it in the *scaled* frame (the `RegionGrid` built from
+    `scaled_region_set(...)`, DREAMPlace's post-`initialize()` positions and
+    sizes), unlike `region_area_balance` above, which must be called in native
+    units because its areas are not scale-invariant (amendment D-2).
     """
     part = np.asarray(part, dtype=np.int64)
     m = len(part)
