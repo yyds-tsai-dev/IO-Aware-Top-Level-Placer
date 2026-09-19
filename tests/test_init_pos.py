@@ -69,6 +69,39 @@ def test_region_center_is_deterministic_per_seed():
     assert not np.array_equal(run(1000), run(2000))
 
 
+def test_region_center_leaves_the_global_numpy_stream_untouched():
+    np.random.seed(123)
+    reference = np.random.uniform(size=5)
+
+    np.random.seed(123)
+    db, params = _placedb(), _params()
+    rs = make_grid_regions((0., 0., 100., 100.), 2, 2, lattice=10)
+    apply_init(db, params, "region_center", region_set=rs,
+               part=np.array([0, 1, 2, 3], dtype=np.int32), rng_seed=1000)
+    after_apply = np.random.uniform(size=5)
+
+    # apply_init's noise must come from its own np.random.default_rng, never
+    # from the global numpy stream -- the same draw sequence must appear
+    # whether or not apply_init ran in between.
+    assert np.array_equal(reference, after_apply)
+
+
+def test_region_centers_rejects_zero_area_region():
+    rs = make_grid_regions((0., 0., 100., 100.), 2, 2, lattice=10)
+    rs.regions[0].rects = np.array([[0., 0., 0., 10.]])
+    with pytest.raises(ValueError, match="area"):
+        region_centers(rs)
+
+
+def test_region_center_rejects_non_positive_node_size():
+    db, params = _placedb(), _params()
+    db.node_size_x[1] = 0.
+    rs = make_grid_regions((0., 0., 100., 100.), 2, 2, lattice=10)
+    with pytest.raises(ValueError, match="node_size"):
+        apply_init(db, params, "region_center", region_set=rs,
+                   part=np.array([0, 1, 2, 3], dtype=np.int32))
+
+
 def test_seed_mode_writes_movable_slice_and_validates_fixed_slice():
     from ioplace.artifacts import Positions
     db, params = _placedb(), _params()

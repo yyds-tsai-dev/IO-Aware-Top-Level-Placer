@@ -35,6 +35,8 @@ def region_centers(rs):
         cx = (rects[:, 0] + rects[:, 2]) * 0.5
         cy = (rects[:, 1] + rects[:, 3]) * 0.5
         total = area.sum()
+        if total <= 0:
+            raise ValueError(f"region {region.name!r} has zero total rect area")
         centers[rid] = (np.sum(cx * area) / total, np.sum(cy * area) / total)
     return centers
 
@@ -68,6 +70,9 @@ def apply_init(placedb, params, mode, *, region_set=None, part=None,
         rng = np.random.default_rng(int(rng_seed))
         size_x = np.asarray(placedb.node_size_x[:m], dtype=np.float64)
         size_y = np.asarray(placedb.node_size_y[:m], dtype=np.float64)
+        if (size_x <= 0).any() or (size_y <= 0).any():
+            raise ValueError("region_center needs positive node_size_x/node_size_y "
+                             "for every movable node")
         # The *cell centre* lands on the region centre: the freeze membership
         # is the argmax at the cell centre (design v2 sec 3 phase 2), so
         # initialising the lower-left there -- what BasicPlace.py:272-277 does
