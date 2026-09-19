@@ -240,3 +240,100 @@ what it actually tracked here was WL's growth.
 - `runs/norm-validation-r2/{grandplan,adaptive}.json.norm_trace.jsonl`
 - `runs/norm-validation-r2/logs/<arm>.{log,start_epoch,end_epoch,exit,pid}`
   (`<arm>.mem.csv` is invalid, see above)
+
+---
+
+# r3 — rerun after ruling F1' (`runs/norm-validation-r3/`)
+
+Controller ruling F1' (fix wave round 2) removed the relative `eps_rel·‖∇WL‖`
+deadness classification from the non-legacy arm entirely: every probe now
+measures `ratio_inst = ‖∇WL‖/max(‖∇T‖, EPS)` and updates the EMA, λ is
+`min(policy(ratio_ema), the term's share of the Lipschitz cap)`, and only an
+exactly-zero gradient yields λ = 0. Ruling F2' added the length-relative
+liveness gate and a placement-quality gate. Code commit `5e07cdf`; the r1 and
+r2 tables above are kept on record.
+
+Same Task 9 Step 4–6 commands, same config (`mempool_group.json` byte-identical
+to r2's), sequential on GPU 3. The memory sampler was corrected to
+`nvidia-smi -i 3` (r2's sampled physical GPU 0 and was discarded).
+
+## Run receipts
+
+| Arm | Wall | `runtime_s` | Torch peak (MB) | Device max (`mem.csv`, MiB; 22.3 GB foreign baseline) | GP iters | Final overflow | `stop_overflow_reached` | `io_count` | `ft_count` | `hpwl` | λ_io final | λ_ft final |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| legacy    | 284 s | 267 s | 3140 | 26747 | 1028 | 0.0697 | True | 85481 | 8191 | 4.91369e+08 | 92.650 | 576.22 |
+| grandplan | 318 s | 300 s | 3116 | 26747 | 1199 | 0.0695 | True | 95368 | 9024 | 5.41741e+08 | 114.30 | 483.88 |
+| adaptive  | 334 s | 315 s | 3140 | 26747 | 1301 | 0.0696 | True | 97264 | 9990 | 5.51461e+08 | 63.856 | 485.68 |
+
+All three now reach `stop_overflow` (r2: only legacy did). Legacy's r3 run is
+**bit-identical to both r1 and r2** — 0 trajectory differences on
+`{iteration, overflow, tau, lambda_io, kappa_ft, ratio_ema, obj_version,
+io_count, ft_count}`, same `hpwl` and `io_count` — so the legacy guarantee has
+now survived three group-scale reruns across both fix-wave rounds.
+
+## Acceptance outcome (ruling F2'): **PASS**
+
+```
+IOPLACE_NORM_VALIDATION_DIR=runs/norm-validation-r3 \
+  "$IOPLACE_PYTHON" -m pytest tests/test_norm_group_validation.py -v -s
+-> 1 passed
+```
+
+- **Gate (a) — measured normalisation parity: PASS.** 20 matched iterations,
+  16 required (`max(15, 0.8 × min(20 legacy, 23 grandplan))`). Worst
+  `ratio_ema` ratio **1.780× at iteration 600** (legacy 181.752, grandplan
+  323.567); **20/20 within 2×**.
+- **Gate (b) — no premature collapse: PASS.** Legacy's last `λ_io > 0` is
+  iteration 1000 of 1028 = **0.9728** of its own run; grandplan's is 1150 of
+  1199 = **0.9591**; threshold 0.8755.
+- **Gate (c) — placement quality: PASS.** Final overflow
+  0.0695 / 0.0697 = **0.9961×** (limit 1.5×); final HPWL
+  5.41741e+08 / 4.91369e+08 = **1.1025×** (limit 1.2×).
+- **Informational — worst λ ratio: 7.463× at iteration 600** (legacy 13.0072,
+  grandplan 97.07) over 19 matched active iterations. This is the
+  wt-schedule-vs-ρ-schedule difference the gates were redefined to stop
+  treating as a normalisation signal; both arms end within 1.24× of each other
+  (114.30 vs 92.65).
+- **Informational — adaptive arm** (no gate covers it): worst `ratio_ema` ratio
+  2.774× over 20 matched, active fraction 0.999 (legacy 0.973), final overflow
+  0.999× legacy's, final HPWL 1.122× legacy's. It would pass (b) and (c) and
+  miss (a) by 0.77×.
+
+## FT activation and the I4 ceiling — now exercised
+
+Unlike r2 (where neither non-legacy arm's overflow got below 0.64), both arms
+converge far enough for FT's overflow ≤ 0.30 gate to fire:
+
+| Arm | first active iteration | `wt` → | `wt_max` | λ_ft at the end | FT force share (last callback) |
+|---|---|---|---|---|---|
+| legacy    | it 800 (κ_FT > 0) | — | — | 576.22 | 0.01009 at it 1000 |
+| grandplan | it 1050 (of 0.2725) | 0.05 → 0.10 | **0.10 = f_ft_max × norm_wt_max** | 483.88 | 0.00977 at it 1150 |
+| adaptive  | it 1150 (of 0.2882) | 0.10 (target share) | 1.0 (no override) | 485.68 | 0.00731 at it 1300 |
+
+Grandplan's FT weight steps 0.05 → 0.10 and **saturates exactly at the I4
+ceiling** `f_ft_max × norm_wt_max = 0.25 × 0.40 = 0.10`, and the realised FT
+force share (0.00977) lands within 3% of legacy's (0.01009) — which is what I4
+was for: without the per-term ceiling FT's share would have converged to IO's.
+`kappa_clamped` is False throughout, so M2's bound never had to act.
+
+## Comparison across the three attempts (grandplan arm)
+
+| | r1 (pre-fix: λ := 0 on a "dead" probe) | r2 (ruling F1: λ := cap headroom) | r3 (ruling F1': measure and cap) |
+|---|---|---|---|
+| final overflow | 0.0697 | 0.7142 | **0.0695** |
+| `stop_overflow_reached` | True | False | **True** |
+| final HPWL | 5.262e+08 | 3.716e+09 | **5.417e+08** |
+| `io_count` | 109306 | 277602 | **95368** |
+| λ_io late-GP behaviour | 0 for the last 285 iterations | jumps to 3772.66 (14.1× the last healthy value) | continuous, 679 → 311 → 257 → 114 |
+| acceptance | fail (count) | fail (a)+(b) | **pass (a)+(b)+(c)** |
+
+r1's apparently-healthy overflow/HPWL came from the IO penalty being switched
+*off* for the last quarter of GP; r3 keeps it on for 96% of the run and still
+converges, with a *better* `io_count` than r1 (95368 vs 109306).
+
+## Artefacts
+
+- `runs/norm-validation-r3/{legacy,grandplan,adaptive}.json` (+ `.npz`)
+- `runs/norm-validation-r3/{grandplan,adaptive}.json.norm_trace.jsonl`
+- `runs/norm-validation-r3/logs/<arm>.{log,start_epoch,end_epoch,exit,mem.csv}`
+  (`mem.csv` is valid in r3: sampler bound to `-i 3`)
