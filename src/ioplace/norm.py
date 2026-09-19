@@ -516,8 +516,23 @@ class TermNormalizer:
         """Atomic coefficient update: derive every lambda, commit it, bump
         `obj_version` exactly once, and hand the driver a transaction whose
         `needs_refresh` flag means "call `refresh_nesterov_secant(optimizer)`
-        then `mark_refreshed()` before the next optimizer step"."""
-        if self.needs_refresh():
+        then `mark_refreshed()` before the next optimizer step".
+
+        The re-entrancy guard below only applies when this normalizer owns
+        its own version counter (`self._legacy is None`). Under `policy=
+        "legacy"`, `obj_version`/`refreshed_version` delegate entirely to the
+        `ScheduleState`, whose own `update_continuous()` -- called by the
+        driver *before* this method, exactly as the retired path always did
+        -- may bump `obj_version` itself (a discrete activation or margin
+        toggle) without an intervening refresh; that bump and this
+        transaction's `apply_ft_transaction` bump are both reconciled by one
+        `mark_refreshed()` call at the end of the iteration (see the retired
+        golden trajectory and `run_placement_io.py`'s own
+        `discrete or state.needs_refresh()` refresh gate). Guarding on
+        `self.needs_refresh()` here would misfire on that legitimate
+        same-iteration bump, so it is skipped for legacy; `ScheduleState`
+        remains the sole authority on its own version pair."""
+        if self._legacy is None and self.needs_refresh():
             raise RuntimeError(
                 "previous transaction was not refreshed: call "
                 "refresh_nesterov_secant(optimizer) then mark_refreshed()")
@@ -549,8 +564,62 @@ class TermNormalizer:
                                obj_version=self.obj_version, row=row)
 
     def _legacy_transaction(self, iteration, overflow, tau, gamma, legacy_publish):
-        raise NotImplementedError(
-            "policy 'legacy' delegation is installed by the legacy adapter task")
+        """Thin adapter over the retired path: `ops/ft_callback.publish_atomic`
+        still measures the gradients, derives `kappa_ft` and runs
+        `ScheduleState.apply_ft_transaction`, so `--norm-policy legacy`
+        reproduces the recorded coefficients bit-for-bit. The normalizer only
+        mirrors the results into its own state and trace row; it computes no
+        coefficient of its own on this path."""
+        if legacy_publish is None:
+            raise ValueError("policy 'legacy' requires legacy_publish=<callable>")
+        record = legacy_publish()
+        state = self._legacy
+        lambdas = {}
+        self.wl_norm = record["grad_l1_wl"]
+        io = self.states.get("io")
+        if io is not None:
+            lambdas["io"] = state.lambda_io
+            io.grad_norm = record["grad_l1_io"]
+            io.ratio_inst = record["ratio_inst"]
+            io.ratio_ema = record["ratio_ema"]
+            io.lam = state.lambda_io
+            # Guard against `state.it_activate is None` before the term ever
+            # activates (e.g. the first callback lands above `of_on`):
+            # `activation_ramp` requires a numeric `it_activate`, and
+            # `update_continuous` already forces `state.rho == 0.0` while
+            # inactive, so the ramped weight is 0.0 either way -- this guard
+            # changes no coefficient, only avoids the `None` arithmetic.
+            io.wt = (state.rho * activation_ramp(iteration, state.it_activate,
+                                                 state.n_ramp)
+                     if state.active else 0.0)
+            io.active = state.active
+            io.it_activate = state.it_activate
+        ft = self.states.get("ft")
+        if ft is not None:
+            lambdas["ft"] = state.lambda_io * state.kappa_ft
+            ft.grad_norm = record["grad_l1_ft"]
+            ft.lam = lambdas["ft"]
+            ft.wt = record["f_ft"]
+            ft.active = record["kappa_ft"] > 0.0
+            ft.it_activate = state.it_activate
+        self.lambdas = dict(lambdas)
+        cap = lipschitz_cap(tau, gamma, state.c_lip, record["Cmax"])
+        # `apply_ft_transaction` uses `min(base, cap)`, so the cap bound exactly
+        # when the stored coefficient *is* the cap value.
+        binding = "io" if state.lambda_io == cap else None
+        # `cmax` here is the legacy `Cmax` from `apply_ft_transaction`'s record
+        # (`1 + kappa_ft*(ecc_max_max-1)_+`), not the new pre-clip
+        # lambda-weighted-mean form `_compute` uses for the other two
+        # policies -- the legacy path owns no coefficient maths of its own,
+        # so `_row` is handed the retired value verbatim.
+        row = self._row(iteration, overflow, tau, gamma, record["Cmax"], cap,
+                        binding, record["cancellation_ratio"])
+        self._pending_row = row
+        return NormTransaction(lambdas=dict(lambdas), cmax=record["Cmax"], cap=cap,
+                               cap_binding=binding,
+                               cancellation_ratio=record["cancellation_ratio"],
+                               obj_version=self.obj_version, row=row,
+                               legacy_record=record)
 
     @staticmethod
     def oneshot_lambda(strength, wl_norm, grad_norm, floor=1e-12):
