@@ -177,10 +177,20 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                          "got %r" % (norm_policy,))
     if norm_p not in (1, 2):
         raise ValueError("norm_p must be 1 or 2, got %r" % (norm_p,))
-    if norm_probe_every <= 0 or norm_probe_every % every:
+    if norm_policy == "legacy" and norm_p != 1:
+        raise ValueError("norm_policy 'legacy' measures L1 gradients inside "
+                         "publish_atomic; norm_p must be 1, got %r" % (norm_p,))
+    if norm_probe_every <= 0:
+        raise ValueError("norm_probe_every must be a positive multiple of every")
+    if norm_policy != "legacy" and norm_probe_every % every:
         raise ValueError("norm_probe_every must be a positive multiple of every")
     if norm_policy != "legacy" and callback_order != "atomic":
         raise ValueError("norm_policy %r requires callback_order='atomic'"
+                         % (norm_policy,))
+    if norm_policy != "legacy" and (rho_max == 0.0 and rho_margin == 0.0
+                                    and wl_reweight == "off"):
+        raise ValueError("norm_policy %r does nothing in observer mode "
+                         "(rho_max=0, rho_margin=0, wl_reweight=off)"
                          % (norm_policy,))
     import torch
     # Overflow-diagnosis follow-up: device_baseline_gb -- see
@@ -350,10 +360,13 @@ def run_io(config_json, k, rtype, seed, out_json, *,
             else:
                 lam_io = normalizer.lambdas.get("io", 0.0)
                 lam_ft = normalizer.lambdas.get("ft", 0.0)
-                if lam_io <= 0.0 and lam_ft > 0.0:
-                    raise RuntimeError(
-                        "FtTerm expresses the FT coefficient as lambda_io*kappa, so "
-                        "a nonzero lambda_ft with lambda_io == 0 cannot be applied")
+                # Defensive only: the callback already rejects this combination
+                # right after normalizer.transaction() (with iteration/overflow
+                # context for diagnosability, fix round 1) -- this should be
+                # unreachable by the time term_fn runs.
+                assert not (lam_io <= 0.0 and lam_ft > 0.0), (
+                    "FtTerm expresses the FT coefficient as lambda_io*kappa, so "
+                    "a nonzero lambda_ft with lambda_io == 0 cannot be applied")
                 # Non-legacy: this path has no bit-exact guarantee to preserve
                 # (unlike legacy above), so recovering kappa by division here,
                 # accepting last-ulp rounding against the traced lambda_ft, is fine.
@@ -551,6 +564,13 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                         if normalizer.should_probe(iteration):
                             normalizer.probe(iteration, pos, wirelength_op, ctx_norm)
                         txn = normalizer.transaction(iteration, of, state.tau, gamma)
+                        lam_io_txn = txn.lambdas.get("io", 0.0)
+                        lam_ft_txn = txn.lambdas.get("ft", 0.0)
+                        if lam_io_txn <= 0.0 and lam_ft_txn > 0.0:
+                            raise RuntimeError(
+                                "FtTerm expresses the FT coefficient as lambda_io*kappa, "
+                                "so a nonzero lambda_ft with lambda_io == 0 cannot be "
+                                "applied (iteration=%d, overflow=%.6f)" % (iteration, of))
                         ft_state = normalizer.states.get("ft")
                         entry.update(grad_l1_wl=normalizer.wl_norm,
                                      grad_l1_io=normalizer.states["io"].grad_norm,
@@ -672,13 +692,23 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                     p_wld = pos.detach().clone().requires_grad_(True)
                     g_wl_density = _raw_wl_density_grad(placer.model, p_wld)
                     tau_rel = state.tau / L_R
+                    # Fix round 1: under a non-legacy policy the live coefficient
+                    # lives on the normalizer (state.lambda_io/ratio_ema are stale
+                    # there -- term_fn never writes them back), so pull the
+                    # snapshot's own lambda_io/ratio_ema from the same source
+                    # term_fn actually reads.
+                    if norm_policy == "legacy":
+                        snap_lambda_io, snap_ratio_ema = state.lambda_io, state.ratio_ema
+                    else:
+                        snap_lambda_io = normalizer.lambdas.get("io", 0.0)
+                        snap_ratio_ema = normalizer.states["io"].ratio_ema
                     np.savez_compressed(
                         os.path.join(snapshot_dir, f"it{iteration:04d}.npz"),
                         iteration=iteration, overflow=of, tau=state.tau, tau_rel=tau_rel,
                         gamma=gamma, density_weight=float(placer.model.density_weight),
-                        ratio_ema=(state.ratio_ema if state.ratio_ema is not None
+                        ratio_ema=(snap_ratio_ema if snap_ratio_ema is not None
                                   else float("nan")),
-                        lambda_io=state.lambda_io,
+                        lambda_io=snap_lambda_io,
                         node_x=pos.data[:n_all].detach().cpu().numpy(),
                         node_y=pos.data[n_all:2 * n_all].detach().cpu().numpy(),
                         g_wl_density=g_wl_density.cpu().numpy().astype(np.float32))

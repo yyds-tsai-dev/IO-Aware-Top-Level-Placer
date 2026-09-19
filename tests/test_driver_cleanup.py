@@ -74,11 +74,17 @@ def test_failed_snapshot_callback_restores_real_hooks_and_threads(tmp_path, monk
     path.write_text(json.dumps(config))
     def failure(*args):
         raise RuntimeError("injected snapshot callback error")
+    # Fix round 1 (controller note (j) follow-up): a non-legacy policy also
+    # owns a NormTraceWriter, registered on the same cleanup ExitStack as the
+    # samplers/hooks above -- it must be closed (and its file left readable)
+    # even when the run fails mid-callback, same as everything else here.
+    norm_trace_path = str(tmp_path / "norm_trace.jsonl")
     with pytest.raises(RuntimeError, match="injected snapshot callback error"):
         driver.run_io(str(path), 4, "grid", 0, str(tmp_path / "result.json"),
             rho_max=.1, every=5, callback_order="atomic", check_invariant=True,
             no_diag=True, snapshot_iters=[5], snapshot_dir=str(tmp_path / "snapshots"),
-            snapshot_grad_check_cb=failure, lifetime_out=str(tmp_path / "lifetime.json"))
+            snapshot_grad_check_cb=failure, lifetime_out=str(tmp_path / "lifetime.json"),
+            norm_policy="grandplan", norm_probe_every=5, norm_trace=norm_trace_path)
     assert len(instances) == 2 and all(item._thread is None for item in instances)
     assert all(not hasattr(params, "_extra_obj_terms") for params in loaded)
     assert constructed
@@ -88,3 +94,6 @@ def test_failed_snapshot_callback_restores_real_hooks_and_threads(tmp_path, monk
         assert not hasattr(placer.optimizer.obj_and_grad_fn, "__wrapped__")
     assert not (tmp_path / "result.json").exists()
     assert not (tmp_path / "lifetime.json").exists()
+    assert os.path.exists(norm_trace_path)
+    from ioplace.norm_trace import read_norm_trace
+    read_norm_trace(norm_trace_path)  # must not raise: writer was closed/flushed

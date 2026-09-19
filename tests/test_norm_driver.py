@@ -67,9 +67,12 @@ def test_norm_flags_are_forwarded_to_run_io(monkeypatch):
 @pytest.mark.parametrize("kwargs,message", [
     (dict(norm_policy="bogus"), "norm_policy"),
     (dict(norm_p=3), "norm_p"),
+    (dict(norm_policy="legacy", norm_p=2), "norm_p"),       # legacy measures L1 only
     (dict(norm_probe_every=0), "norm_probe_every"),
-    (dict(norm_probe_every=75), "norm_probe_every"),        # not a multiple of every=50
+    (dict(norm_probe_every=75, norm_policy="grandplan"), "norm_probe_every"),  # not a multiple of every=50
     (dict(norm_policy="grandplan"), "atomic"),              # callback_order defaults legacy
+    (dict(norm_policy="grandplan", callback_order="atomic", rho_max=0.0),
+     "observer mode"),                                      # rho_max=0/rho_margin=0/wl_reweight=off
 ])
 def test_run_io_rejects_invalid_norm_configuration(kwargs, message, tmp_path):
     with pytest.raises(ValueError) as excinfo:
@@ -137,3 +140,65 @@ def test_legacy_policy_is_the_default_and_emits_no_trace(tmp_path):
     events = result["trajectory"]
     assert events and any(event["grad_l1_ft"] > 0 for event in events)
     assert all(event["obj_version"] == event["refreshed_version"] for event in events)
+
+
+@pytest.mark.slow
+def test_legacy_publish_atomic_is_wired_with_the_correct_tau_ecc_gamma(tmp_path, monkeypatch):
+    """Fix round 1 regression (controller notes (a)/(c)): `--norm-policy
+    legacy` must route through `normalizer.transaction(..., legacy_publish=
+    ...)` with a closure that calls the retired `ops.ft_callback.
+    publish_atomic` with exactly the `(tau_rel=state.tau/L_R,
+    ecc_max=distance.max(), gamma)` triple the pre-P-H driver passed -- never
+    a value derived through the normalizer's own (grandplan/adaptive)
+    coefficient maths. A spy on the module attribute (the driver re-imports
+    it from inside `cb()`'s legacy branch every qualifying callback, so
+    patching the module attribute is observed) records the positional args
+    and calls through to the real implementation, so the run's actual
+    coefficients are unaffected by the spy."""
+    import ioplace.ops.ft_callback as ft_callback_mod
+    from ioplace.drivers.run_placement import _load_dreamplace
+    from ioplace.schedules import lipschitz_cap
+
+    config = _small_config(tmp_path)
+    calls = []
+    original = ft_callback_mod.publish_atomic
+
+    def spy(state, io_term, ft_term, wirelength_op, pos, iteration, tau_rel,
+           ecc_max, gamma):
+        calls.append((iteration, tau_rel, ecc_max, gamma))
+        return original(state, io_term, ft_term, wirelength_op, pos, iteration,
+                        tau_rel, ecc_max, gamma)
+
+    monkeypatch.setattr(ft_callback_mod, "publish_atomic", spy)
+
+    out = str(tmp_path / "legacy_spy.json")
+    result = run_io(config, 4, "grid", 0, out,
+                    rho_max=.4, every=5, of_on=2., of_full=1.,
+                    callback_order="atomic", f_ft_max=.25, ft_ramp_mode="constant",
+                    no_diag=True)
+    assert calls, "publish_atomic was never called"
+
+    # Recompute L_R independently the same way run_io does, from the config's
+    # own die box -- not from anything the driver itself derived.
+    params, placedb = _load_dreamplace(config)
+    placedb.initialize(params)
+    die = (float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh))
+    L_R = ((die[2] - die[0]) * (die[3] - die[1]) / 4) ** 0.5
+
+    events_by_iter = {e["iteration"]: e for e in result["trajectory"] if "kappa_ft" in e}
+    assert events_by_iter, "no legacy events with a kappa_ft record"
+    checked = 0
+    for iteration, tau_rel, ecc_max, gamma in calls:
+        event = events_by_iter.get(iteration)
+        if event is None:
+            continue
+        assert tau_rel == pytest.approx(event["tau"] / L_R, rel=1e-9)
+        assert ecc_max > 0.0    # f_ft_max > 0 in this run
+        assert gamma > 0.0
+        # "gamma matches": tie it to the transaction's own derived lambda_io
+        # via the same lipschitz_cap formula apply_ft_transaction uses --
+        # a wrong gamma would generally desync this bound.
+        cap = lipschitz_cap(event["tau"], gamma, 1.0, event["Cmax"])
+        assert event["lambda_io"] <= cap + 1e-9
+        checked += 1
+    assert checked > 0

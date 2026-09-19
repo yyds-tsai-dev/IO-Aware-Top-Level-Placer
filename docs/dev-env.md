@@ -62,7 +62,14 @@ reuse the previous probe's measurements), with the per-term gradient norm,
 instantaneous and EMA ratio, weight, coefficient, realised force share,
 `cmax` (the pre-clip λ-weighted mean curvature over the active terms --
 controller ruling 2026-09-19; there is no separate κ field to log),
-`cap_binding`, `cancellation_ratio` and the objective/refresh versions.
+`cap_binding`, `cancellation_ratio` and the objective/refresh versions. The
+result JSON's own `trajectory` entries differ by policy too: only
+`--norm-policy legacy` runs carry the eight `ops/ft_callback.publish_atomic`
+keys `grad_l1_merged`, `f_ft`, `kappa_ft`, `kappa_clamped`, `Cmax`,
+`f_effective`, `applied_ft_force_l1` and `home_version` -- `grandplan`/`adaptive`
+runs get the normalizer's own `grad_l1_wl`/`grad_l1_io`/`grad_l1_ft`/`ratio_inst`/
+`ratio_ema`/`lambda_io`/`obj_version` fields instead, with none of the eight
+legacy-only keys present.
 
 ## Installed toolchain
 
