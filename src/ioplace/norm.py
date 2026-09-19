@@ -230,7 +230,9 @@ class TermNormalizer:
         self._refreshed_version = 0
         self._pending_row = None
         self._grad_cache = {}
+        self._probed_names = set()
         self._probed_this_callback = False
+        self._last_probe_iteration = None
 
     # -- version discipline -------------------------------------------------
     @property
@@ -286,13 +288,24 @@ class TermNormalizer:
         """Absorb one probe's measurements. `grad_norms` maps `"wl"` and each
         registered term name to its `||.||_p` gradient norm; unmentioned terms
         keep their previous measurement (this is how `probe_terms` subsetting
-        stays correct)."""
+        stays correct).
+
+        Controller ruling (fix round 1): a term whose measured gradient is at
+        or below `eps_rel * wl_norm` (including exactly zero) has no local
+        signal, and dividing by it would seed the EMA with a huge, meaningless
+        ratio (`wl_norm / EPS` ~ 1e30-ish) that then poisons `ratio_ema` for
+        many probes. Such a probe leaves `ratio_ema` untouched (`None` if
+        never seeded) and records `ratio_inst = None` so the trace row shows
+        the dead probe rather than a manufactured number."""
         self.wl_norm = float(grad_norms["wl"])
         for name, state in self.states.items():
             if name not in grad_norms:
                 continue
             grad_norm = float(grad_norms[name])
             state.grad_norm = grad_norm
+            if grad_norm <= self.eps_rel * self.wl_norm:
+                state.ratio_inst = None
+                continue
             state.ratio_inst = self.wl_norm / max(grad_norm, EPS)
             state.ratio_ema = ema_update(state.ratio_ema, state.ratio_inst, self.ema)
 
@@ -386,9 +399,24 @@ class TermNormalizer:
         Returns the `||.||_p` norms and, with `track_cancellation` set, caches
         the gradient tensors so `transaction()` can report
         `cancellation_ratio`. The cache (and the fact that this callback
-        probed) live only until the next `transaction()`, which clears the
-        flag once it has used them for `cancellation_ratio`."""
+        probed) live only until the next `transaction()`, which clears them
+        once it has used them for `cancellation_ratio`.
+
+        Raises `ValueError` if this normalizer was built without
+        `num_movable`/`num_nodes` (fix round 1, I-3): without them the fixed
+        and filler mask silently becomes a no-op, and the returned norms would
+        silently include fixed/filler gradient mass. Raises `KeyError` if
+        `probe_terms` names a term that was never `register()`ed."""
+        if self.num_movable is None or self.num_nodes is None:
+            raise ValueError(
+                "probe() requires num_movable/num_nodes for the fixed/filler mask")
         names = list(self.configs) if probe_terms is None else list(probe_terms)
+        unknown = [name for name in names if name not in self.terms]
+        if unknown:
+            raise KeyError("probe_terms %r not registered (registered: %r)" %
+                           (unknown, sorted(self.terms)))
+        self._last_probe_iteration = iteration
+        self._probed_names = set(names)
         self._grad_cache = {}
         norms = {"wl": self._norm(self._grad(wl_fn, pos, "wl"))}
         for name in names:
@@ -401,13 +429,16 @@ class TermNormalizer:
         self._probed_this_callback = True
         return norms
 
-    def _grad(self, fn, pos, label):
+    def _grad(self, fn, pos, label="?"):
         """Isolated forward+backward on a detached clone, with the fixed and
         filler entries zeroed exactly as `ops/ft_callback.independent_gradient`
         does, so the live `pos.grad` is never disturbed."""
         import torch
         leaf = pos.detach().clone().requires_grad_(True)
-        grad, = torch.autograd.grad(fn(leaf), leaf)
+        try:
+            grad, = torch.autograd.grad(fn(leaf), leaf)
+        except Exception as exc:
+            raise RuntimeError("norm probe term %r: %s" % (label, exc)) from exc
         if self.num_movable is not None and self.num_nodes is not None:
             grad[self.num_movable:self.num_nodes] = 0
             grad[self.num_nodes + self.num_movable:] = 0
@@ -425,10 +456,18 @@ class TermNormalizer:
         normalizer was built with `track_cancellation=False`, when this
         callback did not call `probe()` (the cache would otherwise mix stale
         gradients from an earlier probe with this transaction's coefficients),
-        or when the probe kept no gradient tensors."""
+        when the probe kept no gradient tensors, or when the most recent probe
+        used `probe_terms` to measure only a subset of terms and one of the
+        *other*, unprobed terms has a nonzero coefficient this transaction
+        (fix round 1, I-2: mixing this transaction's full-lambda coefficients
+        with a partial gradient cache would silently under-count the
+        denominator and misreport the ratio)."""
         if not self.track_cancellation:
             return None
         if not self._probed_this_callback:
+            return None
+        if any(lam != 0.0 and name not in self._grad_cache
+               for name, lam in lambdas.items()):
             return None
         merged, denom = None, 0.0
         for name, grad in self._grad_cache.items():
@@ -448,6 +487,7 @@ class TermNormalizer:
         denom = self.wl_norm + sum(s.lam * s.grad_norm for s in self.states.values())
         return {
             "iteration": int(iteration),
+            "probe_iteration": self._last_probe_iteration,
             "overflow": float(overflow),
             "tau": float(tau),
             "gamma": float(gamma),
@@ -496,6 +536,8 @@ class TermNormalizer:
         self.lambdas.clear()
         self.lambdas.update(lambdas)
         cancellation = self._cancellation_ratio(lambdas)
+        self._grad_cache = {}
+        self._probed_names = set()
         self._probed_this_callback = False
         self._obj_version += 1
         row = self._row(iteration, overflow, tau, gamma, cmax, cap, binding,

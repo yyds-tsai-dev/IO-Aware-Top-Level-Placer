@@ -10,8 +10,6 @@ measured identically (design sec 4).
 class IoNormTerm(object):
     """Unweighted `L_IO` (`lambda_io=1`, no margin) at the schedule's live tau."""
 
-    name = "io"
-
     def __init__(self, io_term):
         self.io_term = io_term
 
@@ -22,8 +20,6 @@ class IoNormTerm(object):
 class FtNormTerm(object):
     """Unweighted feed-through part only -- `FtTerm.ft_only`, i.e. the same
     isolated quantity `ops/ft_callback.publish_atomic` measures for `kappa_ft`."""
-
-    name = "ft"
 
     def __init__(self, ft_term):
         self.ft_term = ft_term

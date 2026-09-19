@@ -177,10 +177,27 @@ def test_update_grad_norms_sets_instant_ratio_and_ema():
 
 
 def test_zero_grad_norm_does_not_divide_by_zero():
+    # Controller ruling (fix round 1): a dead (<= eps_rel * wl_norm) gradient
+    # is never divided into a ratio at all -- `ratio_inst` is None and
+    # `ratio_ema` is left exactly as it was (None here, since this is the
+    # first measurement) rather than seeded with a huge, meaningless number.
     n = _norm_a()
     n.update_grad_norms({"wl": 1000.0, "io": 0.0})
-    assert math.isfinite(n.states["io"].ratio_ema)
-    assert n.states["io"].ratio_ema == pytest.approx(1e33)   # wl_norm / EPS
+    assert n.states["io"].ratio_inst is None
+    assert n.states["io"].ratio_ema is None
+
+
+def test_zero_gradient_probe_does_not_poison_the_ratio_ema():
+    # Controller ruling (fix round 1): a zero (or near-zero) term gradient
+    # must not seed ~1e33 into the EMA -- the next, informative probe should
+    # seed it cleanly instead, exactly as if the dead probe never happened.
+    n = _norm_a(ema=0.5)
+    n.update_grad_norms({"wl": 1000.0, "io": 0.0})
+    assert n.states["io"].ratio_inst is None
+    assert n.states["io"].ratio_ema is None
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
+    assert n.states["io"].ratio_inst == pytest.approx(100.0, rel=1e-12)
+    assert n.states["io"].ratio_ema == pytest.approx(100.0, rel=1e-12)
 
 
 def test_term_stays_inactive_above_the_activation_overflow():
@@ -541,6 +558,10 @@ def test_cancellation_ratio_is_one_for_aligned_terms():
     n.probe(0, pos, wl_fn, ctx)
     txn = n.transaction(0, 0.85, tau=1000.0, gamma=0.0)
     assert txn.cancellation_ratio == pytest.approx(1.0, rel=1e-12)
+    # Fix round 1, I-1: transaction() must clear the probe cache once it has
+    # used it, so a pos-sized tensor per term does not stay pinned for the
+    # whole probe interval.
+    assert n._grad_cache == {}
     n.mark_refreshed()
     # No probe() this callback -- the cache from iteration 0 must not be
     # reused against iteration 50's coefficients.
@@ -577,7 +598,7 @@ def test_norm_term_adapters_expose_the_production_terms():
     nl, io, _, distance = _make(k=4, chunk=1)
     ft = FtTerm(io, distance)
     ft.set_home([0])
-    pos = _pos(nl)
+    pos = _pos(nl, requires=False)
     ctx_a = {"iteration": 0, "overflow": 0.5, "tau": 8.0, "gamma": 1.0}
     ctx_b = {"iteration": 0, "overflow": 0.5, "tau": 4.0, "gamma": 1.0}
     # value(pos, ctx) reads ctx["tau"]: two different taus must not agree.
@@ -592,3 +613,62 @@ def test_norm_term_adapters_expose_the_production_terms():
         2.0 * float(IoNormTerm(io).value(pos, ctx_a)), rel=1e-12)
     assert float(FtNormTerm(ft).value(pos, ctx_a)) == pytest.approx(
         float(ft.ft_only(pos, 8.0)), rel=1e-12)
+
+
+def test_probe_terms_subset_makes_cancellation_ratio_none():
+    # Fix round 1, I-2: a partial (`probe_terms=`) probe caches gradients for
+    # only the measured subset. If a later transaction's lambdas give a
+    # nonzero coefficient to a term outside that subset, the cancellation
+    # ratio's numerator/denominator would silently miss that term's force --
+    # so cancellation_ratio must report None rather than a wrong number.
+    torch, n, pos, wl_fn, ctx = _probe_setup()
+    n.register("a", _Poly(1.0), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.register("b", _Poly(-0.5), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.probe(0, pos, wl_fn, ctx)
+    n.mark_refreshed()
+    n.probe(50, pos, wl_fn, ctx, probe_terms=["a"])
+    txn = n.transaction(50, 0.85, tau=1000.0, gamma=0.0)
+    assert txn.cancellation_ratio is None
+
+
+def test_probe_requires_num_movable_and_num_nodes():
+    # Fix round 1, I-3: without num_movable/num_nodes the fixed/filler mask
+    # silently becomes a no-op (`_grad`'s guard is `is not None`), so probe()
+    # must refuse to run rather than silently return polluted norms.
+    torch = pytest.importorskip("torch")
+    n = TermNormalizer(policy="grandplan", wt0=0.05)
+    n.register("a", _Poly(1.0), 1.0, activate_overflow=0.90, n_ramp=0)
+    pos = torch.tensor([1.0, 2.0, 3.0, 4.0], dtype=torch.float64, requires_grad=True)
+    wl_fn = lambda p: (p ** 3).sum()
+    ctx = {"iteration": 0, "overflow": 0.85, "tau": 1000.0, "gamma": 0.0}
+    with pytest.raises(ValueError):
+        n.probe(0, pos, wl_fn, ctx)
+
+
+def test_probe_rejects_unknown_probe_terms():
+    torch, n, pos, wl_fn, ctx = _probe_setup()
+    n.register("a", _Poly(1.0), 1.0, activate_overflow=0.90, n_ramp=0)
+    with pytest.raises(KeyError):
+        n.probe(0, pos, wl_fn, ctx, probe_terms=["bogus"])
+
+
+def test_probe_drives_the_real_io_and_ft_norm_terms():
+    torch = pytest.importorskip("torch")
+    from ioplace.ops.ft_term import FtTerm
+    from ioplace.ops.norm_terms import FtNormTerm, IoNormTerm
+    from tests.test_ft_term import _make, _pos
+    nl, io, _, distance = _make(k=4, chunk=1)
+    ft = FtTerm(io, distance)
+    ft.set_home([0])
+    pos = _pos(nl)
+    pos.grad = torch.zeros_like(pos)
+    n = TermNormalizer(policy="grandplan", num_movable=io.num_movable,
+                       num_nodes=io.num_nodes, wt0=0.05)
+    n.register("io", IoNormTerm(io), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.register("ft", FtNormTerm(ft), 1.0, activate_overflow=0.90, n_ramp=0)
+    wl_fn = lambda p: (p ** 2).sum()
+    ctx = {"iteration": 0, "overflow": 0.5, "tau": 8.0, "gamma": 1.0}
+    norms = n.probe(0, pos, wl_fn, ctx)
+    for name in ("wl", "io", "ft"):
+        assert math.isfinite(norms[name]) and norms[name] > 0.0
+    assert bool(torch.all(pos.grad == 0.0))
