@@ -47,7 +47,9 @@ P-B produces `soft.npz` (a `seed.npz`-schema file with `kind="soft"`), `frozen_m
 
 **Two independent drivers.** `src/ioplace/drivers/run_placement_io.py` stays as the legacy single-phase driver and must not be modified. `run_main_flow.py` is a fork that imports the small shared helpers rather than duplicating them.
 
-**Retired-path gating.** `IOPLACE_ENABLE_GR_IN_LOOP=1` is required to import `src/scripts/run_route_gp.py` or `src/ioplace/ops/routing_gp_controller.py` (Task 8).
+**Retired-path gating.** `IOPLACE_ENABLE_GR_IN_LOOP=1` is required to import `src/scripts/run_route_gp.py` or `src/ioplace/ops/routing_gp_controller.py` (Task 8). **Stated deviation from spec §1 (controller ruling C-8, 2026-09-19).** Spec §1 lists five retired modules; this plan gates only those two. `ops/route_gp.py`, `ops/joint_route_feedback.py` and `ops/route_feedback.py` stay ungated: they are import-side-effect-free libraries that live unit tests exercise directly, so an import-time gate there would fail those tests at collection for no safety gain. Accepted and recorded; revisit only if a v2 driver ever imports them.
+
+**`schema_version` asymmetry (controller ruling C-2, 2026-09-19).** `save_producer_json` stamps `PRODUCER_SCHEMA_VERSION` itself and `PRODUCER_FIELDS` does not list it; `save_freeze`/`save_result` require the *caller* to supply `schema_version`, and `FREEZE_FIELDS`/`MAIN_FLOW_RESULT_FIELDS` do list it. This is deliberate, not an oversight: the producer (P-C Task 10) builds its whole payload as one dict literal that it also returns to its caller, whereas the main flow's `result` dict is assembled by spreading `_t8a_provenance`, which carries `run_placement`'s own `RESULT_SCHEMA_VERSION` and would clobber any writer-side stamp (see Task 7's `result["schema_version"] = ...` restore). Cross-plan ruling 3 was revised to match (`.superpowers/sdd/v2-cross-plan-rulings.md`); do not "unify" this without editing P-C Task 1's 48-name `PRODUCER_FIELDS` assertion in the same commit.
 
 **Commit trailer.** Every commit message in this plan ends with:
 
@@ -80,6 +82,51 @@ does not create or edit anything under `benchmarks/`. The coordinate contract
 below was checked against P-C Task 10's scaled-inside/native-outside flip and
 needed no change.
 
+**Pre-flight amendments (2026-09-19).** The pre-flight conflict scan
+(`.superpowers/sdd/2026-09-19-v2-p-b-main-flow/preflight.md`, tables A–E) and the
+controller rulings recorded at the end of
+`.superpowers/sdd/2026-09-19-v2-p-b-main-flow/progress.md` changed this plan in the
+places listed below; task numbering is unchanged and nothing else moved.
+
+- **Task 5 (B-1 / A-10 / A-11)** now ships *both* `LegacyNormAdapter` and
+  `TermNormalizerAdapter` in `src/ioplace/norm_adapter.py`. The old text made
+  `--norm-policy grandplan|adaptive` a permanent `NotImplementedError` and
+  attributed `TermNormalizerAdapter` to P-H's plan, which never mentions
+  `norm_adapter.py`; cross-plan ruling 2's literal form ("build on
+  `TermNormalizer` directly, no adapter") is unimplementable because
+  `TermNormalizer` owns no τ schedule and no activation trigger. Ruling 2 was
+  revised to match. Without this, spec §4's policy-A/B ablation is unreachable
+  from `run_main_flow`.
+- **Tasks 5 / 7 / 9 (A-9)** — `norm_trace.jsonl` now carries exactly one schema,
+  P-H's `norm_trace.ROW_FIELDS`, written only through
+  `norm_trace.NormTraceWriter` (rows emitted by `TermNormalizer.mark_refreshed`).
+  The legacy path writes `legacy_trace.jsonl` with `publish_atomic`'s own keys.
+  Task 9's row assertions branch on the policy.
+- **Task 7 (C-6)** — `_resolve_regions` rejects a `regions.json` whose `k`
+  disagrees with `--k`.
+- **Tasks 6 / 7 / 9 (D-1)** — `run_fence_gp` returns `io_fence_gp_source`
+  (`"legalize_op"` | `"fallback"`), `MAIN_FLOW_RESULT_FIELDS` carries it, and
+  Task 9 asserts it instead of two tautologies: `io_identity_residual` is 0 by
+  construction and can never detect a stale measurement.
+- **Task 8 (A-12)** — the claim that P-H Task 8 modifies no existing test module
+  is false; its Files list includes `tests/test_routing_gp_driver.py:41`.
+- **Tasks 1 / 3 / 4 / 9 (E-3)** — an empty real region crashes `initialize()`
+  with `IndexError` at `PlaceDB.py:687` (numpy 1.26.4 `np.percentile` on an
+  empty slice), not `ValueError` at `:729`.
+- **Smaller amendments** — D-2 (one region-stats implementation, owned by
+  `freeze.py`, called with native-unit sizes from both sites), D-3 (dead
+  `sampler` parameters dropped), D-5 (`gp_iteration_budget` reaches
+  `result.json`), D-6 (`soft_summary` provenance), D-7 (the prior-remap netlist
+  is built through a zero-arg factory, only when it is used), D-8
+  (`--argmax-chunk`, default 4), D-9, D-10, D-12, D-13, D-14, D-4's docstring
+  note, and Task 3's Interfaces line.
+- **Recorded in Global Constraints** — C-8's stated deviation from spec §1's
+  five-module retirement list, and C-2's deliberate `schema_version` asymmetry.
+
+Deferred to implementation review by ruling, *not* gaps: C-4 (the clamp band
+against phase 3's `(K+1,)` density-weight vector — spec §3's own open question
+(iii)), D-11, A-24, C-13.
+
 **New modules**
 
 | File | Responsibility |
@@ -88,7 +135,7 @@ needed no change.
 | `src/ioplace/init_pos.py` | The three initial-position modes (`die_center`, `region_center`, `seed`) written into `placedb.node_x/node_y` between `read()` and `initialize()`. |
 | `src/ioplace/freeze.py` | Cell-centre region argmax, membership-churn tracking, the three-part freeze criterion, empty-region repair, per-region cell/area statistics, the `freeze.json` record. |
 | `src/ioplace/fence_phase.py` | Phase-3 PlaceDB construction: fence injection, escape-cell workaround, warm start, and the density-weight clamp (including its scoped `PlaceObj.initialize_density_weight` wrapper). |
-| `src/ioplace/norm_adapter.py` | The single seam between the driver and normalisation policy. `legacy` wraps `schedules.ScheduleState`; `grandplan`/`adaptive` are P-H's `src/ioplace/norm.py` `TermNormalizer`. The driver never imports `schedules.py`. |
+| `src/ioplace/norm_adapter.py` | The single seam between the driver and normalisation policy, with one protocol and two implementations: `LegacyNormAdapter` (`schedules.ScheduleState` + `ops/ft_callback.publish_atomic`, writing `legacy_trace.jsonl`) and `TermNormalizerAdapter` (P-H's `norm.TermNormalizer` for `grandplan`/`adaptive`, writing `norm_trace.jsonl` through `norm_trace.NormTraceWriter`). The driver never imports `schedules.py` or `norm.py`. |
 | `src/ioplace/main_flow_metrics.py` | Pure metric functions: IO accounting identity, region area balance, fence compliance, phase summary. No torch, no DREAMPlace. |
 | `src/ioplace/drivers/run_main_flow.py` | The driver: phase orchestration, CLI, artefact wiring, `result.json`. |
 
@@ -372,7 +419,7 @@ MAIN_FLOW_RESULT_FIELDS = (
     "device_baseline_gb", "dp_seed", "det", "runtime_s",
     # IO accounting (design sec 7 diagnostics 4/5 + the closing identity)
     "io_soft", "io_fence_gp", "io_count", "io_delta_at_freeze", "lg_loss",
-    "io_identity_residual",
+    "io_identity_residual", "io_fence_gp_source",
     # evaluator metrics
     "ft_count", "hard_lambda_sum", "tree_wl", "hpwl", "io_rg", "ft_rg",
     "large_net_lb", "hpwl_gp", "hpwl_lg",
@@ -383,9 +430,13 @@ MAIN_FLOW_RESULT_FIELDS = (
     "phases", "t_read_soft", "t_gp_soft", "t_freeze", "t_read_fence",
     "t_gp_fence", "t_lg", "t_eval", "peak_mem_mb", "peak_mem_mb_by_phase",
     "device_used_gb", "host_peak_rss_gb",
-    "gp_iterations_soft", "gp_iterations_fence", "final_overflow",
-    "stop_overflow_reached", "legalization_status", "num_unplaced_cells",
-    "effective_target_density", "num_filler_nodes", "num_bins_x", "num_bins_y",
+    "gp_iterations_soft", "gp_iterations_fence", "gp_iteration_budget",
+    "final_overflow", "stop_overflow_reached", "legalization_status",
+    "num_unplaced_cells", "effective_target_density", "num_filler_nodes",
+    "num_bins_x", "num_bins_y",
+    # soft-phase provenance (the run_soft_phase record minus its arrays; None
+    # for a --phase fence run, which never opens the soft phase)
+    "soft_summary",
     # artefacts
     "artifacts",
 )
@@ -591,11 +642,15 @@ def load_membership(path, *, expect_num_movable=None, expect_k=None,
         counts = np.bincount(out.part, minlength=out.k)
         empty = np.flatnonzero(counts == 0).tolist()
         if empty:
-            # PlaceDB.calc_num_filler_for_fence_region takes np.percentile/np.mean
-            # of an empty movable-size slice (PlaceDB.py:687-691) -> nan, then
-            # int(round(nan)) at PlaceDB.py:729 raises ValueError inside
-            # initialize(). Refuse the membership here with a readable message
-            # instead of crashing deep inside DREAMPlace.
+            # PlaceDB.calc_num_filler_for_fence_region takes np.percentile of
+            # an empty movable-size slice (PlaceDB.py:687); under the installed
+            # numpy (1.26.4) that raises `IndexError: index -1 is out of bounds
+            # for axis 0 with size 0` right there, inside initialize() -- it
+            # never reaches the int(round(nan)) at PlaceDB.py:728. Verified on
+            # this host 2026-09-19 (pre-flight E-3); the older "silently yields
+            # NaN then ValueError at :729" wording came from
+            # run_placement_two_stage.py's comment block and is wrong. Refuse
+            # the membership here with a readable message either way.
             raise ValueError(f"{path}: empty regions {empty} would crash "
                              "PlaceDB.calc_num_filler_for_fence_region")
     return out
@@ -960,7 +1015,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Test: `tests/test_freeze.py`
 
 **Interfaces:**
-- Consumes: `ioplace.ops.soft_assign.region_sdf_l1` (`src/ioplace/ops/soft_assign.py:19-31`); `ioplace.artifacts.FREEZE_SCHEMA_VERSION` (Task 1); `ioplace.init_pos.region_centers` (Task 2).
+- Consumes: `ioplace.ops.soft_assign.region_sdf_l1` (`src/ioplace/ops/soft_assign.py:19-31`); `ioplace.artifacts.FREEZE_SCHEMA_VERSION` (Task 1). It does **not** consume `ioplace.init_pos.region_centers` — only `tests/test_freeze.py` imports that, to build the `centers` argument `ensure_nonempty_regions` takes as a plain array (pre-flight amendment, Task 3 Interfaces line).
+- Consumed by: `ioplace.main_flow_metrics.region_area_balance` (Task 6) imports `region_cell_stats` from here — one implementation of the per-region count/area/utilisation arithmetic, two consumers (pre-flight amendment D-2). The dependency points this way, not the other, because Task 3 lands first and `main_flow_metrics` must stay torch-free at import time (`freeze.py` pulls in `ops/soft_assign`, which imports torch), so Task 6 takes it as a local import inside the function.
 - Produces:
   - `argmax_region(x, y, rects, rect2region, K, chunk=None) -> torch.Tensor` (int64, shape `(N,)`)
   - `cell_centers(x, y, size_x, size_y) -> (torch.Tensor, torch.Tensor)`
@@ -1193,9 +1249,12 @@ def ensure_nonempty_regions(part, k, cx, cy, centers):
     """Guarantee every region owns at least one cell.
 
     An empty *real* region makes `PlaceDB.calc_num_filler_for_fence_region`
-    take `np.percentile`/`np.mean` of an empty array (PlaceDB.py:687-691),
-    producing nan and then `int(round(nan))` -> ValueError at PlaceDB.py:729,
-    inside `initialize()`. The escape-cell workaround
+    take `np.percentile` of an empty movable-size slice (PlaceDB.py:687).
+    Under the installed numpy (1.26.4) that raises `IndexError: index -1 is out
+    of bounds for axis 0 with size 0` on the spot, inside `initialize()` --
+    verified on this host 2026-09-19 (pre-flight E-3). It never reaches the
+    `int(round(nan))` at PlaceDB.py:728, so do not go looking for a
+    `ValueError`. The escape-cell workaround
     (run_placement_two_stage.py:192-233) only covers the *implicit* bucket, so
     the freeze must repair real regions itself: move the single cell whose
     centre is closest (L1) to the empty region's centre, preferring cells from
@@ -1220,16 +1279,33 @@ def ensure_nonempty_regions(part, k, cx, cy, centers):
 
 
 def region_cell_stats(part, size_x, size_y, rs):
+    """The four per-region arrays `freeze.json` carries.
+
+    This is the **single** implementation of the per-region count / cell-area /
+    region-area / utilisation arithmetic in the v2 flow:
+    `main_flow_metrics.region_area_balance` (Task 6) calls it and only adds the
+    max/min/ratio/deviation summaries that belong to `result.json` (pre-flight
+    amendment D-2). It lives here rather than there because Task 3 lands first
+    and `main_flow_metrics` must stay importable without torch -- this module
+    pulls in `ops/soft_assign`, which imports torch -- so Task 6 takes it as a
+    local import inside the function.
+
+    `region_cell_area` and `region_area` are **not** scale-invariant; only
+    `region_utilization` is (both of its terms carry `scale_factor**2`). Every
+    caller must therefore pass sizes and a `RegionSet` in the *same* frame, and
+    both call sites in `run_main_flow` pass **native-unit** sizes with the
+    native `RegionSet`, because `freeze.json` is a native-unit artefact and
+    `result.json` must quote the same numbers.
+    """
     part = np.asarray(part, dtype=np.int64)
     area = np.asarray(size_x, dtype=np.float64) * np.asarray(size_y, dtype=np.float64)
     counts = np.bincount(part, minlength=rs.k)[:rs.k]
     cell_area = np.bincount(part, weights=area, minlength=rs.k)[:rs.k]
-    region_area = np.asarray(
-        [float(np.sum((np.asarray(r.rects, dtype=np.float64).reshape(-1, 4)[:, 2]
-                       - np.asarray(r.rects, dtype=np.float64).reshape(-1, 4)[:, 0])
-                      * (np.asarray(r.rects, dtype=np.float64).reshape(-1, 4)[:, 3]
-                         - np.asarray(r.rects, dtype=np.float64).reshape(-1, 4)[:, 1])))
-         for r in rs.regions], dtype=np.float64)
+    region_area = np.empty(rs.k, dtype=np.float64)
+    for rid, region in enumerate(rs.regions):
+        rects = np.asarray(region.rects, dtype=np.float64).reshape(-1, 4)
+        region_area[rid] = float(np.sum((rects[:, 2] - rects[:, 0])
+                                        * (rects[:, 3] - rects[:, 1])))
     return {"region_cell_count": counts.astype(int).tolist(),
             "region_cell_area": cell_area.tolist(),
             "region_area": region_area.tolist(),
@@ -1324,7 +1400,12 @@ def test_clamp_is_a_noop_inside_the_band():
     model = _FlatModel(2.0)
     log = clamp_density_weight(model, reference=1.0)
     assert model.density_weight.tolist() == [2.0]
-    assert log["bound"] is False and log["lo"] == 0.25 and log["hi"] == 4.0
+    assert log["bound"] is False and log["lo_abs"] == 0.25 and log["hi_abs"] == 4.0
+    # lo_abs/hi_abs are absolute bounds, not the [0.25, 4] multipliers: they
+    # only coincide with them when reference == 1 (amendment D-14).
+    scaled = clamp_density_weight(_FlatModel(2.0), reference=2.0)
+    assert scaled["lo_abs"] == 0.5 and scaled["hi_abs"] == 8.0
+    assert scaled["bound"] is False
 
 
 def test_clamp_binds_above_and_below():
@@ -1424,6 +1505,10 @@ def clamp_density_weight(model, reference, lo=DENSITY_CLAMP_LO, hi=DENSITY_CLAMP
     (PlaceObj.py:862-875), so the clamp scales `u` by the same elementwise
     ratio and recomputes the step size exactly as PlaceObj.py:817 does --
     otherwise the very first update would undo the clamp.
+
+    The returned `lo_abs`/`hi_abs` are the **absolute** bounds
+    (`lo*reference`, `hi*reference`), not the multipliers; they coincide only
+    when `reference == 1` (pre-flight amendment D-14).
     """
     import torch
     reference = float(reference)
@@ -1433,7 +1518,11 @@ def clamp_density_weight(model, reference, lo=DENSITY_CLAMP_LO, hi=DENSITY_CLAMP
     with torch.no_grad():
         before = model.density_weight.detach().clone()
         after = before.clamp(min=low, max=high)
-        ratio = torch.where(before > 0, after / before.clamp_min(1e-300),
+        # dtype-safe floor: GCD's placedb.dtype is float32, where 1e-300
+        # underflows to 0.0 and the guard would rest entirely on torch.where's
+        # mask (pre-flight amendment D-10).
+        tiny = torch.finfo(before.dtype).tiny
+        ratio = torch.where(before > 0, after / before.clamp_min(tiny),
                             torch.ones_like(before))
         model.density_weight.copy_(after)
         u = getattr(model, "density_weight_u", None)
@@ -1441,7 +1530,7 @@ def clamp_density_weight(model, reference, lo=DENSITY_CLAMP_LO, hi=DENSITY_CLAMP
             u.mul_(ratio)
             model.density_weight_step_size = (
                 model.density_weight_step_size_inc_low - 1.0) * float(u.norm(p=2))
-    return {"reference": reference, "lo": float(low), "hi": float(high),
+    return {"reference": reference, "lo_abs": float(low), "hi_abs": float(high),
             "before": [float(v) for v in before.reshape(-1)],
             "after": [float(v) for v in after.reshape(-1)],
             "bound": bool(torch.any(after != before))}
@@ -1458,6 +1547,14 @@ def install_density_weight_clamp(cleanup, reference, log, *, lo=DENSITY_CLAMP_LO
     `make_parameter_update()` (NonLinearPlace.py:454/462) has already taken a
     step at the unclamped weight. `_install_attribute` restores the original
     function when `cleanup` closes, including on an exception.
+
+    The patch is **process-global**: every `PlaceObj` built in this interpreter
+    sees it while it is installed, so it must only ever be installed inside an
+    `_io_cleanup()` scope (which is what guarantees the restore) and never
+    around code that runs a second, unrelated placement concurrently.
+    `initialize_density_weight` has two call sites (NonLinearPlace.py:400 and
+    :783), so `log` may collect more than one entry per run (pre-flight
+    amendment D-4).
     """
     import PlaceObj
     original = PlaceObj.PlaceObj.initialize_density_weight
@@ -1500,9 +1597,10 @@ def build_fence_placedb(config_json, region_set, part, positions, *,
     inject_fence_regions(placedb, region_set, part)
     # DREAMPlace always allocates an implicit "no fence" bucket (region_id == k)
     # and calls calc_num_filler_for_fence_region on it; our regions tile the whole
-    # die, so that bucket is empty and np.percentile of an empty array turns into
-    # int(round(nan)) -> ValueError at PlaceDB.py:729. Same workaround, same
-    # helper, as run_placement_two_stage.py:192-233.
+    # die, so that bucket is empty and np.percentile of the empty slice raises
+    # IndexError at PlaceDB.py:687 under numpy 1.26.4 (pre-flight E-3; the older
+    # "int(round(nan)) -> ValueError at :729" wording is wrong). Same workaround,
+    # same helper, as run_placement_two_stage.py:192-233.
     escape = _pick_escape_cell(placedb.node2fence_region_map, part,
                                placedb.node_size_x, placedb.node_size_y, k)
     escape_from = int(placedb.node2fence_region_map[escape])
@@ -1556,38 +1654,57 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Test: `tests/test_norm_adapter.py`
 
 **Interfaces:**
-- Consumes: `ioplace.schedules.ScheduleState`; `ioplace.ops.ft_callback.publish_atomic` (`src/ioplace/ops/ft_callback.py:18-49`).
+- Consumes: `ioplace.schedules.ScheduleState`; `ioplace.ops.ft_callback.publish_atomic` (`src/ioplace/ops/ft_callback.py:18-49`); P-H's `ioplace.norm.TermNormalizer` / `VersionPair` / `parse_target_shares` (`src/ioplace/norm.py:169-188,190-630,108-119`), `ioplace.norm_trace.NormTraceWriter` (`src/ioplace/norm_trace.py:27-54`), `ioplace.ops.norm_terms.IoNormTerm` / `FtNormTerm` (`src/ioplace/ops/norm_terms.py:10-28`).
 - Produces:
-  - `NORM_POLICIES = ("legacy", "grandplan", "adaptive")`
-  - `make_norm_adapter(policy, **config) -> LegacyNormAdapter`
-  - `class LegacyNormAdapter` with the adapter protocol below.
+  - `NORM_POLICIES = TermNormalizer.POLICIES` — `("legacy", "grandplan", "adaptive")`
+  - `LEGACY_TRACE_NAME = "legacy_trace.jsonl"`, `NORM_TRACE_NAME = "norm_trace.jsonl"`
+  - `make_norm_adapter(policy, **config) -> LegacyNormAdapter | TermNormalizerAdapter`
+  - `class LegacyNormAdapter`, `class TermNormalizerAdapter` — both implementing the adapter protocol below.
 
-**Adapter protocol** — the driver uses only these members, so P-H can drop in a `TermNormalizerAdapter` without touching `run_main_flow.py`:
+**Adapter protocol** — the driver uses only these members, so `--norm-policy` is a one-word change with no other edit to `run_main_flow.py`:
 
 | Member | Meaning |
 |---|---|
-| `policy: str` | name recorded in `result.json`/`norm_trace.jsonl` |
-| `active: bool` | the term has been switched on |
+| `policy: str` | name recorded in `result.json` and in every trace row |
+| `active: bool` | the term has been switched on (the `ScheduleState` latch, in both adapters) |
 | `tau: float`, `tau_rel: float` | soft-assign temperature, absolute and relative to `L_R` |
-| `lambda_io: float`, `kappa_ft: float` | coefficients the driver feeds to `IoTerm`/`FtTerm` |
-| `obj_version: int`, `refreshed_version: int` | objective version and the version the Nesterov cache was last refreshed at; `dp_hook.install_version_invariant(optimizer, adapter)` reads both |
+| `lambda_io: float`, `kappa_ft: float` | coefficients the driver feeds to `IoTerm`/`FtTerm`; `FtTerm.forward` multiplies the FT part by `lambda_io * kappa_ft`, so `kappa_ft` is `lambda_ft / lambda_io` |
+| `obj_version: int`, `refreshed_version: int` | objective version and the version the Nesterov cache was last refreshed at; `dp_hook.install_version_invariant(optimizer, adapter)` reads both off the adapter |
 | `begin_iteration(iteration, overflow, gamma) -> bool` | continuous update; `True` when a discrete change happened |
-| `probe(iteration, pos, *, io_term, ft_term, wirelength_op, ecc_max, gamma) -> dict` | one isolated backward per term, one atomic coefficient publication, one `obj_version` bump; the returned dict is one `norm_trace.jsonl` row |
+| `probe(iteration, pos, *, io_term, ft_term, wirelength_op, ecc_max, gamma) -> dict` | one isolated backward per term, one atomic coefficient publication, one `obj_version` bump; returns the policy's trace row |
+| `write_trace_row(row, extra) -> dict | None` | the adapter, not the driver, owns the trace file; `extra` is the driver's per-probe `{io_count, ft_count, churn, …}` |
+| `trace_path: str | None`, `close() -> None` | where this policy's trace went, and its teardown |
 | `needs_refresh() -> bool`, `mark_refreshed() -> None` | Nesterov-secant discipline (`dp_hook.py:36-59`) |
 
-P-H's plan owns adding `TermNormalizerAdapter` to this file, mapping `register`/`probe`/`weights`/`transaction`/`mark_refreshed` onto the same protocol. Until then `--norm-policy grandplan|adaptive` fails fast with a message naming the missing module — that is the behaviour pinned by a test, not a stub.
+**Why two classes, not one (pre-flight B-1/A-10/A-11, cross-plan ruling 2 as revised).** The original text deferred `TermNormalizerAdapter` to P-H and raised `NotImplementedError` for `grandplan`/`adaptive`. Both halves of that were wrong: P-H's plan never touches `norm_adapter.py` (its Task 7 modifies `run_placement_io.py`, `run_placement.py`, `docs/dev-env.md` and `tests/test_norm_driver.py`), so the deferral pointed at nobody, and spec §4's policy-A/B ablation would have been permanently unreachable from `run_main_flow`. Ruling 2's literal form — "build on `TermNormalizer` directly, no adapter" — is not implementable either: the live `TermNormalizer` (`src/ioplace/norm.py`) owns coefficients and nothing else. It has no τ schedule, no `L_R`, no activation trigger, no `lambda_io`/`kappa_ft` names, and its `probe(iteration, pos, wl_fn, ctx, probe_terms=None)` signature differs from the driver's. Something must still map overflow onto τ and latch activation, and that something is `ScheduleState`. So `TermNormalizerAdapter` keeps a `ScheduleState` **solely** for τ/ρ/activation (`update_continuous`) and hands every coefficient to a `TermNormalizer`.
 
-**Checked against P-H (2026-09-19).** `NORM_POLICIES` here is character-for-character `TermNormalizer.POLICIES` in P-H Task 2 — `("legacy", "grandplan", "adaptive")` — so `--norm-policy legacy` is not a P-B-only fallback but the same policy P-H implements in its Task 6: under `legacy` the normalizer owns no coefficient maths and delegates `obj_version`/`refreshed_version` to `schedules.ScheduleState`, which is exactly what `LegacyNormAdapter` does here. When `TermNormalizerAdapter` lands it may therefore serve all three policies; `LegacyNormAdapter` stays only as the no-P-H path. P-C's `GroupingWeight` (its Task 4) touches `src/ioplace/norm.py` at a different level — the pure helpers `grandplan_weight(iteration, it_activate, wt0, wt_step, ramp_period, wt_max)` and `ema_update(prev, inst, ema)` from P-H Task 1, both already present in the tree with those exact signatures — so there is no name clash with this adapter.
+**Division of labour inside `TermNormalizerAdapter`.**
+
+- `ScheduleState` — τ from `tau_rel_from_overflow` (`schedules.py:9-14`), ρ, and the single activation latch. Its own `lambda_io`/`kappa_ft`/`Cmax` are never read.
+- `TermNormalizer` — every coefficient, the Lipschitz cap, `Cmax`, the cancellation ratio, and `norm_trace.jsonl`. Rows are emitted by `mark_refreshed()`, i.e. only once the objective version is live in the optimizer's cache.
+- `VersionPair(state, normalizer)` (`norm.py:169-188`) — one version pair covering both, so a single `install_version_invariant(optimizer, adapter)` sees an activation bump from `update_continuous` *and* a coefficient bump from `transaction()`. Stacking two invariant wrappers would not work: `refresh_nesterov_secant` unwraps exactly one `__wrapped__` level.
+- Activation is synchronised **down** from the schedule every iteration. `TermNormalizer._activate` only runs inside `weights()`/`transaction()`, i.e. on the probe cadence, so a term left to latch itself would set `it_activate` tens of iterations late and restart policy A's `activation_ramp` (and policy B's ramped share) from the first probe instead of from the schedule's own activation.
+- Terms are registered on the **first probe**, which is the first moment the driver hands over `io_term`/`ft_term` and the FT curvature `ecc_max`. Declared curvatures (design sec 4): IO 1, FT `ecc_max`.
+- Target shares (policy B) default to the legacy knobs: `io <- rho_max`, `ft <- rho_max * f_ft_max`. `TermNormalizer`'s shares are fractions of the *total* force `G = ‖∇WL‖ + Σ λ_t‖∇T_t‖`, and `rho_max` is already "IO force as a fraction of the WL force", while legacy's `f_ft_max` is the FT force as a fraction of the *IO* force — hence the product. `--norm-target-share io=…,ft=…` (`norm.parse_target_shares`) overrides either.
+- The τ_rel-driven FT window (`--tau-start`/`--tau-full`, `schedules.ft_activation_ramp`) applies to `--norm-policy legacy` only. Policies A and B replace it with the unified iteration ramp plus the target share, which is the whole point of design sec 4.
+
+**One trace schema per file name (pre-flight A-9).** `norm_trace.jsonl` is spec §1's artefact and P-H's `NormTraceWriter` validates every row against `norm_trace.ROW_FIELDS`, rejecting extra or missing keys. The legacy path's row is `publish_atomic`'s dict, which shares almost none of those keys, so it goes to `legacy_trace.jsonl` instead. The driver never formats a row: it calls `adapter.write_trace_row(row, sample)` and the adapter decides. Under `grandplan`/`adaptive` that call is a no-op (the normalizer already wrote the validated row) and the driver's per-probe extras reach `result.json` through `soft_summary["probe_samples"]` instead.
+
+**Checked against P-H (2026-09-19, at `da83162`).** `NORM_POLICIES` is bound to `TermNormalizer.POLICIES` rather than re-spelled, so it cannot drift. Under `legacy` the normalizer owns no coefficient maths and delegates `obj_version`/`refreshed_version` to a `ScheduleState` (`norm.py:566-622`) — exactly what `LegacyNormAdapter` does here — so the two legacy paths agree by construction and `LegacyNormAdapter` keeps `publish_atomic` as its single source of truth (`tests/test_norm_legacy_adapter.py`'s golden trajectory is the regression lock). P-C's `GroupingWeight` (its Task 4) uses `norm.py`'s pure helpers `grandplan_weight` and `ema_update` at a different level; no name clash. P-H Task 7 (the `run_placement_io.py` wiring) had **not** landed when this task was written, so the wiring below is derived from `norm.py` itself; if it has landed by the time you implement, cross-check `probe`/`transaction`/`mark_refreshed` ordering against that driver and report any difference rather than silently diverging.
 
 - [ ] **Step 1: Write the failing test**
 
 Create `tests/test_norm_adapter.py`:
 
 ```python
+import json
+
 import pytest
 torch = pytest.importorskip("torch")
 
-from ioplace.norm_adapter import NORM_POLICIES, make_norm_adapter
+from ioplace.norm_adapter import (NORM_POLICIES, LegacyNormAdapter,
+                                  TermNormalizerAdapter, make_norm_adapter)
+from ioplace.norm_trace import ROW_FIELDS, read_norm_trace
 
 
 class _FakeIoTerm:
@@ -1601,11 +1718,35 @@ def _wirelength(pos):
     return (3.0 * pos).abs().sum()
 
 
-def _adapter():
-    return make_norm_adapter("legacy", L_R=100.0, rho_max=0.1, tau_hi=0.30,
-                             tau_lo=0.03, of_on=2.0, of_end=0.5, of_full=1.0,
-                             f_ft_max=0.0, ft_ramp_mode="window", tau_start=0.12,
-                             tau_full=0.05)
+def _pos():
+    # x = pos[:3], y = pos[3:]; entries 2 and 5 are the fixed/filler slots the
+    # normalizer's mask zeroes, so ||grad WL||_1 = 4*3 = 12 and
+    # ||grad IO||_1 = |2*[1,2,4,5]| = 24 for every probe below.
+    return torch.arange(6, dtype=torch.float64) + 1.0
+
+
+def _config(**override):
+    config = dict(L_R=100.0, rho_max=0.1, tau_hi=0.30, tau_lo=0.03, of_on=2.0,
+                  of_end=0.5, of_full=1.0, f_ft_max=0.0, ft_ramp_mode="window",
+                  tau_start=0.12, tau_full=0.05)
+    config.update(override)
+    return config
+
+
+def _probe(adapter, iteration):
+    return adapter.probe(iteration, _pos(), io_term=_FakeIoTerm(), ft_term=None,
+                         wirelength_op=_wirelength, ecc_max=0.0, gamma=1.0)
+
+
+def _activated(policy, **override):
+    """Activate at iteration 0 so policy A's 20-iteration activation ramp is
+    complete by the first probe at 50. Without the adapter's activation sync
+    the term would latch at the probe itself and ramp to exactly 0."""
+    adapter = make_norm_adapter(policy, **_config(**override))
+    adapter.begin_iteration(0, overflow=1.5, gamma=1.0)
+    adapter.mark_refreshed()
+    adapter.begin_iteration(50, overflow=1.5, gamma=1.0)
+    return adapter
 
 
 def test_policies_are_declared():
@@ -1613,7 +1754,7 @@ def test_policies_are_declared():
 
 
 def test_legacy_adapter_activates_once_and_reports_tau():
-    adapter = _adapter()
+    adapter = make_norm_adapter("legacy", **_config())
     assert adapter.policy == "legacy"
     assert adapter.begin_iteration(0, overflow=3.0, gamma=1.0) is False
     assert adapter.active is False and adapter.lambda_io == 0.0
@@ -1624,21 +1765,16 @@ def test_legacy_adapter_activates_once_and_reports_tau():
 
 
 def test_probe_bumps_obj_version_exactly_once_and_needs_a_refresh():
-    adapter = _adapter()
-    adapter.begin_iteration(0, overflow=1.5, gamma=1.0)
-    adapter.mark_refreshed()
-    adapter.begin_iteration(50, overflow=1.5, gamma=1.0)
+    adapter = _activated("legacy")
     before = adapter.obj_version
-    pos = torch.arange(6, dtype=torch.float64) + 1.0
-    row = adapter.probe(50, pos, io_term=_FakeIoTerm(), ft_term=None,
-                        wirelength_op=_wirelength, ecc_max=0.0, gamma=1.0)
+    row = _probe(adapter, 50)
     assert adapter.obj_version == before + 1
     assert adapter.needs_refresh() is True
     assert adapter.refreshed_version != adapter.obj_version
     adapter.mark_refreshed()
     assert adapter.needs_refresh() is False
     assert adapter.refreshed_version == adapter.obj_version
-    assert row["policy"] == "legacy" and row["iteration"] == 50
+    row = adapter.write_trace_row(row, {"iteration": 50, "policy": "legacy"})
     for key in ("grad_l1_wl", "grad_l1_io", "grad_l1_ft", "ratio_ema",
                 "lambda_io", "obj_version", "tau", "tau_rel", "kappa_ft"):
         assert key in row
@@ -1646,15 +1782,105 @@ def test_probe_bumps_obj_version_exactly_once_and_needs_a_refresh():
     assert adapter.lambda_io > 0
 
 
-def test_unimplemented_policies_name_the_missing_module():
-    with pytest.raises(NotImplementedError, match="src/ioplace/norm.py"):
-        make_norm_adapter("grandplan", L_R=1.0, rho_max=0.1, tau_hi=.3, tau_lo=.03,
-                          of_on=.9, of_end=.07, of_full=.2, f_ft_max=0.,
-                          ft_ramp_mode="window", tau_start=.12, tau_full=.05)
+def test_unknown_policy_and_unknown_knob_are_rejected():
     with pytest.raises(ValueError, match="norm policy"):
-        make_norm_adapter("bogus", L_R=1.0, rho_max=0.1, tau_hi=.3, tau_lo=.03,
-                          of_on=.9, of_end=.07, of_full=.2, f_ft_max=0.,
-                          ft_ramp_mode="window", tau_start=.12, tau_full=.05)
+        make_norm_adapter("bogus", **_config())
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        make_norm_adapter("legacy", bogus_knob=1, **_config())
+    with pytest.raises(ValueError, match="LegacyNormAdapter"):
+        TermNormalizerAdapter("legacy", **_config())
+
+
+def test_grandplan_adapter_normalises_a_positive_lambda_io(tmp_path):
+    """Policy A end to end: one probe of a term with a real positive gradient
+    must leave a non-zero lambda_io and one schema-valid norm_trace row."""
+    adapter = _activated("grandplan", out_dir=str(tmp_path))
+    assert isinstance(adapter, TermNormalizerAdapter)
+    row = _probe(adapter, 50)
+    assert adapter.lambda_io > 0.0
+    assert adapter.kappa_ft == 0.0                      # no FT term registered
+    assert row["policy"] == "grandplan" and set(row) == set(ROW_FIELDS)
+    assert row["grad_l1_wl"] == pytest.approx(12.0)
+    assert row["terms"]["io"]["grad_l1"] == pytest.approx(24.0)
+    assert row["terms"]["io"]["ratio_ema"] == pytest.approx(0.5)
+    assert row["terms"]["io"]["lam"] == pytest.approx(adapter.lambda_io)
+    # wt = activation_ramp(50, 0, 20) * grandplan_weight(...) = 1.0 * 0.05, so
+    # lambda_io = wt * ratio_ema = 0.025, well under the Lipschitz cap.
+    assert adapter.lambda_io == pytest.approx(0.025)
+    # the row reaches disk only once the Nesterov cache has been refreshed
+    assert not (tmp_path / "norm_trace.jsonl").read_text()
+    adapter.mark_refreshed()
+    adapter.close()
+    rows = read_norm_trace(str(tmp_path / "norm_trace.jsonl"))
+    assert len(rows) == 1
+    assert rows[0]["obj_version"] == rows[0]["refreshed_version"]
+
+
+def test_term_normalizer_adapter_bumps_obj_version_once_per_probe(tmp_path):
+    adapter = _activated("grandplan", out_dir=str(tmp_path))
+    assert adapter.needs_refresh() is False
+    before = adapter.obj_version
+    _probe(adapter, 50)
+    # VersionPair sums the ScheduleState's counter and the normalizer's, so one
+    # transaction is one bump even though two objects carry versions.
+    assert adapter.obj_version == before + 1
+    assert adapter.needs_refresh() is True
+    adapter.mark_refreshed()
+    assert adapter.needs_refresh() is False
+    assert adapter.refreshed_version == adapter.obj_version
+    adapter.begin_iteration(100, overflow=1.5, gamma=1.0)
+    _probe(adapter, 100)
+    assert adapter.obj_version == before + 2
+    adapter.mark_refreshed()
+    adapter.close()
+    assert len(read_norm_trace(str(tmp_path / "norm_trace.jsonl"))) == 2
+
+
+def test_adaptive_policy_constructs_and_bootstraps_its_coefficient(tmp_path):
+    """Policy B: target shares default to the legacy knobs (io <- rho_max,
+    ft <- rho_max*f_ft_max) and the first update takes adaptive_lambda's
+    bootstrap branch, so one probe leaves a positive coefficient."""
+    adapter = _activated("adaptive", out_dir=str(tmp_path))
+    assert adapter.policy == "adaptive" and adapter.normalizer.policy == "adaptive"
+    assert adapter.target_shares == {"io": 0.1, "ft": 0.0}
+    _probe(adapter, 50)
+    # bootstrap: target_share * ||grad WL|| / ||grad T|| = 0.1 * 12 / 24
+    assert adapter.lambda_io == pytest.approx(0.05)
+    adapter.mark_refreshed()
+    adapter.close()
+    override = make_norm_adapter("adaptive", target_shares="io=0.3,ft=0.05",
+                                 **_config())
+    assert override.target_shares == {"io": 0.3, "ft": 0.05}
+    assert override.trace_path is None
+
+
+def test_each_policy_writes_its_own_trace_file(tmp_path):
+    """A-9: one schema per file name. norm_trace.jsonl is the design sec 4
+    schema NormTraceWriter validates; the legacy row is publish_atomic's own
+    dict and goes to legacy_trace.jsonl."""
+    legacy_dir, norm_dir = str(tmp_path / "legacy"), str(tmp_path / "grandplan")
+    legacy = _activated("legacy", out_dir=legacy_dir)
+    assert legacy.trace_path.endswith("legacy_trace.jsonl")
+    written = legacy.write_trace_row(_probe(legacy, 50),
+                                     {"io_count": 7, "churn": 0.0})
+    legacy.mark_refreshed()
+    legacy.close()
+    lines = [json.loads(line) for line
+             in open(legacy.trace_path).read().splitlines() if line.strip()]
+    assert len(lines) == 1 and lines[0]["io_count"] == 7
+    assert lines[0]["grad_l1_io"] > 0 and written["policy"] == "legacy"
+    assert not (tmp_path / "legacy" / "norm_trace.jsonl").exists()
+
+    grandplan = _activated("grandplan", out_dir=norm_dir)
+    assert grandplan.trace_path.endswith("norm_trace.jsonl")
+    # the driver's extras must not contaminate the validated schema
+    assert grandplan.write_trace_row(_probe(grandplan, 50),
+                                     {"io_count": 7, "churn": 0.0}) is None
+    grandplan.mark_refreshed()
+    grandplan.close()
+    rows = read_norm_trace(grandplan.trace_path)
+    assert len(rows) == 1 and set(rows[0]) == set(ROW_FIELDS)
+    assert not (tmp_path / "grandplan" / "legacy_trace.jsonl").exists()
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1669,34 +1895,67 @@ Create `src/ioplace/norm_adapter.py`:
 ```python
 """The single seam between the v2 main flow and term normalisation.
 
-`run_main_flow.py` must never import `schedules.py` directly: subproject P-H
-replaces the three ad-hoc normalisation paths with `src/ioplace/norm.py`'s
-`TermNormalizer` (design v2 sec 4), and this adapter is what lets the driver
-survive that swap unchanged.
+`run_main_flow.py` must never import `schedules.py` or `norm.py` directly:
+subproject P-H replaced the three ad-hoc normalisation paths with
+`src/ioplace/norm.py`'s `TermNormalizer` (design v2 sec 4), and this module is
+what lets one driver drive either path with a one-word `--norm-policy` change.
 
-Adapter protocol (see the plan's Task 5 table): `policy`, `active`, `tau`,
-`tau_rel`, `lambda_io`, `kappa_ft`, `obj_version`, `begin_iteration`,
-`probe`, `needs_refresh`, `mark_refreshed`.
+Two adapters, one protocol (the plan's Task 5 table):
+
+* `LegacyNormAdapter` -- `schedules.ScheduleState` plus
+  `ops/ft_callback.publish_atomic`: the recorded pre-v2 coefficients,
+  bit-for-bit. Writes `legacy_trace.jsonl`.
+* `TermNormalizerAdapter` -- policies `grandplan` (design sec 4 policy A) and
+  `adaptive` (policy B) over the live `norm.TermNormalizer`. A `ScheduleState`
+  survives here too, but *only* as the tau / rho / activation schedule:
+  `TermNormalizer` owns no temperature and no activation trigger, so something
+  still has to map overflow onto tau. Every coefficient comes from the
+  normalizer. Writes `norm_trace.jsonl` through `norm_trace.NormTraceWriter`.
 """
+import json
+import os
+
+from ioplace.norm import TermNormalizer, VersionPair, parse_target_shares
+from ioplace.norm_trace import NormTraceWriter
 from ioplace.ops.ft_callback import publish_atomic
+from ioplace.ops.norm_terms import FtNormTerm, IoNormTerm
 from ioplace.schedules import ScheduleState
 
-NORM_POLICIES = ("legacy", "grandplan", "adaptive")
+#: Bound to P-H's tuple rather than re-spelled, so the two cannot drift.
+NORM_POLICIES = TermNormalizer.POLICIES
+
+LEGACY_TRACE_NAME = "legacy_trace.jsonl"
+NORM_TRACE_NAME = "norm_trace.jsonl"
+
+#: Keys `_ScheduleBacked` -- and therefore both adapters -- understands.
+_SCHEDULE_KEYS = ("L_R", "rho_max", "tau_hi", "tau_lo", "of_on", "of_end",
+                  "of_full", "f_ft_max", "ft_ramp_mode", "tau_start",
+                  "tau_full", "ema", "c_lip", "n_ramp", "kappa_max", "eps_rel",
+                  "out_dir")
+
+#: Keys only `TermNormalizerAdapter` understands. The driver builds one kwarg
+#: set for every policy, so under `legacy` these are accepted and dropped
+#: rather than raising -- `--norm-policy` must stay a one-word change.
+_NORMALIZER_KEYS = ("num_movable", "num_nodes", "norm_p", "probe_every", "wt0",
+                    "wt_step", "ramp_period", "wt_max", "momentum",
+                    "target_shares", "track_cancellation")
 
 
-class LegacyNormAdapter:
-    """The pre-v2 path: `ScheduleState` plus the seven-step atomic FT
-    transaction (schedules.py:178-237, ops/ft_callback.py:18-49). Always uses
-    the atomic discipline -- with `ft_term=None` `publish_atomic` degenerates
-    to the IO-only ratio update while still bumping `obj_version` exactly
-    once, which is what the Nesterov invariant
-    (dp_hook.install_version_invariant) requires."""
+class _ScheduleBacked(object):
+    """Shared tau / rho / activation plumbing and trace-file placement.
 
-    policy = "legacy"
+    Both adapters keep a `ScheduleState`: it is the only thing in the tree that
+    maps overflow onto the soft-assign temperature
+    (`schedules.tau_rel_from_overflow`) and latches activation, and
+    `TermNormalizer` deliberately owns neither.
+    """
+
+    TRACE_NAME = None
 
     def __init__(self, *, L_R, rho_max, tau_hi, tau_lo, of_on, of_end, of_full,
                  f_ft_max, ft_ramp_mode, tau_start, tau_full, ema=0.5,
-                 c_lip=1.0, n_ramp=20, kappa_max=100.0, eps_rel=1e-3):
+                 c_lip=1.0, n_ramp=20, kappa_max=100.0, eps_rel=1e-3,
+                 out_dir=None):
         if not L_R > 0:
             raise ValueError("L_R must be positive")
         self.L_R = float(L_R)
@@ -1705,6 +1964,12 @@ class LegacyNormAdapter:
             of_end=of_end, of_full=of_full, n_ramp=n_ramp, c_lip=c_lip,
             f_ft_max=f_ft_max, ft_ramp_mode=ft_ramp_mode, tau_start=tau_start,
             tau_full=tau_full, kappa_max=kappa_max, eps_rel=eps_rel, ema=ema)
+        self.out_dir = out_dir
+        if out_dir is None:
+            self.trace_path = None
+        else:
+            os.makedirs(out_dir, exist_ok=True)
+            self.trace_path = os.path.join(out_dir, self.TRACE_NAME)
 
     @property
     def active(self):
@@ -1717,6 +1982,22 @@ class LegacyNormAdapter:
     @property
     def tau_rel(self):
         return float(self.state.tau) / self.L_R
+
+
+class LegacyNormAdapter(_ScheduleBacked):
+    """The pre-v2 path: `ScheduleState` plus the seven-step atomic FT
+    transaction (schedules.py:178-237, ops/ft_callback.py:18-49). Always uses
+    the atomic discipline -- with `ft_term=None` `publish_atomic` degenerates
+    to the IO-only ratio update while still bumping `obj_version` exactly
+    once, which is what the Nesterov invariant
+    (dp_hook.install_version_invariant) requires."""
+
+    policy = "legacy"
+    TRACE_NAME = LEGACY_TRACE_NAME
+
+    def __init__(self, **config):
+        super().__init__(**config)
+        self._trace = None if self.trace_path is None else open(self.trace_path, "w")
 
     @property
     def lambda_io(self):
@@ -1749,6 +2030,24 @@ class LegacyNormAdapter:
                    refreshed_version=int(self.state.refreshed_version))
         return row
 
+    def write_trace_row(self, row, extra):
+        """One `legacy_trace.jsonl` line per probe: `publish_atomic`'s keys plus
+        whatever the driver measured in the same callback. This file is
+        deliberately *not* `norm_trace.jsonl` -- that name belongs to design
+        sec 4's schema, which `norm_trace.NormTraceWriter` validates and this
+        row does not satisfy (pre-flight amendment A-9)."""
+        record = dict(row)
+        record.update(extra)
+        if self._trace is not None:
+            self._trace.write(json.dumps(record) + "\n")
+            self._trace.flush()
+        return record
+
+    def close(self):
+        if self._trace is not None:
+            self._trace.close()
+            self._trace = None
+
     def needs_refresh(self):
         return bool(self.state.needs_refresh())
 
@@ -1756,31 +2055,199 @@ class LegacyNormAdapter:
         self.state.mark_refreshed()
 
 
+class TermNormalizerAdapter(_ScheduleBacked):
+    """Policies `grandplan` (A) and `adaptive` (B) over `norm.TermNormalizer`.
+
+    `ScheduleState` supplies tau, rho and the single activation latch; the
+    normalizer supplies every coefficient, the Lipschitz cap, the cancellation
+    ratio and `norm_trace.jsonl`. `VersionPair` presents both version counters
+    as one, so a single `dp_hook.install_version_invariant(optimizer, adapter)`
+    covers an activation bump from `update_continuous` *and* a coefficient bump
+    from `transaction()` -- stacking two invariant wrappers would not work,
+    because `refresh_nesterov_secant` unwraps exactly one `__wrapped__` level.
+    """
+
+    TRACE_NAME = NORM_TRACE_NAME
+
+    def __init__(self, policy, *, num_movable=None, num_nodes=None, norm_p=1,
+                 probe_every=50, wt0=0.05, wt_step=0.05, ramp_period=100,
+                 wt_max=1.0, momentum=0.75, target_shares=None,
+                 track_cancellation=True, **config):
+        if policy not in ("grandplan", "adaptive"):
+            raise ValueError(
+                "TermNormalizerAdapter serves 'grandplan' and 'adaptive'; "
+                "'legacy' is LegacyNormAdapter's (got %r)" % (policy,))
+        super().__init__(**config)
+        self.policy = policy
+        # Policy B's shares are fractions of the *total* force
+        # G = ||grad WL|| + sum_t lam_t ||grad T_t||, so the legacy knobs map
+        # across directly: rho_max is already "IO force as a fraction of the WL
+        # force", and legacy's f_ft_max is the FT force as a fraction of the
+        # *IO* force, i.e. rho_max * f_ft_max of the whole.
+        self.target_shares = {"io": float(self.state.rho_max),
+                              "ft": float(self.state.rho_max) * float(self.state.f_ft_max)}
+        self.target_shares.update(parse_target_shares(target_shares))
+        self.normalizer = TermNormalizer(
+            policy=policy, norm_p=norm_p, ema=self.state.ema,
+            probe_every=probe_every, wt0=wt0, wt_step=wt_step,
+            ramp_period=ramp_period, wt_max=wt_max, momentum=momentum,
+            c_lip=self.state.c_lip, eps_rel=self.state.eps_rel,
+            num_movable=num_movable, num_nodes=num_nodes,
+            track_cancellation=track_cancellation,
+            trace=(None if self.trace_path is None
+                   else NormTraceWriter(self.trace_path)))
+        self._versions = VersionPair(self.state, self.normalizer)
+        self._overflow = float("nan")
+        self._registered = False
+
+    @property
+    def lambda_io(self):
+        return float(self.normalizer.lambdas.get("io", 0.0))
+
+    @property
+    def kappa_ft(self):
+        """`lambda_ft / lambda_io` -- the ratio `ops/ft_term.FtTerm.forward`
+        wants, since it scales the FT part by `lambda_io * kappa_ft`. 0.0 when
+        `lambda_io == 0`: there is no IO coefficient to divide by, and the
+        driver's `term_fn` is gated on `lambda_io != 0` anyway."""
+        lambda_io = float(self.normalizer.lambdas.get("io", 0.0))
+        if lambda_io == 0.0:
+            return 0.0
+        return float(self.normalizer.lambdas.get("ft", 0.0)) / lambda_io
+
+    @property
+    def obj_version(self):
+        return int(self._versions.obj_version)
+
+    @property
+    def refreshed_version(self):
+        return int(self._versions.refreshed_version)
+
+    def begin_iteration(self, iteration, overflow, gamma):
+        self._overflow = float(overflow)
+        discrete = bool(self.state.update_continuous(iteration, overflow,
+                                                     self.L_R, gamma))
+        self._sync_activation()
+        return discrete
+
+    def _sync_activation(self):
+        """`ScheduleState` is the single activation authority.
+
+        `TermNormalizer._activate` latches a term the first time it *sees* an
+        overflow at or below the threshold, and it only runs inside
+        `weights()`/`transaction()` -- i.e. on the probe cadence, tens of
+        iterations after the schedule activated. Left alone, policy A's
+        `activation_ramp` would restart from that probe (and policy B's ramped
+        share with it). Latching here, every iteration, keeps one
+        `it_activate` for the whole adapter; the normalizer's own latch is
+        monotone and idempotent, so it becomes a no-op afterwards.
+        """
+        if not self.state.active:
+            return
+        for term_state in self.normalizer.states.values():
+            if not term_state.active:
+                term_state.active = True
+                term_state.it_activate = int(self.state.it_activate)
+
+    def _register(self, io_term, ft_term, ecc_max):
+        """Register the production terms on the first probe -- the first moment
+        the driver hands over the terms and the FT curvature.
+
+        Curvatures are design sec 4's declared values: 1 for IO, `ecc_max` for
+        FT (floored at 1, the curvature of a term with no eccentricity spread,
+        matching `schedules.derive_cmax`'s `max(ecc_max - 1, 0)`).
+        `num_movable`/`num_nodes` fall back to the IO term's, which is where
+        `ops/ft_callback.publish_atomic` reads them from too; without them
+        `TermNormalizer.probe` refuses to run, because the fixed/filler mask
+        would silently become a no-op.
+        """
+        if self.normalizer.num_movable is None:
+            self.normalizer.num_movable = int(io_term.num_movable)
+        if self.normalizer.num_nodes is None:
+            self.normalizer.num_nodes = int(io_term.num_nodes)
+        self.normalizer.register(
+            "io", IoNormTerm(io_term), 1.0,
+            target_share=self.target_shares.get("io", 0.0),
+            activate_overflow=self.state.of_on, n_ramp=self.state.n_ramp)
+        if ft_term is not None:
+            self.normalizer.register(
+                "ft", FtNormTerm(ft_term), max(float(ecc_max), 1.0),
+                target_share=self.target_shares.get("ft", 0.0),
+                activate_overflow=self.state.of_on, n_ramp=self.state.n_ramp)
+        self._registered = True
+        self._sync_activation()
+
+    def probe(self, iteration, pos, *, io_term, ft_term, wirelength_op,
+              ecc_max, gamma):
+        """One WL backward plus one isolated backward per term, then one atomic
+        coefficient transaction. Returns the pending `norm_trace.jsonl` row;
+        `mark_refreshed()` is what actually writes it."""
+        if not self._registered:
+            self._register(io_term, ft_term, ecc_max)
+        ctx = {"iteration": int(iteration), "overflow": self._overflow,
+               "tau": self.tau, "gamma": float(gamma)}
+        self.normalizer.probe(iteration, pos, wirelength_op, ctx)
+        transaction = self.normalizer.transaction(iteration, self._overflow,
+                                                  self.tau, gamma)
+        return transaction.row
+
+    def write_trace_row(self, row, extra):
+        """No-op. `norm_trace.jsonl` is written by the normalizer's own
+        `NormTraceWriter` at `mark_refreshed()` time, and that writer rejects
+        any row whose keys are not exactly `norm_trace.ROW_FIELDS` (pre-flight
+        amendment A-9: one schema per file name). The driver's per-probe
+        extras -- `io_count`, `ft_count`, `churn` -- reach `result.json`
+        through `soft_summary["probe_samples"]` instead."""
+        return None
+
+    def close(self):
+        if self.normalizer.trace is not None:
+            self.normalizer.trace.close()
+            self.normalizer.trace = None
+
+    def needs_refresh(self):
+        return self.obj_version != self.refreshed_version
+
+    def mark_refreshed(self):
+        self.state.mark_refreshed()
+        self.normalizer.mark_refreshed()
+
+
 def make_norm_adapter(policy, **config):
     if policy not in NORM_POLICIES:
         raise ValueError(f"unknown norm policy {policy!r}; expected one of {NORM_POLICIES}")
+    unknown = sorted(set(config) - set(_SCHEDULE_KEYS) - set(_NORMALIZER_KEYS))
+    if unknown:
+        raise TypeError(f"make_norm_adapter got unexpected keyword(s): {unknown}")
+    schedule = {key: value for key, value in config.items() if key in _SCHEDULE_KEYS}
     if policy == "legacy":
-        return LegacyNormAdapter(**config)
-    raise NotImplementedError(
-        f"--norm-policy {policy} requires the TermNormalizer in src/ioplace/norm.py "
-        "(subproject P-H), which also owns adding TermNormalizerAdapter to "
-        "src/ioplace/norm_adapter.py. Use --norm-policy legacy until it lands.")
+        return LegacyNormAdapter(**schedule)
+    extra = {key: value for key, value in config.items() if key in _NORMALIZER_KEYS}
+    return TermNormalizerAdapter(policy, **schedule, **extra)
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_norm_adapter.py -v`
-Expected: PASS — 4 passed.
+Expected: PASS — 8 passed.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Run P-H's own normalisation tests for regressions**
+
+Run: `"$IOPLACE_PYTHON" -m pytest tests/test_norm.py tests/test_norm_trace.py tests/test_norm_legacy_adapter.py -q`
+Expected: PASS — unchanged. This task adds a consumer of `norm.py`/`norm_trace.py`; it must not edit either.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/ioplace/norm_adapter.py tests/test_norm_adapter.py
-git commit -m "feat(norm-adapter): single seam between the main flow and P-H
+git commit -m "feat(norm-adapter): legacy and TermNormalizer adapters behind one protocol
 
-LegacyNormAdapter wraps ScheduleState + publish_atomic behind the protocol the
-driver uses; grandplan/adaptive fail fast naming src/ioplace/norm.py so the
-driver never imports schedules.py directly.
+LegacyNormAdapter wraps ScheduleState + publish_atomic; TermNormalizerAdapter
+drives P-H's TermNormalizer for --norm-policy grandplan|adaptive, keeping a
+ScheduleState only for tau/rho/activation and exposing lambda_io, kappa_ft and
+a VersionPair over both version counters so the Nesterov invariant still
+holds. Each policy writes its own trace file: norm_trace.jsonl through
+NormTraceWriter, legacy_trace.jsonl for the retired row schema.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -1794,7 +2261,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Test: `tests/test_main_flow_metrics.py`
 
 **Interfaces:**
-- Consumes: `ioplace.region_grid.RegionGrid`; `ioplace.profile.host_rss_gb`.
+- Consumes: `ioplace.region_grid.RegionGrid`; `ioplace.profile.host_rss_gb`; `ioplace.freeze.region_cell_stats` (Task 3 — the single implementation of the per-region count/area/utilisation arithmetic, amendment D-2). The last two are **local** imports inside the functions that need them: this module must stay importable without torch, and `freeze` pulls in `ops/soft_assign`, which imports torch.
 - Produces:
   - `io_accounting(io_soft, io_fence_gp, io_final) -> dict` with `io_soft`, `io_fence_gp`, `io_count`, `io_delta_at_freeze`, `lg_loss`, `io_identity_residual`
   - `region_area_balance(part, node_size_x, node_size_y, rs) -> dict`
@@ -1802,7 +2269,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
   - `MAIN_FLOW_PHASES = ("read_soft", "gp_soft", "freeze", "read_fence", "gp_fence", "lg", "eval")`
   - `phase_summary(timer, sampler, *, names=MAIN_FLOW_PHASES, host_rss=None) -> dict` — always emits `t_<name>` for every name in `names` (0.0 when the phase did not run), so `save_result`'s field contract holds for a `--phase fence` run too
 
-**Definitions** (spec §7 diagnostics 4/5 and the closing identity). The three IO measurements are taken with the same GPU evaluator on the same netlist ordering: `io_soft` at the freeze iteration, `io_fence_gp` on the phase-3 GP positions immediately before `legalize_op`, `io_count` on the final post-LG placement. Then `io_delta_at_freeze = io_fence_gp - io_soft` (everything the fence phase cost or saved) and `lg_loss = io_count - io_fence_gp` (the same definition `run_placement_io.py:691-692` already uses), so `io(final) = io(soft) + io_delta_at_freeze + lg_loss` closes with `io_identity_residual == 0` by construction. A non-zero residual means a stale or mismatched measurement, which is exactly what the end-to-end test is there to catch.
+**Definitions** (spec §7 diagnostics 4/5 and the closing identity). The three IO measurements are taken with the same GPU evaluator on the same netlist ordering: `io_soft` at the freeze iteration, `io_fence_gp` on the phase-3 GP positions immediately before `legalize_op`, `io_count` on the final post-LG placement. Then `io_delta_at_freeze = io_fence_gp - io_soft` (everything the fence phase cost or saved) and `lg_loss = io_count - io_fence_gp` (the same definition `run_placement_io.py:691-692` already uses), so `io(final) = io(soft) + io_delta_at_freeze + lg_loss` closes with `io_identity_residual == 0` by construction. `io_identity_residual` stays in the schema as the written-down form of that identity, but it is **not** a check: it is algebraically zero for *any* three inputs and can never detect a stale or mismatched measurement (pre-flight amendment D-1). What can is provenance — `run_fence_gp` reports `io_fence_gp_source`, `"legalize_op"` when the wrapper actually measured the GP positions handed to LG and `"fallback"` when it did not, and Task 9 asserts the former plus `result["io_soft"] == freeze["io_soft"]`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1920,9 +2387,14 @@ def io_accounting(io_soft, io_fence_gp, io_final):
     `lg_loss` keeps run_placement_io.py:691-692's definition (post-LG minus
     the last GP evaluation); `io_delta_at_freeze` is everything the fence
     phase changed, measured between the freeze evaluation and the last
-    fence-GP evaluation. The residual is 0 by construction -- a non-zero
-    value means one of the three numbers came from a different placement,
-    netlist ordering or region grid.
+    fence-GP evaluation.
+
+    `io_identity_residual` is `io_final - (io_soft + delta + lg_loss)`, which
+    is 0 for *any* three inputs -- both summands were just defined as
+    differences of them. It is kept as a result.json field because the schema
+    documents the identity, but it detects nothing (pre-flight amendment D-1);
+    the field that does is `io_fence_gp_source`, which run_fence_gp sets from
+    whether the legalize_op wrapper actually ran.
     """
     io_soft, io_fence_gp, io_final = int(io_soft), int(io_fence_gp), int(io_final)
     delta = io_fence_gp - io_soft
@@ -1935,36 +2407,36 @@ def io_accounting(io_soft, io_fence_gp, io_final):
 def region_area_balance(part, node_size_x, node_size_y, rs):
     """Per-region cell count/area/utilisation plus the max-min summaries.
 
+    The four per-region arrays come from `freeze.region_cell_stats` -- one
+    implementation, two consumers (pre-flight amendment D-2); this function
+    adds only the summaries result.json quotes. The import is local because
+    `freeze` pulls in `ops/soft_assign`, which imports torch, and this module
+    must stay loadable in a bare CPU report process.
+
     Utilisation is `cell area / region area`, which is invariant under
-    PlaceDB's shift+scale (both numerator and denominator carry
-    `scale_factor**2`), so it may be computed in either coordinate frame.
+    PlaceDB's shift+scale (both terms carry `scale_factor**2`).
+    `region_cell_area`/`region_area` are **not**, so call this with
+    native-unit sizes and the native `RegionSet`: that is the frame
+    `freeze.json` is written in, and result.json must quote the same numbers.
     """
-    part = np.asarray(part, dtype=np.int64)
-    area = np.asarray(node_size_x, dtype=np.float64) * np.asarray(node_size_y, dtype=np.float64)
+    from ioplace.freeze import region_cell_stats
+    stats = region_cell_stats(part, node_size_x, node_size_y, rs)
+    counts = np.asarray(stats["region_cell_count"], dtype=np.float64)
+    utilization = np.asarray(stats["region_utilization"], dtype=np.float64)
     k = rs.k
-    counts = np.bincount(part, minlength=k)[:k]
-    cell_area = np.bincount(part, weights=area, minlength=k)[:k]
-    region_area = np.empty(k, dtype=np.float64)
-    for rid, region in enumerate(rs.regions):
-        rects = np.asarray(region.rects, dtype=np.float64).reshape(-1, 4)
-        region_area[rid] = float(np.sum((rects[:, 2] - rects[:, 0])
-                                        * (rects[:, 3] - rects[:, 1])))
-    utilization = cell_area / region_area
     mean_count = counts.mean() if k else 0.0
-    empty = np.flatnonzero(counts == 0).astype(int).tolist()
-    return {"k": int(k),
-            "region_cell_count": counts.astype(int).tolist(),
-            "region_cell_area": cell_area.tolist(),
-            "region_area": region_area.tolist(),
-            "region_utilization": utilization.tolist(),
-            "utilization_max": float(utilization.max()),
-            "utilization_min": float(utilization.min()),
-            "utilization_ratio": (float(utilization.max() / utilization.min())
-                                  if utilization.min() > 0 else None),
-            "cell_count_max": int(counts.max()), "cell_count_min": int(counts.min()),
-            "cell_count_deviation": (float(np.max(np.abs(counts - mean_count)) / mean_count)
-                                     if mean_count > 0 else None),
-            "empty_regions": empty}
+    out = dict(stats)
+    out.update({
+        "k": int(k),
+        "utilization_max": float(utilization.max()),
+        "utilization_min": float(utilization.min()),
+        "utilization_ratio": (float(utilization.max() / utilization.min())
+                              if utilization.min() > 0 else None),
+        "cell_count_max": int(counts.max()), "cell_count_min": int(counts.min()),
+        "cell_count_deviation": (float(np.max(np.abs(counts - mean_count)) / mean_count)
+                                 if mean_count > 0 else None),
+        "empty_regions": np.flatnonzero(counts == 0).astype(int).tolist()})
+    return out
 
 
 def fence_compliance(rg, node_x, node_y, part, node_size_x=None, node_size_y=None):
@@ -2050,8 +2522,10 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Consumes: everything from Tasks 1–6, plus `run_placement._load_dreamplace` / `get_regions_for` / `extract_final_positions` / `_pack_eval_metrics` / `_legalization_diagnostics` / `_effective_scale_fields` / `_stop_overflow_reached` / `_gp_iteration_budget` / `_t8a_provenance`, `run_placement_io._io_cleanup` / `_install_attribute` / `_cleanup_once`, `run_placement_two_stage.assign_blocks_to_regions`, `dp_hook`, `ops/io_term`, `ops/ft_term`, `ops/soft_assign.rect_table`, `evaluator_gpu.GpuEvalContext`, `export/evaluation.save_evaluation`.
 - Produces:
   - `build_parser() -> argparse.ArgumentParser`
-  - `run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None, init="die_center", seed_npz=None, membership_npz=None, remap_blocks="auto", norm_policy="legacy", every=50, home_period=None, rho_max=0.1, f_ft_max=0.0, tau_hi=0.30, tau_lo=0.03, of_on=0.90, of_end=None, of_full=0.20, ft_ramp_mode="window", tau_start=0.12, tau_full=0.05, freeze_window=50, freeze_overflow=0.15, freeze_tau_rel=0.05, freeze_churn=0.005, ignore_net_degree=None, w_mode="unit", dp_seed=None, deterministic=None, check_invariant=False, timer=None, sampler=None) -> dict` returning `{"freeze", "part", "soft_npz", "membership_npz", "regions_json", "region_source", "init", "prior", "norm_trace", "num_probes", "num_refreshes", "gp_iterations_soft", "density_weight_soft", "placedb_sha256", "die_native"}`
-  - `run_fence_gp(config_json, out_dir, *, region_set, part, positions, reference_density_weight, k, density_clamp_lo, density_clamp_hi, dp_seed, deterministic, extra_terms=(), timer, sampler) -> dict`
+  - `run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None, init="die_center", seed_npz=None, membership_npz=None, remap_blocks="auto", norm_policy="legacy", norm_target_share=None, every=50, home_period=None, rho_max=0.1, f_ft_max=0.0, tau_hi=0.30, tau_lo=0.03, of_on=0.90, of_end=None, of_full=0.20, ft_ramp_mode="window", tau_start=0.12, tau_full=0.05, freeze_window=50, freeze_overflow=0.15, freeze_tau_rel=0.05, freeze_churn=0.005, argmax_chunk=4, ignore_net_degree=None, w_mode="unit", dp_seed=None, deterministic=None, check_invariant=False, timer=None) -> dict` returning `{"freeze", "part", "soft_npz", "membership_npz", "regions_json", "region_source", "init", "prior", "norm_policy", "trace_path", "probe_samples", "num_probes", "num_refreshes", "gp_iterations_soft", "density_weight_soft", "placedb_sha256", "die_native"}`
+  - `run_fence_gp(config_json, out_dir, *, region_set, part, positions, reference_density_weight, k, density_clamp_lo, density_clamp_hi, dp_seed, deterministic, extra_terms=(), timer) -> dict`
+
+  `sampler` is gone from both: neither ever read it, only `run_main_flow`'s own sampler reaches `phase_summary` (pre-flight amendment D-3).
   - `run_main_flow(config_json, out_dir, **options) -> dict`
   - `main(argv=None)`
 
@@ -2061,7 +2535,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 2. **Two instances, artefacts in between.** Phase 3 never touches phase 1's `PlaceDB`; it goes through `soft.npz` / `frozen_membership.npz` / `freeze.json`, so `--phase fence` reproduces it from disk.
 3. **IO and FT are off after the freeze.** `run_fence_gp` attaches nothing unless the caller passes `extra_terms` — the hook point where P-D's capacity term and P-E's pseudo-FT term will attach.
 4. **`io_fence_gp` is measured exactly.** The `legalize_op` wrapper evaluates the GP positions immediately before legalisation, so `lg_loss` is never contaminated by a stale periodic callback.
-5. **Soft-assign geometry lives in scaled units.** `IoTerm`, the freeze argmax and the evaluator all work on the optimizer's coordinates, so the native `RegionSet` is converted once with `artifacts.scaled_region_set(rs, params.shift_factor, params.scale_factor)`. Everything written to disk is converted back.
+5. **Soft-assign geometry lives in scaled units.** `IoTerm`, the freeze argmax and the evaluator all work on the optimizer's coordinates, so the native `RegionSet` is converted once with `artifacts.scaled_region_set(rs, params.shift_factor, params.scale_factor)`. Everything written to disk is converted back. The two *area* statistics are the exception: `region_cell_stats`/`region_area_balance` are called with **native-unit** sizes and the native `RegionSet` at both call sites, because `region_area`/`region_cell_area` are not scale-invariant and `freeze.json` and `result.json` must quote the same numbers (amendment D-2).
+6. **One normalisation trace per policy, written by the adapter.** `--norm-policy legacy` writes `legacy_trace.jsonl` (`publish_atomic`'s keys plus the driver's per-probe extras); `grandplan`/`adaptive` write `norm_trace.jsonl` strictly through `norm_trace.NormTraceWriter`, whose rows `TermNormalizer` emits at `mark_refreshed()` time. The driver never formats or opens a trace file: it hands `adapter.write_trace_row(row, sample)` the extras and lets the adapter decide, and registers `adapter.close` on the cleanup stack. The per-probe `io_count`/`ft_count`/`churn` samples always reach `result.json` through `soft_summary["probe_samples"]`, whichever policy ran (amendment A-9).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2087,6 +2562,7 @@ def test_parser_exposes_the_v2_switches():
     assert args.freeze_churn == 0.005
     assert args.density_clamp_lo == 0.25 and args.density_clamp_hi == 4.0
     assert args.remap_blocks == "auto"
+    assert args.argmax_chunk == 4 and args.norm_target_share is None
     for bad, choices in (("--phase", "soft fence all"),
                          ("--init", "die_center region_center seed"),
                          ("--norm-policy", "legacy grandplan adaptive")):
@@ -2103,6 +2579,16 @@ def test_resolve_regions_rejects_a_region_file_from_another_die(tmp_path):
     assert rs.k == 4 and source == "file"
     with pytest.raises(ValueError, match="native post-read units"):
         _resolve_regions((0., 0., 200., 100.), 4, "grid", 0, path)
+
+
+def test_resolve_regions_rejects_a_region_file_with_the_wrong_k(tmp_path):
+    """C-6: IoTerm(K=k), argmax_region(..., k), region_centers, freeze_record
+    and save_membership all assume rs.k == --k. Arms (b)/ours pass a producer
+    regions.json, so a K=16 geometry against a K=4 term must not run."""
+    path = str(tmp_path / "regions.json")
+    make_grid_regions((0., 0., 100., 100.), 2, 2, lattice=8).to_json(path)
+    with pytest.raises(ValueError, match="k=4"):
+        _resolve_regions((0., 0., 100., 100.), 16, "grid", 0, path)
 
 
 def test_resolve_regions_falls_back_to_the_builtin_grid():
@@ -2124,12 +2610,23 @@ def test_resolve_prior_remaps_partitioner_block_ids(tmp_path, monkeypatch):
 
     monkeypatch.setattr("ioplace.drivers.run_placement_two_stage.assign_blocks_to_regions",
                         fake_assign)
-    got, info = _resolve_prior(path, "auto", nl=None, rs=rs, num_movable=4)
+    built = []
+
+    def nl_fn():
+        built.append(1)
+        return None
+
+    got, info = _resolve_prior(path, "auto", nl_fn=nl_fn, rs=rs, num_movable=4)
     assert calls == [4] and info["remapped"] is True
     assert got.tolist() == [3, 2, 1, 0]
+    assert built == [1]
 
-    got_off, info_off = _resolve_prior(path, "off", nl=None, rs=rs, num_movable=4)
+    got_off, info_off = _resolve_prior(path, "off", nl_fn=nl_fn, rs=rs,
+                                       num_movable=4)
     assert info_off["remapped"] is False and got_off.tolist() == [0, 1, 2, 3]
+    # D-7: no remap, no netlist -- netlist_from_placedb copies pin2node and
+    # flat_net2pin, which is multiple GB at 10M-30M cells.
+    assert built == [1]
 
 
 def test_fence_phase_alone_requires_the_soft_artefacts(tmp_path):
@@ -2203,6 +2700,7 @@ FROZEN_MEMBERSHIP_NPZ = "frozen_membership.npz"
 PLACEMENT_NPZ = "placement.npz"
 EVALUATION_NPZ = "evaluation.npz"
 NORM_TRACE = "norm_trace.jsonl"
+LEGACY_TRACE = "legacy_trace.jsonl"
 REGIONS_JSON = "regions.json"
 RESULT_JSON = "result.json"
 SOFT_RESULT_JSON = "soft_result.json"
@@ -2214,7 +2712,12 @@ class _FreezeReached(Exception):
     NonLinearPlace ignores the callback's return value
     (NonLinearPlace.py:521-523), so an exception is the only way to stop the
     loop from the driver without touching DREAMPlace source. Phase 1 runs with
-    legalize_flag=0, so nothing downstream of the loop is skipped by unwinding.
+    legalize_flag=0, so nothing *this driver reads* is skipped by unwinding:
+    the tail it skips is placedb.apply() (NonLinearPlace.py:942), plotting and
+    the legalize/DP branches, and the driver takes its positions from
+    placer.pos[0] on both the freeze and the gp_end path. placedb.node_x does
+    stay at its pre-GP values here, unlike on the gp_end path -- nothing below
+    reads it (amendment D-12).
     """
 
     def __init__(self, snapshot):
@@ -2230,6 +2733,12 @@ def _resolve_regions(die_native, k, rtype, seed, regions_json):
     if regions_json:
         rs = RegionSet.from_json(regions_json)
         rs.validate()
+        # IoTerm(K=k), argmax_region(..., k), region_centers(rs), freeze_record
+        # and save_membership all assume the file's k IS --k; arms (b)/ours pass
+        # a producer regions.json and would otherwise silently run a K=16
+        # geometry against a K=4 term (pre-flight amendment C-6).
+        if rs.k != k:
+            raise ValueError(f"{regions_json} has k={rs.k}, --k is {k}")
         span = max(die_native[2] - die_native[0], die_native[3] - die_native[1])
         if not np.allclose(rs.die, die_native, atol=1e-6 * span, rtol=0.0):
             raise ValueError(f"{regions_json} die {tuple(rs.die)} != placedb die "
@@ -2239,7 +2748,7 @@ def _resolve_regions(die_native, k, rtype, seed, regions_json):
     return get_regions_for(die_native, k, rtype, seed), "builtin"
 
 
-def _resolve_prior(membership_npz, remap_blocks, *, nl, rs, num_movable):
+def _resolve_prior(membership_npz, remap_blocks, *, nl_fn, rs, num_movable):
     """Load the soft-phase membership prior and, when it carries partitioner
     block ids, remap them onto geometric regions.
 
@@ -2247,6 +2756,14 @@ def _resolve_prior(membership_npz, remap_blocks, *, nl, rs, num_movable):
     run_placement_two_stage.assign_blocks_to_regions' docstring), so feeding
     them straight in as region ids can throw two heavily connected blocks onto
     opposite die corners. `auto` decides from the artefact's own `source`.
+
+    `nl_fn` is a zero-arg factory, not a netlist: `netlist_from_placedb` copies
+    pin2node/pin2net/flat_net2pin, several GB at 10M-30M cells, and the remap
+    is the only consumer -- with `remap_blocks="off"` or a non-mtkahypar
+    artefact it must never be built (pre-flight amendment D-7). It cannot be
+    hoisted and shared with the caller's own netlist either: that one is built
+    after `placedb.initialize()`, and `netlist_from_placedb` captures node
+    positions and sizes, which `scale()` has rewritten by then.
     """
     mem = load_membership(membership_npz, expect_num_movable=num_movable,
                           expect_k=rs.k)
@@ -2261,7 +2778,7 @@ def _resolve_prior(membership_npz, remap_blocks, *, nl, rs, num_movable):
     part = np.asarray(mem.part, dtype=np.int32)
     if remap:
         from ioplace.drivers import run_placement_two_stage
-        part = run_placement_two_stage.assign_blocks_to_regions(part, nl, rs)
+        part = run_placement_two_stage.assign_blocks_to_regions(part, nl_fn(), rs)
     return np.asarray(part, dtype=np.int32), {
         "source": mem.source, "k": mem.k, "seed": mem.seed,
         "epsilon": mem.epsilon, "remapped": bool(remap)}
@@ -2273,16 +2790,19 @@ def _to_native(values, shift, scale):
 
 def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
                    init="die_center", seed_npz=None, membership_npz=None,
-                   remap_blocks="auto", norm_policy="legacy", every=50,
+                   remap_blocks="auto", norm_policy="legacy",
+                   norm_target_share=None, every=50,
                    home_period=None, rho_max=0.1, f_ft_max=0.0, tau_hi=0.30,
                    tau_lo=0.03, of_on=0.90, of_end=None, of_full=0.20,
                    ft_ramp_mode="window", tau_start=0.12, tau_full=0.05,
                    freeze_window=50, freeze_overflow=0.15, freeze_tau_rel=0.05,
-                   freeze_churn=0.005, ignore_net_degree=None, w_mode="unit",
-                   dp_seed=None, deterministic=None, check_invariant=False,
-                   timer=None, sampler=None):
-    """Phase 1 + phase 2. Writes soft.npz, frozen_membership.npz, freeze.json,
-    norm_trace.jsonl; returns the record the caller folds into result.json."""
+                   freeze_churn=0.005, argmax_chunk=4, ignore_net_degree=None,
+                   w_mode="unit", dp_seed=None, deterministic=None,
+                   check_invariant=False, timer=None):
+    """Phase 1 + phase 2. Writes soft.npz, frozen_membership.npz, freeze.json
+    and the active policy's normalisation trace (norm_trace.jsonl, or
+    legacy_trace.jsonl under --norm-policy legacy); returns the record the
+    caller folds into result.json as `soft_summary`."""
     import torch
     if every <= 0 or freeze_window % every:
         raise ValueError("freeze_window must be a positive multiple of --every "
@@ -2300,7 +2820,6 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
         raise ValueError("--init seed requires --seed-npz")
     os.makedirs(out_dir, exist_ok=True)
     timer = PhaseTimer() if timer is None else timer
-    sampler = DeviceMemSampler() if sampler is None else sampler
 
     with _io_cleanup() as cleanup:
         with timer.phase("read_soft"):
@@ -2321,7 +2840,8 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
             prior_part, prior_info = (None, None)
             if membership_npz:
                 prior_part, prior_info = _resolve_prior(
-                    membership_npz, remap_blocks, nl=netlist_from_placedb(placedb),
+                    membership_npz, remap_blocks,
+                    nl_fn=lambda: netlist_from_placedb(placedb),
                     rs=rs_native, num_movable=m)
             seed_positions = None
             if seed_npz:
@@ -2363,11 +2883,22 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
             ft_term = FtTerm(io_term, distance)
         ecc_max = float(distance.max()) if distance is not None else 0.0
 
+        # The adapter owns its own trace file (legacy_trace.jsonl or
+        # norm_trace.jsonl, amendment A-9) and, under grandplan/adaptive, the
+        # TermNormalizer that needs num_movable/num_nodes for its fixed/filler
+        # gradient mask. `out_dir` is where the trace lands; unknown-to-legacy
+        # keys are dropped by make_norm_adapter, so this one call serves every
+        # policy.
         adapter = make_norm_adapter(norm_policy, L_R=L_R, rho_max=rho_max,
                                     tau_hi=tau_hi, tau_lo=tau_lo, of_on=of_on,
                                     of_end=of_end, of_full=of_full,
                                     f_ft_max=f_ft_max, ft_ramp_mode=ft_ramp_mode,
-                                    tau_start=tau_start, tau_full=tau_full)
+                                    tau_start=tau_start, tau_full=tau_full,
+                                    out_dir=out_dir, probe_every=every,
+                                    target_shares=norm_target_share,
+                                    num_movable=nl.num_movable,
+                                    num_nodes=placedb.num_nodes)
+        _cleanup_once(cleanup, adapter.close)
         monitor = FreezeMonitor(window=freeze_window, overflow_max=freeze_overflow,
                                 tau_rel_max=freeze_tau_rel, churn_max=freeze_churn)
 
@@ -2390,11 +2921,9 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
                                  device="cuda")
         size_y = torch.as_tensor(np.asarray(placedb.node_size_y[:m], dtype=np.float64),
                                  device="cuda")
-        trace_path = os.path.join(out_dir, NORM_TRACE)
-        trace_file = open(trace_path, "w")
-        _cleanup_once(cleanup, trace_file.close)
         cb_state = {"last_iteration": -1, "num_refreshes": 0, "installed": False,
-                    "io_gp": 0, "overflow": float("nan"), "probes": 0}
+                    "io_gp": 0, "overflow": float("nan"), "probes": 0,
+                    "probe_samples": []}
         previous_home = None
 
         def snapshot(iteration, pos, overflow, reason, io_count, argmax):
@@ -2410,7 +2939,11 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
             x = pos.data[:m].double()
             y = pos.data[n_all:n_all + m].double()
             cx, cy = cell_centers(x, y, size_x, size_y)
-            return argmax_region(cx, cy, rects_t.double(), r2k_t, k)
+            # Chunk over regions: region_sdf_l1 materialises (N, R) and this
+            # function a further (N, K). At 30M cells x K=16 in float64 that is
+            # ~7.7 GB per gated callback (amendment D-8).
+            return argmax_region(cx, cy, rects_t.double(), r2k_t, k,
+                                 chunk=argmax_chunk)
 
         def cb(iteration, pos):
             nonlocal previous_home
@@ -2431,13 +2964,25 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
                                     wirelength_op=placer.model.op_collections.wirelength_op,
                                     ecc_max=ecc_max, gamma=gamma)
                 argmax = centre_argmax(pos)
-                row.update(overflow=overflow, io_count=int(res.io_count),
-                           ft_count=int(res.ft_count),
-                           churn=monitor.observe(iteration, argmax))
-                trace_file.write(json.dumps(row) + "\n")
-                trace_file.flush()
+                sample = {"iteration": int(iteration), "overflow": overflow,
+                          "io_count": int(res.io_count),
+                          "ft_count": int(res.ft_count),
+                          "churn": monitor.observe(iteration, argmax)}
+                cb_state["probe_samples"].append(sample)
+                # The adapter owns the trace: under legacy this writes
+                # publish_atomic's row plus `sample` to legacy_trace.jsonl;
+                # under grandplan/adaptive it is a no-op, because
+                # TermNormalizer already wrote the design sec 4 row to
+                # norm_trace.jsonl at mark_refreshed() time and NormTraceWriter
+                # rejects any extra key (amendment A-9). `sample` reaches
+                # result.json through soft_summary["probe_samples"] either way.
+                adapter.write_trace_row(row, sample)
                 cb_state["probes"] += 1
                 if monitor.should_freeze(overflow, adapter.tau_rel):
+                    # This skips the refresh block below, leaving the adapter in
+                    # needs_refresh(). Deliberate: the GP loop is over, nothing
+                    # evaluates the objective again, and the freeze path reads
+                    # positions rather than gradients (amendment D-13).
                     raise _FreezeReached(snapshot(iteration, pos, overflow,
                                                   "criterion", res.io_count, argmax))
             if discrete or adapter.needs_refresh():
@@ -2496,7 +3041,9 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
     return {"freeze": record, "part": part, "soft_npz": soft_path,
             "membership_npz": membership_path, "regions_json":
             os.path.join(out_dir, REGIONS_JSON), "region_source": region_source,
-            "init": init_info, "prior": prior_info, "norm_trace": trace_path,
+            "init": init_info, "prior": prior_info,
+            "norm_policy": norm_policy, "trace_path": adapter.trace_path,
+            "probe_samples": cb_state["probe_samples"],
             "num_probes": cb_state["probes"],
             "num_refreshes": cb_state["num_refreshes"],
             "gp_iterations_soft": cb_state["last_iteration"] + 1,
@@ -2507,7 +3054,7 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
 def run_fence_gp(config_json, out_dir, *, region_set, part, positions,
                  reference_density_weight, k, density_clamp_lo=0.25,
                  density_clamp_hi=4.0, dp_seed=None, deterministic=None,
-                 extra_terms=(), timer=None, sampler=None):
+                 extra_terms=(), timer=None):
     """Phase 3 + phase 4 + evaluator.
 
     `extra_terms` is the documented attachment point for P-D's capacity term
@@ -2516,7 +3063,6 @@ def run_fence_gp(config_json, out_dir, *, region_set, part, positions,
     """
     import torch
     timer = PhaseTimer() if timer is None else timer
-    sampler = DeviceMemSampler() if sampler is None else sampler
     clamp_log = []
 
     with _io_cleanup() as cleanup:
@@ -2570,7 +3116,10 @@ def run_fence_gp(config_json, out_dir, *, region_set, part, positions,
         _install_attribute(cleanup, placer, "iteration_callback", cb)
         lr = params.global_place_stages[0]["learning_rate"]
         placer(params, placedb, lr)
-        if "lg" not in timer.phases:
+        # Key the guard off *this* phase's own name: `timer` is shared across
+        # all four phases here, so testing for "lg" would silently stop closing
+        # gp_fence the day any other phase is named lg (amendment D-9).
+        if "gp_fence" not in timer.phases:
             gp_phase.__exit__(None, None, None)
 
         with timer.phase("eval"):
@@ -2594,13 +3143,28 @@ def run_fence_gp(config_json, out_dir, *, region_set, part, positions,
                 rg, node_x, node_y, part,
                 np.asarray(placedb.node_size_x[:m], dtype=np.float64),
                 np.asarray(placedb.node_size_y[:m], dtype=np.float64))
-            balance = region_area_balance(
-                part, np.asarray(placedb.node_size_x[:m], dtype=np.float64),
-                np.asarray(placedb.node_size_y[:m], dtype=np.float64), rs_scaled)
+            # Native units, native RegionSet: region_area/region_cell_area are
+            # not scale-invariant, and freeze.json already carries them in the
+            # native frame via region_cell_stats -- result.json must quote the
+            # same numbers (amendment D-2). fence_compliance above stays in the
+            # scaled frame because it is pure geometry against `rg`.
+            size_x_native = (np.asarray(placedb.node_size_x[:m], dtype=np.float64)
+                             / info["scale_factor"])
+            size_y_native = (np.asarray(placedb.node_size_y[:m], dtype=np.float64)
+                             / info["scale_factor"])
+            balance = region_area_balance(part, size_x_native, size_y_native,
+                                          region_set)
         detach_terms(params)
 
-    return {"metrics": metrics, "io_fence_gp": holder.get("io_fence_gp",
-                                                          metrics["io_count"]),
+    io_fence_gp = holder.get("io_fence_gp")
+    return {"metrics": metrics,
+            "io_fence_gp": metrics["io_count"] if io_fence_gp is None else io_fence_gp,
+            # Where io_fence_gp actually came from. io_identity_residual is 0
+            # for any three inputs and can never detect the fallback; this can
+            # (amendment D-1). "fallback" means legalize_op never fired -- the
+            # config had legalize_flag=0 -- so io_fence_gp is the post-"LG"
+            # number and lg_loss is 0 by definition rather than by measurement.
+            "io_fence_gp_source": "fallback" if io_fence_gp is None else "legalize_op",
             "hpwl_gp": holder.get("hpwl_gp"), "hpwl_lg": holder.get("hpwl_lg"),
             "fence_compliance": compliance, "region_area_balance": balance,
             "density_weight_clamp": clamp_log, "escape_cell": info["escape_cell"],
@@ -2618,12 +3182,13 @@ def run_fence_gp(config_json, out_dir, *, region_set, part, positions,
 def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
                   regions_json=None, phase="all", init="die_center",
                   seed_npz=None, membership_npz=None, remap_blocks="auto",
-                  norm_policy="legacy", every=50, home_period=None, rho_max=0.1,
+                  norm_policy="legacy", norm_target_share=None, every=50,
+                  home_period=None, rho_max=0.1,
                   f_ft_max=0.0, tau_hi=0.30, tau_lo=0.03, of_on=0.90,
                   of_end=None, of_full=0.20, ft_ramp_mode="window",
                   tau_start=0.12, tau_full=0.05, freeze_window=50,
                   freeze_overflow=0.15, freeze_tau_rel=0.05, freeze_churn=0.005,
-                  density_clamp_lo=0.25, density_clamp_hi=4.0,
+                  argmax_chunk=4, density_clamp_lo=0.25, density_clamp_hi=4.0,
                   ignore_net_degree=None, w_mode="unit", dp_seed=None,
                   deterministic=None, check_invariant=False,
                   benchmark_kind="real", extra_terms=()):
@@ -2644,21 +3209,31 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
     sampler = DeviceMemSampler()
     sampler.start()
     try:
-        soft = None
+        soft, soft_summary = None, None
         if phase in ("all", "soft"):
             soft = run_soft_phase(
                 config_json, out_dir, k=k, rtype=rtype, seed=seed,
                 regions_json=regions_json, init=init, seed_npz=seed_npz,
                 membership_npz=membership_npz, remap_blocks=remap_blocks,
-                norm_policy=norm_policy, every=every, home_period=home_period,
+                norm_policy=norm_policy, norm_target_share=norm_target_share,
+                every=every, home_period=home_period,
                 rho_max=rho_max, f_ft_max=f_ft_max, tau_hi=tau_hi, tau_lo=tau_lo,
                 of_on=of_on, of_end=of_end, of_full=of_full,
                 ft_ramp_mode=ft_ramp_mode, tau_start=tau_start, tau_full=tau_full,
                 freeze_window=freeze_window, freeze_overflow=freeze_overflow,
                 freeze_tau_rel=freeze_tau_rel, freeze_churn=freeze_churn,
+                argmax_chunk=argmax_chunk,
                 ignore_net_degree=ignore_net_degree, w_mode=w_mode,
                 dp_seed=dp_seed, deterministic=deterministic,
-                check_invariant=check_invariant, timer=timer, sampler=sampler)
+                check_invariant=check_invariant, timer=timer)
+            # Everything the soft phase decided that result.json would otherwise
+            # lose: region_source, the resolved init record, the prior
+            # (including `remapped`, which is the --remap-blocks auto decision
+            # a reviewer of arms (a)/(b) will ask about), the probe samples and
+            # which trace file the policy wrote (amendment D-6). `part` is a
+            # numpy array and `freeze` is already result["freeze"].
+            soft_summary = {key: value for key, value in soft.items()
+                            if key not in ("part", "freeze")}
             torch.cuda.empty_cache()
             if phase == "soft":
                 with open(os.path.join(out_dir, SOFT_RESULT_JSON), "w") as stream:
@@ -2688,8 +3263,7 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
             reference_density_weight=record["density_weight_soft"],
             k=region_set.k, density_clamp_lo=density_clamp_lo,
             density_clamp_hi=density_clamp_hi, dp_seed=dp_seed,
-            deterministic=deterministic, extra_terms=extra_terms, timer=timer,
-            sampler=sampler)
+            deterministic=deterministic, extra_terms=extra_terms, timer=timer)
     finally:
         sampler.stop()
 
@@ -2703,7 +3277,10 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
                      ("membership_npz", membership_path),
                      ("placement_npz", fence["placement_npz"]),
                      ("evaluation_npz", fence["evaluation_npz"]),
-                     ("norm_trace", os.path.join(out_dir, NORM_TRACE)))
+                     # whichever the policy wrote (amendment A-9); the
+                     # os.path.exists filter drops the other
+                     ("norm_trace", os.path.join(out_dir, NORM_TRACE)),
+                     ("legacy_trace", os.path.join(out_dir, LEGACY_TRACE)))
                  if os.path.exists(path)}
     result = {
         **fence["metrics"], **accounting,
@@ -2721,6 +3298,9 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
         "escape_cell": {"index": fence["escape_cell"], "from": fence["escape_from"]},
         "gp_iterations_soft": record["gp_iterations_soft"],
         "gp_iterations_fence": fence["gp_iterations_fence"],
+        "gp_iteration_budget": fence["gp_iteration_budget"],
+        "io_fence_gp_source": fence["io_fence_gp_source"],
+        "soft_summary": soft_summary,
         "final_overflow": fence["final_overflow"],
         "stop_overflow_reached": fence["stop_overflow_reached"],
         "artifacts": artefacts,
@@ -2755,6 +3335,11 @@ def build_parser():
     parser.add_argument("--membership", default=None)
     parser.add_argument("--remap-blocks", choices=["auto", "on", "off"], default="auto")
     parser.add_argument("--norm-policy", choices=list(NORM_POLICIES), default="legacy")
+    parser.add_argument("--norm-target-share", default=None,
+                        help="policy B force shares as fractions of the total "
+                             "force, e.g. 'io=0.3,ft=0.1'; default io=--rho-max, "
+                             "ft=--rho-max*--f-ft-max. Ignored by --norm-policy "
+                             "legacy")
     parser.add_argument("--every", type=int, default=50)
     parser.add_argument("--home-period", type=int, default=None)
     parser.add_argument("--rho-max", type=float, default=0.1)
@@ -2771,6 +3356,10 @@ def build_parser():
     parser.add_argument("--freeze-overflow", type=float, default=0.15)
     parser.add_argument("--freeze-tau-rel", type=float, default=0.05)
     parser.add_argument("--freeze-churn", type=float, default=0.005)
+    parser.add_argument("--argmax-chunk", type=int, default=4,
+                        help="regions per chunk in the freeze argmax; the "
+                             "unchunked (N, R) + (N, K) intermediates are "
+                             "~7.7 GB at 30M cells x K=16 in float64")
     parser.add_argument("--density-clamp-lo", type=float, default=0.25)
     parser.add_argument("--density-clamp-hi", type=float, default=4.0)
     parser.add_argument("--d-max", type=int, default=None, dest="ignore_net_degree")
@@ -2789,13 +3378,15 @@ def main(argv=None):
         regions_json=args.regions, phase=args.phase, init=args.init,
         seed_npz=args.seed_npz, membership_npz=args.membership,
         remap_blocks=args.remap_blocks, norm_policy=args.norm_policy,
+        norm_target_share=args.norm_target_share,
         every=args.every, home_period=args.home_period, rho_max=args.rho_max,
         f_ft_max=args.f_ft_max, tau_hi=args.tau_hi, tau_lo=args.tau_lo,
         of_on=args.of_on, of_end=args.of_end, of_full=args.of_full,
         ft_ramp_mode=args.ft_ramp_mode, tau_start=args.tau_start,
         tau_full=args.tau_full, freeze_window=args.freeze_window,
         freeze_overflow=args.freeze_overflow, freeze_tau_rel=args.freeze_tau_rel,
-        freeze_churn=args.freeze_churn, density_clamp_lo=args.density_clamp_lo,
+        freeze_churn=args.freeze_churn, argmax_chunk=args.argmax_chunk,
+        density_clamp_lo=args.density_clamp_lo,
         density_clamp_hi=args.density_clamp_hi,
         ignore_net_degree=args.ignore_net_degree, w_mode=args.w_mode,
         dp_seed=args.dp_seed, deterministic=args.deterministic,
@@ -2810,7 +3401,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_main_flow_driver.py -v`
-Expected: PASS — 5 passed.
+Expected: PASS — 6 passed.
 
 - [ ] **Step 5: Verify the CLI help renders (no import-time errors)**
 
@@ -2860,7 +3451,7 @@ Spec §1 "Retired" puts `src/scripts/run_route_gp.py`, `ops/routing_gp_controlle
 **Reconciliation with P-H Task 8 (2026-09-19) — relocate, do not duplicate.** P-H lands before P-B and its Task 8 already installs an `IOPLACE_ENABLE_GR_IN_LOOP` check, but *inside* `RoutingGPController.__init__`, not at import time. Two consequences:
 
 1. **The controller keeps a constructor gate, not an import gate.** P-H ships `tests/test_routing_gp_retirement.py`, whose module-level `from ioplace.ops.routing_gp_controller import RoutingGPController` would fail at collection if this task added an import-time guard to that module. So this task *moves* P-H's four-line `if os.environ.get(...) != "1": raise RuntimeError(...)` block out of `__init__` and into `gr_in_loop.require_gr_in_loop()`, leaving a one-line call at the same place (before the `mode` check). Same env var, **same message text, copied verbatim from P-H**, so `test_controller_is_retired_unless_the_escape_hatch_is_set` keeps passing untouched. The import-time guard is added only to `src/scripts/run_route_gp.py`, whose module docstring is the only thing P-H Task 8 changes there.
-2. **Test edits P-H already made: none.** P-H Task 8's file list is `src/ioplace/ops/routing_gp_controller.py`, `src/scripts/run_route_gp.py` and the new `tests/test_routing_gp_retirement.py`; it modifies no existing test module, and in particular it does **not** set the env var in `tests/test_routing_gp_driver.py` or `tests/test_bounded_grt_feedback.py` (neither constructs a `RoutingGPController` — they only run/import `run_route_gp.py`, so P-H's constructor gate never fires there). Those two files therefore stay on this task's plate: they break only because of the `run_route_gp.py` import guard added in Step 4, and Step 5 repairs them. What this task must *skip* is duplicating P-H's constructor-gate coverage — `tests/test_gr_in_loop_gate.py` asserts only that the controller *delegates* to `require_gr_in_loop`, never re-testing the `RuntimeError` message.
+2. **P-H Task 8 already edits `tests/test_routing_gp_driver.py:41` — check before applying that one line.** P-H Task 8's Files list (`docs/superpowers/plans/2026-09-19-v2-p-h-normalisation.md:2242`) reads `Modify: tests/test_routing_gp_driver.py:41 (subprocess env= for the now-gated construction)`, and P-H's ledger ruling E-1 repeats it. An earlier draft of this paragraph claimed P-H modifies no existing test module; that was false and is corrected here (pre-flight amendment A-12). So before applying Step 5's line-41 edit, **read the line**: if the `env={**os.environ, "IOPLACE_ENABLE_GR_IN_LOOP": "1"}` argument is already present, leave it alone and say so in the task report; if it is not — P-H Task 8 had not landed when this text was written, and line 41 was then still the un-envved `subprocess.run(command, capture_output=True, text=True)` — apply it. The other four sites in that module and the one in `tests/test_bounded_grt_feedback.py` are this task's alone: neither test constructs a `RoutingGPController`, so P-H's constructor gate never fires there and they break only because of the `run_route_gp.py` import guard added in Step 4. What this task must still *skip* is duplicating P-H's constructor-gate coverage — `tests/test_gr_in_loop_gate.py` asserts only that the controller *delegates* to `require_gr_in_loop`, never re-testing the `RuntimeError` message.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2978,7 +3569,7 @@ require_gr_in_loop()
 - [ ] **Step 5: Update the tests that legitimately use the retired paths**
 
 In `tests/test_routing_gp_driver.py`:
-- line 41 — change `run = subprocess.run(command, capture_output=True, text=True)` to
+- line 41 — **check first**: P-H Task 8's Files list already claims this edit (see the reconciliation note above). If the `env=` argument is there, skip this bullet. Otherwise change `run = subprocess.run(command, capture_output=True, text=True)` to
   `run = subprocess.run(command, capture_output=True, text=True, env={**os.environ, "IOPLACE_ENABLE_GR_IN_LOOP": "1"})`
 - line 105 — add `env={**os.environ, "IOPLACE_ENABLE_GR_IN_LOOP": "1"},` to that `subprocess.run(...)` call
 - line 127 — change `result = subprocess.run(command, capture_output=True, text=True)` to
@@ -3060,20 +3651,29 @@ def test_main_flow_end_to_end_on_gcd_closes_the_io_identity(tmp_path):
                            init="die_center", every=25, freeze_window=50,
                            rho_max=0.05, dp_seed=1000, deterministic=1)
 
+    # the normalisation trace's file name is the policy's, not a constant:
+    # legacy writes legacy_trace.jsonl, grandplan/adaptive norm_trace.jsonl
+    # (amendment A-9). This run is legacy, the driver's default.
+    trace_name = ("legacy_trace.jsonl" if result["norm_policy"] == "legacy"
+                  else "norm_trace.jsonl")
     for name in ("regions.json", "soft.npz", "freeze.json",
                  "frozen_membership.npz", "placement.npz", "evaluation.npz",
-                 "norm_trace.jsonl", "result.json"):
+                 trace_name, "result.json"):
         assert (out / name).exists(), name
     on_disk = json.loads((out / "result.json").read_text())
     for field in MAIN_FLOW_RESULT_FIELDS:
         assert field in on_disk, field
     assert on_disk["mode"] == "main_flow" and on_disk["schema_version"] == 1
 
-    # the accounting identity (design v2 sec 7), to within the spec's +/-1
-    assert abs(result["io_count"] - (result["io_soft"]
-                                     + result["io_delta_at_freeze"]
-                                     + result["lg_loss"])) <= 1
+    # The accounting identity (design v2 sec 7) is algebraic:
+    # io_identity_residual is 0 for *any* three inputs, so it is asserted as
+    # the schema invariant it is, and the real check comes from provenance
+    # (amendment D-1) -- io_fence_gp must be the legalize_op wrapper's exact
+    # pre-LG measurement, and io_soft must be the number freeze.json recorded.
     assert result["io_identity_residual"] == 0
+    assert result["io_fence_gp_source"] == "legalize_op"
+    assert result["io_soft"] == result["freeze"]["io_soft"]
+    assert result["io_count"] == result["io_fence_gp"] + result["lg_loss"]
 
     freeze = result["freeze"]
     assert freeze["reason"] in ("criterion", "gp_end")
@@ -3092,13 +3692,31 @@ def test_main_flow_end_to_end_on_gcd_closes_the_io_identity(tmp_path):
                                         "membership_npz", "placement_npz",
                                         "evaluation_npz"}
 
-    rows = [json.loads(line) for line
-            in (out / "norm_trace.jsonl").read_text().splitlines() if line.strip()]
+    # Row assertions branch on the policy (amendment A-9): legacy_trace.jsonl
+    # carries publish_atomic's keys plus the driver's per-probe extras;
+    # norm_trace.jsonl carries exactly norm_trace.ROW_FIELDS and nothing else,
+    # because NormTraceWriter validates every row. The else branch is what the
+    # --norm-policy grandplan|adaptive arms of the spec section 4 ablation hit.
+    from ioplace.norm_trace import ROW_FIELDS, read_norm_trace
+    rows = read_norm_trace(str(out / trace_name))
     assert rows
-    for row in rows:
-        for key in ("iteration", "overflow", "tau", "tau_rel", "lambda_io",
-                    "grad_l1_wl", "grad_l1_io", "obj_version", "policy"):
-            assert key in row
+    if result["norm_policy"] == "legacy":
+        for row in rows:
+            for key in ("iteration", "overflow", "tau", "tau_rel", "lambda_io",
+                        "grad_l1_wl", "grad_l1_io", "obj_version", "policy",
+                        "io_count", "ft_count", "churn"):
+                assert key in row, key
+    else:
+        for row in rows:
+            assert set(row) == set(ROW_FIELDS)
+            assert row["policy"] == result["norm_policy"] and "io" in row["terms"]
+
+    # soft-phase provenance survives into result.json (amendment D-6)
+    summary = result["soft_summary"]
+    assert summary["region_source"] == "builtin"
+    assert summary["init"]["mode"] == "die_center" and summary["prior"] is None
+    assert summary["num_probes"] == len(rows) == len(summary["probe_samples"])
+    assert summary["trace_path"].endswith(trace_name)
 
     # --phase fence reproduces the fence half from the artefacts alone
     rerun = run_main_flow(str(config), str(out), phase="fence", k=4,
@@ -3112,13 +3730,13 @@ def test_main_flow_end_to_end_on_gcd_closes_the_io_identity(tmp_path):
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_main_flow_driver.py::test_main_flow_end_to_end_on_gcd_closes_the_io_identity -v`
 Expected on first run: it exercises the real flow. If it fails, the failure must be a real defect in Tasks 1–7 — fix that code, not the assertions. The two failure modes to expect and how to handle them:
-- `ValueError` out of `PlaceDB.calc_num_filler_for_fence_region` / `int(round(nan))` → an empty region survived; `ensure_nonempty_regions` (Task 3) is not being applied to the membership that reaches `save_membership`.
-- `io_identity_residual != 0` → `io_fence_gp` was not captured in the `legalize_op` wrapper (the `holder.get("io_fence_gp", metrics["io_count"])` fallback fired because `legalize_flag` was 0 in phase 3). Check the config's `legalize_flag`.
+- `IndexError: index -1 is out of bounds for axis 0 with size 0`, raised by `np.percentile` inside `PlaceDB.calc_num_filler_for_fence_region` at `PlaceDB.py:687` → an empty region survived; `ensure_nonempty_regions` (Task 3) is not being applied to the membership that reaches `save_membership`. Do **not** go looking for a `ValueError` at `:729`: under the installed numpy (1.26.4) the percentile call raises before `int(round(nan))` is ever reached (pre-flight amendment E-3).
+- `result["io_fence_gp_source"] == "fallback"` → `io_fence_gp` was not captured in the `legalize_op` wrapper, so it fell back to the post-LG count and `lg_loss` is 0 by definition rather than by measurement. The cause is `legalize_flag = 0` in phase 3; check the config. (`io_identity_residual` cannot report this — it is 0 either way.)
 
 - [ ] **Step 3: Run the whole main-flow test module**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_main_flow_driver.py -v`
-Expected: PASS — 6 passed (5 fast + 1 slow). Wall time dominated by two GCD placements, roughly 2–5 minutes.
+Expected: PASS — 7 passed (6 fast + 1 slow). Wall time dominated by two GCD placements, roughly 2–5 minutes.
 
 - [ ] **Step 4: Run the full suite**
 
@@ -3248,5 +3866,12 @@ Out of scope by design and *not* gaps: `capacity.npz` and the capacity term (P-D
 - `phase_summary` emitted `t_<phase name>` keys while `MAIN_FLOW_RESULT_FIELDS` listed `t_soft_gp`/`t_fence_gp`; the field list now uses the real phase names (`t_read_soft`, `t_gp_soft`, `t_freeze`, `t_read_fence`, `t_gp_fence`, `t_lg`, `t_eval`) and `phase_summary` emits the full fixed set (0.0 for a phase that did not run), so `save_result` cannot fail on a `--phase fence` run.
 - `install_version_invariant` needs `obj_version` **and** `refreshed_version`; `LegacyNormAdapter` exposed only the first, and the driver reached through `adapter.state`. Both were fixed: the adapter protocol now carries `refreshed_version` and the driver passes `adapter` itself.
 - `_t8a_provenance` carries `run_placement`'s own `RESULT_SCHEMA_VERSION = 3` and was spread last into `result`, silently overwriting `MAIN_FLOW_RESULT_SCHEMA_VERSION`; the driver now restores it after the spread.
+
+Three more were found by the 2026-09-19 pre-flight scan and fixed in the amendment pass:
+- `norm_trace.jsonl` had two incompatible schemas under one spec §1 artefact name (the driver's row and P-H's validated `ROW_FIELDS`). The legacy row moved to `legacy_trace.jsonl` and the adapter, not the driver, owns the file.
+- `freeze.region_cell_stats` and `main_flow_metrics.region_area_balance` were two implementations of the same arithmetic evaluated in *different coordinate frames*, so `result.json` carried `region_area` in scaled units and `freeze.json` the same quantity in native units. One implementation now, called in native units from both sites.
+- `_resolve_prior` took a materialised netlist and the driver built it unconditionally, a multi-GB copy at 10M–30M cells even with `--remap-blocks off`; it now takes a zero-arg factory.
+
+A second residual risk, flagged rather than hidden: the end-to-end test runs `--norm-policy legacy` only, because a second GCD flow would double its wall time. `TermNormalizerAdapter` is therefore covered by Task 5's unit tests (real gradients, real `NormTraceWriter` rows, the version-pair discipline) and by Task 9's policy branch, but the first full `grandplan` GP run happens in the spec §4 ablation campaign. If that run surprises, the first two things to check are the activation sync (`_sync_activation`, which keeps `it_activate` on the schedule's iteration rather than the first probe's) and the default target shares.
 
 One residual risk, flagged rather than hidden: Task 9's `--phase fence` re-run asserts bit-identical IO counts across two processes-in-one-process runs. It relies on `deterministic_flag = 1` plus the `np.random.seed(params.random_seed)` guard, the same determinism the existing `tests/test_driver_io.py::test_lifetime_out_is_bit_exact_with_run_without_it` depends on. If it proves flaky on this host, weaken that one assertion to `abs(rerun["io_count"] - result["io_count"]) <= 1` and record the observed spread — do not weaken the identity assertions, which must hold exactly.
