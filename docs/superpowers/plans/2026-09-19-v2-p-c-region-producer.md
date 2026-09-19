@@ -52,7 +52,8 @@ direction's support point (D1, Tasks 2 and 9); the morphology no longer erodes
 the die border (D2, Task 5); `extract()` canonicalises connectivity and asserts
 it (D7, Task 5); `enforce_rect_max` gains a shedding move and the driver falls
 back to `--extract-bins 32` automatically instead of aborting (D3, Tasks 7, 10,
-11); the potential-function termination proof is replaced by the pass-budget
+11 — measured: shedding cuts `64²` aborts from 23/80 to 6/80 at 20 seeds but
+does not eliminate them, so the fallback is load-bearing); the potential-function termination proof is replaced by the pass-budget
 guard (D4, Task 7); `GroupingWeight` and `VersionState` are deleted and the
 grouping coefficient is derived by `norm.TermNormalizer` with
 `dp_hook.install_version_invariant` installed (D5/D6, Tasks 4 and 10);
@@ -2126,7 +2127,18 @@ Spec §2's hard requirement and §10 risk 1: "decompose each region into maximal
 
 Shedding reduces the target's rect count by **exactly one by construction**: `mask_to_rects` decomposes a region into maximal horizontal strips merged vertically, so every rect is a set of whole row runs, and deleting one deletes exactly those runs while leaving every other rect's decomposition untouched. It needs one surviving receiver where absorption needs every donor to survive, which is why it is feasible in the cases absorption is not — and that construction argument, not any trial count, is what the budget rests on.
 
-Re-measured while writing this amendment (16 clusters, 120–200 k cells, full `extract → anneal → enforce_rect_max`, both moves live): **0/6 failures** at `64²` and `32²`, with and without SA, `max_rects ≤ 8` on every run. The same harness with `_shed_one_strip` stubbed out still failed 1/6 at `64²` without SA, so shedding is doing real work; the pre-flight's higher rates came from a slightly different cluster generator and predate ruling D7's connectivity canonicalisation, which independently reduces the number of pathological maps reaching this function. Treat the counts as directional.
+**Measured (20 seeds per cell, 16 clusters, 200 k cells, full `extract → anneal → enforce_rect_max` at `64²`, ruling D7 active):**
+
+| σ of the cluster spread | SA | aborts without shedding | aborts with shedding |
+|---|---|---|---|
+| 110 | yes | 2/20 | **0/20** |
+| 110 | no | 8/20 | **3/20** |
+| 180 | yes | 2/20 | **1/20** |
+| 180 | no | 11/20 | **2/20** |
+
+Shedding cuts aborts from 23/80 to 6/80, and on the production path (SA is on unless `--no-sa`) from 4/40 to 1/40. **It does not eliminate them.** That is the point of ruling D3(b): the `--extract-bins 32` fallback in Task 10 is load-bearing, not a belt-and-braces guard — a `64²` acceptance run can still exhaust both moves, and the driver must absorb that rather than abort. Do not read the shedding move as having closed spec §10 risk 1; it moved the residual onto the fallback.
+
+**Open number, name it if it bites:** the fallback *target* — `32²` with both moves — was measured at only 6 seeds (0/6, with and without SA) and never at 20. The experiment that would close it is the table above re-run with `bins=32`, plus the conditional rate that actually matters: of the seeds that abort at `64²`, how many also abort at `32²`. If that conditional rate is not ~0, the fallback is not a fallback and the rect budget needs a third move or a relaxation — escalate rather than widening `rect_max`, which is a memory contract (§10 risk 1). Task 11 Step 5's `sa.rect_max_path` line is the first real-design datapoint for this.
 
 **Termination (ruling D4 — the earlier potential-function argument was wrong and is deleted).** There is no monotone potential here. A donor `j` that extends beyond `r`'s bbox loses `j ∩ bbox(r)` without changing `bbox(j)`, so `|bbox(j) \ j|` *increases* by exactly what `r` gained and `Σ_r |bbox(r) \ r|` stays flat; with the arg-max target switching between regions, no stated potential excludes a cycle. What makes the loop safe is the explicit **`k·B²` pass budget**: every pass strictly grows (absorption) or strictly shrinks (shedding) the current target region, and the budget bound is the guard. The `RuntimeError` at budget exhaustion already existed; only the proof was wrong.
 
@@ -3857,7 +3869,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 6. **λ for the grouping term comes from P-H's `norm.TermNormalizer`** — `TermNormalizer` **exists at HEAD** (`src/ioplace/norm.py`), so the earlier draft's local `GroupingWeight` + `VersionState` pair was a fourth ad-hoc normalisation path in direct conflict with spec §0, and ruling D5/D6 deletes both. Task 10 registers the term with `policy="grandplan", norm_p=1, curvature=1.0, activate_overflow=1.0` and installs `dp_hook.install_version_invariant`. Two named consequences: `tau = gamma = 0` deliberately disables the Lipschitz cap (the grouping term is an exact quadratic with no smoothing parameter — GrandPlan Eq.3 has no cap), and `register`'s default `n_ramp = 20` makes λ zero on the activating transaction, so the term is inert for the first `t_hull` iterations where `GroupingWeight` was on from iteration 0.
 7. **Algorithm-1 keeps each direction's support point** (ruling D1, Tasks 2 and 9) on top of the digest's literal band `[t, t+α(s_max−t)]`. Without it the band-plus-cap selects a shell just above the q-quantile and the hull collapses onto the dense cluster (measured: area 0.95 against a true hull of 100 on the corner-cloud test, 95.78 against 100 on a uniform square). Cost of the deviation: ≤ `2·m` extra points per region.
 8. **The morphology erodes with `border_value=1`** (ruling D2, Task 5), spelled out as erosion/dilation/dilation/erosion instead of `binary_closing(binary_opening(...))`, because scipy's default `border_value=0` erodes the entire die border and the dilations cannot restore it (252 of 4096 bins at `64²`, every call).
-9. **`enforce_rect_max` has two moves and a driver-level fallback** (rulings D3/D4, Tasks 7 and 10): absorption then shedding, terminated by the `k·B²` pass budget rather than by a potential function — the earlier `Σ_r |bbox(r) \ r|` argument is false (a donor extending beyond `r`'s bbox keeps its own bbox while losing bins, so the sum can stay flat) and has been deleted.
+9. **`enforce_rect_max` has two moves and a driver-level fallback** (rulings D3/D4, Tasks 7 and 10): absorption then shedding, terminated by the `k·B²` pass budget rather than by a potential function — the earlier `Σ_r |bbox(r) \ r|` argument is false (a donor extending beyond `r`'s bbox keeps its own bbox while losing bins, so the sum can stay flat) and has been deleted. Measured at 20 seeds, shedding cuts `64²` aborts from 23/80 to 6/80 but does **not** eliminate them, so the automatic `--extract-bins 32` fallback is load-bearing; the fallback target's own abort rate is the open number Task 7's prose names.
 
 **Expected-count ledger (ruling D8, after every amendment above).** Task 2: 9. Task 3: 15. Task 4: **9**. Task 5: **15**. Task 6: 15. Task 7: **13**. Task 8: **7**. Task 9: 12. Task 10: **8** (4 fast, 4 slow). Every count except Tasks 4, 5, 7, 8 and 10 is unchanged from the pre-amendment plan and was confirmed by `pytest --collect-only` in the pre-flight scan.
 
