@@ -33,3 +33,6 @@ results/**/segments.json
 results/**/drc.rpt
 results/**/verify_wire_length.rpt
 results/**/.*.partial.json
+
+# research PDFs stay local
+docs/research/*.pdf
