@@ -2,7 +2,7 @@ import hashlib, json, subprocess, sys
 from pathlib import Path
 import numpy as np
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/check_h100_nvl_prediction.py'
+SCRIPT = Path(__file__).resolve().parents[1] / 'src/scripts/check_h100_nvl_prediction.py'
 def h(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 def fixture(tmp_path, timeout=False, bad_history=False, bad_coords=False, outside_band=False):

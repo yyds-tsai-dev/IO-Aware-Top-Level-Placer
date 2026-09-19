@@ -1,0 +1,6 @@
+[submodule "third_party/DREAMPlace"]
+	path = third_party/DREAMPlace
+	url = https://github.com/limbo018/DREAMPlace.git
+[submodule "third_party/OpenROAD"]
+	path = third_party/OpenROAD
+	url = https://github.com/liangrj2014/OpenROAD_ISPD25.git

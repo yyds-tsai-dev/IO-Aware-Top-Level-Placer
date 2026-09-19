@@ -45,7 +45,7 @@ END LIBRARY
         'COMPONENTS 8 ;\n'+"\n".join(components)+'\nEND COMPONENTS\nPINS 8 ;\n'+"\n".join(pins)
         +'\nEND PINS\nNETS 8 ;\n'+"\n".join(nets)+'\nEND NETS\nEND DESIGN\n')
     output=tmp_path/"pins.npz"
-    script=Path(__file__).resolve().parents[1]/"ioplace/route_eval/or_scripts/dump_pin_geometry.py"
+    script=Path(__file__).resolve().parents[1]/"src/ioplace/route_eval/or_scripts/dump_pin_geometry.py"
     run=subprocess.run([os.environ["OPENROAD_BIN"],"-python",str(script),"--lef",str(lef),
                         "--def",str(design),"--out",str(output)],capture_output=True,text=True)
     assert run.returncode==0,run.stdout+run.stderr
@@ -85,7 +85,7 @@ PINS 1 ; - PORT0 + NET n0 + DIRECTION INPUT + USE SIGNAL
 NETS 1 ; - n0 ( PIN PORT0 ) ; END NETS
 END DESIGN\n''')
     output = tmp_path / "pins.npz"
-    script = Path(__file__).resolve().parents[1] / "ioplace/route_eval/or_scripts/dump_pin_geometry.py"
+    script = Path(__file__).resolve().parents[1] / "src/ioplace/route_eval/or_scripts/dump_pin_geometry.py"
     run = subprocess.run([os.environ["OPENROAD_BIN"], "-python", str(script), "--lef", str(lef),
                          "--def", str(design), "--out", str(output)], capture_output=True, text=True)
     assert run.returncode == 0, run.stdout + run.stderr

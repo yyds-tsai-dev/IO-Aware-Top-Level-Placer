@@ -15,18 +15,20 @@ read and run things, but you do not modify the repo.
 
 ## Where things live
 
-- `ioplace/netlist.py`, `ioplace/regions.py`, `ioplace/region_grid.py` — core
+- `src/ioplace/netlist.py`, `src/ioplace/regions.py`, `src/ioplace/region_grid.py` — core
   data model.
-- `ioplace/evaluator_ref.py` — slow reference evaluator (ground truth);
-  `ioplace/evaluator_gpu.py` — GPU evaluator that must stay numerically
+- `src/ioplace/evaluator_ref.py` — slow reference evaluator (ground truth);
+  `src/ioplace/evaluator_gpu.py` — GPU evaluator that must stay numerically
   consistent with it.
-- `ioplace/partition/` — hMETIS-format export (`hgr.py`) and the Mt-KaHyPar
+- `src/ioplace/partition/` — hMETIS-format export (`hgr.py`) and the Mt-KaHyPar
   runner.
-- `ioplace/drivers/run_placement.py`, `ioplace/dreamplace_env.py` — DREAMPlace
+- `src/ioplace/drivers/run_placement.py`, `src/ioplace/dreamplace_env.py` — DREAMPlace
   integration.
 - `docs/dev-env.md` — authoritative environment reference:
-  `DP=/nashome/NVL4/vdalab/yyds-dev/DREAMPlace`, python is
-  `$DP/.venv312/bin/python` (torch 2.8.0+cu128, NVIDIA L4).
+  H100 NVL host, `DREAMPLACE_ROOT=/ldaphome/yyds-tsai-dev/DREAMPlace`, Python
+  at `$DREAMPLACE_ROOT/.venv312/bin/python` (Python 3.12, torch 2.8.0+cu128).
+  From the repo root, `source src/scripts/env.sh` sets `DREAMPLACE_ROOT` and
+  `IOPLACE_PYTHON`; use these instead of historical NVL4 paths.
 - `docs/superpowers/plans/` and `docs/superpowers/specs/` — current milestone
   plan and phase-1 design; `docs/research/` — the 2026-07-30 research surveys.
 
@@ -34,7 +36,9 @@ read and run things, but you do not modify the repo.
 
 - Ground every claim in code or docs you actually read; cite `file:line`.
 - For numeric questions (HPWL parity, cost terms, gradients), run small probes
-  with `$DP/.venv312/bin/python` instead of reasoning from memory.
+  with `"$IOPLACE_PYTHON"` after sourcing `src/scripts/env.sh` instead of reasoning
+  from memory. Honor `CUDA_VISIBLE_DEVICES`, check `nvidia-smi`, and use an
+  available GPU for bounded probes. Report contention or missing dependencies.
 - Weigh options against the plan's objectives — placement quality (HPWL, IO
   crossings, feed-throughs) at the 10M–30M scale target — and say which option
   moves those metrics and why.

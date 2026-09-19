@@ -31,7 +31,7 @@ SPECIALNETS 1 ;
 END SPECIALNETS
 END DESIGN
 ''')
-    helper=Path(__file__).resolve().parents[1]/'ioplace/route_eval/or_scripts/clear_signal_routing.tcl'
+    helper=Path(__file__).resolve().parents[1]/'src/ioplace/route_eval/or_scripts/clear_signal_routing.tcl'
     ledger=tmp_path/'removed.txt'
     script=tmp_path/'check.tcl'
     script.write_text(f'''read_lef {{{lef}}}

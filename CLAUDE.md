@@ -39,12 +39,13 @@ Dispatch rules for the scheduler:
   flow) to catch what a single model family misses. When Codex is unavailable,
   fall back to a second `deep-reasoner` pass with an adversarial framing.
 - **Verify before accepting:** a delegated change counts as done only after
-  pytest passes, run with the DREAMPlace Python 3.12 venv —
-  `$DP/.venv312/bin/python -m pytest` where
-  `DP=/nashome/NVL4/vdalab/yyds-dev/DREAMPlace` (GPU/DREAMPlace tests need this
-  venv; plain `python` has no torch — see [docs/dev-env.md](docs/dev-env.md)).
+  pytest passes. On this H100 NVL host, run `source src/scripts/env.sh`
+  from the repo root, then `"$IOPLACE_PYTHON" -m pytest`. The script exports
+  `DREAMPLACE_ROOT=/ldaphome/yyds-tsai-dev/DREAMPlace` by default and selects
+  its Python 3.12 venv — see [docs/dev-env.md](docs/dev-env.md).
   `-m "not slow"` skips the real-placement integration tests while iterating;
-  run the full suite before calling a task complete.
+  run the full suite before calling a task complete. Honor `CUDA_VISIBLE_DEVICES` and
+  check `nvidia-smi` before GPU work on this shared host.
 
 Invocation:
 
@@ -68,3 +69,18 @@ Invocation:
     `tool_timeout_sec` — a server without one (e.g. `codebase-memory-mcp`) can
     hang a single tool call indefinitely and freeze the whole review in
     `investigating`.
+
+<!-- codex-project-subagents:start -->
+## Codex task execution and review
+
+When dispatching implementation, diagnosis, or review in Codex, read
+[`.codex/agents/README.md`](.codex/agents/README.md) and the selected role TOML.
+Use `fast-worker` (`gpt-5.6-terra`, `low`) for decided implementation tasks;
+use `deep-reasoner` (`gpt-6-astra`, `high`) for diagnosis and independent review.
+Keep the latter read-only; the parent persists its returned review report.
+Use fresh implementers sequentially and review each task for specification
+compliance and code quality before advancing. Preserve these role settings
+across session resets; pass explicit ownership and graph evidence in briefs.
+The current Codex runtime exposes both roles. Select them by `agent_type`;
+do not substitute inherited default roles silently.
+<!-- codex-project-subagents:end -->

@@ -72,7 +72,7 @@ def test_cli_invalid_sku_rejects_without_output(tmp_path):
     sku.write_text(json.dumps({"name": ""}))
     out = tmp_path / "invalid.json"
     result = subprocess.run(
-        [sys.executable, "scripts/m4_forecast.py", "--sku-json", str(sku),
+        [sys.executable, "src/scripts/m4_forecast.py", "--sku-json", str(sku),
          "--out", str(out)], cwd=REPO, text=True, capture_output=True,
     )
     assert result.returncode != 0
@@ -85,7 +85,7 @@ def test_cli_alternate_frozen_output_records_sku_and_hash(tmp_path):
     sku.write_text(json.dumps(_sku(), indent=2))
     out = tmp_path / "frozen.json"
     result = subprocess.run(
-        [sys.executable, "scripts/m4_forecast.py", "--sku-json", str(sku),
+        [sys.executable, "src/scripts/m4_forecast.py", "--sku-json", str(sku),
          "--out", str(out), "--freeze"], cwd=REPO, text=True,
         capture_output=True,
     )

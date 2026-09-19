@@ -218,7 +218,7 @@ def test_cli_subprocess_smoke(tmp_path, def_with_dupes_path, lef_path):
     plain `python3` subprocess (no torch/DP needed -- pure text)."""
     out = tmp_path / "out.def"
     result = subprocess.run(
-        [sys.executable, os.path.join(REPO, "scripts", "stage2_fix_def_vias.py"),
+        [sys.executable, os.path.join(REPO, "src", "scripts", "stage2_fix_def_vias.py"),
          "--lef", lef_path, "--def", def_with_dupes_path, "--out", str(out)],
         capture_output=True, text=True, cwd=REPO)
     assert result.returncode == 0, result.stderr

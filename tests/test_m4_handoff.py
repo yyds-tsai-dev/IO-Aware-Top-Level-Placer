@@ -38,12 +38,12 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO))  # matches other tests/test_m4_*.py's `from scripts...` imports
+sys.path.insert(0, str(REPO / "src"))  # matches other tests/test_m4_*.py's `from scripts...` imports
 
 from scripts import m4_check_prediction as chk
 from scripts import m4_forecast as fc
 
-M4_RUN_SH = REPO / "scripts" / "m4_run.sh"
+M4_RUN_SH = REPO / "src" / "scripts" / "m4_run.sh"
 
 
 # ---------------------------------------------------------------------------

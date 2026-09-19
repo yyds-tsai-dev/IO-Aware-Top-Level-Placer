@@ -1,10 +1,22 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ioplace"
 version = "0.0.1"
 requires-python = ">=3.9"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ioplace*"]
+
+[tool.setuptools.package-data]
+ioplace = ["**/*.cpp", "**/*.patch", "**/*.tcl"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 markers = [
     "slow: integration tests that run real placements",
     "gpu: tests that require a CUDA device (M4 T2b: not run while the GPU is busy)",
