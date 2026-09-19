@@ -38,7 +38,12 @@ def clamp_density_weight(model, reference, lo=DENSITY_CLAMP_LO, hi=DENSITY_CLAMP
     low, high = lo * reference, hi * reference
     with torch.no_grad():
         before = model.density_weight.detach().clone()
-        after = before.clamp(min=low, max=high)
+        clamped = before.clamp(min=low, max=high)
+        # A zero entry has no density_weight_u counterpart to rescale (u is 0
+        # there too), so raising it to lo_abs would be undone by the very
+        # next overflow-based update; leave zero entries untouched.
+        zero = before == 0
+        after = torch.where(zero, before, clamped)
         # dtype-safe floor: GCD's placedb.dtype is float32, where 1e-300
         # underflows to 0.0 and the guard would rest entirely on torch.where's
         # mask (pre-flight amendment D-10).
@@ -93,7 +98,8 @@ def build_fence_placedb(config_json, region_set, part, positions, *,
     """Read a fresh PlaceDB, inject fences from the frozen membership, apply the
     escape-cell workaround, warm start from `positions`, then initialize()."""
     params, placedb = _load_dreamplace(config_json)
-    assert params.enable_fillers == 1, "fence mode requires enable_fillers"
+    if params.enable_fillers != 1:
+        raise ValueError("fence mode requires enable_fillers=1")
     if dp_seed is not None:
         params.random_seed = dp_seed
     if deterministic is not None:
@@ -104,6 +110,9 @@ def build_fence_placedb(config_json, region_set, part, positions, *,
     part = np.asarray(part, dtype=np.int32)
     if len(part) != m:
         raise ValueError(f"membership has {len(part)} entries, expected {m}")
+    if part.size and (int(part.min()) < 0 or int(part.max()) >= k):
+        raise ValueError(f"membership values must be in [0, {k}), got range "
+                         f"[{int(part.min())}, {int(part.max())}]")
     die_native = (float(placedb.xl), float(placedb.yl),
                   float(placedb.xh), float(placedb.yh))
     span = max(die_native[2] - die_native[0], die_native[3] - die_native[1])
