@@ -1,8 +1,11 @@
 import json
+import os
+import stat
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
+import torch
 
 from ioplace.artifacts import (
     FREEZE_FIELDS, MAIN_FLOW_RESULT_FIELDS, MAIN_FLOW_RESULT_SCHEMA_VERSION,
@@ -169,3 +172,118 @@ def test_file_sha256_is_stable_and_content_sensitive(tmp_path):
     assert file_sha256(str(first)) == file_sha256(str(second))
     second.write_bytes(b"hellp")
     assert file_sha256(str(first)) != file_sha256(str(second))
+
+
+# -- Fix round 1: numpy/torch scalar coercion in the JSON writers ----------
+
+def test_json_writer_coerces_numpy_and_torch_scalars(tmp_path):
+    record = {name: 0 for name in FREEZE_FIELDS}
+    record["schema_version"] = 1
+    record["overflow"] = np.float32(0.05)
+    record["iteration"] = np.int64(3)
+    record["tau"] = torch.tensor(0.25)
+    path = str(tmp_path / "freeze.json")
+    save_freeze(path, record)
+    on_disk = json.load(open(path))
+    assert isinstance(on_disk["overflow"], float)
+    assert on_disk["overflow"] == pytest.approx(0.05, abs=1e-6)
+    assert on_disk["iteration"] == 3 and isinstance(on_disk["iteration"], int)
+    assert on_disk["tau"] == pytest.approx(0.25, abs=1e-6)
+
+
+def test_json_writer_rejects_unserialisable_value_with_value_error(tmp_path):
+    record = {name: 0 for name in FREEZE_FIELDS}
+    record["schema_version"] = 1
+    record["overflow"] = object()
+    with pytest.raises(ValueError, match="not JSON-serialisable"):
+        save_freeze(str(tmp_path / "bad.json"), record)
+
+
+def test_json_writer_rejects_multi_element_tensor(tmp_path):
+    record = {name: 0 for name in FREEZE_FIELDS}
+    record["schema_version"] = 1
+    record["overflow"] = torch.tensor([0.1, 0.2])
+    with pytest.raises(ValueError, match="not JSON-serialisable"):
+        save_freeze(str(tmp_path / "bad.json"), record)
+
+
+# -- Fix round 1: unknown fields are rejected, not silently round-tripped --
+
+def test_freeze_rejects_unknown_field_on_save_and_load(tmp_path):
+    record = {name: 0 for name in FREEZE_FIELDS}
+    record["schema_version"] = 1
+    record["bogus"] = 1
+    with pytest.raises(ValueError, match="bogus"):
+        save_freeze(str(tmp_path / "bad.json"), record)
+
+    good = {name: 0 for name in FREEZE_FIELDS}
+    good["schema_version"] = 1
+    path = str(tmp_path / "freeze.json")
+    save_freeze(path, good)
+    on_disk = json.load(open(path))
+    on_disk["bogus"] = 1
+    json.dump(on_disk, open(path, "w"))
+    with pytest.raises(ValueError, match="bogus"):
+        load_freeze(path)
+
+
+def test_result_rejects_unknown_field(tmp_path):
+    record = {name: 0 for name in MAIN_FLOW_RESULT_FIELDS}
+    record["schema_version"] = MAIN_FLOW_RESULT_SCHEMA_VERSION
+    record["bogus"] = 1
+    with pytest.raises(ValueError, match="bogus"):
+        save_result(str(tmp_path / "bad.json"), record)
+
+
+def test_producer_json_rejects_unknown_field_on_save_and_load(tmp_path):
+    record = {name: 0 for name in PRODUCER_FIELDS}
+    record["bogus"] = 1
+    with pytest.raises(ValueError, match="bogus"):
+        save_producer_json(str(tmp_path / "bad.json"), record)
+
+    good = {name: 0 for name in PRODUCER_FIELDS}
+    path = str(tmp_path / "producer.json")
+    save_producer_json(path, good)
+    on_disk = json.load(open(path))
+    on_disk["bogus"] = 1
+    json.dump(on_disk, open(path, "w"))
+    with pytest.raises(ValueError, match="bogus"):
+        load_producer_json(path)
+
+
+def test_producer_json_load_accepts_its_own_stamped_schema_version(tmp_path):
+    """schema_version is not in PRODUCER_FIELDS (C-2 asymmetry) but the
+    writer stamps it and the loader must not then flag it as unexpected."""
+    good = {name: 0 for name in PRODUCER_FIELDS}
+    path = str(tmp_path / "producer.json")
+    save_producer_json(path, good)
+    assert load_producer_json(path)["schema_version"] == PRODUCER_SCHEMA_VERSION
+
+
+# -- Fix round 1: minors -----------------------------------------------------
+
+def test_freeze_rejects_wrong_schema_version_at_write_time(tmp_path):
+    record = {name: 0 for name in FREEZE_FIELDS}
+    record["schema_version"] = 999
+    with pytest.raises(ValueError, match="schema_version"):
+        save_freeze(str(tmp_path / "bad.json"), record)
+
+
+def test_artifact_files_honour_the_process_umask(tmp_path):
+    old_umask = os.umask(0o022)
+    try:
+        record = {name: 0 for name in FREEZE_FIELDS}
+        record["schema_version"] = 1
+        path = str(tmp_path / "freeze.json")
+        save_freeze(path, record)
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        assert mode == (0o666 & ~0o022)
+
+        npz_path = str(tmp_path / "seed.npz")
+        save_positions(npz_path, [1.], [2.], die=(0., 0., 1., 1.),
+                       shift_factor=(0., 0.), scale_factor=1.,
+                       placedb_sha256="a", kind="seed")
+        npz_mode = stat.S_IMODE(os.stat(npz_path).st_mode)
+        assert npz_mode == (0o666 & ~0o022)
+    finally:
+        os.umask(old_umask)

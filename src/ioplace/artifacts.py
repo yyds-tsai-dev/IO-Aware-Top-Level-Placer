@@ -168,6 +168,18 @@ def placedb_identity_sha256(placedb):
         np.asarray(placedb.flat_net2pin_start_map, dtype=np.int64))
 
 
+def _restore_umask_permissions(path):
+    """mkstemp() creates the temporary file at 0600; os.replace() preserves
+    that mode across the rename, so every artefact would otherwise end up
+    unreadable by anyone but its writer regardless of the process umask.
+    Read the umask (os.umask() has no read-only form) and immediately put it
+    back, then apply the same 0666-minus-umask a normal open()/write() would
+    have produced."""
+    mask = os.umask(0)
+    os.umask(mask)
+    os.chmod(path, 0o666 & ~mask)
+
+
 def _atomic_savez(path, **arrays):
     parent = os.path.dirname(os.path.abspath(path))
     os.makedirs(parent, exist_ok=True)
@@ -176,9 +188,30 @@ def _atomic_savez(path, **arrays):
         with os.fdopen(fd, "wb") as stream:
             np.savez_compressed(stream, **arrays)
         os.replace(temporary, path)
+        _restore_umask_permissions(path)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def _json_default(obj):
+    """json.dump's `default=` hook: coerce the numpy/torch scalars that
+    naturally fall out of driver code (np.float32 overflow ratios, np.int64
+    counters, 0-d torch losses) into native JSON types. Anything else --
+    including a multi-element array/tensor, which would silently lose shape
+    under a bare `.tolist()`/`.item()` -- is refused rather than guessed at.
+    Duck-typed on `.detach()` so this module still need not import torch."""
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if hasattr(obj, "detach"):
+        try:
+            if obj.numel() == 1:
+                return obj.item()
+        except Exception:
+            pass
+    raise ValueError(f"value of type {type(obj).__name__} is not JSON-serialisable")
 
 
 def _atomic_write_json(path, payload):
@@ -187,8 +220,9 @@ def _atomic_write_json(path, payload):
     fd, temporary = tempfile.mkstemp(prefix=".artifact-", suffix=".json", dir=parent)
     try:
         with os.fdopen(fd, "w") as stream:
-            json.dump(payload, stream, indent=1, sort_keys=True)
+            json.dump(payload, stream, indent=1, sort_keys=True, default=_json_default)
         os.replace(temporary, path)
+        _restore_umask_permissions(path)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -288,28 +322,45 @@ def load_membership(path, *, expect_num_movable=None, expect_k=None,
     return out
 
 
-def _require_fields(record, fields, what):
-    missing = [name for name in fields if name not in record]
-    if missing:
-        raise ValueError(f"{what} is missing required field(s): {', '.join(missing)}")
+def _require_exact_fields(record, fields, what, extra_allowed=()):
+    """Require record's keys to match `fields` exactly (order-independent),
+    rejecting both a missing declared field and a key that was never
+    declared -- a stray/renamed key must not round-trip silently. `fields`
+    grows in later plans; `extra_allowed` carries the handful of keys a
+    writer stamps itself after this check runs (schema_version for
+    producer.json, per the C-2 asymmetry) so a load of that same file does
+    not then reject its own stamp."""
+    allowed = set(fields) | set(extra_allowed)
+    record_set = set(record)
+    missing = [name for name in fields if name not in record_set]
+    unexpected = sorted(record_set - allowed)
+    if missing or unexpected:
+        parts = []
+        if missing:
+            parts.append(f"missing field(s): {', '.join(missing)}")
+        if unexpected:
+            parts.append(f"unexpected field(s): {', '.join(unexpected)}")
+        raise ValueError(f"{what}: {'; '.join(parts)}")
 
 
 def save_freeze(path, record):
-    _require_fields(record, FREEZE_FIELDS, "freeze.json")
+    _require_exact_fields(record, FREEZE_FIELDS, "freeze.json")
+    if int(record["schema_version"]) != FREEZE_SCHEMA_VERSION:
+        raise ValueError(f"schema_version must be {FREEZE_SCHEMA_VERSION}")
     _atomic_write_json(path, record)
 
 
 def load_freeze(path):
     with open(path) as stream:
         record = json.load(stream)
-    _require_fields(record, FREEZE_FIELDS, f"{path}")
+    _require_exact_fields(record, FREEZE_FIELDS, f"{path}")
     if int(record["schema_version"]) != FREEZE_SCHEMA_VERSION:
         raise ValueError(f"unsupported freeze schema in {path}")
     return record
 
 
 def save_result(path, record):
-    _require_fields(record, MAIN_FLOW_RESULT_FIELDS, "result.json")
+    _require_exact_fields(record, MAIN_FLOW_RESULT_FIELDS, "result.json")
     _atomic_write_json(path, record)
 
 
@@ -320,7 +371,7 @@ def save_producer_json(path, payload):
     run_region_producer.run_producer builds the payload as one dict literal and
     also returns it to its caller, so the version belongs to the writer.
     """
-    _require_fields(payload, PRODUCER_FIELDS, "producer.json")
+    _require_exact_fields(payload, PRODUCER_FIELDS, "producer.json")
     record = dict(payload)
     record["schema_version"] = PRODUCER_SCHEMA_VERSION
     _atomic_write_json(path, record)
@@ -329,7 +380,8 @@ def save_producer_json(path, payload):
 def load_producer_json(path):
     with open(path) as stream:
         record = json.load(stream)
-    _require_fields(record, PRODUCER_FIELDS, f"{path}")
+    _require_exact_fields(record, PRODUCER_FIELDS, f"{path}",
+                          extra_allowed=("schema_version",))
     if int(record["schema_version"]) != PRODUCER_SCHEMA_VERSION:
         raise ValueError(f"unsupported producer schema in {path}")
     return record
