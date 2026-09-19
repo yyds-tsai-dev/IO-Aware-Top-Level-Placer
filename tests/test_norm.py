@@ -385,3 +385,82 @@ def test_install_version_invariant_guards_the_normalizer():
     n.mark_refreshed()
     opt.step()
     uninstall()
+
+
+def _norm_b(share=0.2, **kwargs):
+    n = TermNormalizer(policy="adaptive", **kwargs)
+    n.register("io", object(), 1.0, target_share=share, activate_overflow=0.90, n_ramp=0)
+    return n
+
+
+def test_policy_b_bootstraps_from_the_grandplan_form():
+    n = _norm_b()
+    txn = n.transaction(0, 0.85, tau=1000.0, gamma=0.0,
+                        grad_norms={"wl": 1000.0, "io": 10.0})
+    assert txn.lambdas["io"] == pytest.approx(20.0, rel=1e-12)
+    assert n.states["io"].wt == pytest.approx(0.2, rel=1e-12)
+
+
+def test_policy_b_applies_sqrt_update_with_momentum_on_the_second_probe():
+    n = _norm_b()
+    n.transaction(0, 0.85, tau=1000.0, gamma=0.0, grad_norms={"wl": 1000.0, "io": 10.0})
+    n.mark_refreshed()
+    txn = n.transaction(50, 0.85, tau=1000.0, gamma=0.0,
+                        grad_norms={"wl": 1000.0, "io": 10.0})
+    assert txn.lambdas["io"] == pytest.approx(20.477225575051661, rel=1e-12)
+
+
+def test_policy_b_converges_to_the_requested_force_share():
+    n = _norm_b(share=0.2)
+    for iteration in range(0, 50 * 150, 50):
+        n.transaction(iteration, 0.85, tau=1000.0, gamma=0.0,
+                      grad_norms={"wl": 1000.0, "io": 10.0})
+        n.mark_refreshed()
+    lam = n.lambdas["io"]
+    assert lam == pytest.approx(25.0, rel=1e-6)          # lam*g/(wl+lam*g) == 0.2
+    share = lam * 10.0 / (1000.0 + lam * 10.0)
+    assert share == pytest.approx(0.2, rel=1e-6)
+
+
+def test_policy_b_ramp_scales_the_target_share_not_the_coefficient():
+    n = TermNormalizer(policy="adaptive")
+    n.register("io", object(), 1.0, target_share=0.2, activate_overflow=0.90, n_ramp=20)
+    n.transaction(0, 0.85, tau=1000.0, gamma=0.0, grad_norms={"wl": 1000.0, "io": 10.0})
+    assert n.lambdas["io"] == 0.0                        # ramp 0 -> share 0
+    n.mark_refreshed()
+    n.transaction(10, 0.85, tau=1000.0, gamma=0.0, grad_norms={"wl": 1000.0, "io": 10.0})
+    assert n.states["io"].wt == pytest.approx(0.1, rel=1e-12)
+    assert n.lambdas["io"] == pytest.approx(0.1 * 1000.0 / 10.0, rel=1e-12)
+
+
+def test_policy_b_zero_target_share_leaves_the_term_off():
+    n = _norm_b(share=0.0)
+    txn = n.transaction(0, 0.85, tau=1000.0, gamma=0.0,
+                        grad_norms={"wl": 1000.0, "io": 10.0})
+    assert txn.lambdas["io"] == 0.0
+
+
+def test_policy_b_obeys_the_same_cap_as_policy_a():
+    n = TermNormalizer(policy="adaptive")
+    n.register("io", object(), 1.0, target_share=0.9,
+               activate_overflow=0.90, n_ramp=0)
+    n.register("ft", object(), 6.0, target_share=0.9,
+               activate_overflow=0.90, n_ramp=0)
+    txn = n.transaction(0, 0.85, tau=100.0, gamma=20.0,
+                        grad_norms={"wl": 1000.0, "io": 5.0, "ft": 10.0})
+    # pre-clip lambdas (bootstrap): io = 0.9*1000/5 = 180, ft = 0.9*1000/10 = 90
+    # Cmax is the lambda-weighted mean curvature (controller ruling
+    # 2026-09-19): Cmax = (180*1 + 90*6) / (180 + 90) = 720/270 = 8/3
+    assert txn.cmax == pytest.approx(8.0 / 3.0, rel=1e-12)
+    # cap = 100^2/(20*8/3) = 10000/53.333... = 187.5, which is < 270 so the cap binds
+    assert txn.cap == pytest.approx(100.0 * 100.0 / (20.0 * 8.0 / 3.0), rel=1e-12)
+    assert txn.cap == pytest.approx(187.5, rel=1e-12)
+    assert sum(txn.lambdas.values()) == pytest.approx(txn.cap, rel=1e-12)
+    # scale = cap/total = 187.5/270 = 0.69444... -> io = 125.0, ft = 62.5
+    assert txn.lambdas["io"] == pytest.approx(125.0, rel=1e-12)
+    assert txn.lambdas["ft"] == pytest.approx(62.5, rel=1e-12)
+    # binding is the term with the largest pre-clip lambda*curv: io=180*1=180,
+    # ft=90*6=540, so ft dominates even though its raw pre-clip lambda (90) is
+    # smaller than io's (180)
+    assert txn.cap_binding == "ft"
+    assert txn.lambdas["io"] / txn.lambdas["ft"] == pytest.approx(2.0, rel=1e-12)
