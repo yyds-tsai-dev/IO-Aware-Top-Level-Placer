@@ -464,3 +464,131 @@ def test_policy_b_obeys_the_same_cap_as_policy_a():
     # smaller than io's (180)
     assert txn.cap_binding == "ft"
     assert txn.lambdas["io"] / txn.lambdas["ft"] == pytest.approx(2.0, rel=1e-12)
+
+
+class _Poly(object):
+    """Toy term: value = coefficient * sum(pos**2), so grad = 2*coefficient*pos."""
+
+    def __init__(self, coefficient):
+        self.coefficient = coefficient
+
+    def value(self, pos, ctx):
+        return self.coefficient * (pos ** 2).sum()
+
+
+def _probe_setup(policy="grandplan", **kwargs):
+    torch = pytest.importorskip("torch")
+    n = TermNormalizer(policy=policy, num_movable=1, num_nodes=2,
+                       wt0=0.05, **kwargs)
+    pos = torch.tensor([1.0, 2.0, 3.0, 4.0], dtype=torch.float64, requires_grad=True)
+    wl_fn = lambda p: (p ** 3).sum()
+    ctx = {"iteration": 0, "overflow": 0.85, "tau": 1000.0, "gamma": 0.0}
+    return torch, n, pos, wl_fn, ctx
+
+
+def test_probe_masks_fixed_and_filler_entries_like_independent_gradient():
+    torch, n, pos, wl_fn, ctx = _probe_setup()
+    n.register("a", _Poly(1.0), 1.0, activate_overflow=0.90, n_ramp=0)
+    norms = n.probe(0, pos, wl_fn, ctx)
+    assert norms["wl"] == pytest.approx(30.0, rel=1e-12)      # 3 + 27, [1] and [3] masked
+    assert norms["a"] == pytest.approx(8.0, rel=1e-12)        # 2 + 6
+    assert n.states["a"].grad_norm == pytest.approx(8.0, rel=1e-12)
+    assert n.states["a"].ratio_ema == pytest.approx(30.0 / 8.0, rel=1e-12)
+
+
+def test_probe_does_not_touch_the_live_gradient_buffer():
+    torch, n, pos, wl_fn, ctx = _probe_setup()
+    pos.grad = torch.full_like(pos, 123.0)
+    n.register("a", _Poly(1.0), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.probe(0, pos, wl_fn, ctx)
+    assert bool(torch.all(pos.grad == 123.0))
+
+
+def test_probe_honours_norm_p_two():
+    torch, n, pos, wl_fn, ctx = _probe_setup(norm_p=2)
+    n.register("a", _Poly(1.0), 1.0, activate_overflow=0.90, n_ramp=0)
+    norms = n.probe(0, pos, wl_fn, ctx)
+    assert norms["wl"] == pytest.approx(27.166155414412157, rel=1e-12)   # sqrt(9+729)
+    assert norms["a"] == pytest.approx(6.324555320336759, rel=1e-12)     # sqrt(4+36)
+
+
+def test_probe_terms_subsetting_keeps_previous_measurements():
+    torch, n, pos, wl_fn, ctx = _probe_setup()
+    n.register("a", _Poly(1.0), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.register("b", _Poly(-0.5), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.probe(0, pos, wl_fn, ctx)
+    assert n.states["b"].grad_norm == pytest.approx(4.0, rel=1e-12)
+    n.probe(50, pos, wl_fn, ctx, probe_terms=["a"])
+    assert n.states["b"].grad_norm == pytest.approx(4.0, rel=1e-12)
+
+
+def test_cancellation_ratio_is_zero_for_exactly_opposed_terms():
+    torch, n, pos, wl_fn, ctx = _probe_setup()
+    n.register("a", _Poly(1.0), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.register("b", _Poly(-0.5), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.probe(0, pos, wl_fn, ctx)
+    txn = n.transaction(0, 0.85, tau=1000.0, gamma=0.0)
+    assert txn.lambdas["a"] == pytest.approx(0.05 * 30.0 / 8.0, rel=1e-12)
+    assert txn.lambdas["b"] == pytest.approx(0.05 * 30.0 / 4.0, rel=1e-12)
+    assert txn.cancellation_ratio == pytest.approx(0.0, abs=1e-15)
+    assert txn.row["cancellation_ratio"] == pytest.approx(0.0, abs=1e-15)
+
+
+def test_cancellation_ratio_is_one_for_aligned_terms():
+    torch, n, pos, wl_fn, ctx = _probe_setup()
+    n.register("a", _Poly(1.0), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.register("b", _Poly(0.5), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.probe(0, pos, wl_fn, ctx)
+    txn = n.transaction(0, 0.85, tau=1000.0, gamma=0.0)
+    assert txn.cancellation_ratio == pytest.approx(1.0, rel=1e-12)
+    n.mark_refreshed()
+    # No probe() this callback -- the cache from iteration 0 must not be
+    # reused against iteration 50's coefficients.
+    txn2 = n.transaction(50, 0.80, tau=1000.0, gamma=0.0,
+                         grad_norms={"wl": 1000.0, "a": 8.0, "b": 4.0})
+    assert txn2.cancellation_ratio is None
+
+
+def test_track_cancellation_off_keeps_no_tensors():
+    torch, n, pos, wl_fn, ctx = _probe_setup(track_cancellation=False)
+    n.register("a", _Poly(1.0), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.probe(0, pos, wl_fn, ctx)
+    assert n._grad_cache == {}
+    assert n.transaction(0, 0.85, tau=1000.0, gamma=0.0).cancellation_ratio is None
+
+
+def test_probe_rejects_a_nonfinite_gradient():
+    torch, n, pos, wl_fn, ctx = _probe_setup()
+
+    class _Bad(object):
+        def value(self, pos, ctx):
+            return (pos * float("inf")).sum()
+
+    n.register("bad", _Bad(), 1.0, activate_overflow=0.90, n_ramp=0)
+    with pytest.raises(FloatingPointError):
+        n.probe(0, pos, wl_fn, ctx)
+
+
+def test_norm_term_adapters_expose_the_production_terms():
+    torch = pytest.importorskip("torch")
+    from ioplace.ops.ft_term import FtTerm
+    from ioplace.ops.norm_terms import FtNormTerm, IoNormTerm
+    from tests.test_ft_term import _make, _pos
+    nl, io, _, distance = _make(k=4, chunk=1)
+    ft = FtTerm(io, distance)
+    ft.set_home([0])
+    pos = _pos(nl)
+    ctx_a = {"iteration": 0, "overflow": 0.5, "tau": 8.0, "gamma": 1.0}
+    ctx_b = {"iteration": 0, "overflow": 0.5, "tau": 4.0, "gamma": 1.0}
+    # value(pos, ctx) reads ctx["tau"]: two different taus must not agree.
+    assert float(IoNormTerm(io).value(pos, ctx_a)) != pytest.approx(
+        float(IoNormTerm(io).value(pos, ctx_b)))
+    assert float(FtNormTerm(ft).value(pos, ctx_a)) != pytest.approx(
+        float(FtNormTerm(ft).value(pos, ctx_b)))
+    # value(pos, ctx) is unweighted (lambda_io=1): io(pos, tau, 2.0) is 2x it.
+    assert float(IoNormTerm(io).value(pos, ctx_a)) == pytest.approx(
+        float(io(pos, 8.0, 1.0)), rel=1e-12)
+    assert float(io(pos, 8.0, 2.0)) == pytest.approx(
+        2.0 * float(IoNormTerm(io).value(pos, ctx_a)), rel=1e-12)
+    assert float(FtNormTerm(ft).value(pos, ctx_a)) == pytest.approx(
+        float(ft.ft_only(pos, 8.0)), rel=1e-12)

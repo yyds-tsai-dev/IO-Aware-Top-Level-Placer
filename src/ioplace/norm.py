@@ -373,6 +373,48 @@ class TermNormalizer:
         self._activate(iteration, overflow)
         return self._compute(iteration, tau, gamma)[0]
 
+    def probe(self, iteration, pos, wl_fn, ctx, probe_terms=None):
+        """One WL-only backward plus one isolated backward per registered term
+        -- the pattern at `run_placement_io.py:465-481`, generalised to N terms.
+        Five terms cost about +12% backward at `probe_every=50`; pass
+        `probe_terms` to measure a subset (unmeasured terms keep their previous
+        norms).
+
+        `ctx` is handed to each term's `value(pos, ctx)`; the driver fills it
+        with `{"iteration", "overflow", "tau", "gamma"}`.
+
+        Returns the `||.||_p` norms and, with `track_cancellation` set, caches
+        the gradient tensors so `transaction()` can report
+        `cancellation_ratio`. The cache (and the fact that this callback
+        probed) live only until the next `transaction()`, which clears the
+        flag once it has used them for `cancellation_ratio`."""
+        names = list(self.configs) if probe_terms is None else list(probe_terms)
+        self._grad_cache = {}
+        norms = {"wl": self._norm(self._grad(wl_fn, pos, "wl"))}
+        for name in names:
+            term = self.terms[name]
+            grad = self._grad(lambda p: term.value(p, ctx), pos, name)
+            norms[name] = self._norm(grad)
+            if self.track_cancellation:
+                self._grad_cache[name] = grad
+        self.update_grad_norms(norms)
+        self._probed_this_callback = True
+        return norms
+
+    def _grad(self, fn, pos, label):
+        """Isolated forward+backward on a detached clone, with the fixed and
+        filler entries zeroed exactly as `ops/ft_callback.independent_gradient`
+        does, so the live `pos.grad` is never disturbed."""
+        import torch
+        leaf = pos.detach().clone().requires_grad_(True)
+        grad, = torch.autograd.grad(fn(leaf), leaf)
+        if self.num_movable is not None and self.num_nodes is not None:
+            grad[self.num_movable:self.num_nodes] = 0
+            grad[self.num_nodes + self.num_movable:] = 0
+        if not bool(torch.isfinite(grad).all()):
+            raise FloatingPointError("nonfinite probe gradient for term %r" % (label,))
+        return grad
+
     def _norm(self, tensor):
         return (float(tensor.abs().sum()) if self.norm_p == 1
                 else float(tensor.norm(p=2)))
