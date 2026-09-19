@@ -9,6 +9,17 @@ own coefficients from `ioplace.ops.norm_terms.IoNormTerm`/`FtNormTerm`
 gradient probes. `IoNormTerm` measures the *unweighted* IO term only, with no
 margin contribution -- the same quantity `ops/ft_callback.publish_atomic`
 isolates for its own `kappa_ft` derivation, so the two paths stay comparable.
+
+Coefficient timing on the non-legacy arms (review I1): `transaction()` commits
+an un-ramped lambda every `every` iterations, and `term_fn` multiplies it by
+`activation_ramp(iteration, it_activate, n_ramp)` on *every* GP iteration, so
+the applied coefficient drifts continuously through the activation window
+exactly as the retired path's `rho * ramp * ratio_ema` did. That drift carries
+no `obj_version` bump -- identical in kind to the retired behaviour, and for
+the same reason: the ramp is a known monotone function of the iteration
+counter, not a new measurement. `it_activate` itself comes from the
+ScheduleState's per-iteration activation (`normalizer.set_activation`), not
+from the first `every`-gated callback, so both arms ramp off the same instant.
 """
 import json, os, time
 from contextlib import ExitStack, contextmanager
@@ -22,6 +33,7 @@ from ioplace.region_grid import RegionGrid
 from ioplace.evaluator_gpu import GpuEvalContext
 from ioplace.ops.soft_assign import rect_table
 from ioplace.ops.io_term import build_net_node_csr, IoTerm
+from ioplace.ops.norm_terms import FtNormTerm, IoNormTerm
 from ioplace.profile import PhaseTimer, DeviceMemSampler
 from ioplace.profile_lifetime import LifetimeRecorder
 from ioplace.schedules import ScheduleState
@@ -57,6 +69,51 @@ RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  "norm_policy", "norm_p", "norm_ramp_period", "norm_wt_max",
                  "norm_probe_every", "norm_target_share", "norm_trace",
                  "lambda_ft_final")
+
+
+#: Policy B's default IO force share when `--norm-target-share` is silent
+#: (documented in docs/dev-env.md's P-H flag table, review M5).
+DEFAULT_IO_TARGET_SHARE = 0.3
+#: FT's activation gate (ledger ruling 2026-09-19): the legacy tau_rel window
+#: 0.12 -> 0.05 maps through `tau_rel_from_overflow` to overflow 0.57 -> 0.25,
+#: and 0.30 is the same threshold the capacity term uses (design sec 5).
+FT_ACTIVATE_OVERFLOW = 0.30
+
+
+def _register_norm_terms(normalizer, io_term, ft_term, ecc_max, shares, of_on,
+                         n_ramp, f_ft_max, norm_policy, norm_wt_max):
+    """Register `io` (and `ft`, when FT is enabled) on `normalizer`, then
+    validate `--norm-target-share`'s keys against what was actually registered.
+
+    Split out of `run_io` so the registration contract is unit-testable without
+    a GPU placement (review C1/I4/I6). Three things are load-bearing here:
+
+    * `ft` declares `requires="io"`: `FtTerm` can only express the FT force as
+      `lambda_io * kappa`, so a `lambda_ft > 0` with `lambda_io == 0` is
+      unapplicable. The normalizer zeroes it instead of the driver aborting the
+      run on one transient probe (review C1).
+    * Under `grandplan`, `ft`'s weight ceiling is `f_ft_max * norm_wt_max`, so
+      the FT force share mirrors the legacy `f_ft_max` instead of converging to
+      IO's ceiling (review I4). Under `adaptive` the target shares already say
+      what each term's share is, so no override is installed.
+    * An unknown `--norm-target-share` key used to fall through to the default
+      silently (`io=0.3` for a typo'd `ioo=0.5`); it is now an error naming the
+      registered terms (review I6)."""
+    normalizer.register("io", IoNormTerm(io_term), 1.0,
+                        target_share=shares.get("io", DEFAULT_IO_TARGET_SHARE),
+                        activate_overflow=of_on, n_ramp=n_ramp)
+    if ft_term is not None:
+        normalizer.register("ft", FtNormTerm(ft_term), ecc_max,
+                            target_share=shares.get("ft", f_ft_max),
+                            activate_overflow=FT_ACTIVATE_OVERFLOW,
+                            n_ramp=n_ramp, requires="io",
+                            wt_max=(f_ft_max * norm_wt_max
+                                    if norm_policy == "grandplan" else None))
+    unknown = sorted(set(shares) - set(normalizer.configs))
+    if unknown:
+        raise ValueError("--norm-target-share names unregistered terms %r "
+                         "(registered: %r)"
+                         % (unknown, sorted(normalizer.configs)))
 
 
 def _normalize_snapshot_iters(spec):
@@ -192,6 +249,20 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         raise ValueError("norm_policy %r does nothing in observer mode "
                          "(rho_max=0, rho_margin=0, wl_reweight=off)"
                          % (norm_policy,))
+    # Review I2/I3: rho_max and rho_margin only reach the coefficients through
+    # ScheduleState, which the non-legacy policies bypass entirely. Accepting
+    # them would silently invert the caller's intent -- `--rho-max 0` reads as
+    # "IO off" but turns the IO penalty on at full normalizer strength, and
+    # `--rho-margin` is dropped while still being echoed into the result JSON.
+    if norm_policy != "legacy" and rho_max == 0.0:
+        raise ValueError("rho_max is inert under non-legacy policies; use "
+                         "--norm-policy legacy for reweight-only runs "
+                         "(norm_policy=%r)" % (norm_policy,))
+    if norm_policy != "legacy" and rho_margin > 0:
+        raise ValueError("rho_margin is inert under non-legacy policies "
+                         "(the margin objective is driven by ScheduleState, "
+                         "which %r bypasses); use --norm-policy legacy"
+                         % (norm_policy,))
     import torch
     # Overflow-diagnosis follow-up: device_baseline_gb -- see
     # run_placement.run_flat's matching comment for why this must be the
@@ -321,7 +392,6 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         from ioplace.norm import (TermNormalizer, VersionPair, _json_cap,
                                  parse_target_shares)
         from ioplace.norm_trace import NormTraceWriter
-        from ioplace.ops.norm_terms import FtNormTerm, IoNormTerm
         shares = parse_target_shares(norm_target_share)
         norm_trace_path = norm_trace
         if norm_trace_path is None and norm_policy != "legacy" and not observer_mode:
@@ -340,17 +410,21 @@ def run_io(config_json, k, rtype, seed, out_json, *,
             track_cancellation=(placedb.num_nodes <= 5_000_000),
             legacy_state=state if norm_policy == "legacy" else None,
             trace=trace_writer)
-        normalizer.register("io", IoNormTerm(io_term), 1.0,
-                            target_share=shares.get("io", 0.3),
-                            activate_overflow=of_on, n_ramp=state.n_ramp)
-        if ft_term is not None:
-            # FT curvature is ecc_max (design sec 4). Its overflow gate is 0.30:
-            # the tau_rel window the legacy ramp used (0.12 -> 0.05) maps through
-            # tau_rel_from_overflow to overflow 0.57 -> 0.25, and 0.30 is the
-            # same threshold the capacity term uses (design sec 5).
-            normalizer.register("ft", FtNormTerm(ft_term), float(distance.max()),
-                                target_share=shares.get("ft", f_ft_max),
-                                activate_overflow=0.30, n_ramp=state.n_ramp)
+        # FT curvature is ecc_max (design sec 4); see _register_norm_terms for
+        # the requires="io" dependency, FT's weight ceiling and the
+        # target-share key validation.
+        _register_norm_terms(normalizer, io_term, ft_term,
+                             float(distance.max()) if distance is not None else 1.0,
+                             shares, of_on, state.n_ramp, f_ft_max,
+                             norm_policy, norm_wt_max)
+
+        # Review I1b: the GP iteration whose coefficients the objective is
+        # currently being evaluated against. Defined here, not in `cb_state`
+        # below, because `term_fn` can be called while NonLinearPlace is being
+        # constructed -- before `cb_state` is bound. -1 means "no callback has
+        # run yet", which `applied_lambda` answers with 0.0 (nothing is
+        # activated yet either).
+        norm_iteration = {"it": -1}
 
         def term_fn(pos):
             if norm_policy == "legacy":
@@ -358,15 +432,24 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                 # would differ in the last ulp and break the legacy guarantee.
                 lam_io, kappa = state.lambda_io, state.kappa_ft
             else:
+                # Review I1b: the committed lambdas only move on `every`-gated
+                # transactions, so apply this iteration's activation ramp here
+                # -- the same continuous drift `update_continuous` gives the
+                # legacy arm, and the only thing that makes n_ramp visible at
+                # every=50. `cb_state["last_iteration"]` is the iteration whose
+                # callback most recently ran, i.e. the one whose coefficients
+                # these objective evaluations belong to (iteration_callback
+                # fires before the optimizer step).
                 lam_io = normalizer.lambdas.get("io", 0.0)
                 lam_ft = normalizer.lambdas.get("ft", 0.0)
-                # Defensive only: the callback already rejects this combination
-                # right after normalizer.transaction() (with iteration/overflow
-                # context for diagnosability, fix round 1) -- this should be
-                # unreachable by the time term_fn runs.
+                # Defensive only: the normalizer zeroes a dependent term whose
+                # base died (review C1), so this is unreachable.
                 assert not (lam_io <= 0.0 and lam_ft > 0.0), (
                     "FtTerm expresses the FT coefficient as lambda_io*kappa, so "
                     "a nonzero lambda_ft with lambda_io == 0 cannot be applied")
+                it_now = norm_iteration["it"]
+                lam_io = normalizer.applied_lambda("io", it_now)
+                lam_ft = normalizer.applied_lambda("ft", it_now)
                 # Non-legacy: this path has no bit-exact guarantee to preserve
                 # (unlike legacy above), so recovering kappa by division here,
                 # accepting last-ulp rounding against the traced lambda_ft, is fine.
@@ -480,9 +563,18 @@ def run_io(config_json, k, rtype, seed, out_json, *,
             # Lgamma_stop_criterion must still report the iteration it actually
             # stopped at.
             cb_state["last_iteration"] = iteration
+            norm_iteration["it"] = iteration
             of = float(placer.model.overflow.max())
             gamma = float(placer.model.gamma)
             discrete = state.update_continuous(iteration, of, L_R, gamma)
+            if not observer_mode and norm_policy != "legacy":
+                # Review I1a: hand the normalizer ScheduleState's per-iteration
+                # activation instant for `io`, and latch every other term's own
+                # overflow gate per iteration too, so `it_activate` is never the
+                # first `every`-gated callback (up to `every` iterations late,
+                # which aliased the whole n_ramp=20 soft start away).
+                normalizer.set_activation("io", state.it_activate)
+                normalizer.update_activation(iteration, of)
             if not observer_mode and state.active:
                 cb_state["n_callbacks_with_active"] += 1
 
@@ -567,11 +659,15 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                         txn = normalizer.transaction(iteration, of, state.tau, gamma)
                         lam_io_txn = txn.lambdas.get("io", 0.0)
                         lam_ft_txn = txn.lambdas.get("ft", 0.0)
-                        if lam_io_txn <= 0.0 and lam_ft_txn > 0.0:
-                            raise RuntimeError(
-                                "FtTerm expresses the FT coefficient as lambda_io*kappa, "
-                                "so a nonzero lambda_ft with lambda_io == 0 cannot be "
-                                "applied (iteration=%d, overflow=%.6f)" % (iteration, of))
+                        # Review C1: unreachable -- `ft` is registered with
+                        # requires="io", so the normalizer publishes 0 for it
+                        # whenever lambda_io is 0. Kept as an assert because a
+                        # transient IO-gradient dip must degrade gracefully, not
+                        # kill a multi-hour run.
+                        assert not (lam_io_txn <= 0.0 and lam_ft_txn > 0.0), (
+                            "FtTerm expresses the FT coefficient as lambda_io*kappa, "
+                            "so a nonzero lambda_ft with lambda_io == 0 cannot be "
+                            "applied (iteration=%d, overflow=%.6f)" % (iteration, of))
                         ft_state = normalizer.states.get("ft")
                         entry.update(grad_l1_wl=normalizer.wl_norm,
                                      grad_l1_io=normalizer.states["io"].grad_norm,
@@ -579,6 +675,12 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                                      ratio_inst=normalizer.states["io"].ratio_inst,
                                      ratio_ema=normalizer.states["io"].ratio_ema,
                                      lambda_io=txn.lambdas.get("io", 0.),
+                                     # Review I1c: the committed lambda above is
+                                     # un-ramped; these are what term_fn applied
+                                     # at this iteration.
+                                     lambda_io_applied=normalizer.states["io"].lam_applied,
+                                     lambda_ft_applied=(ft_state.lam_applied
+                                                        if ft_state else 0.),
                                      obj_version=txn.obj_version)
                     entry.update(lambda_ft=txn.lambdas.get("ft", 0.),
                                  norm_cmax=txn.cmax,

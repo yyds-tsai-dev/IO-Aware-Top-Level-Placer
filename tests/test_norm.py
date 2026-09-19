@@ -111,6 +111,21 @@ def test_parse_target_shares():
         parse_target_shares("io")
 
 
+@pytest.mark.parametrize("spec", [
+    "io=0.3,io=0.9",        # duplicate: last used to win, silently
+    "io=nan",               # nan defeats every downstream `<= 0.0` guard
+    "io=inf",
+    "io=-0.2",
+    "io=1.5",
+    "io=0.3,ft=",           # empty value
+])
+def test_parse_target_shares_rejects_bad_values(spec):
+    """Review I6: every one of these was silently accepted (or, for the empty
+    value, raised an unhelpful float() ValueError)."""
+    with pytest.raises(ValueError):
+        parse_target_shares(spec)
+
+
 def _norm_a(**kwargs):
     """Policy-A normalizer with one IO term, cap effectively disabled."""
     n = TermNormalizer(policy="grandplan", **kwargs)
@@ -225,15 +240,191 @@ def test_policy_a_lambda_is_stepped_weight_times_ema_ratio():
     assert txn.lambdas["io"] == pytest.approx(0.10 * 75.0, rel=1e-12)
 
 
-def test_activation_ramp_is_shared_by_the_policy():
+def test_the_committed_lambda_is_unramped_and_the_ramp_is_applied_per_iteration():
+    """Review I1: `lambdas` (and the trace's `lam`) hold the UN-ramped
+    coefficient; the activation ramp is applied by `applied_lambda` on every
+    GP iteration, so it is visible between two `every`-gated transactions
+    instead of being aliased away by them."""
     n = TermNormalizer(policy="grandplan")
     n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=20)
     n.update_grad_norms({"wl": 1000.0, "io": 10.0})
     txn = n.transaction(0, 0.85, tau=1000.0, gamma=1e-12)
-    assert txn.lambdas["io"] == 0.0                            # ramp(0, 0, 20) == 0
+    assert txn.lambdas["io"] == pytest.approx(0.05 * 100.0, rel=1e-12)
+    assert n.applied_lambda("io", 0) == 0.0                    # ramp(0, 0, 20) == 0
+    assert n.applied_lambda("io", 10) == pytest.approx(0.05 * 0.5 * 100.0, rel=1e-12)
+    assert n.applied_lambda("io", 20) == pytest.approx(0.05 * 100.0, rel=1e-12)
+    assert txn.row["terms"]["io"]["lam_applied"] == 0.0
     n.mark_refreshed()
     txn = n.transaction(10, 0.85, tau=1000.0, gamma=1e-12)
-    assert txn.lambdas["io"] == pytest.approx(0.05 * 0.5 * 100.0, rel=1e-12)
+    assert txn.lambdas["io"] == pytest.approx(0.05 * 100.0, rel=1e-12)
+    assert txn.row["terms"]["io"]["lam_applied"] == pytest.approx(
+        0.05 * 0.5 * 100.0, rel=1e-12)
+
+
+def test_the_external_activation_clock_wins_over_the_first_gated_probe():
+    """Review I1a: `it_activate` is the ScheduleState's per-iteration
+    activation instant, not the first `every`-gated callback that observed the
+    overflow threshold (which is up to `every`=50 iterations later -- longer
+    than the whole n_ramp=20 window)."""
+    n = TermNormalizer(policy="grandplan", wt0=1.0)
+    n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=20)
+    n.set_activation("io", 37)          # ScheduleState latched at iteration 37
+    n.update_activation(50, 0.85)       # the first gated callback would say 50
+    assert n.states["io"].it_activate == 37 and n.states["io"].active
+    txn = n.transaction(50, 0.85, tau=1000.0, gamma=0.0,
+                        grad_norms={"wl": 1000.0, "io": 10.0})
+    lam = txn.lambdas["io"]
+    assert lam == pytest.approx(100.0, rel=1e-12)
+    for offset in range(0, 21):
+        assert n.applied_lambda("io", 37 + offset) == pytest.approx(
+            lam * activation_ramp(37 + offset, 37, 20), rel=1e-12)
+    assert n.applied_lambda("io", 57) == pytest.approx(lam, rel=1e-12)
+    assert n.applied_lambda("io", 500) == pytest.approx(lam, rel=1e-12)
+    assert txn.row["terms"]["io"]["lam_applied"] == pytest.approx(
+        lam * 13.0 / 20.0, rel=1e-12)
+
+
+def test_per_term_weight_ceilings_saturate_independently():
+    """Review I4: without per-term `wt_max` every grandplan term converges to
+    the same ceiling, so FT's realised force share converges to IO's (an
+    effective f_ft of 1.0 against legacy's 0.25)."""
+    n = TermNormalizer(policy="grandplan", wt0=0.05, wt_step=0.05,
+                       ramp_period=10, wt_max=1.0)
+    n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.register("ft", object(), 1.0, activate_overflow=0.90, n_ramp=0,
+               requires="io", wt_max=0.25)
+    for iteration in range(0, 1000, 50):
+        n.transaction(iteration, 0.85, tau=1000.0, gamma=0.0,
+                      grad_norms={"wl": 1000.0, "io": 10.0, "ft": 10.0})
+        n.mark_refreshed()
+    assert n.states["io"].wt == pytest.approx(1.00, rel=1e-12)
+    assert n.states["ft"].wt == pytest.approx(0.25, rel=1e-12)
+    assert n.lambdas["ft"] / n.lambdas["io"] == pytest.approx(0.25, rel=1e-12)
+    assert n.transaction(1000, 0.85, tau=1000.0, gamma=0.0).row[
+        "terms"]["ft"]["wt_max"] == pytest.approx(0.25, rel=1e-12)
+
+
+def test_dependent_term_is_zeroed_when_its_base_dies():
+    """Review C1: `FtTerm` can only express the FT force as
+    `lambda_io * kappa`, so a nonzero lambda_ft with a dead lambda_io is
+    unapplicable -- and the pre-fix driver raised RuntimeError there, killing a
+    multi-hour run on one ordinary probe. Worse, lambda_ft *rose* at exactly
+    that probe (20 -> 30 in the review's reproduction), because FT's own EMA
+    kept updating while IO's signal vanished."""
+    n = TermNormalizer(policy="grandplan", wt0=1.0)
+    n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.register("ft", object(), 1.0, activate_overflow=0.90, n_ramp=0,
+               requires="io")
+    healthy = n.transaction(0, 0.85, tau=1000.0, gamma=0.0,
+                            grad_norms={"wl": 1000.0, "io": 100.0, "ft": 50.0})
+    assert healthy.lambdas["io"] > 0.0 and healthy.lambdas["ft"] > 0.0
+    n.mark_refreshed()
+    # Exactly-zero IO gradient: no crossing to pull on, so IO is genuinely dead
+    # and FT must die with it (controller ruling F1 keys the dependency on
+    # "base lambda == 0 after the tiny-gradient logic").
+    dead = n.transaction(50, 0.80, tau=1000.0, gamma=0.0,
+                         grad_norms={"wl": 1000.0, "io": 0.0, "ft": 50.0})
+    assert dead.lambdas == {"io": 0.0, "ft": 0.0}
+    assert n.states["ft"].wt == 0.0
+    n.mark_refreshed()
+    recovered = n.transaction(100, 0.75, tau=1000.0, gamma=0.0,
+                              grad_norms={"wl": 1000.0, "io": 100.0, "ft": 50.0})
+    assert recovered.lambdas["io"] > 0.0 and recovered.lambdas["ft"] > 0.0
+
+
+def test_a_tiny_but_nonzero_gradient_saturates_at_the_cap_instead_of_dying():
+    """Controller ruling F1: the pre-fix behaviour (lambda := 0 whenever
+    `grad <= eps_rel * ||grad WL||`) collapsed the IO term around iteration
+    1000 of the group-scale run, where the retired path instead let
+    `ratio_inst` explode and simply sat at the Lipschitz cap. The term now
+    takes the cap's remaining headroom, `ratio_ema` is left untouched, and a
+    dependent term stays alive because its base is still nonzero."""
+    n = TermNormalizer(policy="grandplan", wt0=1.0)
+    n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.register("ft", object(), 1.0, activate_overflow=0.90, n_ramp=0,
+               requires="io")
+    n.transaction(0, 0.85, tau=100.0, gamma=20.0,
+                  grad_norms={"wl": 1000.0, "io": 10.0, "ft": 20.0})
+    n.mark_refreshed()
+    assert n.states["io"].ratio_ema == pytest.approx(100.0, rel=1e-12)
+    # 0.5 <= eps_rel(1e-3) * 1000 == 1.0, but not exactly zero
+    txn = n.transaction(50, 0.80, tau=100.0, gamma=20.0,
+                        grad_norms={"wl": 1000.0, "io": 0.5, "ft": 20.0})
+    assert n.states["io"].ratio_inst is None                    # dead probe
+    assert n.states["io"].ratio_ema == pytest.approx(100.0, rel=1e-12)  # untouched
+    assert txn.cap == pytest.approx(lipschitz_cap(100.0, 20.0, 1.0, 1.0), rel=1e-12)
+    assert txn.lambdas["ft"] == pytest.approx(50.0, rel=1e-12)  # 1.0 * 1000/20
+    assert txn.lambdas["io"] == pytest.approx(txn.cap - 50.0, rel=1e-12)
+    assert txn.lambdas["io"] > 0.0
+    assert sum(txn.lambdas.values()) == pytest.approx(txn.cap, rel=1e-12)
+
+
+def test_an_exactly_zero_gradient_still_zeroes_the_coefficient():
+    n = _norm_a()
+    txn = n.transaction(0, 0.85, tau=100.0, gamma=20.0,
+                        grad_norms={"wl": 1000.0, "io": 10.0})
+    assert txn.lambdas["io"] > 0.0
+    n.mark_refreshed()
+    txn = n.transaction(50, 0.80, tau=100.0, gamma=20.0,
+                        grad_norms={"wl": 1000.0, "io": 0.0})
+    assert txn.lambdas["io"] == 0.0
+
+
+def test_dependent_kappa_is_clamped_like_the_legacy_schedule():
+    """Review M2: the non-legacy driver recovers `kappa = lam_ft/lam_io` by
+    division, which a denormal base coefficient blows up. Mirrors
+    `ScheduleState.kappa_max`."""
+    n = TermNormalizer(policy="grandplan", wt0=1.0, kappa_max=100.0)
+    n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.register("ft", object(), 1.0, activate_overflow=0.90, n_ramp=0,
+               requires="io")
+    txn = n.transaction(0, 0.85, tau=1000.0, gamma=0.0,
+                        grad_norms={"wl": 1000.0, "io": 1000.0, "ft": 2.0})
+    assert txn.lambdas["io"] == pytest.approx(1.0, rel=1e-12)
+    assert txn.lambdas["ft"] == pytest.approx(100.0, rel=1e-12)   # not 500.0
+    assert txn.row["terms"]["ft"]["kappa_clamped"] is True
+    assert txn.row["terms"]["io"]["kappa_clamped"] is False
+
+
+def test_register_range_checks():
+    """Review M3: a mis-registered term used to fail silently --
+    `curvature=0` gave `cmax=0`, which `lipschitz_cap`'s `max(1.0, cmax)`
+    swallowed, so the term got no cap protection and `cap_binding` became
+    meaningless."""
+    n = TermNormalizer(policy="grandplan")
+    with pytest.raises(ValueError):
+        n.register("a", object(), 0.0)                 # curvature < 1
+    with pytest.raises(ValueError):
+        n.register("a", object(), -5.0)
+    with pytest.raises(ValueError):
+        n.register("a", object(), float("nan"))
+    with pytest.raises(ValueError):
+        n.register("a", object(), 1.0, n_ramp=-1)
+    with pytest.raises(ValueError):
+        n.register("a", object(), 1.0, activate_overflow=0.0)
+    with pytest.raises(ValueError):
+        n.register("a", object(), 1.0, target_share=1.5)
+    with pytest.raises(ValueError):
+        n.register("a", object(), 1.0, wt_max=0.0)
+    with pytest.raises(ValueError):
+        n.register("a", object(), 1.0, ramp_period=-10)
+    with pytest.raises(ValueError):
+        n.register("a", object(), 1.0, requires="nope")
+    # `--of-on 2` is a legitimate "always active" setting the driver passes
+    # straight through, so activate_overflow has no upper bound.
+    n.register("a", object(), 1.0, activate_overflow=2.0)
+    assert n.configs["a"].activate_overflow == 2.0
+
+
+def test_transaction_rejects_a_nonfinite_committed_lambda():
+    """Review I6: no derived coefficient was checked for finiteness, so a
+    `nan` ratio reached the objective term itself (every downstream guard --
+    `lam <= 0.0`, `target_share <= 0.0` -- is False for `nan`)."""
+    n = _norm_a()
+    with pytest.raises(FloatingPointError):
+        n.transaction(0, 0.85, tau=1000.0, gamma=1e-12,
+                      grad_norms={"wl": 1000.0, "io": float("nan")})
+    assert n.obj_version == 0                     # nothing was committed
 
 
 def test_cap_uses_per_term_curvature_and_clips_the_sum():
@@ -330,6 +521,9 @@ def test_row_carries_every_logged_field():
     # realised share lam*||grad T|| / (||grad WL|| + sum lam*||grad T||)
     assert io["share"] == pytest.approx(50.0 / 1050.0, rel=1e-12)
     assert io["active"] is True
+    assert io["lam_applied"] == pytest.approx(5.0)     # n_ramp=0 -> ramp is 1
+    assert io["wt_max"] == pytest.approx(1.0)
+    assert io["kappa_clamped"] is False
     assert row["cancellation_ratio"] is None                         # no probe cache
 
 
@@ -445,15 +639,42 @@ def test_policy_b_converges_to_the_requested_force_share():
     assert share == pytest.approx(0.2, rel=1e-6)
 
 
-def test_policy_b_ramp_scales_the_target_share_not_the_coefficient():
+def test_policy_b_ramps_the_applied_coefficient_not_the_target_share():
+    """Review I1c: the ramp no longer scales policy B's target share (which
+    made the controller chase a moving fixed point during the soft start);
+    the committed coefficient is computed at the full share and the ramp is
+    applied per iteration to what the objective sees."""
     n = TermNormalizer(policy="adaptive")
     n.register("io", object(), 1.0, target_share=0.2, activate_overflow=0.90, n_ramp=20)
     n.transaction(0, 0.85, tau=1000.0, gamma=0.0, grad_norms={"wl": 1000.0, "io": 10.0})
-    assert n.lambdas["io"] == 0.0                        # ramp 0 -> share 0
+    assert n.states["io"].wt == pytest.approx(0.2, rel=1e-12)
+    assert n.lambdas["io"] == pytest.approx(0.2 * 1000.0 / 10.0, rel=1e-12)
+    assert n.applied_lambda("io", 0) == 0.0              # ramp 0
+    assert n.applied_lambda("io", 10) == pytest.approx(0.5 * n.lambdas["io"], rel=1e-12)
+    assert n.applied_lambda("io", 20) == pytest.approx(n.lambdas["io"], rel=1e-12)
+
+
+def test_policy_b_keeps_its_momentum_state_across_a_dead_probe():
+    """Review I7: one dead probe used to overwrite `state.lam` with 0, so the
+    next probe re-bootstrapped from policy A's form (20.0 here) instead of
+    resuming the converged multiplicative state (25.0)."""
+    n = _norm_b(share=0.2)
+    for iteration in range(0, 50 * 150, 50):
+        n.transaction(iteration, 0.85, tau=1000.0, gamma=0.0,
+                      grad_norms={"wl": 1000.0, "io": 10.0})
+        n.mark_refreshed()
+    converged = n.lambdas["io"]
+    assert converged == pytest.approx(25.0, rel=1e-6)
+    n.transaction(10000, 0.85, tau=1000.0, gamma=0.0,
+                  grad_norms={"wl": 1000.0, "io": 0.0})
+    assert n.lambdas["io"] == 0.0                         # published: nothing
+    assert n.states["io"].lam_state == pytest.approx(
+        converged, rel=1e-12)                          # policy state: kept
     n.mark_refreshed()
-    n.transaction(10, 0.85, tau=1000.0, gamma=0.0, grad_norms={"wl": 1000.0, "io": 10.0})
-    assert n.states["io"].wt == pytest.approx(0.1, rel=1e-12)
-    assert n.lambdas["io"] == pytest.approx(0.1 * 1000.0 / 10.0, rel=1e-12)
+    n.transaction(10050, 0.85, tau=1000.0, gamma=0.0,
+                  grad_norms={"wl": 1000.0, "io": 10.0})
+    assert n.lambdas["io"] == pytest.approx(converged, rel=1e-6)
+    assert n.lambdas["io"] != pytest.approx(0.2 * 1000.0 / 10.0, rel=1e-3)
 
 
 def test_policy_b_zero_target_share_leaves_the_term_off():

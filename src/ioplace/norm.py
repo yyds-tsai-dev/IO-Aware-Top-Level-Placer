@@ -10,6 +10,7 @@ Everything above `TermNormalizer` is a total function of floats: no torch, no
 DREAMPlace, no CUDA, so the policy maths is testable on any host.
 """
 
+import math
 from dataclasses import dataclass
 from typing import Optional
 
@@ -107,15 +108,33 @@ def clip_sum_to_cap(lambdas, cap):
 
 def parse_target_shares(spec):
     """Parse the `--norm-target-share` CLI value: `"io=0.3,ft=0.1"` ->
-    `{"io": 0.3, "ft": 0.1}`. Empty or `None` -> `{}`."""
+    `{"io": 0.3, "ft": 0.1}`. Empty or `None` -> `{}`.
+
+    Value validation (review I6): duplicates, non-finite values and values
+    outside `[0, 1]` are rejected here. A `nan` share is otherwise invisible
+    -- `adaptive_lambda`'s `target_share <= 0.0` guard is False for `nan`, the
+    sqrt update yields `nan`, and `clip_sum_to_cap` then propagates it to
+    every term. Unknown *names* cannot be checked here (this function has no
+    term registry); the driver validates them against `normalizer.configs`
+    right after it registers its terms."""
     if not spec:
         return {}
     shares = {}
     for item in spec.split(","):
         name, sep, value = item.partition("=")
-        if not sep or not name.strip():
+        name = name.strip()
+        if not sep or not name:
             raise ValueError("target share must be name=value, got %r" % (item,))
-        shares[name.strip()] = float(value)
+        if name in shares:
+            raise ValueError("duplicate target share for %r in %r" % (name, spec))
+        share = float(value)
+        if not math.isfinite(share):
+            raise ValueError("target share for %r must be finite, got %r"
+                             % (name, share))
+        if share < 0.0 or share > 1.0:
+            raise ValueError("target share for %r must lie in [0, 1], got %r"
+                             % (name, share))
+        shares[name] = share
     return shares
 
 
@@ -131,23 +150,54 @@ class TermConfig:
     """Static registration data for one extra objective term. There is no
     per-term `kappa`: `Cmax` is the pre-clip lambda-weighted mean of every
     active term's `curvature` (controller ruling 2026-09-19; see `register`'s
-    docstring and `_compute`)."""
+    docstring and `_compute`).
+
+    `requires` (review C1) names the term this one's coefficient is expressed
+    *relative to* -- `ft`'s applied force is `lambda_io * kappa`, so a
+    `lambda_ft > 0` with `lambda_io == 0` cannot be applied at all. The
+    `wt0`/`wt_step`/`ramp_period`/`wt_max` fields (review I4) are per-term
+    overrides of the normalizer-wide policy-A weight schedule; `None` means
+    "use the normalizer's value"."""
     name: str
     curvature: float = 1.0
     target_share: float = 0.0
     activate_overflow: float = 0.90
     n_ramp: int = 20
+    requires: Optional[str] = None
+    wt0: Optional[float] = None
+    wt_step: Optional[float] = None
+    ramp_period: Optional[int] = None
+    wt_max: Optional[float] = None
 
 
 @dataclass
 class TermState:
     """Live per-term state. `wt` holds policy A's stepped weight or policy B's
-    ramped target share, whichever the active policy produced."""
+    target share, whichever the active policy produced.
+
+    Three coefficient slots, not one (reviews I1/I7):
+
+    * `lam` -- the committed, UN-ramped coefficient this transaction
+      published. This is what the trace's `lam` column and `self.lambdas`
+      carry.
+    * `lam_applied` -- `lam` scaled by this term's activation ramp at the
+      transaction's iteration. The driver recomputes the same product every GP
+      iteration through `applied_lambda()`, so the coefficient actually
+      applied drifts continuously across the ramp window exactly as the
+      retired path's `rho * ramp * ratio_ema` did; this field records its
+      value at the transaction itself.
+    * `lam_state` -- policy B's momentum state. A probe that publishes 0 (a
+      dead gradient, or a dependent term whose base died) leaves this
+      untouched, so the next healthy probe resumes the multiplicative update
+      from the converged value instead of re-bootstrapping (review I7)."""
     grad_norm: float = 0.0
     ratio_inst: Optional[float] = None
-    ratio_ema: float = None
+    ratio_ema: Optional[float] = None
     wt: float = 0.0
     lam: float = 0.0
+    lam_applied: float = 0.0
+    lam_state: float = 0.0
+    kappa_clamped: bool = False
     active: bool = False
     it_activate: Optional[int] = None
 
@@ -200,7 +250,7 @@ class TermNormalizer:
 
     def __init__(self, policy="grandplan", norm_p=1, ema=0.5, probe_every=50,
                  wt0=0.05, wt_step=0.05, ramp_period=100, wt_max=1.0,
-                 momentum=0.75, c_lip=1.0, eps_rel=1e-3,
+                 momentum=0.75, c_lip=1.0, eps_rel=1e-3, kappa_max=100.0,
                  num_movable=None, num_nodes=None, track_cancellation=True,
                  legacy_state=None, trace=None):
         if policy not in self.POLICIES:
@@ -219,6 +269,10 @@ class TermNormalizer:
         self.ramp_period, self.wt_max = int(ramp_period), float(wt_max)
         self.momentum = float(momentum)
         self.c_lip, self.eps_rel = float(c_lip), float(eps_rel)
+        # Mirrors ScheduleState.kappa_max (schedules.py): the non-legacy arm
+        # recovers kappa = lam_dependent/lam_base, which a denormal base
+        # coefficient would blow up (review M2).
+        self.kappa_max = float(kappa_max)
         self.num_movable, self.num_nodes = num_movable, num_nodes
         self.track_cancellation = bool(track_cancellation)
         self.trace = trace
@@ -233,6 +287,9 @@ class TermNormalizer:
         self._probed_names = set()
         self._probed_this_callback = False
         self._last_probe_iteration = None
+        # Terms whose activation clock is supplied from outside (review I1a);
+        # `_activate`'s own overflow gate is only a fallback for the rest.
+        self._external_activation = set()
 
     # -- version discipline -------------------------------------------------
     @property
@@ -264,22 +321,82 @@ class TermNormalizer:
 
     # -- registration and measurement --------------------------------------
     def register(self, name, term, curvature, target_share=0.0,
-                 activate_overflow=0.90, n_ramp=20):
+                 activate_overflow=0.90, n_ramp=20, requires=None,
+                 wt0=None, wt_step=None, ramp_period=None, wt_max=None):
         """Register one term. `term` exposes `value(pos, ctx) -> Tensor`;
         `probe()` owns the backward, the masking and the norm order.
 
         Declared curvatures (design sec 4): IO 1, FT `ecc_max`, capacity
         `max_s pen''`, pseudo-FT 1. `curvature` feeds `Cmax`'s pre-clip
         lambda-weighted mean over every active term (controller ruling
-        2026-09-19, `_compute`) -- there is no per-term kappa to register."""
+        2026-09-19, `_compute`) -- there is no per-term kappa to register.
+
+        `requires` (review C1) names an already-registered term this one's
+        coefficient is expressed relative to: `_compute` publishes 0 for this
+        term whenever that base term's coefficient is 0, because the force
+        `lam_base * kappa` cannot be applied without a base. It also bounds
+        the recovered `kappa = lam/lam_base` by `kappa_max` (review M2).
+
+        `wt0`/`wt_step`/`ramp_period`/`wt_max` (review I4) override the
+        normalizer-wide policy-A weight schedule for this term only; `None`
+        (the default) keeps the normalizer's value, so registering two terms
+        without overrides behaves exactly as before.
+
+        Range checks (review M3): a mis-registered term used to fail silently
+        -- `curvature=0` made `cmax=0`, which `lipschitz_cap`'s `max(1.0,
+        cmax)` swallowed, so the term got no cap protection at all and
+        `cap_binding` became meaningless."""
         if name in self.configs:
             raise ValueError("term %r already registered" % (name,))
-        self.configs[name] = TermConfig(name, float(curvature),
-                                        float(target_share), float(activate_overflow),
-                                        int(n_ramp))
+        curvature = float(curvature)
+        if not math.isfinite(curvature) or curvature < 1.0:
+            raise ValueError("curvature must be a finite value >= 1.0 (1.0 = "
+                             "no extra curvature), got %r for term %r"
+                             % (curvature, name))
+        n_ramp = int(n_ramp)
+        if n_ramp < 0:
+            raise ValueError("n_ramp must be >= 0, got %r for term %r"
+                             % (n_ramp, name))
+        activate_overflow = float(activate_overflow)
+        # Upper bound intentionally not enforced: `run_io` passes `--of-on`
+        # straight through as the IO term's gate, and `--of-on 2` is the
+        # established "always active" setting in the driver tests.
+        if not math.isfinite(activate_overflow) or activate_overflow <= 0.0:
+            raise ValueError("activate_overflow must be a finite value > 0, "
+                             "got %r for term %r" % (activate_overflow, name))
+        target_share = float(target_share)
+        if not math.isfinite(target_share) or not 0.0 <= target_share <= 1.0:
+            raise ValueError("target_share must lie in [0, 1], got %r for "
+                             "term %r" % (target_share, name))
+        if requires is not None and requires not in self.configs:
+            raise ValueError("term %r requires %r, which is not registered "
+                             "(registered: %r)"
+                             % (name, requires, sorted(self.configs)))
+        overrides = {}
+        for label, value in (("wt0", wt0), ("wt_step", wt_step),
+                             ("ramp_period", ramp_period), ("wt_max", wt_max)):
+            if value is None:
+                overrides[label] = None
+                continue
+            value = float(value)
+            if not math.isfinite(value) or value <= 0.0:
+                raise ValueError("%s must be > 0 when given, got %r for term %r"
+                                 % (label, value, name))
+            overrides[label] = int(value) if label == "ramp_period" else value
+        self.configs[name] = TermConfig(name, curvature, target_share,
+                                        activate_overflow, n_ramp, requires,
+                                        overrides["wt0"], overrides["wt_step"],
+                                        overrides["ramp_period"],
+                                        overrides["wt_max"])
         self.terms[name] = term
         self.states[name] = TermState()
         self.lambdas[name] = 0.0
+
+    def _schedule(self, name, attr):
+        """Per-term policy-A schedule value with the normalizer-wide default
+        (review I4)."""
+        value = getattr(self.configs[name], attr)
+        return getattr(self, attr) if value is None else value
 
     def should_probe(self, iteration):
         return iteration % self.probe_every == 0
@@ -313,43 +430,130 @@ class TermNormalizer:
     def _activate(self, iteration, overflow):
         """Latch each term on the first iteration at or below its activation
         overflow threshold. Monotone and idempotent, so both `weights()` and
-        `transaction()` may call it."""
+        `transaction()` may call it. Terms with an external activation clock
+        (`set_activation`) are skipped -- their clock is authoritative."""
         for name, config in self.configs.items():
             state = self.states[name]
+            if name in self._external_activation:
+                continue
             if not state.active and overflow <= config.activate_overflow:
                 state.active, state.it_activate = True, iteration
 
+    def set_activation(self, name, it_activate):
+        """Install an external activation clock for one term (review I1a).
+
+        `TermState.it_activate` used to latch on the first `every`-gated
+        callback at or below the term's overflow threshold, which differs from
+        the true activation iteration by up to `every` (50 by default) -- and
+        the activation ramp is `n_ramp=20` iterations long, so the whole soft
+        start was aliased away. The driver owns a per-iteration clock already
+        (`ScheduleState.it_activate`, latched inside `update_continuous` on
+        every GP iteration); this hands it to the normalizer so both arms ramp
+        off the same instant. Monotone and idempotent: the first non-`None`
+        value wins."""
+        if it_activate is None:
+            return
+        state = self.states[name]
+        self._external_activation.add(name)
+        if not state.active:
+            state.active, state.it_activate = True, int(it_activate)
+
+    def update_activation(self, iteration, overflow):
+        """Per-iteration activation latch for terms with no external clock
+        (review I1a). The driver calls this every GP iteration, not only on
+        `every`-gated callbacks, so `it_activate` is the real activation
+        iteration."""
+        self._activate(iteration, overflow)
+
+    def applied_lambda(self, name, iteration):
+        """The coefficient to actually apply at `iteration`: the committed
+        (un-ramped) lambda scaled by this term's activation ramp (review I1b).
+
+        `self.lambdas` only changes inside `transaction()`, i.e. every `every`
+        iterations. The retired path recomputed `lambda_io = rho * ramp *
+        ratio_ema` on *every* GP iteration (`ScheduleState.update_continuous`),
+        so its coefficient drifted continuously through the ramp window
+        instead of stepping once. A driver's `term_fn` calls this every
+        iteration to reproduce that drift for the non-legacy policies; the
+        drift carries no `obj_version` bump, exactly as it did not on the
+        retired path (the ramp is a known, monotone function of the iteration
+        counter, not a new measurement)."""
+        state = self.states.get(name)
+        if state is None or state.it_activate is None:
+            return 0.0
+        lam = self.lambdas.get(name, 0.0)
+        if lam == 0.0:
+            return 0.0
+        return lam * activation_ramp(iteration, state.it_activate,
+                                     self.configs[name].n_ramp)
+
     def _compute(self, iteration, tau, gamma):
-        """Pure: returns `(lambdas, weights, cmax, cap, cap_binding)` from the
-        current measurements without mutating anything."""
+        """Pure: returns `(lambdas, weights, cmax, cap, cap_binding,
+        lam_states, kappa_clamped)` from the current measurements without
+        mutating anything.
+
+        `lambdas` are the committed, UN-ramped coefficients (the activation
+        ramp is applied per iteration by `applied_lambda`, review I1b).
+        `lam_states` are policy B's momentum states, which a dead or
+        dependency-zeroed probe leaves untouched (review I7).
+
+        Tiny-gradient handling (controller ruling F1): a term whose gradient
+        is at or below `eps_rel * ||grad WL||` but not exactly zero has no
+        usable ratio, but it is *not* dead -- the retired path let `ratio_inst`
+        explode in that regime and simply saturated `lambda_io` at the
+        Lipschitz cap, which is why its IO force persisted to the end of GP.
+        Zeroing the coefficient instead (the pre-F1 behaviour) collapsed the
+        IO term around iteration 1000 of the group-scale acceptance run. Such
+        a term therefore takes the cap's remaining headroom, and `ratio_ema`
+        stays untouched. A gradient of exactly 0.0 still gets 0: there is no
+        crossing to pull on, so any coefficient is inert.
+
+        Caveat on the headroom: `Cmax` (and so the cap) is derived from the
+        other terms' pre-clip lambdas, as the ruling specifies, so a saturating
+        term with `curvature > Cmax` can push the realised weighted mean above
+        the bound. `io` (curvature 1) is the term that saturates in practice;
+        for it the bound is exact."""
         total_force = self.wl_norm + sum(
-            self.states[n].lam * self.states[n].grad_norm
+            self.states[n].lam_state * self.states[n].grad_norm
             for n in self.configs if self.states[n].active)
-        lambdas, weights = {}, {}
+        lambdas, weights, lam_states = {}, {}, {}
+        saturating, healthy = [], []
         for name, config in self.configs.items():
             state = self.states[name]
+            lam_states[name] = state.lam_state
             if not state.active or state.ratio_ema is None:
                 lambdas[name], weights[name] = 0.0, 0.0
                 continue
-            ramp = activation_ramp(iteration, state.it_activate, config.n_ramp)
             if self.policy == "grandplan":
-                weights[name] = ramp * grandplan_weight(
-                    iteration, state.it_activate, self.wt0, self.wt_step,
-                    self.ramp_period, self.wt_max)
-                lambdas[name] = grandplan_lambda(weights[name], state.ratio_ema,
-                                                 self.wl_norm, state.grad_norm,
-                                                 self.eps_rel)
+                weights[name] = grandplan_weight(
+                    iteration, state.it_activate, self._schedule(name, "wt0"),
+                    self._schedule(name, "wt_step"),
+                    self._schedule(name, "ramp_period"),
+                    self._schedule(name, "wt_max"))
             elif self.policy == "adaptive":
-                weights[name] = ramp * config.target_share
-                lambdas[name] = adaptive_lambda(state.lam, state.grad_norm,
-                                                weights[name], total_force,
-                                                self.wl_norm, self.momentum,
-                                                self.eps_rel)
+                weights[name] = config.target_share
             else:
                 raise ValueError(
                     "policy %r has no coefficient rule ('grandplan' and "
                     "'adaptive' compute here; 'legacy' must delegate before "
                     "reaching _compute)" % (self.policy,))
+            if state.grad_norm == 0.0:
+                lambdas[name] = 0.0
+                continue
+            if state.grad_norm <= self.eps_rel * self.wl_norm:
+                lambdas[name] = 0.0          # placeholder; resolved after the cap
+                saturating.append(name)
+                continue
+            if self.policy == "grandplan":
+                lambdas[name] = grandplan_lambda(weights[name], state.ratio_ema,
+                                                 self.wl_norm, state.grad_norm,
+                                                 self.eps_rel)
+            else:
+                lambdas[name] = adaptive_lambda(state.lam_state, state.grad_norm,
+                                                weights[name], total_force,
+                                                self.wl_norm, self.momentum,
+                                                self.eps_rel)
+            healthy.append(name)
         # Cmax is the pre-clip lambda-weighted mean curvature (controller
         # ruling 2026-09-19, fix round 1): Cmax = sum_t lambda_t*curv_t /
         # sum_t lambda_t. This replaces the derived-kappa form
@@ -375,7 +579,51 @@ class TermNormalizer:
         else:
             binding = None
         lambdas, _ = clip_sum_to_cap(preclip, cap)
-        return lambdas, weights, cmax, cap, binding
+        if saturating:
+            if math.isfinite(cap):
+                headroom = max(cap - sum(lambdas.values()), 0.0) / len(saturating)
+                for name in saturating:
+                    lambdas[name] = headroom
+            else:
+                # gamma <= 0: there is no Lipschitz bound to saturate against,
+                # so hold the last published coefficient rather than invent an
+                # unbounded one.
+                for name in saturating:
+                    lambdas[name] = max(self.states[name].lam_state, 0.0)
+        for name in healthy:
+            lam_states[name] = lambdas[name]
+        # Review C1: a term registered with `requires=<base>` expresses its
+        # force as `lambda_base * kappa`, so it cannot be applied at all once
+        # the base coefficient is zero -- and the retired failure mode was
+        # worse than useless, because the FT coefficient *rose* at exactly the
+        # probe where IO's signal vanished. Zero the published coefficient (and
+        # its weight) but leave `lam_states` alone, so policy B resumes from
+        # its converged value when the base recovers (review I7). Iterated so a
+        # chain of dependencies collapses in one transaction.
+        for _ in range(len(self.configs)):
+            changed = False
+            for name, config in self.configs.items():
+                base = config.requires
+                if base is None or lambdas.get(name, 0.0) == 0.0:
+                    continue
+                if lambdas.get(base, 0.0) <= 0.0:
+                    lambdas[name], weights[name] = 0.0, 0.0
+                    changed = True
+            if not changed:
+                break
+        # Review M2: mirror `ScheduleState.kappa_max`. The applied force is
+        # already bounded by the cap; this bounds the *conditioning* of the
+        # kappa = lam/lam_base the driver recovers by division.
+        kappa_clamped = dict((name, False) for name in self.configs)
+        for name, config in self.configs.items():
+            base = config.requires
+            if base is None or lambdas.get(name, 0.0) <= 0.0:
+                continue
+            ceiling = self.kappa_max * lambdas.get(base, 0.0)
+            if lambdas[name] > ceiling:
+                lambdas[name] = ceiling
+                kappa_clamped[name] = True
+        return lambdas, weights, cmax, cap, binding, lam_states, kappa_clamped
 
     def weights(self, iteration, overflow, tau, gamma):
         """Pure preview of the coefficients. Latches activation (monotone) but
@@ -505,9 +753,11 @@ class TermNormalizer:
             "terms": dict(
                 (name, {"grad_l1": s.grad_norm, "ratio_inst": s.ratio_inst,
                         "ratio_ema": s.ratio_ema, "wt": s.wt,
+                        "wt_max": self._schedule(name, "wt_max"),
                         "target_share": self.configs[name].target_share,
-                        "lam": s.lam,
+                        "lam": s.lam, "lam_applied": s.lam_applied,
                         "share": (s.lam * s.grad_norm / denom) if denom > 0.0 else 0.0,
+                        "kappa_clamped": s.kappa_clamped,
                         "active": s.active})
                 for name, s in self.states.items()),
         }
@@ -552,9 +802,24 @@ class TermNormalizer:
         if grad_norms is not None:
             self.update_grad_norms(grad_norms)
         self._activate(iteration, overflow)
-        lambdas, weights, cmax, cap, binding = self._compute(iteration, tau, gamma)
+        (lambdas, weights, cmax, cap, binding, lam_states,
+         kappa_clamped) = self._compute(iteration, tau, gamma)
+        # Review I6: no derived coefficient was ever checked for finiteness,
+        # unlike the probe gradients. A `nan` share or ratio otherwise reaches
+        # the objective term itself, where every downstream guard
+        # (`lam <= 0.0`, `target_share <= 0.0`) silently evaluates False.
+        # Raised before anything is committed, so the normalizer stays usable.
+        for name, value in lambdas.items():
+            if not math.isfinite(value):
+                raise FloatingPointError("non-finite lambda for %r" % (name,))
         for name, state in self.states.items():
             state.lam, state.wt = lambdas[name], weights[name]
+            state.lam_state = lam_states[name]
+            state.kappa_clamped = kappa_clamped.get(name, False)
+            state.lam_applied = (
+                0.0 if state.it_activate is None else
+                lambdas[name] * activation_ramp(iteration, state.it_activate,
+                                                self.configs[name].n_ramp))
         # Mutate the live dict in place: `self.lambdas` is the object a
         # driver's `term_fn` closure captured a reference to, and rebinding
         # `self.lambdas = dict(lambdas)` would leave that closure reading a
@@ -604,6 +869,13 @@ class TermNormalizer:
                      if state.active else 0.0)
             io.active = state.active
             io.it_activate = state.it_activate
+            # The retired path bakes its own ramp into `lambda_io`
+            # (`update_continuous`/`apply_ft_transaction`), so the committed
+            # and applied coefficients are the same number here. Additive
+            # trace bookkeeping only -- no coefficient changes on this path.
+            io.lam_applied = state.lambda_io
+            io.lam_state = state.lambda_io
+            io.kappa_clamped = False
         ft = self.states.get("ft")
         if ft is not None:
             lambdas["ft"] = state.lambda_io * state.kappa_ft
@@ -612,6 +884,9 @@ class TermNormalizer:
             ft.wt = record["f_ft"]
             ft.active = record["kappa_ft"] > 0.0
             ft.it_activate = state.it_activate
+            ft.lam_applied = lambdas["ft"]
+            ft.lam_state = lambdas["ft"]
+            ft.kappa_clamped = bool(record["kappa_clamped"])
         # Mutate the live dict in place, exactly like the non-legacy branch
         # above: `self.lambdas` is the object a driver's `term_fn` closure
         # captured a reference to, and rebinding it would leave that closure

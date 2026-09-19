@@ -53,10 +53,38 @@ through `ioplace.norm.TermNormalizer` (v2 design section 4):
 | `--norm-ramp-period` | `100` | Policy `grandplan`: iterations between `+0.05` steps of `wt`, from `0.05` |
 | `--norm-wt-max` | `1.0` | Policy `grandplan`: upper bound on `wt` |
 | `--norm-probe-every` | `50` | Iterations between probes; must be a positive multiple of `--every` |
-| `--norm-target-share` | unset | Policy `adaptive`: `io=0.3,ft=0.1` |
+| `--norm-target-share` | unset | Policy `adaptive`: `io=0.3,ft=0.1`. Unnamed terms fall back to `io=0.3` and `ft=--f-ft-max`; names must match registered terms (`io`, and `ft` when `--f-ft-max > 0`), values must be finite and in `[0, 1]`, duplicates are rejected |
 | `--norm-trace` | unset | Trace path; defaults to `<out>.norm_trace.jsonl` for non-legacy policies |
 
-Non-legacy policies require `--callback-order atomic`. `norm_trace.jsonl` gets
+Non-legacy policies require `--callback-order atomic`. They also reject
+`--rho-max 0` and `--rho-margin > 0`: both only reach the coefficients through
+`ScheduleState`, which these policies bypass, so `--rho-max 0` (a reweight-only
+run under `legacy`) would silently turn the IO penalty on at full normalizer
+strength and `--rho-margin` would be dropped while still being echoed into the
+result JSON. Use `--norm-policy legacy` for either.
+
+Under `grandplan`, `ft`'s weight ceiling is `--f-ft-max x --norm-wt-max`, so the
+FT force share mirrors the retired `f_ft_max` instead of converging to IO's
+ceiling; `ft` is also registered as a *dependent* term (`requires="io"`), so its
+coefficient is published as 0 whenever λ_IO is 0 -- `FtTerm` can only express
+the FT force as `λ_IO·κ`, and one transient IO-gradient dip used to abort the
+whole run. The recovered `κ = λ_FT/λ_IO` is clamped at 100, mirroring
+`ScheduleState.kappa_max`.
+
+Coefficient timing on the non-legacy arms: `transaction()` commits an *un-ramped*
+λ every `--every` iterations, and the objective term multiplies it by
+`activation_ramp(iteration, it_activate, n_ramp)` on every GP iteration, so λ
+drifts continuously through the activation window exactly as the retired
+`ρ·ramp·ratio_ema` did (no `obj_version` bump for that drift -- it is a known
+monotone function of the iteration counter, not a new measurement). `it_activate`
+comes from `ScheduleState`'s per-iteration activation, not from the first
+`--every`-gated callback, so both arms ramp off the same instant. The trace
+records both: `terms.<t>.lam` (committed) and `terms.<t>.lam_applied` (ramped);
+the result trajectory adds `lambda_io_applied`/`lambda_ft_applied`.
+A term whose measured gradient is at or below `eps_rel·‖∇WL‖` but not exactly
+zero takes the Lipschitz cap's remaining headroom rather than dropping to 0
+(the retired path let `ratio_inst` explode and saturated at the same cap); a
+gradient of exactly 0 still gives λ = 0. `norm_trace.jsonl` gets
 one row per coefficient transaction (>= one per probe, since a transaction may
 reuse the previous probe's measurements), with the per-term gradient norm,
 instantaneous and EMA ratio, weight, coefficient, realised force share,

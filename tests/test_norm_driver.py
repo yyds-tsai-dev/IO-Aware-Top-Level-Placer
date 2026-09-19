@@ -73,11 +73,69 @@ def test_norm_flags_are_forwarded_to_run_io(monkeypatch):
     (dict(norm_policy="grandplan"), "atomic"),              # callback_order defaults legacy
     (dict(norm_policy="grandplan", callback_order="atomic", rho_max=0.0),
      "observer mode"),                                      # rho_max=0/rho_margin=0/wl_reweight=off
+    # Review I2: rho_max never reaches the normalizer, so `--rho-max 0` (which
+    # under legacy is a reweight-only run) silently turned the IO penalty on at
+    # full strength instead.
+    (dict(norm_policy="grandplan", callback_order="atomic", rho_max=0.0,
+          wl_reweight="crossings"), "rho_max is inert"),
+    (dict(norm_policy="adaptive", callback_order="atomic", rho_max=0.0,
+          wl_reweight="crossings"), "rho_max is inert"),
+    # Review I3: ScheduleState.ratio_ema is never written on a non-legacy arm,
+    # so the margin term evaluates to 0.0 forever while --rho-margin is still
+    # echoed into the result JSON.
+    (dict(norm_policy="grandplan", callback_order="atomic", rho_max=0.4,
+          rho_margin=0.05), "rho_margin is inert"),
+    (dict(norm_policy="adaptive", callback_order="atomic", rho_max=0.4,
+          rho_margin=0.05), "rho_margin is inert"),
 ])
 def test_run_io_rejects_invalid_norm_configuration(kwargs, message, tmp_path):
     with pytest.raises(ValueError) as excinfo:
         run_io("missing.json", 4, "grid", 0, str(tmp_path / "o.json"), **kwargs)
     assert message in str(excinfo.value)
+
+
+def test_ft_is_registered_as_a_dependent_term_with_a_mirrored_wt_ceiling():
+    """Reviews C1/I4/I6, on the driver's own registration contract (no GPU
+    needed). `ft` must declare `requires="io"` so a dead IO probe degrades to
+    lambda_ft=0 instead of the RuntimeError that used to kill the run, and
+    under grandplan its weight ceiling must mirror legacy's f_ft_max rather
+    than converging to IO's."""
+    from ioplace.drivers.run_placement_io import (DEFAULT_IO_TARGET_SHARE,
+                                                  FT_ACTIVATE_OVERFLOW,
+                                                  _register_norm_terms)
+    from ioplace.norm import TermNormalizer
+
+    n = TermNormalizer(policy="grandplan", wt_max=0.4)
+    _register_norm_terms(n, object(), object(), 6.0, {}, 0.90, 20, 0.25,
+                         "grandplan", 0.4)
+    assert n.configs["ft"].requires == "io"
+    assert n.configs["io"].requires is None
+    assert n.configs["ft"].wt_max == pytest.approx(0.25 * 0.4)
+    assert n.configs["io"].wt_max is None                  # normalizer default
+    assert n.configs["io"].target_share == DEFAULT_IO_TARGET_SHARE
+    assert n.configs["io"].activate_overflow == 0.90
+    assert n.configs["ft"].activate_overflow == FT_ACTIVATE_OVERFLOW
+
+    # Under adaptive the target shares already set each term's budget, so no
+    # weight-ceiling override is installed.
+    n = TermNormalizer(policy="adaptive")
+    _register_norm_terms(n, object(), object(), 6.0, {"io": 0.3, "ft": 0.1},
+                         0.90, 20, 0.25, "adaptive", 1.0)
+    assert n.configs["ft"].wt_max is None
+    assert n.configs["ft"].target_share == pytest.approx(0.1)
+
+    # Review I6: a typo'd share key used to fall back to the default silently.
+    n = TermNormalizer(policy="grandplan")
+    with pytest.raises(ValueError) as excinfo:
+        _register_norm_terms(n, object(), object(), 6.0, {"ioo": 0.5}, 0.90,
+                             20, 0.25, "grandplan", 1.0)
+    assert "ioo" in str(excinfo.value) and "io" in str(excinfo.value)
+
+    # FT off: `--norm-target-share ft=...` names a term that will not exist.
+    n = TermNormalizer(policy="grandplan")
+    with pytest.raises(ValueError):
+        _register_norm_terms(n, object(), None, 1.0, {"ft": 0.1}, 0.90, 20,
+                             0.0, "grandplan", 1.0)
 
 
 def _small_config(tmp_path):

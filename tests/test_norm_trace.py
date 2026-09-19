@@ -14,8 +14,10 @@ def _row(**overrides):
            "cap_binding": "io", "cancellation_ratio": 0.83, "obj_version": 3,
            "refreshed_version": 3,
            "terms": {"io": {"grad_l1": 10.0, "ratio_inst": 100.0,
-                            "ratio_ema": 95.0, "wt": 0.1, "target_share": 0.3,
-                            "lam": 9.5, "share": 0.087, "active": True}}}
+                            "ratio_ema": 95.0, "wt": 0.1, "wt_max": 1.0,
+                            "target_share": 0.3, "lam": 9.5,
+                            "lam_applied": 4.75, "share": 0.087,
+                            "kappa_clamped": False, "active": True}}}
     row.update(overrides)
     return row
 
@@ -26,7 +28,8 @@ def test_row_fields_match_the_design_logging_list():
                           "cap", "cap_binding", "cancellation_ratio",
                           "obj_version", "refreshed_version", "terms")
     assert TERM_FIELDS == ("grad_l1", "ratio_inst", "ratio_ema", "wt",
-                           "target_share", "lam", "share", "active")
+                           "wt_max", "target_share", "lam", "lam_applied",
+                           "share", "kappa_clamped", "active")
 
 
 def test_writer_appends_one_json_object_per_row(tmp_path):
@@ -86,6 +89,18 @@ def test_normalizer_emits_one_row_per_refreshed_transaction(tmp_path):
     # written at mark_refreshed(), so the row always records a live objective
     assert all(r["refreshed_version"] == r["obj_version"] for r in rows)
     assert [r["terms"]["io"]["wt"] for r in rows] == [0.05, 0.05, 0.10]
+
+
+def test_write_after_close_raises(tmp_path):
+    """Review M9 (deferred at progress.md:51): this used to raise
+    `AttributeError: 'NoneType' object has no attribute 'write'`."""
+    writer = NormTraceWriter(str(tmp_path / "t.jsonl"))
+    writer.write(_row())
+    writer.close()
+    with pytest.raises(RuntimeError) as excinfo:
+        writer.write(_row())
+    assert "closed" in str(excinfo.value)
+    writer.close()                     # close() stays idempotent
 
 
 def test_no_row_is_written_for_a_transaction_that_is_never_refreshed(tmp_path):
