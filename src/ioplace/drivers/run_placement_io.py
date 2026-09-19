@@ -523,6 +523,7 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                 cb_state["io_gp"] = res.io_count
 
                 entry = {"iteration": iteration, "overflow": of, "tau": state.tau,
+                         "gamma": gamma,
                          "lambda_io": state.lambda_io, "obj_evals": obj_evals,
                          "io_count": res.io_count, "ft_count": res.ft_count,
                          "hard_lambda_sum": res.hard_lambda_sum,

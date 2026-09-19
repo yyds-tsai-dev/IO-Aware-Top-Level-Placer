@@ -154,11 +154,25 @@ def test_legacy_publish_atomic_is_wired_with_the_correct_tau_ecc_gamma(tmp_path,
     it from inside `cb()`'s legacy branch every qualifying callback, so
     patching the module attribute is observed) records the positional args
     and calls through to the real implementation, so the run's actual
-    coefficients are unaffected by the spy."""
+    coefficients are unaffected by the spy.
+
+    Fix round 2: the round-1 "gamma matches" check
+    (`event["lambda_io"] <= lipschitz_cap(event["tau"], gamma, 1.0,
+    event["Cmax"])`) was tautological -- `apply_ft_transaction` computed
+    `event["lambda_io"]` as `min(base, lipschitz_cap(tau, gamma, ...))` from
+    that exact spied `gamma`/`tau`/`Cmax`, so the bound holds for *any* gamma
+    the driver happens to pass, not just the correct one. Replaced with (i)
+    a schedule-independent property check (every spied gamma is finite and
+    positive, and non-increasing wherever the matching trajectory overflow
+    is non-increasing -- DREAMPlace's Lgamma schedule ties gamma to
+    overflow) and (ii) a direct equality check against a new `entry["gamma"]`
+    trajectory field the driver now records independently of the spy."""
+    import math
+
     import ioplace.ops.ft_callback as ft_callback_mod
     from ioplace.drivers.run_placement import _load_dreamplace
-    from ioplace.schedules import lipschitz_cap
 
+    k = 4
     config = _small_config(tmp_path)
     calls = []
     original = ft_callback_mod.publish_atomic
@@ -172,33 +186,53 @@ def test_legacy_publish_atomic_is_wired_with_the_correct_tau_ecc_gamma(tmp_path,
     monkeypatch.setattr(ft_callback_mod, "publish_atomic", spy)
 
     out = str(tmp_path / "legacy_spy.json")
-    result = run_io(config, 4, "grid", 0, out,
+    result = run_io(config, k, "grid", 0, out,
                     rho_max=.4, every=5, of_on=2., of_full=1.,
                     callback_order="atomic", f_ft_max=.25, ft_ramp_mode="constant",
                     no_diag=True)
     assert calls, "publish_atomic was never called"
 
     # Recompute L_R independently the same way run_io does, from the config's
-    # own die box -- not from anything the driver itself derived.
+    # own die box and the test's own k -- not from anything the driver itself
+    # derived.
     params, placedb = _load_dreamplace(config)
     placedb.initialize(params)
     die = (float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh))
-    L_R = ((die[2] - die[0]) * (die[3] - die[1]) / 4) ** 0.5
+    L_R = ((die[2] - die[0]) * (die[3] - die[1]) / k) ** 0.5
 
     events_by_iter = {e["iteration"]: e for e in result["trajectory"] if "kappa_ft" in e}
     assert events_by_iter, "no legacy events with a kappa_ft record"
+    calls_sorted = sorted(calls, key=lambda c: c[0])
+    # Not vacuous: the schedule-property check below is pairwise, so it needs
+    # at least two spied calls to say anything at all.
+    assert len(calls_sorted) >= 2, "need >= 2 spied calls to check the schedule property"
+
     checked = 0
-    for iteration, tau_rel, ecc_max, gamma in calls:
+    for iteration, tau_rel, ecc_max, gamma in calls_sorted:
         event = events_by_iter.get(iteration)
         if event is None:
             continue
         assert tau_rel == pytest.approx(event["tau"] / L_R, rel=1e-9)
         assert ecc_max > 0.0    # f_ft_max > 0 in this run
-        assert gamma > 0.0
-        # "gamma matches": tie it to the transaction's own derived lambda_io
-        # via the same lipschitz_cap formula apply_ft_transaction uses --
-        # a wrong gamma would generally desync this bound.
-        cap = lipschitz_cap(event["tau"], gamma, 1.0, event["Cmax"])
-        assert event["lambda_io"] <= cap + 1e-9
+        # (i) schedule-independent property: finite, positive.
+        assert math.isfinite(gamma) and gamma > 0.0
+        # (ii) direct equality against the driver's own recorded value,
+        # independent of anything derived through the spy or through
+        # apply_ft_transaction's own formulas.
+        assert event["gamma"] == gamma
         checked += 1
     assert checked > 0
+
+    # (i) continued: gamma must not increase wherever overflow does not
+    # increase, matching DREAMPlace's Lgamma schedule (gamma tracks overflow).
+    pairs_checked = 0
+    for (it_a, *_), (it_b, *_) in zip(calls_sorted, calls_sorted[1:]):
+        event_a, event_b = events_by_iter.get(it_a), events_by_iter.get(it_b)
+        if event_a is None or event_b is None:
+            continue
+        gamma_a = next(g for i, _, _, g in calls_sorted if i == it_a)
+        gamma_b = next(g for i, _, _, g in calls_sorted if i == it_b)
+        if event_b["overflow"] <= event_a["overflow"]:
+            assert gamma_b <= gamma_a + 1e-9
+        pairs_checked += 1
+    assert pairs_checked > 0
