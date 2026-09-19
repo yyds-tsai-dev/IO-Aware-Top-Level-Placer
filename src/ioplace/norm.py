@@ -487,7 +487,8 @@ class TermNormalizer:
         denom = self.wl_norm + sum(s.lam * s.grad_norm for s in self.states.values())
         return {
             "iteration": int(iteration),
-            "probe_iteration": self._last_probe_iteration,
+            "probe_iteration": (None if self._last_probe_iteration is None
+                               else int(self._last_probe_iteration)),
             "overflow": float(overflow),
             "tau": float(tau),
             "gamma": float(gamma),
