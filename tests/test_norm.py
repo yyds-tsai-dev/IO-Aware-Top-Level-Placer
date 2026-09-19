@@ -67,14 +67,16 @@ def test_adaptive_lambda_guards_zero_share_and_dead_gradient():
     assert adaptive_lambda(1.0, 0.5, 0.2, 100.0, 1000.0) == 0.0
 
 
-def test_cmax_generalises_derive_cmax():
-    from ioplace.schedules import derive_cmax
-    assert cmax_from_curvatures([]) == 1.0
-    assert cmax_from_curvatures([(1.0, 1.0)]) == 1.0
-    assert cmax_from_curvatures([(1.0, 1.0), (1.0, 6.0)]) == pytest.approx(6.0, rel=1e-12)
-    assert cmax_from_curvatures([(0.5, 6.0)]) == pytest.approx(3.5, rel=1e-12)
-    assert cmax_from_curvatures([(2.0, 0.5)]) == 1.0            # (curv-1)_+ hinge
-    assert cmax_from_curvatures([(2.0, 6.0)]) == pytest.approx(derive_cmax(2.0, 6.0), rel=1e-12)
+def test_cmax_is_the_lambda_weighted_mean_curvature():
+    # Controller ruling 2026-09-19 (fix round 1): Cmax = sum_t lambda_t*curv_t
+    # / sum_t lambda_t, replacing the derived-kappa form this test used to
+    # exercise (that form degenerated whenever lambda_io == 0).
+    assert cmax_from_curvatures([]) == 1.0                          # no terms
+    assert cmax_from_curvatures([(0.0, 6.0)]) == 1.0                # sum(lambda) == 0
+    assert cmax_from_curvatures([(1.0, 1.0)]) == pytest.approx(1.0, rel=1e-12)
+    assert cmax_from_curvatures([(1.0, 1.0), (1.0, 6.0)]) == pytest.approx(3.5, rel=1e-12)
+    assert cmax_from_curvatures([(200.0, 1.0), (100.0, 6.0)]) == pytest.approx(
+        800.0 / 300.0, rel=1e-12)                                   # 800/300 = 2.6666...
 
 
 def test_clip_sum_to_cap_is_a_noop_below_the_cap():
@@ -116,6 +118,28 @@ def _norm_a(**kwargs):
     return n
 
 
+class _FakeGrad:
+    """Tiny torch-free stand-in for a gradient tensor: supports exactly the
+    operations `_cancellation_ratio`/`_norm` use (`*` by a scalar, `+`,
+    `.abs().sum()`), so the cancellation-ratio maths can be unit-tested
+    without a real probe (Task 4 populates `_grad_cache` for real)."""
+
+    def __init__(self, values):
+        self.values = list(values)
+
+    def __mul__(self, scalar):
+        return _FakeGrad(v * scalar for v in self.values)
+
+    def __add__(self, other):
+        return _FakeGrad(a + b for a, b in zip(self.values, other.values))
+
+    def abs(self):
+        return _FakeGrad(abs(v) for v in self.values)
+
+    def sum(self):
+        return sum(self.values)
+
+
 def test_normalizer_rejects_unknown_policy_and_norm_order():
     with pytest.raises(ValueError):
         TermNormalizer(policy="bogus")
@@ -123,6 +147,14 @@ def test_normalizer_rejects_unknown_policy_and_norm_order():
         TermNormalizer(norm_p=3)
     with pytest.raises(ValueError):
         TermNormalizer(policy="legacy")          # legacy needs a ScheduleState
+
+
+def test_weights_rejects_the_legacy_policy_until_the_adapter_lands():
+    from ioplace.schedules import ScheduleState
+    n = TermNormalizer(policy="legacy", legacy_state=ScheduleState(rho_max=1.0))
+    n.register("io", object(), 1.0)
+    with pytest.raises(NotImplementedError):
+        n.weights(0, 0.85, tau=1000.0, gamma=1e-12)
 
 
 def test_register_rejects_duplicates_and_seeds_state():
@@ -186,13 +218,23 @@ def test_cap_uses_per_term_curvature_and_clips_the_sum():
     n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=0)
     n.register("ft", object(), 6.0, activate_overflow=0.90, n_ramp=0)
     n.update_grad_norms({"wl": 1000.0, "io": 5.0, "ft": 10.0})   # ratios 200, 100
-    txn = n.transaction(0, 0.85, tau=100.0, gamma=10.0)
+    txn = n.transaction(0, 0.85, tau=100.0, gamma=20.0)
     # pre-clip lambdas: io = wt*ratio_io = 1.0*200 = 200, ft = 1.0*100 = 100
-    # derived kappa: kappa_io = 1.0 (by definition), kappa_ft = 100/200 = 0.5
-    assert txn.cmax == pytest.approx(3.5, rel=1e-12)                # 1 + 0.5*(6-1)
-    assert txn.cap == pytest.approx(lipschitz_cap(100.0, 10.0, 1.0, 3.5), rel=1e-12)
+    # Cmax is the lambda-weighted mean curvature (controller ruling
+    # 2026-09-19): Cmax = (200*1 + 100*6) / (200 + 100) = 800/300 = 8/3
+    assert txn.cmax == pytest.approx(8.0 / 3.0, rel=1e-12)
+    # cap = c_lip*tau^2/(gamma*Cmax) = 100^2/(20*8/3) = 10000/53.333... = 187.5,
+    # which is < 300 so the cap binds
+    assert txn.cap == pytest.approx(lipschitz_cap(100.0, 20.0, 1.0, 8.0 / 3.0), rel=1e-12)
+    assert txn.cap == pytest.approx(187.5, rel=1e-12)
     assert sum(txn.lambdas.values()) == pytest.approx(txn.cap, rel=1e-12)
-    assert txn.cap_binding == "io"                                  # 200 > 100
+    # scale = cap/total = 187.5/300 = 0.625 -> io = 125.0, ft = 62.5
+    assert txn.lambdas["io"] == pytest.approx(125.0, rel=1e-12)
+    assert txn.lambdas["ft"] == pytest.approx(62.5, rel=1e-12)
+    # binding is the term with the largest pre-clip lambda*curv: io=200*1=200,
+    # ft=100*6=600, so ft dominates the Lipschitz bound even though its raw
+    # pre-clip lambda (100) is smaller than io's (200)
+    assert txn.cap_binding == "ft"
     assert txn.lambdas["io"] / txn.lambdas["ft"] == pytest.approx(2.0, rel=1e-12)
 
 
@@ -229,6 +271,7 @@ def test_transaction_accepts_grad_norms_inline():
 
 def test_weights_is_a_pure_preview_that_does_not_bump_the_version():
     n = _norm_a()
+    ref_before = n.lambdas
     n.update_grad_norms({"wl": 1000.0, "io": 10.0})
     preview = n.weights(0, 0.85, tau=1000.0, gamma=1e-12)
     assert preview == {"io": pytest.approx(5.0, rel=1e-12)}
@@ -236,6 +279,9 @@ def test_weights_is_a_pure_preview_that_does_not_bump_the_version():
     assert n.lambdas == {"io": 0.0}                                  # not committed
     assert n.transaction(0, 0.85, tau=1000.0, gamma=1e-12).lambdas == preview
     assert n.lambdas == preview                                      # now committed
+    # `self.lambdas` must be mutated in place, never rebound: a driver's
+    # `term_fn` closure holds a reference to this exact dict.
+    assert n.lambdas is ref_before
 
 
 def test_should_probe_follows_probe_every():
@@ -262,6 +308,37 @@ def test_row_carries_every_logged_field():
     assert io["share"] == pytest.approx(50.0 / 1050.0, rel=1e-12)
     assert io["active"] is True
     assert row["cancellation_ratio"] is None                         # no probe cache
+
+
+def test_cancellation_ratio_reads_the_seeded_probe_cache():
+    # Task 4 populates `_grad_cache`/`_probed_this_callback` for real via a
+    # probe; here we seed them directly to unit-test the maths in isolation.
+    n = TermNormalizer(policy="grandplan", track_cancellation=True)
+    n.register("io", object(), 1.0, n_ramp=0)
+    n.register("ft", object(), 1.0, n_ramp=0)
+    n.states["io"].grad_norm = 1.0
+    n.states["ft"].grad_norm = 1.0
+    n._probed_this_callback = True
+    # aligned gradients: ||lam_io*g + lam_ft*g|| / (lam_io*1 + lam_ft*1) == 1.0
+    n._grad_cache = {"io": _FakeGrad([1.0, 0.0]), "ft": _FakeGrad([1.0, 0.0])}
+    assert n._cancellation_ratio({"io": 1.0, "ft": 1.0}) == pytest.approx(1.0, rel=1e-12)
+    # opposed gradients: the merged sum cancels to zero
+    n._grad_cache = {"io": _FakeGrad([1.0, 0.0]), "ft": _FakeGrad([-1.0, 0.0])}
+    assert n._cancellation_ratio({"io": 1.0, "ft": 1.0}) == pytest.approx(0.0, rel=1e-12)
+
+
+def test_cancellation_ratio_is_none_when_track_cancellation_is_false():
+    n = TermNormalizer(policy="grandplan", track_cancellation=False)
+    n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.update_grad_norms({"wl": 1000.0, "io": 10.0})
+    # Seeded exactly as the aligned-gradient case above would be, so the only
+    # difference from a real hit is `track_cancellation=False` -- if the gate
+    # were dead this would still report 1.0.
+    n._probed_this_callback = True
+    n._grad_cache = {"io": _FakeGrad([1.0, 0.0])}
+    txn = n.transaction(0, 0.85, tau=1000.0, gamma=1e-12)
+    assert txn.cancellation_ratio is None
+    assert txn.row["cancellation_ratio"] is None
 
 
 def test_version_pair_is_equal_only_when_both_members_are_refreshed():

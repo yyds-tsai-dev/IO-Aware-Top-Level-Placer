@@ -11,6 +11,7 @@ DREAMPlace, no CUDA, so the policy maths is testable on any host.
 """
 
 from dataclasses import dataclass
+from typing import Optional
 
 from ioplace.schedules import activation_ramp, lipschitz_cap
 
@@ -72,10 +73,20 @@ def adaptive_lambda(lam_prev, grad_norm, target_share, total_force, wl_norm,
 
 
 def cmax_from_curvatures(items):
-    """`Cmax = 1 + sum_t kappa_t (curv_t - 1)_+`, the N-term generalisation of
-    `schedules.derive_cmax(kappa_ft, ecc_max_max)`. `items` is an iterable of
-    `(kappa, curvature)` pairs over the *active* terms only."""
-    return 1.0 + sum(kappa * max(curv - 1.0, 0.0) for kappa, curv in items)
+    """`Cmax = sum_t lambda_t*curv_t / sum_t lambda_t`, the pre-clip
+    lambda-weighted mean curvature (controller ruling 2026-09-19, fix round 1
+    -- replaces the derived-kappa form `1 + sum_t kappa_t(curv_t-1)_+`, which
+    degenerated whenever `lambda_io == 0`). This form is exactly the legacy
+    bound `sum_t lambda_t*curv_t <= c_lip*tau^2/gamma` when only IO is active
+    (`curv_io == 1`), and has no such degeneracy. `items` is an iterable of
+    `(lambda, curvature)` pairs over the *active* terms only. Returns `1.0`
+    when the total lambda is zero (including an empty `items`): there is no
+    force to weight the mean by."""
+    items = list(items)
+    total = sum(lam for lam, _ in items)
+    if total <= 0.0:
+        return 1.0
+    return sum(lam * curv for lam, curv in items) / total
 
 
 def clip_sum_to_cap(lambdas, cap):
@@ -117,9 +128,10 @@ def _json_cap(cap):
 
 @dataclass
 class TermConfig:
-    """Static registration data for one extra objective term. `kappa` is not
-    stored here: it is derived every transaction from the live lambdas (see
-    `register`'s docstring)."""
+    """Static registration data for one extra objective term. There is no
+    per-term `kappa`: `Cmax` is the pre-clip lambda-weighted mean of every
+    active term's `curvature` (controller ruling 2026-09-19; see `register`'s
+    docstring and `_compute`)."""
     name: str
     curvature: float = 1.0
     target_share: float = 0.0
@@ -132,12 +144,12 @@ class TermState:
     """Live per-term state. `wt` holds policy A's stepped weight or policy B's
     ramped target share, whichever the active policy produced."""
     grad_norm: float = 0.0
-    ratio_inst: float = None
+    ratio_inst: Optional[float] = None
     ratio_ema: float = None
     wt: float = 0.0
     lam: float = 0.0
     active: bool = False
-    it_activate: int = None
+    it_activate: Optional[int] = None
 
 
 @dataclass
@@ -146,7 +158,7 @@ class NormTransaction:
     lambdas: dict
     cmax: float
     cap: float
-    cap_binding: str
+    cap_binding: Optional[str]
     cancellation_ratio: float
     obj_version: int
     row: dict
@@ -255,9 +267,9 @@ class TermNormalizer:
         `probe()` owns the backward, the masking and the norm order.
 
         Declared curvatures (design sec 4): IO 1, FT `ecc_max`, capacity
-        `max_s pen''`, pseudo-FT 1. `kappa_t` is derived each transaction as
-        `lambda_t / lambda_io` (pre-clip), generalising
-        `derive_cmax(kappa_ft, ecc_max)` -- it is not a registration input."""
+        `max_s pen''`, pseudo-FT 1. `curvature` feeds `Cmax`'s pre-clip
+        lambda-weighted mean over every active term (controller ruling
+        2026-09-19, `_compute`) -- there is no per-term kappa to register."""
         if name in self.configs:
             raise ValueError("term %r already registered" % (name,))
         self.configs[name] = TermConfig(name, float(curvature),
@@ -314,29 +326,50 @@ class TermNormalizer:
                 lambdas[name] = grandplan_lambda(weights[name], state.ratio_ema,
                                                  self.wl_norm, state.grad_norm,
                                                  self.eps_rel)
-            else:
+            elif self.policy == "adaptive":
                 weights[name] = ramp * config.target_share
                 lambdas[name] = adaptive_lambda(state.lam, state.grad_norm,
                                                 weights[name], total_force,
                                                 self.wl_norm, self.momentum,
                                                 self.eps_rel)
-        # kappa is derived, not declared: kappa_io = 1.0 by definition, and
-        # kappa_t = lambda_t / lambda_io (both pre-clip) for every other term,
-        # generalising derive_cmax(kappa_ft, ecc_max)'s live ratio reading.
-        # kappa_t = 0.0 when lambda_io is 0.0 (no IO signal to scale against).
-        lam_io_preclip = lambdas.get("io", 0.0)
+            else:
+                raise ValueError(
+                    "policy %r has no coefficient rule ('grandplan' and "
+                    "'adaptive' compute here; 'legacy' must delegate before "
+                    "reaching _compute)" % (self.policy,))
+        # Cmax is the pre-clip lambda-weighted mean curvature (controller
+        # ruling 2026-09-19, fix round 1): Cmax = sum_t lambda_t*curv_t /
+        # sum_t lambda_t. This replaces the derived-kappa form
+        # `1 + kappa_t(curv_t-1)_+`, which divided by lambda_io and so
+        # degenerated whenever lambda_io == 0. The new form is exactly the
+        # legacy bound sum_t lambda_t*curv_t <= c_lip*tau^2/gamma when only IO
+        # is active (curv_io == 1), with no such degeneracy.
+        preclip = lambdas
         cmax = cmax_from_curvatures(
-            [(1.0 if name == "io" else
-              (lambdas[name] / lam_io_preclip if lam_io_preclip != 0.0 else 0.0),
-              self.configs[name].curvature)
+            [(preclip[name], self.configs[name].curvature)
              for name in self.configs if self.states[name].active])
         cap = lipschitz_cap(tau, gamma, self.c_lip, cmax)
-        lambdas, binding = clip_sum_to_cap(lambdas, cap)
+        total = sum(preclip.values())
+        # cap_binding is the term with the largest pre-clip lambda_t*curv_t --
+        # the dominant contributor to the Lipschitz bound this cap enforces --
+        # not merely the largest raw lambda_t (clip_sum_to_cap's own binding
+        # answers that different question). Ties break alphabetically,
+        # matching clip_sum_to_cap's convention. `None` exactly when
+        # clip_sum_to_cap will not scale (same condition it uses internally).
+        if total > cap and total > 0.0:
+            binding = max(sorted(preclip),
+                         key=lambda n: preclip[n] * self.configs[n].curvature)
+        else:
+            binding = None
+        lambdas, _ = clip_sum_to_cap(preclip, cap)
         return lambdas, weights, cmax, cap, binding
 
     def weights(self, iteration, overflow, tau, gamma):
         """Pure preview of the coefficients. Latches activation (monotone) but
         commits nothing and never bumps `obj_version`."""
+        if self._legacy is not None:
+            raise NotImplementedError(
+                "policy 'legacy' delegation is installed by the legacy adapter task")
         self._activate(iteration, overflow)
         return self._compute(iteration, tau, gamma)[0]
 
@@ -347,9 +380,12 @@ class TermNormalizer:
     def _cancellation_ratio(self, lambdas):
         """`||sum_t lam_t grad T_t||_p / sum_t lam_t ||grad T_t||_p`, the N-term
         generalisation of `ScheduleState.cancellation_ratio`. `None` when this
+        normalizer was built with `track_cancellation=False`, when this
         callback did not call `probe()` (the cache would otherwise mix stale
-        gradients from an earlier probe with this transaction's coefficients)
-        or when the probe kept no gradient tensors (`track_cancellation=False`)."""
+        gradients from an earlier probe with this transaction's coefficients),
+        or when the probe kept no gradient tensors."""
+        if not self.track_cancellation:
+            return None
         if not self._probed_this_callback:
             return None
         merged, denom = None, 0.0
@@ -398,7 +434,7 @@ class TermNormalizer:
         `obj_version` exactly once, and hand the driver a transaction whose
         `needs_refresh` flag means "call `refresh_nesterov_secant(optimizer)`
         then `mark_refreshed()` before the next optimizer step"."""
-        if self._pending_row is not None:
+        if self.needs_refresh():
             raise RuntimeError(
                 "previous transaction was not refreshed: call "
                 "refresh_nesterov_secant(optimizer) then mark_refreshed()")
@@ -411,7 +447,12 @@ class TermNormalizer:
         lambdas, weights, cmax, cap, binding = self._compute(iteration, tau, gamma)
         for name, state in self.states.items():
             state.lam, state.wt = lambdas[name], weights[name]
-        self.lambdas = dict(lambdas)
+        # Mutate the live dict in place: `self.lambdas` is the object a
+        # driver's `term_fn` closure captured a reference to, and rebinding
+        # `self.lambdas = dict(lambdas)` would leave that closure reading a
+        # stale copy forever.
+        self.lambdas.clear()
+        self.lambdas.update(lambdas)
         cancellation = self._cancellation_ratio(lambdas)
         self._probed_this_callback = False
         self._obj_version += 1

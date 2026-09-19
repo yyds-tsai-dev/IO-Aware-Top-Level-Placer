@@ -18,7 +18,7 @@
 - Shared across both policies: `ema=0.5`, the activation ramps, and the Lipschitz cap.
 - Policy A `grandplan`: `λ_t = wt_t·‖∇WL‖_p/‖∇T_t‖_p`, `wt_t` starting at 0.05, stepped +0.05 every `ramp_period=100` iterations up to `wt_max=1.0`, gated on the activation overflow threshold.
 - Policy B `adaptive`: target force shares `f_t`; `λ_t ← λ_t·(f_t·G/(λ_t‖∇T_t‖))^0.5` with momentum `λ_t ← 0.75·λ_t^prev + 0.25·λ_t^new`.
-- Lipschitz cap survives in form: `lipschitz_cap(tau, gamma, c_lip, Cmax)` with `Cmax = 1 + Σ_t κ_t(curv_t−1)_+`, generalising `derive_cmax`. Declared curvatures: IO 1, FT `ecc_max`, capacity `max_s pen''`, pseudo-FT 1. λ's are clipped so their *sum* respects the cap; which term bound the cap is logged.
+- Lipschitz cap survives in form: `lipschitz_cap(tau, gamma, c_lip, Cmax)` with `Cmax = Σ_t λ_t·curv_t / Σ_t λ_t` (the pre-clip λ-weighted mean curvature over the active terms, `1.0` when `Σλ=0`; **controller ruling 2026-09-19, fix round 1** replaces the earlier derived-κ form `1 + Σ_t κ_t(curv_t−1)_+`, which degenerated whenever λ_io=0), generalising `derive_cmax`. Declared curvatures: IO 1, FT `ecc_max`, capacity `max_s pen''`, pseudo-FT 1. λ's are clipped so their *sum* respects the cap; the term with the largest pre-clip λ_t·curv_t is logged as `cap_binding`.
 - Exactly one `obj_version` bump per transaction, followed by a required `refresh_nesterov_secant` then `mark_refreshed()`. This invariant holds per counter, not per callback: under the normalizer policies, `ScheduleState.obj_version` (τ/ρ) and `TermNormalizer.obj_version` (λ) each bump independently within one iteration; `VersionPair(state, normalizer)` is what makes summing them safe for `install_version_invariant` (Task 2).
 - The three legacy paths (`schedules.py:94-104,159-176`; `schedules.py:66-81,178-237`; `ops/routing_gp_controller.py:64-78`) end as thin adapters over the new module or are deleted; the routing one is kept only behind `IOPLACE_ENABLE_GR_IN_LOOP=1`.
 - The host is shared: check `nvidia-smi` and select a free device with `CUDA_VISIBLE_DEVICES` before any GPU work. At the time of writing GPU 3 was the only idle device.
@@ -432,13 +432,23 @@ def test_cap_uses_per_term_curvature_and_clips_the_sum():
     n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=0)
     n.register("ft", object(), 6.0, activate_overflow=0.90, n_ramp=0)
     n.update_grad_norms({"wl": 1000.0, "io": 5.0, "ft": 10.0})   # ratios 200, 100
-    txn = n.transaction(0, 0.85, tau=100.0, gamma=10.0)
+    txn = n.transaction(0, 0.85, tau=100.0, gamma=20.0)
     # pre-clip lambdas: io = wt*ratio_io = 1.0*200 = 200, ft = 1.0*100 = 100
-    # derived kappa: kappa_io = 1.0 (by definition), kappa_ft = 100/200 = 0.5
-    assert txn.cmax == pytest.approx(3.5, rel=1e-12)                # 1 + 0.5*(6-1)
-    assert txn.cap == pytest.approx(lipschitz_cap(100.0, 10.0, 1.0, 3.5), rel=1e-12)
+    # Cmax is the lambda-weighted mean curvature (controller ruling
+    # 2026-09-19): Cmax = (200*1 + 100*6) / (200 + 100) = 800/300 = 8/3
+    assert txn.cmax == pytest.approx(8.0 / 3.0, rel=1e-12)
+    # cap = c_lip*tau^2/(gamma*Cmax) = 100^2/(20*8/3) = 10000/53.333... = 187.5,
+    # which is < 300 so the cap binds
+    assert txn.cap == pytest.approx(lipschitz_cap(100.0, 20.0, 1.0, 8.0 / 3.0), rel=1e-12)
+    assert txn.cap == pytest.approx(187.5, rel=1e-12)
     assert sum(txn.lambdas.values()) == pytest.approx(txn.cap, rel=1e-12)
-    assert txn.cap_binding == "io"                                  # 200 > 100
+    # scale = cap/total = 187.5/300 = 0.625 -> io = 125.0, ft = 62.5
+    assert txn.lambdas["io"] == pytest.approx(125.0, rel=1e-12)
+    assert txn.lambdas["ft"] == pytest.approx(62.5, rel=1e-12)
+    # binding is the term with the largest pre-clip lambda*curv: io=200*1=200,
+    # ft=100*6=600, so ft dominates the Lipschitz bound even though its raw
+    # pre-clip lambda (100) is smaller than io's (200)
+    assert txn.cap_binding == "ft"
     assert txn.lambdas["io"] / txn.lambdas["ft"] == pytest.approx(2.0, rel=1e-12)
 
 
@@ -719,9 +729,9 @@ class TermNormalizer:
         `probe()` owns the backward, the masking and the norm order.
 
         Declared curvatures (design sec 4): IO 1, FT `ecc_max`, capacity
-        `max_s pen''`, pseudo-FT 1. `kappa_t` is derived each transaction as
-        `lambda_t / lambda_io` (pre-clip), generalising
-        `derive_cmax(kappa_ft, ecc_max)` -- it is not a registration input."""
+        `max_s pen''`, pseudo-FT 1. `curvature` feeds `Cmax`'s pre-clip
+        lambda-weighted mean over every active term (controller ruling
+        2026-09-19, `_compute`) -- there is no per-term kappa to register."""
         if name in self.configs:
             raise ValueError("term %r already registered" % (name,))
         self.configs[name] = TermConfig(name, float(curvature),
@@ -996,11 +1006,20 @@ def test_policy_b_obeys_the_same_cap_as_policy_a():
     txn = n.transaction(0, 0.85, tau=100.0, gamma=20.0,
                         grad_norms={"wl": 1000.0, "io": 5.0, "ft": 10.0})
     # pre-clip lambdas (bootstrap): io = 0.9*1000/5 = 180, ft = 0.9*1000/10 = 90
-    # derived kappa: kappa_io = 1.0, kappa_ft = 90/180 = 0.5
-    assert txn.cmax == pytest.approx(3.5, rel=1e-12)
-    assert txn.cap == pytest.approx(100.0 * 100.0 / (20.0 * 3.5), rel=1e-12)  # 142.857...
+    # Cmax is the lambda-weighted mean curvature (controller ruling
+    # 2026-09-19): Cmax = (180*1 + 90*6) / (180 + 90) = 720/270 = 8/3
+    assert txn.cmax == pytest.approx(8.0 / 3.0, rel=1e-12)
+    # cap = 100^2/(20*8/3) = 10000/53.333... = 187.5, which is < 270 so the cap binds
+    assert txn.cap == pytest.approx(100.0 * 100.0 / (20.0 * 8.0 / 3.0), rel=1e-12)
+    assert txn.cap == pytest.approx(187.5, rel=1e-12)
     assert sum(txn.lambdas.values()) == pytest.approx(txn.cap, rel=1e-12)
-    assert txn.cap_binding == "io"                                  # 180 > 90
+    # scale = cap/total = 187.5/270 = 0.69444... -> io = 125.0, ft = 62.5
+    assert txn.lambdas["io"] == pytest.approx(125.0, rel=1e-12)
+    assert txn.lambdas["ft"] == pytest.approx(62.5, rel=1e-12)
+    # binding is the term with the largest pre-clip lambda*curv: io=180*1=180,
+    # ft=90*6=540, so ft dominates even though its raw pre-clip lambda (90) is
+    # smaller than io's (180)
+    assert txn.cap_binding == "ft"
     assert txn.lambdas["io"] / txn.lambdas["ft"] == pytest.approx(2.0, rel=1e-12)
 ```
 
@@ -2191,6 +2210,8 @@ Non-legacy policies require `--callback-order atomic`. `norm_trace.jsonl` gets
 one row per coefficient transaction (>= one per probe, since a transaction may
 reuse the previous probe's measurements), with the per-term gradient norm,
 instantaneous and EMA ratio, weight, coefficient, realised force share,
+`cmax` (the pre-clip λ-weighted mean curvature over the active terms --
+controller ruling 2026-09-19; there is no separate κ field to log),
 `cap_binding`, `cancellation_ratio` and the objective/refresh versions.
 ```
 
@@ -2403,11 +2424,13 @@ git commit -m "refactor(routing): reduce the one-shot route lambda to a norm ada
 paths' `ratio_ema` denominators equal. Legacy's `ratio_ema` denominator is the
 *merged* `‖∇IO + κ_FT·∇FT‖` (schedules.py's cancellation-aware measurement),
 while policy A's `ratio_ema` denominator is the *isolated* `‖∇IO‖` that
-`probe()` measures per term (C-1's derived-`kappa` `Cmax` also differs from
+`probe()` measures per term (C-1's λ-weighted-mean `Cmax` also differs from
 legacy's stored `Cmax` in general). A 2x miss in this acceptance test may
 therefore stem from either the normalisation change itself or from this
 pre-existing difference in what the two paths measure — do not attribute a
-failure to one cause without checking both traces.
+failure to one cause without checking both traces. Also: the new cap bounds
+λ_io + λ_ft·ecc, legacy bounded λ_io + λ_ft·(ecc−1); expect the new path
+slightly stricter when FT is active.
 
 - [ ] **Step 1: Write the failing test**
 
