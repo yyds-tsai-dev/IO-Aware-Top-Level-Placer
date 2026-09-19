@@ -445,7 +445,7 @@ def run_flat(config_json, k, rtype, seed, out_json, *, dp_seed=None, determinist
         json.dump(result, f, indent=1)
     return result
 
-def main():
+def build_parser():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
     ap.add_argument("--mode", required=True, choices=["flat", "two_stage", "reweight", "io"])
@@ -505,7 +505,37 @@ def main():
     ap.add_argument("--benchmark-kind", default="real", choices=["real", "synthetic"])
     ap.add_argument("--discrete-mode",choices=["none","ce","refine","ce_refine"],default="none")
     ap.add_argument("--discrete-max-active",type=int,default=65536)
-    args = ap.parse_args()
+    # v2 P-H (design sec 4): gradient-norm normalisation for the extra
+    # objective terms. mode=io only; no-op for the other modes.
+    ap.add_argument("--norm-policy", choices=["legacy", "grandplan", "adaptive"],
+                    default="legacy",
+                    help="coefficient normalisation policy: 'legacy' reproduces "
+                         "the retired lambda_IO EMA + kappa_FT force share exactly; "
+                         "'grandplan' uses lambda_t = wt_t*||grad WL||_p/||grad T_t||_p "
+                         "with wt stepping +0.05 every --norm-ramp-period iterations; "
+                         "'adaptive' drives each term to a target force share")
+    ap.add_argument("--norm-p", type=int, choices=[1, 2], default=1,
+                    help="gradient norm order for every normalisation probe "
+                         "(default 1: every calibrated constant was fitted under L1)")
+    ap.add_argument("--norm-ramp-period", type=int, default=100,
+                    help="policy grandplan: iterations between +0.05 wt steps")
+    ap.add_argument("--norm-wt-max", type=float, default=1.,
+                    help="policy grandplan: upper bound on wt (default 1.0)")
+    ap.add_argument("--norm-probe-every", type=int, default=50,
+                    help="iterations between normalisation probes; must be a "
+                         "positive multiple of --every")
+    ap.add_argument("--norm-target-share", default=None,
+                    help="policy adaptive: per-term target force shares, "
+                         "e.g. 'io=0.3,ft=0.1'")
+    ap.add_argument("--norm-trace", default=None,
+                    help="write norm_trace.jsonl here (default "
+                         "<out>.norm_trace.jsonl for non-legacy policies, "
+                         "no trace for legacy)")
+    return ap
+
+
+def main():
+    args = build_parser().parse_args()
     if args.mode == "flat":
         run_flat(args.config, args.k, args.rtype, args.seed, args.out,
                  dp_seed=args.dp_seed, deterministic=args.deterministic,
@@ -534,7 +564,11 @@ def main():
               discrete_mode=args.discrete_mode,discrete_max_active=args.discrete_max_active,
               emit_def=args.emit_def,
               emit_eval=args.emit_eval,
-              benchmark_kind=args.benchmark_kind)
+              benchmark_kind=args.benchmark_kind,
+              norm_policy=args.norm_policy, norm_p=args.norm_p,
+              norm_ramp_period=args.norm_ramp_period, norm_wt_max=args.norm_wt_max,
+              norm_probe_every=args.norm_probe_every,
+              norm_target_share=args.norm_target_share, norm_trace=args.norm_trace)
 
 if __name__ == "__main__":
     main()

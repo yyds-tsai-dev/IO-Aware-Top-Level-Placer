@@ -1,3 +1,15 @@
+"""Driver for `--mode io`.
+
+v2 P-H: coefficient derivation for the extra objective terms is routed
+through `ioplace.norm.TermNormalizer` (see `run_io`'s `norm_policy` family of
+keyword arguments). `--norm-policy legacy` (the default) is a thin adapter
+over the retired `ops/ft_callback.publish_atomic` + `ScheduleState` path and
+reproduces its coefficients bit-for-bit; `grandplan`/`adaptive` compute their
+own coefficients from `ioplace.ops.norm_terms.IoNormTerm`/`FtNormTerm`
+gradient probes. `IoNormTerm` measures the *unweighted* IO term only, with no
+margin contribution -- the same quantity `ops/ft_callback.publish_atomic`
+isolates for its own `kappa_ft` derivation, so the two paths stay comparable.
+"""
 import json, os, time
 from contextlib import ExitStack, contextmanager
 import numpy as np
@@ -39,7 +51,12 @@ RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  "num_filler_nodes", "num_bins_x", "num_bins_y",
                  "command", "hostname", "benchmark_kind", "device_baseline_gb",
                  # M4 T2b (probe_lifetime_gate.py's artifact postcondition):
-                 "n_callbacks_with_active", "n_evals_while_active")
+                 "n_callbacks_with_active", "n_evals_while_active",
+                 # v2 P-H (design sec 4): normalisation module configuration
+                 # and artefact.
+                 "norm_policy", "norm_p", "norm_ramp_period", "norm_wt_max",
+                 "norm_probe_every", "norm_target_share", "norm_trace",
+                 "lambda_ft_final")
 
 
 def _normalize_snapshot_iters(spec):
@@ -136,7 +153,10 @@ def run_io(config_json, k, rtype, seed, out_json, *,
            ft_ramp_mode="window", tau_start=.12, tau_full=.05,
            home_period=None, topology_diagnostics=False,
            wl_reweight="off", alpha_wl=.2, wl_cap=10.,
-           discrete_mode="none", discrete_max_active=65536):
+           discrete_mode="none", discrete_max_active=65536,
+           norm_policy="legacy", norm_p=1, norm_ramp_period=100,
+           norm_wt_max=1.0, norm_probe_every=50, norm_target_share=None,
+           norm_trace=None):
     if discrete_mode not in ("none","ce","refine","ce_refine") or discrete_max_active<0:
         raise ValueError("invalid discrete postprocess configuration")
     if callback_order not in ("legacy", "atomic"):
@@ -152,6 +172,16 @@ def run_io(config_json, k, rtype, seed, out_json, *,
     home_period = every if home_period is None else home_period
     if every <= 0 or home_period <= 0 or home_period % every:
         raise ValueError("home_period must be a positive multiple of every")
+    if norm_policy not in ("legacy", "grandplan", "adaptive"):
+        raise ValueError("norm_policy must be legacy, grandplan or adaptive, "
+                         "got %r" % (norm_policy,))
+    if norm_p not in (1, 2):
+        raise ValueError("norm_p must be 1 or 2, got %r" % (norm_p,))
+    if norm_probe_every <= 0 or norm_probe_every % every:
+        raise ValueError("norm_probe_every must be a positive multiple of every")
+    if norm_policy != "legacy" and callback_order != "atomic":
+        raise ValueError("norm_policy %r requires callback_order='atomic'"
+                         % (norm_policy,))
     import torch
     # Overflow-diagnosis follow-up: device_baseline_gb -- see
     # run_placement.run_flat's matching comment for why this must be the
@@ -278,13 +308,62 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         # io_gp/lg_loss/hard_lambda_sum columns it needs.
         observer_mode = (rho_max == 0.0 and rho_margin == 0.0 and wl_reweight == "off")
 
+        from ioplace.norm import (TermNormalizer, VersionPair, _json_cap,
+                                 parse_target_shares)
+        from ioplace.norm_trace import NormTraceWriter
+        from ioplace.ops.norm_terms import FtNormTerm, IoNormTerm
+        shares = parse_target_shares(norm_target_share)
+        norm_trace_path = norm_trace
+        if norm_trace_path is None and norm_policy != "legacy" and not observer_mode:
+            norm_trace_path = out_json + ".norm_trace.jsonl"
+        trace_writer = None
+        if norm_trace_path is not None and not observer_mode:
+            trace_writer = NormTraceWriter(norm_trace_path)
+            cleanup.callback(trace_writer.close)
+        normalizer = TermNormalizer(
+            policy=norm_policy, norm_p=norm_p, ema=state.ema,
+            probe_every=norm_probe_every, ramp_period=norm_ramp_period,
+            wt_max=norm_wt_max, c_lip=state.c_lip,
+            num_movable=io_term.num_movable, num_nodes=io_term.num_nodes,
+            # One cached gradient tensor per term is ~8 B/node/term; above 5M
+            # nodes the cancellation diagnostic is not worth the residency.
+            track_cancellation=(placedb.num_nodes <= 5_000_000),
+            legacy_state=state if norm_policy == "legacy" else None,
+            trace=trace_writer)
+        normalizer.register("io", IoNormTerm(io_term), 1.0,
+                            target_share=shares.get("io", 0.3),
+                            activate_overflow=of_on, n_ramp=state.n_ramp)
+        if ft_term is not None:
+            # FT curvature is ecc_max (design sec 4). Its overflow gate is 0.30:
+            # the tau_rel window the legacy ramp used (0.12 -> 0.05) maps through
+            # tau_rel_from_overflow to overflow 0.57 -> 0.25, and 0.30 is the
+            # same threshold the capacity term uses (design sec 5).
+            normalizer.register("ft", FtNormTerm(ft_term), float(distance.max()),
+                                target_share=shares.get("ft", f_ft_max),
+                                activate_overflow=0.30, n_ramp=state.n_ramp)
+
         def term_fn(pos):
-            if not state.active or (state.lambda_io == 0.0 and state.lambda_margin == 0.0):
+            if norm_policy == "legacy":
+                # Pass state.kappa_ft verbatim: recovering it as lambda_ft/lambda_io
+                # would differ in the last ulp and break the legacy guarantee.
+                lam_io, kappa = state.lambda_io, state.kappa_ft
+            else:
+                lam_io = normalizer.lambdas.get("io", 0.0)
+                lam_ft = normalizer.lambdas.get("ft", 0.0)
+                if lam_io <= 0.0 and lam_ft > 0.0:
+                    raise RuntimeError(
+                        "FtTerm expresses the FT coefficient as lambda_io*kappa, so "
+                        "a nonzero lambda_ft with lambda_io == 0 cannot be applied")
+                # Non-legacy: this path has no bit-exact guarantee to preserve
+                # (unlike legacy above), so recovering kappa by division here,
+                # accepting last-ulp rounding against the traced lambda_ft, is fine.
+                kappa = lam_ft / lam_io if lam_io > 0.0 else 0.0
+            if not state.active or (lam_io == 0.0 and state.lambda_margin == 0.0):
                 return pos.new_zeros(())
             if ft_term is not None:
-                return ft_term(pos, state.tau, state.lambda_io, state.kappa_ft,
+                return ft_term(pos, state.tau, lam_io, kappa,
                                state.lambda_margin, state.margin_m, state.margin_tau)
-            return io_term(pos, state.tau, state.lambda_io, state.lambda_margin,
+            return io_term(pos, state.tau, lam_io, state.lambda_margin,
                            state.margin_m, state.margin_tau)
 
         if not observer_mode:
@@ -455,10 +534,36 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                                                 if previous_home is not None and len(homes) else None)
                         ft_term.set_home(homes)
                         previous_home = homes.copy()
-                    from ioplace.ops.ft_callback import publish_atomic
-                    entry.update(publish_atomic(state, io_term, ft_term,
-                        placer.model.op_collections.wirelength_op, pos, iteration,
-                        state.tau / L_R, float(distance.max()) if distance is not None else 0., gamma))
+                    wirelength_op = placer.model.op_collections.wirelength_op
+                    if norm_policy == "legacy":
+                        from ioplace.ops.ft_callback import publish_atomic
+                        txn = normalizer.transaction(
+                            iteration, of, state.tau, gamma,
+                            legacy_publish=lambda: publish_atomic(
+                                state, io_term, ft_term, wirelength_op, pos,
+                                iteration, state.tau / L_R,
+                                float(distance.max()) if distance is not None else 0.,
+                                gamma))
+                        entry.update(txn.legacy_record)
+                    else:
+                        ctx_norm = {"iteration": iteration, "overflow": of,
+                                    "tau": state.tau, "gamma": gamma}
+                        if normalizer.should_probe(iteration):
+                            normalizer.probe(iteration, pos, wirelength_op, ctx_norm)
+                        txn = normalizer.transaction(iteration, of, state.tau, gamma)
+                        ft_state = normalizer.states.get("ft")
+                        entry.update(grad_l1_wl=normalizer.wl_norm,
+                                     grad_l1_io=normalizer.states["io"].grad_norm,
+                                     grad_l1_ft=ft_state.grad_norm if ft_state else 0.,
+                                     ratio_inst=normalizer.states["io"].ratio_inst,
+                                     ratio_ema=normalizer.states["io"].ratio_ema,
+                                     lambda_io=txn.lambdas.get("io", 0.),
+                                     obj_version=txn.obj_version)
+                    entry.update(lambda_ft=txn.lambdas.get("ft", 0.),
+                                 norm_cmax=txn.cmax,
+                                 norm_cap=_json_cap(txn.cap),
+                                 cap_binding=txn.cap_binding,
+                                 cancellation_ratio=txn.cancellation_ratio)
                     weights = placer.data_collections.net_weights
                     entry["wl_weights_min"] = float(weights.min())
                     entry["wl_weights_max"] = float(weights.max())
@@ -582,15 +687,24 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                                                g_wl_density)
 
             # 順序不可換:先讓新 τ/λ/w 生效,再 refresh。
-            if not observer_mode and (discrete or state.needs_refresh()):
+            if not observer_mode and (discrete or state.needs_refresh()
+                                      or normalizer.needs_refresh()):
                 refresh_nesterov_secant(placer.optimizer)
                 state.mark_refreshed()
+                normalizer.mark_refreshed()      # also emits the pending trace row
                 cb_state["num_refreshes"] += 1
             if callback_order == "atomic" and trajectory and trajectory[-1]["iteration"] == iteration:
-                trajectory[-1]["refreshed_version"] = state.refreshed_version
+                trajectory[-1]["refreshed_version"] = (
+                    state.refreshed_version if norm_policy == "legacy"
+                    else normalizer.refreshed_version)
 
             if check_invariant and not cb_state["installed_invariant"]:
-                cleanup.callback(install_version_invariant(placer.optimizer, state))
+                # Under policy="legacy" the normalizer's obj_version/
+                # refreshed_version delegate to `state`, so this VersionPair
+                # sums the same counter twice; equality still holds iff both
+                # are refreshed, so the invariant stays sound.
+                cleanup.callback(install_version_invariant(
+                    placer.optimizer, VersionPair(state, normalizer)))
                 cb_state["installed_invariant"] = True
 
         _install_attribute(cleanup, placer, "iteration_callback", cb)
@@ -609,7 +723,10 @@ def run_io(config_json, k, rtype, seed, out_json, *,
             # per-iteration signal comes from the scan_iters mark() checkpoints
             # inside cb(), not from a phase boundary.
             rec.phase_end("gp")
-        lambda_io_final = state.lambda_io
+        lambda_io_final = (state.lambda_io if norm_policy == "legacy"
+                           else normalizer.lambdas.get("io", 0.0))
+        lambda_ft_final = (state.lambda_io * state.kappa_ft if norm_policy == "legacy"
+                           else normalizer.lambdas.get("ft", 0.0))
         final_overflow = float(placer.model.overflow.max())
         stop_overflow_reached = _stop_overflow_reached(final_overflow, params.stop_overflow)
         gp_iterations_run = cb_state["last_iteration"] + 1
@@ -702,6 +819,14 @@ def run_io(config_json, k, rtype, seed, out_json, *,
             "of_on": of_on, "of_end": of_end, "alpha_io": alpha_io,
             "w_mode": w_mode, "d_max": ignore_net_degree, "rho_margin": rho_margin,
             "margin_m": margin_m, "lambda_io_final": lambda_io_final,
+            "lambda_ft_final": lambda_ft_final,
+            "norm_policy": norm_policy, "norm_p": norm_p,
+            "norm_ramp_period": norm_ramp_period, "norm_wt_max": norm_wt_max,
+            "norm_probe_every": norm_probe_every,
+            "norm_target_share": norm_target_share,
+            "norm_trace": (os.path.abspath(norm_trace_path)
+                           if norm_trace_path is not None and not observer_mode
+                           else None),
             "spearman_rho": spearman_rho, "num_callbacks": len(trajectory),
             "num_refreshes": cb_state["num_refreshes"],
             "backtrack_median": backtrack_median, "observer_mode": observer_mode,

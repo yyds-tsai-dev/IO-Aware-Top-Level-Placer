@@ -41,6 +41,29 @@ The host is shared. Check `nvidia-smi` and select an available GPU with
 `-m "not slow"` excludes placement integration tests but still includes GPU
 unit tests. Report missing benchmark data or unavailable GPUs explicitly.
 
+### Normalisation module (P-H) flags
+
+`ioplace.drivers.run_placement --mode io` normalises every extra objective term
+through `ioplace.norm.TermNormalizer` (v2 design section 4):
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--norm-policy` | `legacy` | `legacy` reproduces the retired λ_IO EMA + κ_FT force share exactly; `grandplan` is `λ_t = wt_t·‖∇WL‖_p/‖∇T_t‖_p`; `adaptive` targets a per-term force share |
+| `--norm-p` | `1` | Gradient norm order (L1 default, L2 switch) |
+| `--norm-ramp-period` | `100` | Policy `grandplan`: iterations between `+0.05` steps of `wt`, from `0.05` |
+| `--norm-wt-max` | `1.0` | Policy `grandplan`: upper bound on `wt` |
+| `--norm-probe-every` | `50` | Iterations between probes; must be a positive multiple of `--every` |
+| `--norm-target-share` | unset | Policy `adaptive`: `io=0.3,ft=0.1` |
+| `--norm-trace` | unset | Trace path; defaults to `<out>.norm_trace.jsonl` for non-legacy policies |
+
+Non-legacy policies require `--callback-order atomic`. `norm_trace.jsonl` gets
+one row per coefficient transaction (>= one per probe, since a transaction may
+reuse the previous probe's measurements), with the per-term gradient norm,
+instantaneous and EMA ratio, weight, coefficient, realised force share,
+`cmax` (the pre-clip λ-weighted mean curvature over the active terms --
+controller ruling 2026-09-19; there is no separate κ field to log),
+`cap_binding`, `cancellation_ratio` and the objective/refresh versions.
+
 ## Installed toolchain
 
 | Component | Version / configuration |
