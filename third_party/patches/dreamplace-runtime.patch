@@ -1,0 +1,107 @@
+diff --git a/dreamplace/NonLinearPlace.py b/dreamplace/NonLinearPlace.py
+index 073bbf2..241f89c 100644
+--- a/dreamplace/NonLinearPlace.py
++++ b/dreamplace/NonLinearPlace.py
+@@ -230,6 +230,10 @@ class NonLinearPlace(BasicPlace.BasicPlace):
+                                "Every training epoch calls the function 'step(closure)'." % (optimizer_name))
+ 
+                 logging.info("use %s optimizer" % (optimizer_name))
++                # io-aware: expose optimizer/model so the iteration callback can refresh
++                # objective-dependent optimizer state (design sec 6.4)
++                self.optimizer = optimizer
++                self.model = model
+                 model.train()
+                 # defining evaluation ops
+                 eval_ops = {
+@@ -513,6 +517,11 @@ class NonLinearPlace(BasicPlace.BasicPlace):
+                     if optimizer_name.lower() == "nesterov":
+                         cur_metric.objective = optimizer.param_groups[0]["obj_k_1"][0].data.clone()
+ 
++                    # io-aware: external per-iteration callback (see IO-Aware-Top-Level-Placer)
++                    cb = getattr(self, "iteration_callback", None)
++                    if cb is not None:
++                        cb(iteration, pos)
++
+                     # actually reports the metric before step
+                     logging.info(cur_metric)
+                     # record the best outer cell overflow
+diff --git a/dreamplace/Params.py b/dreamplace/Params.py
+index d9c42ee..1117cf0 100644
+--- a/dreamplace/Params.py
++++ b/dreamplace/Params.py
+@@ -112,7 +112,9 @@ class Params:
+         """
+         data = {}
+         for key, value in self.__dict__.items():
+-            if key != 'params_dict': 
++            # io-aware: skip runtime-only attachments (e.g. _extra_obj_terms, which
++            # holds python callables and is not JSON-serializable)
++            if key != 'params_dict' and not key.startswith('_'):
+                 data[key] = value
+         return data
+ 
+diff --git a/dreamplace/PlaceObj.py b/dreamplace/PlaceObj.py
+index c1d45e2..1e429a2 100644
+--- a/dreamplace/PlaceObj.py
++++ b/dreamplace/PlaceObj.py
+@@ -290,6 +290,11 @@ class PlaceObj(nn.Module):
+             self.routability_Lsub_iteration = self.Lsub_iteration
+         self.start_fence_region_density = False
+ 
++        # io-aware: runtime-attached extra objective terms (see IO-Aware-Top-Level-Placer
++        # docs/superpowers/specs/2026-08-06-m2-differentiable-io-design.md sec 6.2).
++        # Carried on `params` so each run gets its own list -- no global mutation.
++        self.extra_obj_terms = list(getattr(params, "_extra_obj_terms", []))
++
+     def obj_fn(self, pos):
+         """
+         @brief Compute objective.
+@@ -317,6 +322,10 @@ class PlaceObj(nn.Module):
+         else:
+             result = torch.add(self.wirelength, self.density, alpha=(self.density_factor * self.density_weight).item())
+ 
++        # io-aware: extra objective terms (added per-instance, see __init__)
++        for term in self.extra_obj_terms:
++            result = result + term(pos)
++
+         return result
+ 
+     def obj_and_grad_fn_old(self, pos_w, pos_g=None, admm_multiplier=None):
+diff --git a/dreamplace/ops/fence_region/fence_region.py b/dreamplace/ops/fence_region/fence_region.py
+index 319feba..6669b83 100644
+--- a/dreamplace/ops/fence_region/fence_region.py
++++ b/dreamplace/ops/fence_region/fence_region.py
+@@ -166,10 +166,16 @@ def slice_non_fence_region(
+             continue
+         intersect = non_fence_region.intersection(cvx_hull)
+ 
+-        if isinstance(intersect, Polygon) and len(intersect.bounds) == 4:
++        # io-aware: shapely 2.x compat -- an empty-result Polygon's .bounds
++        # is (nan, nan, nan, nan) (len 4) here, not the shapely 1.x empty
++        # tuple (), so it used to fail this len-4 filter and now silently
++        # passes it, poisoning downstream density maps with NaN boxes;
++        # explicitly exclude is_empty results to restore the old behavior.
++        if isinstance(intersect, Polygon) and not intersect.is_empty and len(intersect.bounds) == 4:
+             slices.append(intersect.bounds)
+         elif isinstance(intersect, (GeometryCollection, MultiPolygon)):
+-            slices.extend([j.bounds for j in intersect.geoms if (isinstance(j, Polygon) and len(j.bounds) == 4)])
++            slices.extend([j.bounds for j in intersect.geoms
++                           if (isinstance(j, Polygon) and not j.is_empty and len(j.bounds) == 4)])
+ 
+     if merge:
+         raw_bbox_list = sorted(slices, key=lambda x: (x[1], x[0]))
+@@ -186,7 +192,13 @@ def slice_non_fence_region(
+                 bbox_list.append(cur_bbox)
+                 cur_bbox = [minx, miny, maxx, maxy]
+         else:
+-            bbox_list.append(cur_bbox)
++            # io-aware: shapely 2.x compat -- with the is_empty guard above,
++            # raw_bbox_list can now legitimately end up empty (every
++            # candidate slice was an empty intersection), leaving cur_bbox
++            # as None; guard the flush so we don't append a bare None,
++            # which torch.tensor() below cannot convert.
++            if cur_bbox is not None:
++                bbox_list.append(cur_bbox)
+     else:
+         bbox_list = slices
+ 

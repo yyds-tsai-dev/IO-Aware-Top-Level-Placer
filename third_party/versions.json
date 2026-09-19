@@ -1,0 +1,47 @@
+{
+  "DREAMPlace": {
+    "commit": "6627f3327e6cc17db7782c0b90073a498531ca3c",
+    "remote": "https://github.com/limbo018/DREAMPlace.git",
+    "patch": "third_party/patches/dreamplace-runtime.patch",
+    "patch_sha256": "d902de8c4deeaee58347730da4f59e85dcd2d60ff77f1e1e63890c8284310121",
+    "source_verified_against": "/ldaphome/yyds-tsai-dev/DREAMPlace",
+    "patched_files": [
+      "dreamplace/NonLinearPlace.py",
+      "dreamplace/Params.py",
+      "dreamplace/PlaceObj.py",
+      "dreamplace/ops/fence_region/fence_region.py"
+    ]
+  },
+  "OpenROAD": {
+    "commit": "1a29dadda2c06e2cb2f5b09b8f7425778dd88b47",
+    "remote": "https://github.com/liangrj2014/OpenROAD_ISPD25.git",
+    "patch": "third_party/patches/openroad-runtime.patch",
+    "patch_sha256": "9c9a7d41631b288756364952f4932aee5da94c246ed51b09a78f51facfce85fa",
+    "source_verified_against": "/ldaphome/yyds-tsai-dev/tools/openroad/src",
+    "patched_files": [
+      "src/Main.cc",
+      "src/grt/include/grt/GRoute.h",
+      "src/grt/include/grt/GlobalRouter.h",
+      "src/grt/messages.txt",
+      "src/grt/src/GlobalRouter.cpp",
+      "src/grt/src/GlobalRouter.i",
+      "src/grt/src/GlobalRouter.tcl",
+      "src/grt/src/RepairAntennas.cpp",
+      "src/grt/src/RepairAntennas.h",
+      "src/grt/src/fastroute/include/FastRoute.h",
+      "src/grt/src/fastroute/src/FastRoute.cpp",
+      "src/grt/src/fastroute/src/utility.cpp",
+      "src/grt/test/repair_antennas1.defok",
+      "src/grt/test/repair_antennas1.guideok",
+      "src/grt/test/repair_antennas1.ok",
+      "src/grt/test/repair_antennas2.defok",
+      "src/grt/test/repair_antennas2.guideok",
+      "src/grt/test/repair_antennas2.ok",
+      "src/grt/test/repair_antennas3.defok",
+      "src/grt/test/repair_antennas3.guideok",
+      "src/grt/test/repair_antennas3.ok",
+      "src/grt/test/repair_antennas4.ok",
+      "src/odb/src/swig/common/odb.i"
+    ]
+  }
+}
