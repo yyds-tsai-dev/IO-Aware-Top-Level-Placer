@@ -382,7 +382,8 @@ class TermNormalizer:
         commits nothing and never bumps `obj_version`."""
         if self._legacy is not None:
             raise NotImplementedError(
-                "policy 'legacy' delegation is installed by the legacy adapter task")
+                "policy 'legacy' has no pure preview: coefficients only "
+                "exist after publish_atomic measures gradients")
         self._activate(iteration, overflow)
         return self._compute(iteration, tau, gamma)[0]
 
@@ -518,29 +519,38 @@ class TermNormalizer:
         `needs_refresh` flag means "call `refresh_nesterov_secant(optimizer)`
         then `mark_refreshed()` before the next optimizer step".
 
-        The re-entrancy guard below only applies when this normalizer owns
-        its own version counter (`self._legacy is None`). Under `policy=
-        "legacy"`, `obj_version`/`refreshed_version` delegate entirely to the
-        `ScheduleState`, whose own `update_continuous()` -- called by the
-        driver *before* this method, exactly as the retired path always did
-        -- may bump `obj_version` itself (a discrete activation or margin
-        toggle) without an intervening refresh; that bump and this
-        transaction's `apply_ft_transaction` bump are both reconciled by one
+        The re-entrancy guard below is path-independent: it fires whenever
+        this normalizer's own `_pending_row` is still set, i.e. the previous
+        transaction's row was never finalised by `mark_refreshed()`. This
+        matters for `policy="legacy"`: `obj_version`/`refreshed_version`
+        delegate entirely to the `ScheduleState`, whose own
+        `update_continuous()` -- called by the driver *before* this method,
+        exactly as the retired path always did -- may bump `obj_version`
+        itself (a discrete activation or margin toggle) without an
+        intervening refresh; that bump and this transaction's
+        `apply_ft_transaction` bump are both reconciled by one
         `mark_refreshed()` call at the end of the iteration (see the retired
         golden trajectory and `run_placement_io.py`'s own
         `discrete or state.needs_refresh()` refresh gate). Guarding on
-        `self.needs_refresh()` here would misfire on that legitimate
-        same-iteration bump, so it is skipped for legacy; `ScheduleState`
-        remains the sole authority on its own version pair."""
-        if self._legacy is None and self.needs_refresh():
+        `self.needs_refresh()` would misfire on that legitimate
+        same-iteration bump; guarding on `_pending_row` instead tracks only
+        *this* normalizer's own uncommitted transaction, so legacy gets a
+        real double-transaction detector without being fooled by
+        `ScheduleState`'s independent version bump."""
+        if self._pending_row is not None:
             raise RuntimeError(
                 "previous transaction was not refreshed: call "
                 "refresh_nesterov_secant(optimizer) then mark_refreshed()")
-        if grad_norms is not None:
-            self.update_grad_norms(grad_norms)
         if self._legacy is not None:
+            if grad_norms is not None:
+                raise ValueError(
+                    "policy 'legacy' does not accept grad_norms: gradients "
+                    "are measured by publish_atomic (via legacy_publish), "
+                    "not update_grad_norms")
             return self._legacy_transaction(iteration, overflow, tau, gamma,
                                             legacy_publish)
+        if grad_norms is not None:
+            self.update_grad_norms(grad_norms)
         self._activate(iteration, overflow)
         lambdas, weights, cmax, cap, binding = self._compute(iteration, tau, gamma)
         for name, state in self.states.items():
@@ -602,8 +612,13 @@ class TermNormalizer:
             ft.wt = record["f_ft"]
             ft.active = record["kappa_ft"] > 0.0
             ft.it_activate = state.it_activate
-        self.lambdas = dict(lambdas)
-        cap = lipschitz_cap(tau, gamma, state.c_lip, record["Cmax"])
+        # Mutate the live dict in place, exactly like the non-legacy branch
+        # above: `self.lambdas` is the object a driver's `term_fn` closure
+        # captured a reference to, and rebinding it would leave that closure
+        # reading a stale copy forever.
+        self.lambdas.clear()
+        self.lambdas.update(lambdas)
+        cap = lipschitz_cap(state.tau, gamma, state.c_lip, record["Cmax"])
         # `apply_ft_transaction` uses `min(base, cap)`, so the cap bound exactly
         # when the stored coefficient *is* the cap value.
         binding = "io" if state.lambda_io == cap else None

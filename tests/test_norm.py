@@ -149,7 +149,13 @@ def test_normalizer_rejects_unknown_policy_and_norm_order():
         TermNormalizer(policy="legacy")          # legacy needs a ScheduleState
 
 
-def test_weights_rejects_the_legacy_policy_until_the_adapter_lands():
+def test_weights_has_no_pure_preview_under_the_legacy_policy():
+    """`weights()` stays a NotImplementedError under `policy="legacy"` even
+    with the adapter landed (Task 6): there is no pure preview to give.
+    Coefficients on the legacy path come from `apply_ft_transaction`, which
+    only runs -- and only measures gradients -- inside `legacy_publish`
+    during `transaction()`; there is no side-effect-free way to compute them
+    ahead of a real transaction."""
     from ioplace.schedules import ScheduleState
     n = TermNormalizer(policy="legacy", legacy_state=ScheduleState(rho_max=1.0))
     n.register("io", object(), 1.0)

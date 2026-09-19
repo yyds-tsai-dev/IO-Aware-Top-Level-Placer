@@ -5,7 +5,7 @@ torch = pytest.importorskip("torch")
 from ioplace.norm import TermNormalizer
 from ioplace.ops.ft_callback import publish_atomic
 from ioplace.ops.ft_term import FtTerm
-from ioplace.schedules import ScheduleState
+from ioplace.schedules import ScheduleState, activation_ramp
 
 # Recorded on 2026-09-19 from the retired path at HEAD (commit 13246d8):
 # ScheduleState(rho_max=0.4, n_ramp=20, f_ft_max=0.25, c_lip=1.0) driven with
@@ -103,6 +103,7 @@ def test_legacy_policy_delegates_the_version_counters():
     normalizer = TermNormalizer(policy="legacy", legacy_state=state)
     normalizer.register("io", object(), 1.0)
     normalizer.register("ft", object(), ecc_max)
+    ref_before = normalizer.lambdas
     state.update_continuous(0, 0.5, 100.0, 1.0)
     assert normalizer.obj_version == state.obj_version
     normalizer.transaction(0, 0.5, state.tau, 1.0,
@@ -111,8 +112,13 @@ def test_legacy_policy_delegates_the_version_counters():
                                pos, 0, state.tau / 100.0, ecc_max, 1.0))
     assert normalizer.obj_version == state.obj_version
     assert normalizer.needs_refresh() and state.needs_refresh()
+    # `self.lambdas` must be mutated in place, never rebound, on the legacy
+    # path too: a driver's `term_fn` closure holds a reference to this exact
+    # dict (fix round 1, I-1).
+    assert normalizer.lambdas is ref_before
     normalizer.mark_refreshed()
     assert not normalizer.needs_refresh() and not state.needs_refresh()
+    assert normalizer.lambdas is ref_before
 
 
 def test_legacy_policy_requires_the_publish_callable():
@@ -145,3 +151,17 @@ def test_legacy_policy_fills_the_trace_row(tmp_path):
     assert row["terms"]["ft"]["lam"] == pytest.approx(
         state.lambda_io * state.kappa_ft, rel=1e-12)
     assert row["cmax"] == pytest.approx(state.Cmax, rel=1e-12)
+    assert row["terms"]["io"]["wt"] == pytest.approx(
+        state.rho * activation_ramp(100, state.it_activate, state.n_ramp),
+        rel=1e-12)
+
+
+def test_legacy_policy_rejects_grad_norms():
+    """The non-legacy EMA path (`update_grad_norms`) must never run on a
+    legacy call: gradients are measured by `publish_atomic` inside
+    `legacy_publish`, not by a probe (fix round 1, I-6)."""
+    state = ScheduleState(rho_max=0.4)
+    normalizer = TermNormalizer(policy="legacy", legacy_state=state)
+    normalizer.register("io", object(), 1.0)
+    with pytest.raises(ValueError):
+        normalizer.transaction(0, 0.5, 10.0, 1.0, grad_norms={"wl": 1.0, "io": 1.0})
