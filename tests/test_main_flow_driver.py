@@ -155,3 +155,120 @@ def test_a_clamp_ceiling_above_dreamplaces_own_cap_is_flagged():
     assert _flag_dreamplace_density_cap(log) is log
     assert log[0]["hi_abs_capped_by_dreamplace"] is False
     assert log[1]["hi_abs_capped_by_dreamplace"] is True
+
+
+import json
+from pathlib import Path
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("norm_policy", ["legacy", "grandplan"])
+def test_main_flow_end_to_end_on_gcd_closes_the_io_identity(tmp_path, norm_policy):
+    """Design v2 sec 9's small end-to-end case: producer-free grid K=4 on GCD,
+    full main flow, asserting the artefacts exist and
+    io(final) = io(soft) + io_delta_at_freeze + lg_loss.
+
+    Parametrised over the two shipped policies (Global Constraints ruling
+    2026-09-19): `grandplan` is the driver's default and design sec 4's
+    coefficient path, `legacy` is the bit-for-bit regression arm. `adaptive`
+    is ablation-only and is covered by tests/test_norm_adapter.py, not here."""
+    from ioplace.artifacts import MAIN_FLOW_RESULT_FIELDS
+    from ioplace.paths import REPO_ROOT
+    config = Path(REPO_ROOT) / "results/route_feedback_20260914/gcd.json"
+    if not config.exists():
+        pytest.skip("GCD benchmark required")
+    out = tmp_path / f"gcd_k4_{norm_policy}"
+    result = run_main_flow(str(config), str(out), k=4, rtype="grid", seed=0,
+                           init="die_center", every=25, freeze_window=50,
+                           rho_max=0.05, norm_policy=norm_policy,
+                           dp_seed=1000, deterministic=1)
+    assert result["norm_policy"] == norm_policy
+
+    # the normalisation trace's file name is the policy's, not a constant:
+    # legacy writes legacy_trace.jsonl, grandplan/adaptive norm_trace.jsonl
+    # (amendment A-9).
+    trace_name = ("legacy_trace.jsonl" if norm_policy == "legacy"
+                  else "norm_trace.jsonl")
+    for name in ("regions.json", "soft.npz", "freeze.json",
+                 "frozen_membership.npz", "placement.npz", "evaluation.npz",
+                 trace_name, "result.json"):
+        assert (out / name).exists(), name
+    on_disk = json.loads((out / "result.json").read_text())
+    for field in MAIN_FLOW_RESULT_FIELDS:
+        assert field in on_disk, field
+    assert on_disk["mode"] == "main_flow" and on_disk["schema_version"] == 1
+
+    # The accounting identity (design v2 sec 7) is algebraic:
+    # io_identity_residual is 0 for *any* three inputs, so it is asserted as
+    # the schema invariant it is, and the real check comes from provenance
+    # (amendment D-1) -- io_fence_gp must be the legalize_op wrapper's exact
+    # pre-LG measurement, and io_soft must be the number freeze.json recorded.
+    assert result["io_identity_residual"] == 0
+    assert result["io_fence_gp_source"] == "legalize_op"
+    assert result["io_soft"] == result["freeze"]["io_soft"]
+    assert result["io_count"] == result["io_fence_gp"] + result["lg_loss"]
+
+    freeze = result["freeze"]
+    assert freeze["reason"] in ("criterion", "gp_end")
+    assert freeze["k"] == 4 and len(freeze["region_cell_count"]) == 4
+    assert min(freeze["region_cell_count"]) >= 1          # no empty fence region
+    assert freeze["density_weight_soft"] > 0
+
+    assert result["fence_compliance_center"] >= 0.9
+    assert result["region_area_balance"]["utilization_ratio"] is not None
+    assert result["region_area_balance"]["empty_regions"] == []
+    assert result["density_weight_clamp"] and "bound" in result["density_weight_clamp"][0]
+    assert result["hpwl"] > 0 and result["hpwl_gp"] > 0 and result["hpwl_lg"] > 0
+    assert result["gp_iterations_soft"] >= 1 and result["gp_iterations_fence"] >= 1
+    assert result["peak_mem_mb"] > 0 and result["t_gp_fence"] > 0
+    assert set(result["artifacts"]) >= {"soft_npz", "freeze_json",
+                                        "membership_npz", "placement_npz",
+                                        "evaluation_npz"}
+
+    # Row assertions branch on the policy (amendment A-9): legacy_trace.jsonl
+    # carries publish_atomic's keys plus the driver's per-probe extras;
+    # norm_trace.jsonl carries exactly norm_trace.ROW_FIELDS and nothing else,
+    # because NormTraceWriter validates every row. The else branch is what the
+    # --norm-policy grandplan|adaptive arms of the spec section 4 ablation hit.
+    from ioplace.norm_trace import ROW_FIELDS, TERM_FIELDS, read_norm_trace
+    rows = read_norm_trace(str(out / trace_name))
+    assert rows
+    if norm_policy == "legacy":
+        for row in rows:
+            for key in ("iteration", "overflow", "tau", "tau_rel", "lambda_io",
+                        "grad_l1_wl", "grad_l1_io", "obj_version", "policy",
+                        "io_count", "ft_count", "churn"):
+                assert key in row, key
+    else:
+        for row in rows:
+            assert set(row) == set(ROW_FIELDS)
+            assert row["policy"] == norm_policy and "io" in row["terms"]
+            assert set(row["terms"]["io"]) == set(TERM_FIELDS)
+        # design sec 4's point: the IO coefficient is derived from a measured
+        # gradient ratio, and the committed lambda is un-ramped while the
+        # applied one carries the activation ramp (review I1).
+        assert any(row["terms"]["io"]["ratio_ema"] for row in rows)
+        assert any(row["terms"]["io"]["lam"] > 0.0 for row in rows)
+        assert all(row["terms"]["io"]["lam_applied"] <= row["terms"]["io"]["lam"]
+                   for row in rows)
+
+    # soft-phase provenance survives into result.json (amendment D-6)
+    summary = result["soft_summary"]
+    assert summary["region_source"] == "builtin"
+    assert summary["init"]["mode"] == "die_center" and summary["prior"] is None
+    assert summary["num_probes"] == len(summary["probe_samples"])
+    # Under legacy the adapter writes each row as the driver hands it over.
+    # Under grandplan/adaptive TermNormalizer holds the row until
+    # mark_refreshed(), and the freeze raise deliberately skips that last
+    # refresh (amendment D-13), so a criterion freeze drops exactly one row --
+    # by design: those coefficients never reached the objective.
+    dropped = int(norm_policy != "legacy" and freeze["reason"] == "criterion")
+    assert len(rows) == summary["num_probes"] - dropped
+    assert summary["trace_path"].endswith(trace_name)
+
+    # --phase fence reproduces the fence half from the artefacts alone
+    rerun = run_main_flow(str(config), str(out), phase="fence", k=4,
+                          dp_seed=1000, deterministic=1)
+    assert rerun["io_soft"] == result["io_soft"]
+    assert rerun["io_count"] == result["io_count"]
+    assert rerun["lg_loss"] == result["lg_loss"]
