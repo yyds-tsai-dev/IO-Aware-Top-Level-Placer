@@ -1,8 +1,14 @@
 import os
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
-from ioplace.drivers.run_main_flow import (_flag_dreamplace_density_cap,
+from ioplace.drivers.run_main_flow import (EVALUATION_NPZ, FREEZE_JSON,
+                                           FROZEN_MEMBERSHIP_NPZ,
+                                           PLACEMENT_NPZ, REGIONS_JSON,
+                                           RESULT_JSON, SOFT_NPZ,
+                                           _flag_dreamplace_density_cap,
                                            _resolve_prior, _resolve_regions,
                                            build_parser, main, run_main_flow,
                                            run_soft_phase)
@@ -159,6 +165,149 @@ def test_a_clamp_ceiling_above_dreamplaces_own_cap_is_flagged():
 
 import json
 from pathlib import Path
+
+
+def test_flag_dreamplace_density_cap_against_a_real_clamp_log():
+    """M4 (task review): the existing hand-typed-dict test above cannot
+    catch a rename of `clamp_density_weight`'s own `hi_abs` key
+    (fence_phase.py:59), the only way this helper can actually break in
+    production. Build the log from the *real* function instead, on a
+    minimal fake model with just the `density_weight` tensor it reads."""
+    import torch
+    from ioplace.fence_phase import clamp_density_weight
+
+    def clamp_entry(value, *, reference, hi):
+        class FakeModel:
+            density_weight = torch.tensor([value])
+        return clamp_density_weight(FakeModel(), reference=reference,
+                                    lo=0.25, hi=hi)
+
+    log = [clamp_entry(1.0, reference=1.0, hi=4.0),
+           clamp_entry(1.0, reference=10.0, hi=4.0)]
+    assert _flag_dreamplace_density_cap(log) is log
+    for entry in log:
+        # clamp_density_weight's documented key set (fence_phase.py:59-62);
+        # a rename of any of these fails here, not only in the fabricated
+        # dict above.
+        assert set(entry) >= {"reference", "lo_abs", "hi_abs", "before",
+                              "after", "bound"}
+    assert log[0]["hi_abs"] == pytest.approx(4.0)
+    assert log[0]["hi_abs_capped_by_dreamplace"] is False
+    assert log[1]["hi_abs"] == pytest.approx(40.0)
+    assert log[1]["hi_abs_capped_by_dreamplace"] is True
+
+
+def test_run_main_flow_maps_fence_compliance_and_matches_the_result_schema(
+        tmp_path, monkeypatch):
+    """I1 (task review): `fence_compliance()["lower_left"]`/`["center"]` ->
+    `result["fence_compliance"]`/`["fence_compliance_center"]`
+    (run_main_flow.py's result assembly) and result.json's exact key set
+    (artifacts.MAIN_FLOW_RESULT_FIELDS) are both reached only through a full
+    `run_main_flow`, and neither had a fast test. Stubs run_soft_phase and
+    run_fence_gp so this needs no real DREAMPlace placement, but builds
+    fence_compliance/region_area_balance/the eval metrics/the legalization
+    fields from the *live* functions rather than hand-typed dicts, so a
+    rename of any of their return keys still fails this test."""
+    from ioplace.artifacts import (MAIN_FLOW_RESULT_FIELDS, save_freeze,
+                                   save_membership, save_positions)
+    from ioplace.drivers.run_placement import (_legalization_fields,
+                                               _pack_eval_metrics)
+    from ioplace.freeze import freeze_record, region_cell_stats
+    from ioplace.main_flow_metrics import fence_compliance, region_area_balance
+    from ioplace.region_grid import RegionGrid
+
+    out = tmp_path / "run"
+    out.mkdir()
+    config = tmp_path / "config.json"
+    config.write_text("{}")
+
+    k = 4
+    die = (0.0, 0.0, 100.0, 100.0)
+    rs = make_grid_regions(die, 2, 2, lattice=8)
+    part = np.array([0, 1, 2, 3], dtype=np.int32)
+    size_x = np.array([10.0, 10.0, 10.0, 10.0])
+    size_y = np.array([10.0, 10.0, 10.0, 10.0])
+    # One cell centred in each of the four grid quadrants -- unambiguous
+    # fence_compliance (both anchors) without needing a real placement.
+    node_x = np.array([10.0, 60.0, 10.0, 60.0])
+    node_y = np.array([10.0, 10.0, 60.0, 60.0])
+
+    regions_path = str(out / REGIONS_JSON)
+    rs.to_json(regions_path)
+    soft_path = str(out / SOFT_NPZ)
+    save_positions(soft_path, node_x, node_y, die=die, shift_factor=(0.0, 0.0),
+                   scale_factor=1.0, placedb_sha256="fake", kind="soft")
+    membership_path = str(out / FROZEN_MEMBERSHIP_NPZ)
+    save_membership(membership_path, part, source="freeze", k=k, seed=0,
+                    epsilon=0.0)
+    freeze_path = str(out / FREEZE_JSON)
+    record = freeze_record(
+        iteration=10, reason="gp_end", overflow=0.05, tau=0.1, tau_rel=0.02,
+        churn=0.0, k=k, io_soft=5, membership_npz=membership_path,
+        soft_npz=soft_path, repaired_empty_regions=[], gp_iterations_soft=11,
+        density_weight_soft=1.5,
+        stats=region_cell_stats(part, size_x, size_y, rs))
+    save_freeze(freeze_path, record)
+
+    def fake_run_soft_phase(config_json, out_dir, *, k, timer=None, **kwargs):
+        return {"freeze": record, "part": part, "soft_npz": soft_path,
+                "membership_npz": membership_path,
+                "regions_json": regions_path, "region_source": "builtin",
+                "init": {"mode": "die_center"}, "prior": None,
+                "norm_policy": kwargs.get("norm_policy"),
+                "trace_path": str(out / "norm_trace.jsonl"),
+                "probe_samples": [], "num_probes": 0, "num_refreshes": 0,
+                "gp_iterations_soft": 11, "density_weight_soft": 1.5,
+                "placedb_sha256": "fake", "die_native": die}
+
+    rg = RegionGrid(rs)
+    real_compliance = fence_compliance(rg, node_x, node_y, part, size_x, size_y)
+    real_balance = region_area_balance(part, size_x, size_y, rs)
+    real_metrics = _pack_eval_metrics(SimpleNamespace(
+        io_count=3, ft_count=0, tree_wl=1.0, hpwl=2.0, large_net_lb=0,
+        hard_lambda_sum=0.0, io_rg=0.0, ft_rg=0.0))
+    real_legal_fields = _legalization_fields(True, 0, 1)
+
+    def fake_run_fence_gp(config_json, out_dir, *, region_set, part,
+                          positions, reference_density_weight,
+                          density_clamp_lo=0.25, density_clamp_hi=4.0,
+                          dp_seed=None, deterministic=None, extra_terms=(),
+                          timer=None):
+        placement_path = str(out / PLACEMENT_NPZ)
+        evaluation_path = str(out / EVALUATION_NPZ)
+        np.savez_compressed(placement_path, node_x=node_x, node_y=node_y)
+        np.savez_compressed(evaluation_path, node_x=node_x, node_y=node_y)
+        return {
+            "metrics": real_metrics, "io_fence_gp": 4,
+            "io_fence_gp_source": "legalize_op",
+            "hpwl_gp": 2.5, "hpwl_lg": 2.0,
+            "fence_compliance": real_compliance,
+            "region_area_balance": real_balance,
+            "density_weight_clamp": [],
+            "escape_cell": 0, "escape_from": 1,
+            "legal_fields": real_legal_fields,
+            "scale_fields": {"effective_target_density": 0.7,
+                            "num_filler_nodes": 0, "num_bins_x": 8,
+                            "num_bins_y": 8},
+            "final_overflow": 0.05, "stop_overflow_reached": True,
+            "gp_iterations_fence": 5, "gp_iteration_budget": 100,
+            "placement_npz": placement_path, "evaluation_npz": evaluation_path,
+            "params_seed": 7, "deterministic": 1,
+        }
+
+    monkeypatch.setattr("ioplace.drivers.run_main_flow.run_soft_phase",
+                        fake_run_soft_phase)
+    monkeypatch.setattr("ioplace.drivers.run_main_flow.run_fence_gp",
+                        fake_run_fence_gp)
+
+    result = run_main_flow(str(config), str(out), k=k, phase="all")
+
+    assert result["fence_compliance"] == real_compliance["lower_left"] == 1.0
+    assert result["fence_compliance_center"] == real_compliance["center"] == 1.0
+    assert set(result) == set(MAIN_FLOW_RESULT_FIELDS)
+
+    on_disk = json.loads((out / RESULT_JSON).read_text())
+    assert set(on_disk) == set(MAIN_FLOW_RESULT_FIELDS)
 
 
 @pytest.mark.slow
