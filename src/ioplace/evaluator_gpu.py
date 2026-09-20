@@ -80,6 +80,7 @@ import torch
 
 from ioplace.evaluator_ref import EvalResult
 from ioplace.region_graph import region_graph as build_region_graph, next_hop_table, steiner_tree_stats
+from ioplace.straddle import _REGION_STRIDE
 
 
 def _pow2_bounds(n):
@@ -93,7 +94,7 @@ def _pow2_bounds(n):
 class GpuEvalContext:
     def __init__(self, nl, rg, device="cuda", max_degree=256,
                  mst_chunk_budget=8_000_000, seg_chunk_budget=8_000_000,
-                 edge_batch_size=1_000_000):
+                 edge_batch_size=1_000_000, straddle=True):
         """
         mst_chunk_budget / seg_chunk_budget / edge_batch_size (M4 T2 §4.2 item 7:
         "batch size as a construction parameter"): all three bound the peak size
@@ -120,6 +121,14 @@ class GpuEvalContext:
         overridable constructor parameters for the T2 batch-invariance tests
         (edge_batch_size in {1_000_000, 8_000_000, "all edges in one batch"})
         and for callers with a different memory/kernel-launch-overhead tradeoff.
+
+        straddle (v2 P-F, design sec 7): compute the straddle diagnostics.
+        Costs two persistent (num_physical,) float64 size tensors and, per
+        evaluate(), an O(N) geometry pass plus one extra torch.unique over the
+        pin keys -- small next to the MST, but not free at 30M cells, so it is
+        switchable both here (skip the allocation) and per call
+        (evaluate(..., straddle=False), which the in-loop diagnostic callback in
+        run_placement_io uses).
         """
         self.nl, self.rg = nl, rg
         self.device = torch.device(device)
@@ -224,6 +233,20 @@ class GpuEvalContext:
         self.pin_offset_x_t = torch.from_numpy(nl.pin_offset_x.astype(np.float64)).to(self.device)
         self.pin_offset_y_t = torch.from_numpy(nl.pin_offset_y.astype(np.float64)).to(self.device)
 
+        # v2 P-F: movable/physical counts and the sizes the sec 7 diagnostics
+        # need. float64 for the same reason every other geometry tensor here is
+        # float64 -- these feed _to_idx, whose truncation decides integers.
+        self.num_movable = int(nl.num_movable)
+        self.num_physical = int(n_physical)
+        self.straddle = bool(straddle)
+        if self.straddle:
+            self.node_size_x_t = torch.from_numpy(
+                np.asarray(nl.node_size_x[:n_physical], dtype=np.float64)).to(self.device)
+            self.node_size_y_t = torch.from_numpy(
+                np.asarray(nl.node_size_y[:n_physical], dtype=np.float64)).to(self.device)
+        else:
+            self.node_size_x_t = self.node_size_y_t = None
+
         self.n_nets = nl.num_nets
         # M4 T2 (spec §4.2 F4 / §2.1): composite (net_id, region_id) keys used
         # below (evaluate()'s net_region_key) and elsewhere (pair-demand's
@@ -304,6 +327,88 @@ class GpuEvalContext:
         px = node_x[self.pin2node_t] + self.pin_offset_x_t
         py = node_y[self.pin2node_t] + self.pin_offset_y_t
         return px, py
+
+    def _distinct_regions_per_net(self, pin_rid):
+        """(n_nets,) int64 distinct-region count per net, 0 for degree<2 -- the
+        torch mirror of straddle.distinct_regions_per_net.
+
+        R-8: packs (net, region) using _REGION_STRIDE, the same named constant
+        ioplace.straddle uses for the identical packing -- not the bare `64`
+        evaluate()'s net_region_key/pin_bm packing above hardcodes for its own,
+        unrelated (net, region) key (same numeric value today, but importing
+        the name instead of re-hardcoding it means the two can never silently
+        drift apart)."""
+        stride = int(_REGION_STRIDE)
+        key = torch.unique(self.pin2net_t.to(torch.int64) * stride
+                           + pin_rid.to(torch.int64))
+        counts = torch.bincount(key // stride, minlength=self.n_nets)
+        return torch.where(self.degrees_t >= 2, counts, torch.zeros_like(counts))
+
+    def _straddle_stats(self, node_x, node_y, pin_rid, per_net_lambda):
+        """Torch mirror of ioplace.straddle.straddle_diagnostics. Every
+        convention is documented there; this must not invent one.
+
+        The lattice-line coordinate below divides/multiplies through the 0-dim
+        self._cell_w_t / self._cell_h_t tensors, never the python floats
+        self.cell_w / self.cell_h -- same C1 reciprocal-multiply hazard as
+        _to_idx (see its comment); a python float here mis-rounds the quadrant
+        split exactly at region boundaries.
+        """
+        dev = self.device
+        m = self.num_movable
+        x = node_x[:m]
+        y = node_y[:m]
+        w = self.node_size_x_t[:m]
+        h = self.node_size_y_t[:m]
+        xr = x + w
+        yt = y + h
+
+        def _rid(ax, ay):
+            ix, iy = self._to_idx(ax, ay)
+            return self.grid_t[iy, ix].to(torch.int64)
+
+        r00 = _rid(x, y)
+        r10 = _rid(xr, y)
+        r01 = _rid(x, yt)
+        r11 = _rid(xr, yt)
+        owner = _rid(x + 0.5 * w, y + 0.5 * h)
+        straddle = (r10 != r00) | (r01 != r00) | (r11 != r00)
+
+        ix0, iy0 = self._to_idx(x, y)
+        ix1, iy1 = self._to_idx(xr, yt)
+        xm = torch.minimum(xr, self.xl + (ix0.to(torch.float64) + 1.0) * self._cell_w_t)
+        ym = torch.minimum(yt, self.yl + (iy0.to(torch.float64) + 1.0) * self._cell_h_t)
+        lw = (xm - x).clamp(min=0.0)
+        rw = (xr - xm).clamp(min=0.0)
+        bh = (ym - y).clamp(min=0.0)
+        th = (yt - ym).clamp(min=0.0)
+        out_area = (lw * bh * (r00 != owner).to(torch.float64)
+                    + rw * bh * (r10 != owner).to(torch.float64)
+                    + lw * th * (r01 != owner).to(torch.float64)
+                    + rw * th * (r11 != owner).to(torch.float64))
+        wide = ((ix1 - ix0) > 1) | ((iy1 - iy0) > 1)
+
+        per_node = torch.zeros(self.num_physical, dtype=torch.uint8, device=dev)
+        per_node[:m] = straddle.to(torch.uint8)
+        owner_full = torch.zeros(self.num_physical, dtype=torch.int64, device=dev)
+        owner_full[:m] = owner
+        node_of_pin = self.pin2node_t.to(torch.int64)
+        pin_rid_re = torch.where(per_node[node_of_pin].bool(),
+                                 owner_full[node_of_pin], pin_rid.to(torch.int64))
+        split = (per_net_lambda - self._distinct_regions_per_net(pin_rid_re))
+
+        total_area = float((w * h).sum().item())
+        out_total = float(out_area.sum().item())
+        return {
+            "straddle_cells": int(straddle.sum().item()),
+            "straddle_area_fraction": (out_total / total_area) if total_area > 0.0 else 0.0,
+            "straddle_pin_split_nets": int((split > 0).sum().item()),
+            "straddle_out_area": out_total,
+            "straddle_movable_area": total_area,
+            "straddle_wide_cells": int(wide.sum().item()),
+            "per_node_straddle": per_node.cpu().numpy(),
+            "per_net_pin_split": split.to(torch.int32).cpu().numpy(),
+        }
 
     def _bit_planes(self, bm, dtype=None):
         """(...,) int64 *already-combined* bitmask -> (...,K) 0/1 bit planes.
@@ -528,7 +633,12 @@ class GpuEvalContext:
     # ------------------------------------------------------------------
     # main entry point
     # ------------------------------------------------------------------
-    def evaluate(self, node_x, node_y):
+    def evaluate(self, node_x, node_y, *, straddle=None):
+        want_straddle = self.straddle if straddle is None else bool(straddle)
+        if want_straddle and not self.straddle:
+            raise ValueError("this GpuEvalContext was built with straddle=False, "
+                             "so it holds no node-size tensors; rebuild it with "
+                             "straddle=True to ask for the sec 7 diagnostics")
         dev = self.device
         node_x = torch.as_tensor(node_x, dtype=torch.float64, device=dev)
         node_y = torch.as_tensor(node_y, dtype=torch.float64, device=dev)
@@ -573,7 +683,9 @@ class GpuEvalContext:
         # per net-with->=1-touched-region achieves it, so the direct assignment
         # below (not a scatter) is race-free.
         net_region_key = self.pin2net_t.to(torch.int64) * 64 + pin_rid.to(torch.int64)
-        del pin_ix, pin_iy, pin_rid  # only needed to build net_region_key above
+        del pin_ix, pin_iy
+        if not want_straddle:
+            pin_rid = None      # only net_region_key above needed it
         uniq_keys, uniq_counts = torch.unique(net_region_key, return_counts=True)
         del net_region_key
         uniq_net = uniq_keys // 64
@@ -602,6 +714,15 @@ class GpuEvalContext:
         per_net_lambda = torch.where(self.degrees_t >= 2, self._popcount_k(pin_bm),
                                      torch.zeros_like(pin_bm))
         hard_lambda_sum = int((per_net_lambda - 1).clamp(min=0).sum().item())
+
+        # v2 P-F (design sec 7): per_net_lambda is in hand and pin_rid is still
+        # alive, which is the only point in evaluate() where both are true.
+        if want_straddle:
+            straddle_stats = self._straddle_stats(node_x, node_y, pin_rid,
+                                                  per_net_lambda)
+            pin_rid = None
+        else:
+            straddle_stats = {}
 
         # per_net_steiner (ST_e): Λ<=3 closed form (bulk, vectorized over only
         # the Λ==2 / Λ==3 subsets -- never a full (n_nets,K) bit-plane tensor);
@@ -766,8 +887,10 @@ class GpuEvalContext:
             ft_rg=ft_rg,
             per_net_steiner=per_net_steiner.cpu().numpy(),
             per_net_home=per_net_home.to(torch.uint8).cpu().numpy(),
+            **straddle_stats,
         )
 
 
-def evaluate_gpu(nl, node_x, node_y, rg, max_degree=256, device="cuda"):
-    return GpuEvalContext(nl, rg, device=device, max_degree=max_degree).evaluate(node_x, node_y)
+def evaluate_gpu(nl, node_x, node_y, rg, max_degree=256, device="cuda", straddle=True):
+    return GpuEvalContext(nl, rg, device=device, max_degree=max_degree,
+                          straddle=straddle).evaluate(node_x, node_y)

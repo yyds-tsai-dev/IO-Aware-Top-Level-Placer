@@ -429,7 +429,30 @@ def test_legacy_fields_bit_exact_regression_adaptec1_k16_grid_flat():
 # tree_wl/hpwl (sum-order-sensitive float64 reductions) only need rel<=1e-12.
 # ---------------------------------------------------------------------------
 
-def _assert_batch_invariant_fields(a, b, float_rel=1e-12):
+# ---------------------------------------------------------------------------
+# v2 P-F (design sec 7 / spec sec 9): straddle diagnostics. The three integer
+# fields and the two integer arrays are bit-exact ref-vs-GPU and across batch
+# sizes / chunk budgets; the three float fields carry tree_wl/hpwl's rel<=1e-12
+# contract, because they are float64 reductions whose order numpy and torch do
+# not share.
+# ---------------------------------------------------------------------------
+
+_STRADDLE_INT_SCALARS = ("straddle_cells", "straddle_pin_split_nets",
+                         "straddle_wide_cells")
+_STRADDLE_FLOAT_SCALARS = ("straddle_area_fraction", "straddle_out_area",
+                           "straddle_movable_area")
+
+
+def _assert_straddle_equal(a, b, float_rel=1e-12):
+    for field in _STRADDLE_INT_SCALARS:
+        assert getattr(a, field) == getattr(b, field), field
+    for field in _STRADDLE_FLOAT_SCALARS:
+        assert getattr(a, field) == pytest.approx(getattr(b, field), rel=float_rel), field
+    assert np.array_equal(a.per_node_straddle, b.per_node_straddle)
+    assert np.array_equal(a.per_net_pin_split, b.per_net_pin_split)
+
+
+def _assert_batch_invariant_fields(a, b, float_rel=1e-12, straddle=True):
     """a, b: two EvalResult from the same netlist/positions, different
     construction parameters (mst_chunk_budget/seg_chunk_budget/edge_batch_size).
     Every integer/structural field must be bit-exact; tree_wl/hpwl only need
@@ -449,6 +472,17 @@ def _assert_batch_invariant_fields(a, b, float_rel=1e-12):
     assert a.boundary_pair_demand == b.boundary_pair_demand
     assert a.tree_wl == pytest.approx(b.tree_wl, rel=float_rel)
     assert a.hpwl == pytest.approx(b.hpwl, rel=float_rel)
+    if straddle:
+        # v2 P-F: same split as everything above -- integers bit-exact, the
+        # three float64 reductions at float_rel. `straddle=False` is only for
+        # the one test that deliberately compares a straddle-on run against a
+        # straddle-off one.
+        for field in _STRADDLE_INT_SCALARS:
+            assert getattr(a, field) == getattr(b, field), field
+        assert np.array_equal(a.per_node_straddle, b.per_node_straddle)
+        assert np.array_equal(a.per_net_pin_split, b.per_net_pin_split)
+        for field in _STRADDLE_FLOAT_SCALARS:
+            assert getattr(a, field) == pytest.approx(getattr(b, field), rel=float_rel), field
 
 
 def test_gpu_evaluate_batch_invariance_small_batches():
@@ -685,3 +719,146 @@ def test_gpu_evaluator_memory_mempool_group_k32_under_2gb():
 
     print(f"\n[T2] mempool_group K=32 (n_nets={nl.num_nets}) peak_alloc={peak_gb:.4f}GB (gate: <=2GB)")
     assert peak_gb <= 2.0
+
+
+def _sized_case(rng, n_cells=60, n_nets=40, max_d=10, size=6.0):
+    """_random_case with cells big enough (6.0 on a 100-wide die cut at
+    25/50/75) that a solid fraction of them straddles -- the default unit-size
+    cells only straddle by accident."""
+    nl = _random_case(rng, n_cells=n_cells, n_nets=n_nets, max_d=max_d)
+    nl.node_size_x = np.full(n_cells, size)
+    nl.node_size_y = np.full(n_cells, size)
+    return nl
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2, 3, 4])
+def test_gpu_straddle_matches_reference(seed):
+    rng = np.random.default_rng(seed)
+    rg = RegionGrid(make_grid_regions(DIE, 4, 4, lattice=20))
+    nl = _sized_case(rng)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    assert ref.straddle_cells > 0          # the case actually exercises the path
+    _assert_straddle_equal(ref, gpu)
+
+
+def test_gpu_straddle_matches_reference_on_the_hand_built_corner_case():
+    """The same layout tests/test_straddle.py pins by hand, so ref and GPU are
+    both nailed to known numbers rather than only to each other."""
+    from tests.test_straddle import _corner_case
+    nl = _corner_case()
+    rg = RegionGrid(make_grid_regions(DIE, 2, 2, lattice=10))
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    assert ref.straddle_cells == 2 and ref.straddle_pin_split_nets == 1
+    assert ref.per_net_pin_split.tolist() == [-1, 0, 1, -1]
+    assert ref.straddle_area_fraction == pytest.approx(20.0 / 48.0)
+    _assert_straddle_equal(ref, gpu)
+
+
+def test_gpu_straddle_matches_reference_with_fixed_nodes_and_pin_offsets():
+    """num_movable < num_physical and non-zero pin offsets together: the
+    terminal tail must stay out of both the geometry and the re-attribution."""
+    rng = np.random.default_rng(7)
+    rg = RegionGrid(make_grid_regions(DIE, 4, 4, lattice=20))
+    nl = _sized_case(rng, n_cells=50, n_nets=30)
+    nl.num_movable = 35
+    nl.num_terminals = 15
+    nl.pin_offset_x = rng.uniform(0., 6., len(nl.pin2node))
+    nl.pin_offset_y = rng.uniform(0., 6., len(nl.pin2node))
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    assert ref.per_node_straddle[35:].sum() == 0
+    _assert_straddle_equal(ref, gpu)
+
+
+def test_gpu_straddle_matches_reference_on_lattice_boundaries():
+    """C1 again, for the corner lookups: the lattice-line coordinate
+    xl + (ix0+1)*cell_w must be built from the 0-dim cell-size tensors, or the
+    quadrant split lands one ULP off exactly at a region boundary."""
+    from ioplace.netlist import Netlist
+    DIE_ND = (0., 0., 10692., 10680.)
+    rg = RegionGrid(make_grid_regions(DIE_ND, 4, 4, lattice=512))
+    # cell_w = 10692/512 = 20.8828125; region columns break at lattice 128/256/384,
+    # i.e. x = 2673.0 / 5346.0 / 8019.0. Each cell straddles one of them.
+    node_x = np.array([2670.0, 5340.0, 8010.0, 1000.0])
+    node_y = np.array([5000.0, 5000.0, 5000.0, 5000.0])
+    nl = Netlist(node_x=node_x, node_y=node_y,
+                 node_size_x=np.full(4, 20.0), node_size_y=np.full(4, 20.0),
+                 num_movable=4, num_terminals=0, num_terminal_NIs=0,
+                 pin_offset_x=np.zeros(4), pin_offset_y=np.zeros(4),
+                 pin2node=np.array([0, 1, 2, 3], np.int32),
+                 pin2net=np.array([0, 0, 1, 1], np.int32),
+                 flat_net2pin=np.arange(4, dtype=np.int32),
+                 flat_net2pin_start=np.array([0, 2, 4], np.int32),
+                 xl=0., yl=0., xh=10692., yh=10680.)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    assert ref.straddle_cells == 3
+    _assert_straddle_equal(ref, gpu)
+
+
+def test_gpu_straddle_bit_exact_across_batch_sizes_and_chunk_budgets():
+    from ioplace.evaluator_gpu import GpuEvalContext
+    rg = RegionGrid(make_grid_regions(DIE, 8, 4, lattice=32))
+    rng = np.random.default_rng(123)
+    nl = _lambda_ge4_netlist(rng, rg.k)
+    nl.node_size_x = np.full(len(nl.node_x), 5.0)
+    nl.node_size_y = np.full(len(nl.node_x), 5.0)
+    ref_ctx = GpuEvalContext(nl, rg, device="cuda", mst_chunk_budget=10**9,
+                             seg_chunk_budget=10**9, edge_batch_size=10**9)
+    ref = ref_ctx.evaluate(nl.node_x, nl.node_y)
+    assert ref.straddle_cells > 0
+    cpu = evaluate(nl, nl.node_x, nl.node_y, rg)
+    for mst_b, seg_b, edge_b in [(3, 3, 3), (7, 11, 5), (1, 4, 2)]:
+        got = GpuEvalContext(nl, rg, device="cuda", mst_chunk_budget=mst_b,
+                             seg_chunk_budget=seg_b,
+                             edge_batch_size=edge_b).evaluate(nl.node_x, nl.node_y)
+        _assert_batch_invariant_fields(ref, got)     # incl. the straddle block
+        _assert_straddle_equal(cpu, got)             # and against evaluator_ref
+
+
+@pytest.mark.parametrize("k_shape", [(1, 1, 20), (4, 2, 20), (8, 4, 32)])
+def test_gpu_straddle_matches_reference_for_k1_k8_k32(k_shape):
+    rows, cols, lattice = k_shape
+    rng = np.random.default_rng(5)
+    if rows == 1 and cols == 1:
+        from ioplace.regions import RegionSet, RegionSpec
+        rs = RegionSet(die=DIE, lattice=lattice,
+                       regions=[RegionSpec("P0", np.array([[0., 0., 100., 100.]]))])
+    else:
+        rs = make_grid_regions(DIE, rows, cols, lattice=lattice)
+    rg = RegionGrid(rs)
+    nl = _sized_case(rng)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    if rg.k == 1:
+        assert ref.straddle_cells == 0     # one region: nothing can straddle
+    _assert_straddle_equal(ref, gpu)
+
+
+def test_gpu_straddle_off_leaves_the_legacy_fields_bit_identical():
+    from ioplace.evaluator_gpu import GpuEvalContext
+    rng = np.random.default_rng(1)
+    rg = RegionGrid(make_grid_regions(DIE, 4, 4, lattice=20))
+    nl = _sized_case(rng)
+    on = GpuEvalContext(nl, rg, device="cuda").evaluate(nl.node_x, nl.node_y)
+    off = GpuEvalContext(nl, rg, device="cuda",
+                         straddle=False).evaluate(nl.node_x, nl.node_y)
+    _assert_batch_invariant_fields(on, off, straddle=False)
+    assert off.straddle_cells == 0 and off.per_node_straddle is None
+    assert on.straddle_cells > 0
+
+
+def test_gpu_per_call_straddle_switch_matches_the_context_default():
+    from ioplace.evaluator_gpu import GpuEvalContext
+    rng = np.random.default_rng(2)
+    rg = RegionGrid(make_grid_regions(DIE, 4, 4, lattice=20))
+    nl = _sized_case(rng)
+    ctx = GpuEvalContext(nl, rg, device="cuda")
+    _assert_straddle_equal(ctx.evaluate(nl.node_x, nl.node_y),
+                           ctx.evaluate(nl.node_x, nl.node_y, straddle=True))
+    assert ctx.evaluate(nl.node_x, nl.node_y, straddle=False).per_node_straddle is None
+    lean = GpuEvalContext(nl, rg, device="cuda", straddle=False)
+    with pytest.raises(ValueError, match="straddle=False"):
+        lean.evaluate(nl.node_x, nl.node_y, straddle=True)
