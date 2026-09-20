@@ -26,8 +26,9 @@ from contextlib import ExitStack, contextmanager
 import numpy as np
 import scipy.stats
 from ioplace.drivers.run_placement import (_load_dreamplace, extract_final_positions,
-    _pack_eval_metrics, get_regions_for, _legalization_diagnostics, _phase_summary,
-    _t8a_provenance, _stop_overflow_reached, _gp_iteration_budget, _effective_scale_fields)
+    _pack_eval_metrics, _pack_straddle_metrics, get_regions_for, _legalization_diagnostics,
+    _phase_summary, _t8a_provenance, _stop_overflow_reached, _gp_iteration_budget,
+    _effective_scale_fields)
 from ioplace.netlist import netlist_from_placedb
 from ioplace.region_grid import RegionGrid
 from ioplace.evaluator_gpu import GpuEvalContext
@@ -70,7 +71,11 @@ RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  "norm_probe_every", "norm_target_share", "norm_trace",
                  "lambda_ft_final",
                  # v2 P-F (design sec 7): soft-assign anchor
-                 "node_anchor")
+                 "node_anchor",
+                 # v2 P-F (design sec 7 diagnostics 1-3)
+                 "straddle_cells", "straddle_area_fraction",
+                 "straddle_pin_split_nets", "straddle_out_area",
+                 "straddle_movable_area", "straddle_wide_cells")
 
 
 #: Policy B's default IO force share when `--norm-target-share` is silent
@@ -618,7 +623,9 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                     rec.mark(f"gp_iter_{iteration}")
                 node_x = pos.data[:n_phys]
                 node_y = pos.data[n_all:n_all + n_phys]
-                res = ctx.evaluate(node_x, node_y)
+                # sec 7 diagnostics are a final-placement report, not a
+                # per-callback cost.
+                res = ctx.evaluate(node_x, node_y, straddle=False)
                 if do_scan:
                     rec.mark(f"after_ctx_evaluate_{iteration}")
                 if not observer_mode and state.active:
@@ -896,6 +903,7 @@ def run_io(config_json, k, rtype, seed, out_json, *,
             legal_fields = _legalization_diagnostics(placer, placedb, params, node_x, node_y)
             res = ctx.evaluate(node_x, node_y)
             metrics = _pack_eval_metrics(res)
+            metrics.update(_pack_straddle_metrics(res))
             metrics.update(evaluation_backend="gpu", cpu_reference_full_evaluation=False)
             m = res.per_net_crossings > 0
             if np.count_nonzero(m) >= 2:

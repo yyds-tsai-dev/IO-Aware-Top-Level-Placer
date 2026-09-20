@@ -119,6 +119,19 @@ def _pack_eval_metrics(res):
                "io_rg": res.io_rg, "ft_rg": res.ft_rg}
 
 
+def _pack_straddle_metrics(res):
+    """v2 P-F (design sec 7 diagnostics 1-3). Deliberately separate from
+    _pack_eval_metrics: that one also feeds run_flat / run_two_stage /
+    run_reweight, none of which has a RESULT_FIELDS gate, so widening it would
+    silently change three other drivers' result.json."""
+    from ioplace.straddle import STRADDLE_SCALARS
+    out = {}
+    for name in STRADDLE_SCALARS:
+        value = getattr(res, name)
+        out[name] = int(value) if isinstance(value, (int, np.integer)) else float(value)
+    return out
+
+
 def _evaluate_and_pack(placedb, node_x, node_y, k, rtype, seed, *, include_result=False):
     nl = netlist_from_placedb(placedb)
     nl.node_x, nl.node_y = node_x, node_y

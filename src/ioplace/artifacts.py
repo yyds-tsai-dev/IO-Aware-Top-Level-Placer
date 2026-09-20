@@ -52,6 +52,12 @@ MAIN_FLOW_RESULT_FIELDS = (
     # IO accounting (design sec 7 diagnostics 4/5 + the closing identity)
     "io_soft", "io_fence_gp", "io_count", "io_delta_at_freeze", "lg_loss",
     "io_identity_residual", "io_fence_gp_source",
+    # v2 P-F (design sec 7): the anchor the soft phase ran with, and the three
+    # evaluator-side diagnostics plus their two components. Together with
+    # io_delta_at_freeze and fence_compliance above, these are F's five.
+    "node_anchor", "straddle_cells", "straddle_area_fraction",
+    "straddle_pin_split_nets", "straddle_out_area", "straddle_movable_area",
+    "straddle_wide_cells",
     # evaluator metrics
     "ft_count", "hard_lambda_sum", "tree_wl", "hpwl", "io_rg", "ft_rg",
     "large_net_lb", "hpwl_gp", "hpwl_lg",

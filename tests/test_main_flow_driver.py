@@ -269,9 +269,15 @@ def test_run_main_flow_maps_fence_compliance_and_matches_the_result_schema(
     rg = RegionGrid(rs)
     real_compliance = fence_compliance(rg, node_x, node_y, part, size_x, size_y)
     real_balance = region_area_balance(part, size_x, size_y, rs)
-    real_metrics = _pack_eval_metrics(SimpleNamespace(
+    # R-1 (task 5): run_fence_gp now hands back the raw EvalResult beside its
+    # packed metrics dict, so _pack_straddle_metrics has something to read.
+    real_eval_result = SimpleNamespace(
         io_count=3, ft_count=0, tree_wl=1.0, hpwl=2.0, large_net_lb=0,
-        hard_lambda_sum=0.0, io_rg=0.0, ft_rg=0.0))
+        hard_lambda_sum=0.0, io_rg=0.0, ft_rg=0.0,
+        straddle_cells=1, straddle_area_fraction=0.25,
+        straddle_pin_split_nets=0, straddle_out_area=0.5,
+        straddle_movable_area=2.0, straddle_wide_cells=0)
+    real_metrics = _pack_eval_metrics(real_eval_result)
     real_legal_fields = _legalization_fields(True, 0, 1)
 
     def fake_run_fence_gp(config_json, out_dir, *, region_set, part,
@@ -284,7 +290,8 @@ def test_run_main_flow_maps_fence_compliance_and_matches_the_result_schema(
         np.savez_compressed(placement_path, node_x=node_x, node_y=node_y)
         np.savez_compressed(evaluation_path, node_x=node_x, node_y=node_y)
         return {
-            "metrics": real_metrics, "io_fence_gp": 4,
+            "metrics": real_metrics, "eval_result": real_eval_result,
+            "io_fence_gp": 4,
             "io_fence_gp_source": "legalize_op",
             "hpwl_gp": 2.5, "hpwl_lg": 2.0,
             "fence_compliance": real_compliance,
@@ -427,3 +434,16 @@ def test_main_flow_end_to_end_on_gcd_closes_the_io_identity(tmp_path, norm_polic
     assert rerun["io_soft"] == result["io_soft"]
     assert rerun["io_count"] == result["io_count"]
     assert rerun["lg_loss"] == result["lg_loss"]
+
+
+def test_parser_defaults_the_node_anchor_to_center():
+    parser = build_parser()
+    args = parser.parse_args(["--config", "c.json", "--out-dir", "o"])
+    assert args.node_anchor == "center"
+
+
+def test_main_flow_result_fields_carry_the_p_f_diagnostics():
+    from ioplace.artifacts import MAIN_FLOW_RESULT_FIELDS
+    from ioplace.straddle import STRADDLE_SCALARS
+    for name in ("node_anchor",) + STRADDLE_SCALARS:
+        assert name in MAIN_FLOW_RESULT_FIELDS, name

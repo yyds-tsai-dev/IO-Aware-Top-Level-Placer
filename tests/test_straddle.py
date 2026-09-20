@@ -281,3 +281,21 @@ def test_lambda_matches_the_evaluators_own_per_net_lambda():
     px, py = nl.node_x[nl.pin2node], nl.node_y[nl.pin2node]
     assert distinct_regions_per_net(nl, rg.region_of_points(px, py)).tolist() \
         == res.per_net_lambda.tolist()
+
+
+def test_pack_straddle_metrics_has_exactly_the_six_scalar_names():
+    from ioplace.drivers.run_placement import _pack_straddle_metrics
+    nl = _corner_case()
+    res = evaluate(nl, nl.node_x, nl.node_y, _grid())
+    packed = _pack_straddle_metrics(res)
+    assert tuple(packed) == STRADDLE_SCALARS
+    assert packed["straddle_cells"] == 2
+    assert packed["straddle_pin_split_nets"] == 1
+    assert isinstance(packed["straddle_area_fraction"], float)
+    assert isinstance(packed["straddle_cells"], int)
+
+
+def test_run_io_result_fields_carry_every_straddle_scalar():
+    from ioplace.drivers.run_placement_io import RESULT_FIELDS
+    for name in STRADDLE_SCALARS:
+        assert name in RESULT_FIELDS, name

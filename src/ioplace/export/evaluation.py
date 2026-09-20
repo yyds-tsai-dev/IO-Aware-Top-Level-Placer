@@ -10,8 +10,14 @@ import tempfile
 
 import numpy as np
 
+from ioplace.straddle import STRADDLE_SCALARS
 
-SCHEMA_VERSION = 1
+
+SCHEMA_VERSION = 2
+# v2 P-F: schema 2 adds the sec 7 straddle block. Schema 1 archives stay
+# readable -- results/ holds historical evidence the route-calibration tooling
+# still pairs against, and a diagnostics addition is no reason to orphan it.
+SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 PER_NET_FIELDS = (
     "per_net_crossings", "per_net_ft", "per_net_lambda",
     "per_net_steiner", "per_net_home",
@@ -90,6 +96,22 @@ def save_evaluation(path, nl, rg, result, node_x, node_y, net_names, *,
         boundary_pairs=np.asarray(pairs, dtype=np.int32).reshape(-1, 2),
         boundary_demand=demand.astype(np.int64), boundary_length=lengths,
     )
+    # v2 P-F (design sec 7). Present iff the evaluator actually computed them,
+    # so "not measured" and "measured as zero" stay distinguishable.
+    straddle = None
+    if getattr(result, "per_node_straddle", None) is not None:
+        node_straddle = np.asarray(result.per_node_straddle, dtype=np.uint8)
+        pin_split = np.asarray(result.per_net_pin_split, dtype=np.int32)
+        if node_straddle.shape != (nl.num_physical,):
+            raise ValueError("per_node_straddle must cover every physical node")
+        if pin_split.shape != (nl.num_nets,):
+            raise ValueError("per_net_pin_split must cover the entire netlist")
+        arrays.update(per_node_straddle=node_straddle, per_net_pin_split=pin_split)
+        straddle = {key: getattr(result, key) for key in STRADDLE_SCALARS}
+        straddle = {key: (int(value) if isinstance(value, (int, np.integer))
+                          else float(value)) for key, value in straddle.items()}
+        straddle["anchor"] = "center"
+        straddle["box"] = "closed_four_corner"
     metadata = dict(
         schema_version=SCHEMA_VERSION, num_nets=nl.num_nets,
         num_physical=nl.num_physical, num_movable=nl.num_movable,
@@ -101,6 +123,7 @@ def save_evaluation(path, nl, rg, result, node_x, node_y, net_names, *,
                 ("io_count", "ft_count", "hard_lambda_sum", "io_rg", "ft_rg",
                  "tree_wl", "hpwl", "large_net_lb")},
         provenance=provenance or {},
+        straddle=straddle,
         **boundary_stats,
     )
     arrays["metadata"] = np.asarray(json.dumps(metadata, sort_keys=True))
@@ -121,7 +144,7 @@ def load_evaluation(path, *, net_names=None, rg=None):
     with np.load(path, allow_pickle=False) as archive:
         data = {key: archive[key] for key in archive.files}
     metadata = json.loads(str(data.pop("metadata")))
-    if metadata.get("schema_version") != SCHEMA_VERSION:
+    if metadata.get("schema_version") not in SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError("unsupported evaluator evidence schema")
     n = metadata["num_nets"]
     for key in (*PER_NET_FIELDS, "net_degrees", "pin_region_mask", "net_names"):
@@ -137,6 +160,16 @@ def load_evaluation(path, *, net_names=None, rg=None):
         raise ValueError("evaluator and route net-name orders differ")
     if rg is not None and region_digest(rg) != metadata["region_sha256"]:
         raise ValueError("evaluator and route region geometries differ")
+    straddle = metadata.get("straddle")
+    if straddle is not None:
+        for key, shape in (("per_node_straddle", (metadata["num_physical"],)),
+                           ("per_net_pin_split", (n,))):
+            if key not in data or data[key].shape != shape:
+                raise ValueError(f"invalid evaluator evidence array: {key}")
+        if int(data["per_node_straddle"].sum(dtype=np.int64)) != straddle["straddle_cells"]:
+            raise ValueError("evaluator total mismatch: per_node_straddle")
+        if int((data["per_net_pin_split"] > 0).sum()) != straddle["straddle_pin_split_nets"]:
+            raise ValueError("evaluator total mismatch: per_net_pin_split")
     data["metadata"] = metadata
     return data
 

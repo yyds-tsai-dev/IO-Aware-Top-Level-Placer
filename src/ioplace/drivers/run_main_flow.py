@@ -26,6 +26,7 @@ from ioplace.drivers.run_placement import (_effective_scale_fields,
                                            _legalization_diagnostics,
                                            _load_dreamplace,
                                            _pack_eval_metrics,
+                                           _pack_straddle_metrics,
                                            _stop_overflow_reached,
                                            _t8a_provenance,
                                            extract_final_positions,
@@ -566,6 +567,10 @@ def run_fence_gp(config_json, out_dir, *, region_set, part, positions,
 
     io_fence_gp = holder.get("io_fence_gp")
     return {"metrics": metrics,
+            # R-1 (task 5 pre-flight ruling): _pack_straddle_metrics needs the
+            # raw EvalResult, which "metrics" (already packed by
+            # _pack_eval_metrics) does not carry.
+            "eval_result": res,
             "io_fence_gp": metrics["io_count"] if io_fence_gp is None else io_fence_gp,
             # Where io_fence_gp actually came from. io_identity_residual is 0
             # for any three inputs and can never detect the fallback; this can
@@ -712,13 +717,15 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
                      ("legacy_trace", os.path.join(out_dir, LEGACY_TRACE)))
                  if os.path.exists(path)}
     result = {
-        **fence["metrics"], **accounting,
+        **fence["metrics"], **accounting, **_pack_straddle_metrics(fence["eval_result"]),
         "mode": "main_flow", "schema_version": MAIN_FLOW_RESULT_SCHEMA_VERSION,
         "config": os.path.abspath(config_json), "k": int(region_set.k),
         "rtype": rtype, "seed": seed, "init": init, "norm_policy": norm_policy,
         "phase": phase, "regions_json": os.path.abspath(regions_path),
         "dp_seed": fence["params_seed"], "det": fence["deterministic"],
         "runtime_s": time.time() - t0,
+        # v2 P-F (design sec 7): the anchor the soft phase ran with.
+        "node_anchor": node_anchor,
         "hpwl_gp": fence["hpwl_gp"], "hpwl_lg": fence["hpwl_lg"],
         "fence_compliance": fence["fence_compliance"]["lower_left"],
         "fence_compliance_center": fence["fence_compliance"]["center"],
