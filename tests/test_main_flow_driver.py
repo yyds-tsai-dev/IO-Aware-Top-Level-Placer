@@ -207,7 +207,10 @@ def test_run_main_flow_maps_fence_compliance_and_matches_the_result_schema(
     run_fence_gp so this needs no real DREAMPlace placement, but builds
     fence_compliance/region_area_balance/the eval metrics/the legalization
     fields from the *live* functions rather than hand-typed dicts, so a
-    rename of any of their return keys still fails this test."""
+    rename of any of their return keys still fails this test. The geometry
+    below is chosen so `lower_left` and `center` disagree (1.0 vs 0.75), so a
+    *swapped* mapping fails too (re-review finding: the original all-1.0
+    geometry could not detect a swap)."""
     from ioplace.artifacts import (MAIN_FLOW_RESULT_FIELDS, save_freeze,
                                    save_membership, save_positions)
     from ioplace.drivers.run_placement import (_legalization_fields,
@@ -227,10 +230,13 @@ def test_run_main_flow_maps_fence_compliance_and_matches_the_result_schema(
     part = np.array([0, 1, 2, 3], dtype=np.int32)
     size_x = np.array([10.0, 10.0, 10.0, 10.0])
     size_y = np.array([10.0, 10.0, 10.0, 10.0])
-    # One cell centred in each of the four grid quadrants -- unambiguous
-    # fence_compliance (both anchors) without needing a real placement.
-    node_x = np.array([10.0, 60.0, 10.0, 60.0])
-    node_y = np.array([10.0, 10.0, 60.0, 60.0])
+    # Cell 0's lower-left corner sits in region 0, but at (45, 45) with a
+    # 10x10 size its centre (50, 50) straddles the x=y=50 region boundary and
+    # lands in region 3 instead -- so lower_left and center disagree (1.0 vs
+    # 0.75) and a swapped fence_compliance()["lower_left"]/["center"] mapping
+    # fails this test (re-review: the previous all-1.0 geometry could not).
+    node_x = np.array([45.0, 60.0, 10.0, 60.0])
+    node_y = np.array([45.0, 10.0, 60.0, 60.0])
 
     regions_path = str(out / REGIONS_JSON)
     rs.to_json(regions_path)
@@ -303,7 +309,7 @@ def test_run_main_flow_maps_fence_compliance_and_matches_the_result_schema(
     result = run_main_flow(str(config), str(out), k=k, phase="all")
 
     assert result["fence_compliance"] == real_compliance["lower_left"] == 1.0
-    assert result["fence_compliance_center"] == real_compliance["center"] == 1.0
+    assert result["fence_compliance_center"] == real_compliance["center"] == 0.75
     assert set(result) == set(MAIN_FLOW_RESULT_FIELDS)
 
     on_disk = json.loads((out / RESULT_JSON).read_text())
