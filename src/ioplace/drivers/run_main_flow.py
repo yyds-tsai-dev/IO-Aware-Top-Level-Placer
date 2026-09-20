@@ -45,7 +45,7 @@ from ioplace.netlist import netlist_from_placedb
 from ioplace.norm_adapter import NORM_POLICIES, make_norm_adapter
 from ioplace.ops.io_term import IoTerm, build_net_node_csr
 from ioplace.ops.soft_assign import rect_table
-from ioplace.profile import DeviceMemSampler, PhaseTimer
+from ioplace.profile import DeviceMemSampler, PhaseTimer, release_cuda_scratch
 from ioplace.region_grid import RegionGrid
 from ioplace.regions import RegionSet
 
@@ -316,9 +316,8 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
         size_y = torch.as_tensor(np.asarray(placedb.node_size_y[:m], dtype=np.float64),
                                  device="cuda")
         cb_state = {"last_iteration": -1, "num_refreshes": 0, "installed": False,
-                    "io_gp": 0, "overflow": float("nan"), "probes": 0,
+                    "overflow": float("nan"), "probes": 0,
                     "probe_samples": []}
-        previous_home = None
 
         def snapshot(iteration, pos, overflow, reason, io_count, argmax):
             return {"iteration": int(iteration), "reason": reason,
@@ -340,7 +339,6 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
                                  chunk=argmax_chunk)
 
         def cb(iteration, pos):
-            nonlocal previous_home
             cb_state["last_iteration"] = iteration
             overflow = float(placer.model.overflow.max())
             cb_state["overflow"] = overflow
@@ -348,12 +346,10 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
             discrete = adapter.begin_iteration(iteration, overflow, gamma)
             if (iteration > 0 and iteration % every == 0) or iteration == total_iterations - 1:
                 res = ctx.evaluate(pos.data[:n_phys], pos.data[n_all:n_all + n_phys])
-                cb_state["io_gp"] = res.io_count
                 if ft_term is not None and (ft_term.home is None
                                             or iteration % home_period == 0):
                     homes = res.per_net_home[csr.net_ids]
                     ft_term.set_home(homes)
-                    previous_home = homes.copy()
                 row = adapter.probe(iteration, pos, io_term=io_term, ft_term=ft_term,
                                     wirelength_op=placer.model.op_collections.wirelength_op,
                                     ecc_max=ecc_max, gamma=gamma)
@@ -402,7 +398,15 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
             argmax = centre_argmax(pos)
             res = ctx.evaluate(pos.data[:n_phys], pos.data[n_all:n_all + n_phys])
             monitor.observe(cb_state["last_iteration"] + 1, argmax)
-            shot = snapshot(cb_state["last_iteration"], pos, cb_state["overflow"],
+            # Fix wave item 2: cb_state["overflow"] is a snapshot from the
+            # START of the last callback, taken before that iteration's
+            # optimizer step; `pos` above is read AFTER the final step, so
+            # the two disagree by one iteration on this path (review I3).
+            # The "criterion" path (except branch below) has no such gap --
+            # snapshot() there is called from inside the same callback that
+            # measured `overflow`, alongside the very `pos` it is given.
+            overflow = float(placer.model.overflow.max())
+            shot = snapshot(cb_state["last_iteration"], pos, overflow,
                             "gp_end", res.io_count, argmax)
         except _FreezeReached as event:
             shot = event.snapshot
@@ -453,7 +457,7 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
 
 
 def run_fence_gp(config_json, out_dir, *, region_set, part, positions,
-                 reference_density_weight, k, density_clamp_lo=0.25,
+                 reference_density_weight, density_clamp_lo=0.25,
                  density_clamp_hi=4.0, dp_seed=None, deterministic=None,
                  extra_terms=(), timer=None):
     """Phase 3 + phase 4 + evaluator.
@@ -675,11 +679,19 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
             config_json, out_dir, region_set=region_set, part=part,
             positions=positions,
             reference_density_weight=record["density_weight_soft"],
-            k=region_set.k, density_clamp_lo=density_clamp_lo,
+            density_clamp_lo=density_clamp_lo,
             density_clamp_hi=density_clamp_hi, dp_seed=dp_seed,
             deterministic=deterministic, extra_terms=extra_terms, timer=timer)
     finally:
         sampler.stop()
+        # Fix wave item 4: the fence branch leaves a fixed 32 MiB cuBLAS
+        # workspace behind (PlaceObj.py:321's wirelength + density_weight
+        # .dot(density), taken only when regions are fenced) that gc/
+        # empty_cache() alone cannot reclaim. This runs after the sampler
+        # has stopped and after every phase peak this run reports has
+        # already been captured inside the `try`, so it cannot perturb
+        # this run's own numbers.
+        release_cuda_scratch()
 
     accounting = io_accounting(record["io_soft"], fence["io_fence_gp"],
                                fence["metrics"]["io_count"])
