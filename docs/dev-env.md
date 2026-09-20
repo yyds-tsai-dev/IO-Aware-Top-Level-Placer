@@ -102,6 +102,33 @@ runs get the normalizer's own `grad_l1_wl`/`grad_l1_io`/`grad_l1_ft`/`ratio_inst
 `ratio_ema`/`lambda_io`/`obj_version` fields instead, with none of the eight
 legacy-only keys present.
 
+## Drivers
+
+| Driver | Entry point | What it runs | Status |
+| --- | --- | --- | --- |
+| Flat baseline | `ioplace.drivers.run_placement --mode flat` | one-shot GP+LG, no region terms | current |
+| Legacy IO driver | `ioplace.drivers.run_placement --mode io` (`run_placement_io.py`) | single-phase GP with the soft IO/FT terms | legacy, frozen |
+| Fence-from-start | `ioplace.drivers.run_placement --mode two_stage` | Mt-KaHyPar partition -> fences before GP; v2 arm (f) | current |
+| **v2 main flow** | `python -m ioplace.drivers.run_main_flow` | soft GP -> freeze -> fence GP -> fence LG -> evaluator, two DREAMPlace instances, artefacts in between | current |
+| GR-in-loop | `src/scripts/run_route_gp.py` | routing-gradient GP with OpenROAD feedback | retired; requires `IOPLACE_ENABLE_GR_IN_LOOP=1` |
+
+The v2 main flow writes one directory per arm containing `regions.json`,
+`soft.npz`, `freeze.json`, `frozen_membership.npz`, `placement.npz`,
+`evaluation.npz`, `norm_trace.jsonl` and `result.json`. All cross-phase arrays
+are in native post-read PlaceDB units (before `placedb.initialize()`'s
+`scale()`); `evaluation.npz` stays in scaled evaluator units and records
+`shift_factor`/`scale_factor`. `--phase {all,soft,fence}` re-runs either half
+from the artefacts. Example:
+
+```bash
+source src/scripts/env.sh
+export IOPLACE_MTKAHYPAR_THREADS=1 CUDA_VISIBLE_DEVICES=3
+"$IOPLACE_PYTHON" -m ioplace.drivers.run_main_flow \
+  --config results/route_feedback_20260914/gcd.json \
+  --out-dir runs/gcd/ours --k 4 --rtype grid --init die_center \
+  --norm-policy grandplan
+```
+
 ## Installed toolchain
 
 | Component | Version / configuration |
