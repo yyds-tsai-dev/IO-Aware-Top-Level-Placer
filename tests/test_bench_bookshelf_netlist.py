@@ -456,8 +456,19 @@ def test_replication_equals_placedb_read_on_real_1x2_array_movable_first():
     historical manifests or their original source hashes.
     """
     import tempfile
+    from pathlib import Path
     manifest_path = os.environ.get("IOPLACE_1X2_MANIFEST",
         "results/m4/bench/arrays/1x2_n2/1x2_n2.manifest.json")
+    if not os.path.exists(manifest_path):
+        pytest.skip(f"{manifest_path} not present on this host")
+    # The manifest records an absolute `source_prefix` for the Bookshelf export
+    # it was tiled from. That export is host-local scratch, never committed, so
+    # a manifest carried over from another host points at a path that does not
+    # exist here; skip instead of failing deep inside the cache builder.
+    source_prefix = json.loads(Path(manifest_path).read_text())["source_prefix"]
+    if not os.path.exists(source_prefix + ".aux"):
+        pytest.skip(f"{source_prefix}.aux not present on this host "
+                    "(regenerate the export or set IOPLACE_1X2_MANIFEST)")
     prefix = os.path.abspath(manifest_path[:-len(".manifest.json")])
     with tempfile.TemporaryDirectory() as cache_dir:
         bn.build_tiled_netlist_cache(manifest_path, cache_dir)
