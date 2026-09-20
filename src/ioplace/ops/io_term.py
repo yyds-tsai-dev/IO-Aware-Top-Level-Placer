@@ -53,6 +53,39 @@ def build_net_node_csr(nl, ignore_net_degree):
     return NetCsr(flat, start, ids, degs, pin_deg, bucket, int(nl.num_nets))
 
 
+@dataclass
+class PinCsr:
+    """Pin-level companion to NetCsr, for IoTermRef's `pin` anchor only
+    (design v2 sec 7). `net_pos` indexes NetCsr.net_ids, not the raw net id,
+    so it lines up with IoTermRef.w / n_active without a second lookup."""
+    pin_node: np.ndarray
+    pin_offset_x: np.ndarray
+    pin_offset_y: np.ndarray
+    net_pos: np.ndarray
+
+
+def build_net_pin_csr(nl, csr):
+    """Every pin of every net NetCsr kept, in the netlist's own pin order.
+
+    Nets NetCsr dropped -- degree < 2, degree >= ignore_net_degree, or collapsed
+    to a single node -- contribute no pins, or `net_pos` would not be a valid
+    index into `w`. NetCsr.net_ids is ascending (np.unique), so membership is a
+    searchsorted, not a hash set.
+    """
+    net_of_pin = np.asarray(nl.pin2net, dtype=np.int64)
+    if len(csr.net_ids) == 0:
+        empty_i = np.empty(0, dtype=np.int64)
+        empty_f = np.empty(0, dtype=np.float64)
+        return PinCsr(empty_i, empty_f, empty_f, empty_i)
+    pos = np.searchsorted(csr.net_ids, net_of_pin)
+    pos = np.clip(pos, 0, len(csr.net_ids) - 1)
+    keep = csr.net_ids[pos] == net_of_pin
+    return PinCsr(np.asarray(nl.pin2node, dtype=np.int64)[keep],
+                  np.asarray(nl.pin_offset_x, dtype=np.float64)[keep],
+                  np.asarray(nl.pin_offset_y, dtype=np.float64)[keep],
+                  pos[keep])
+
+
 def margin_penalty(d_star, m, tau_m):
     """design v2 sec 9.2: softplus((d*+m)/tau_m); d* < 0 inside a region."""
     return F.softplus((d_star + m) / tau_m).sum()
@@ -113,6 +146,14 @@ class IoTermRef(torch.nn.Module):
             if pin_csr is None:
                 raise ValueError("node_anchor='pin' requires pin_csr "
                                  "(ioplace.ops.io_term.build_net_pin_csr)")
+            self.register_buffer("pin_node", torch.as_tensor(pin_csr.pin_node,
+                                                             dtype=torch.int64, device=device))
+            self.register_buffer("pin_dx", torch.as_tensor(pin_csr.pin_offset_x,
+                                                           dtype=torch.float64, device=device))
+            self.register_buffer("pin_dy", torch.as_tensor(pin_csr.pin_offset_y,
+                                                           dtype=torch.float64, device=device))
+            self.register_buffer("pin_net_idx", torch.as_tensor(pin_csr.net_pos,
+                                                                dtype=torch.int64, device=device))
             dx = dy = None
         else:
             dx, dy = anchor_offsets(node_anchor, node_size_x, node_size_y,
@@ -140,16 +181,32 @@ class IoTermRef(torch.nn.Module):
         return self._anchor_xy(x, y)
 
     def _forward_io(self, x, y, tau):
-        """-> (L_io scalar, lam (n_active,), d_star (N,))"""
-        m, t, am = softmax_stats(x, y, self.rects, self.rect2region, self.K, tau)
-        sdf = region_sdf_l1(x, y, self.rects, self.rect2region, 0, self.K)
+        """-> (L_io scalar, lam (n_active,), d_star (M,)) where M is N for the
+        node anchors and P' for the pin anchor."""
+        if self.node_anchor == "pin":
+            ax = x[self.pin_node] + self.pin_dx.to(dtype=x.dtype)
+            ay = y[self.pin_node] + self.pin_dy.to(dtype=y.dtype)
+            unit_idx = self.pin_net_idx
+        else:
+            ax, ay, unit_idx = x, y, None
+        m, t, am = softmax_stats(ax, ay, self.rects, self.rect2region, self.K, tau)
+        sdf = region_sdf_l1(ax, ay, self.rects, self.rect2region, 0, self.K)
         p, ell = chunk_p_ell(sdf, m, t, am, 0, tau)
+        if unit_idx is None:
+            unit_idx, contrib = self.net_idx, ell[self.node_idx]
+        else:
+            contrib = ell
         S = torch.zeros((self.n_active, self.K), dtype=torch.float64,
-                        device=x.device).index_add_(0, self.net_idx, ell[self.node_idx].double())
+                        device=x.device).index_add_(0, unit_idx, contrib.double())
         lam = (1.0 - torch.exp(S)).sum(dim=1)
         return (self.w * (lam - 1.0).clamp(min=0)).sum(), lam, d_star_from_m(m, tau)
 
     def forward(self, pos, tau, lambda_io, lambda_margin=0.0, margin_m=0.0, margin_tau=1.0):
+        if self.node_anchor == "pin" and lambda_margin != 0.0:
+            raise ValueError(
+                "the pin anchor makes d_star per-pin, so lambda_margin would "
+                "silently change the margin term's scale; pass lambda_margin=0 "
+                "(design v2 sec 7: the pin arm is an L_IO bias probe only)")
         x, y = self._split_xy(pos)
         L_io, lam, d_star = self._forward_io(x, y, tau)
         L_margin = margin_penalty(d_star, margin_m, margin_tau)
@@ -164,6 +221,11 @@ class IoTermRef(torch.nn.Module):
         return float(p.grad.abs().sum())
 
     def diagnostics(self, pos, tau) -> dict:
+        if self.node_anchor == "pin":
+            raise NotImplementedError(
+                "frac_soft's denominator and grad_share's attribution are both "
+                "node-based; under the pin anchor they would return numbers that "
+                "look comparable with the node arms and are not (design v2 sec 7)")
         p = pos.detach().clone().requires_grad_(True)
         x, y = self._split_xy(p)
 

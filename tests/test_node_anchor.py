@@ -284,3 +284,106 @@ def test_run_main_flow_rejects_node_anchor_under_phase_fence_before_any_side_eff
             run_main_flow("nonexistent.json", out_dir, phase="fence", node_anchor="centre")
         assert not os.path.exists(out_dir), \
             "run_main_flow created out_dir before validating node_anchor"
+
+
+# ---------------------------------------------------------- task 2: pin arm
+
+def _pin_ref(nl, rs):
+    from ioplace.ops.io_term import build_net_pin_csr
+    rects, r2k = rect_table(rs)
+    csr = build_net_node_csr(nl, 100)
+    return IoTermRef(csr=csr, rects=rects, rect2region=r2k, K=rs.k,
+                     num_movable=nl.num_movable, num_physical=nl.num_physical,
+                     num_nodes=nl.num_physical, device=DEV,
+                     node_anchor="pin", pin_csr=build_net_pin_csr(nl, csr))
+
+
+def test_build_net_pin_csr_aligns_with_the_node_csr():
+    from ioplace.ops.io_term import build_net_pin_csr
+    rs, nl = _straddler()
+    csr = build_net_node_csr(nl, 100)
+    pc = build_net_pin_csr(nl, csr)
+    assert pc.pin_node.shape == pc.net_pos.shape == (len(nl.pin2node),)
+    assert pc.net_pos.min() >= 0 and pc.net_pos.max() < len(csr.net_ids)
+    assert np.array_equal(csr.net_ids[pc.net_pos], nl.pin2net[: len(pc.net_pos)])
+
+
+def test_build_net_pin_csr_drops_pins_of_nets_the_node_csr_dropped():
+    """Degree-1 nets and nets above ignore_net_degree are absent from NetCsr;
+    their pins must be absent here too or net_pos would not index w."""
+    nl = _nl([(10., 10.), (90., 10.), (10., 90.)], [[0], [0, 1], [0, 1, 2]])
+    nl.node_size_x = np.ones(3)
+    nl.node_size_y = np.ones(3)
+    from ioplace.ops.io_term import build_net_pin_csr
+    csr = build_net_node_csr(nl, ignore_net_degree=3)      # keeps only net 1
+    pc = build_net_pin_csr(nl, csr)
+    assert len(csr.net_ids) == 1 and csr.net_ids.tolist() == [1]
+    assert pc.net_pos.tolist() == [0, 0]
+    assert sorted(pc.pin_node.tolist()) == [0, 1]
+
+
+def test_pin_arm_equals_the_lower_left_node_arm_when_every_node_has_one_pin_at_offset_zero():
+    """The strongest available correctness statement: with one zero-offset pin
+    per node the pin-level and node-level accumulations are the same sum, so
+    the two arms must agree to the last bit of the fp64 accumulator."""
+    rng = np.random.default_rng(3)
+    rs = make_grid_regions(DIE, 2, 2, lattice=10)
+    xy = [(float(a), float(b)) for a, b in zip(rng.uniform(2, 98, 12),
+                                               rng.uniform(2, 98, 12))]
+    nets = []
+    for d in (2, 3, 2, 3, 2):
+        nets.append(sorted(rng.choice(12, d, replace=False).tolist()))
+    nl = _nl(xy, nets)
+    nl.node_size_x = np.full(12, 3.)
+    nl.node_size_y = np.full(12, 2.)
+    pos = _pos(nl, device=DEV)
+    node_arm = _ref(nl, rs, "lower_left")(pos, 0.5, 1.0)
+    pin_arm = _pin_ref(nl, rs)(pos, 0.5, 1.0)
+    assert float(pin_arm.detach()) == float(node_arm.detach())
+    g_node, = torch.autograd.grad(node_arm, pos, retain_graph=True)
+    g_pin, = torch.autograd.grad(pin_arm, pos)
+    assert torch.allclose(g_node, g_pin, rtol=1e-12, atol=1e-14)
+
+
+def test_pin_arm_double_counts_a_node_carrying_two_pins_of_one_net():
+    """The defect m2-differentiable-io-design.md:105 rejected, made visible:
+    the node arm dedups (net, node), the pin arm does not."""
+    rs = make_grid_regions(DIE, 2, 2, lattice=10)
+    nl = _nl([(10., 10.), (90., 10.)], [[0, 1, 1]])   # node 1 carries two pins
+    nl.node_size_x = np.ones(2)
+    nl.node_size_y = np.ones(2)
+    csr = build_net_node_csr(nl, 100)
+    assert csr.degrees.tolist() == [2] and csr.pin_degrees.tolist() == [3]
+    from ioplace.ops.io_term import build_net_pin_csr
+    assert len(build_net_pin_csr(nl, csr).pin_node) == 3
+
+
+def test_pin_arm_moves_with_the_pin_offsets_not_the_cell_corner():
+    """A cell whose lower-left corner and centre are both in region 0 but whose
+    one pin sits past the boundary: only the pin arm sees the crossing."""
+    rs = make_grid_regions(DIE, 2, 2, lattice=10)
+    nl = _nl([(10., 10.), (44., 10.)], [[0, 1]])
+    nl.node_size_x = np.array([2., 2.])
+    nl.node_size_y = np.array([2., 2.])
+    nl.pin_offset_x = np.array([0., 10.])            # pin of node 1 at x = 54
+    pos = _pos(nl, device=DEV)
+    assert float(_ref(nl, rs, "lower_left")(pos, 0.05, 1.0).detach()) == pytest.approx(0., abs=1e-9)
+    assert float(_ref(nl, rs, "center")(pos, 0.05, 1.0).detach()) == pytest.approx(0., abs=1e-9)
+    assert float(_pin_ref(nl, rs)(pos, 0.05, 1.0).detach()) == pytest.approx(1., abs=1e-9)
+
+
+def test_pin_arm_rejects_a_margin_and_diagnostics():
+    rs, nl = _straddler()
+    pos = _pos(nl, device=DEV)
+    term = _pin_ref(nl, rs)
+    with pytest.raises(ValueError, match="lambda_margin"):
+        term(pos, 0.3, 1.0, lambda_margin=1.0, margin_m=1.0)
+    with pytest.raises(NotImplementedError, match="pin"):
+        term.diagnostics(pos.detach(), 0.3)
+
+
+def test_ft_term_ref_rejects_a_pin_anchored_io_term():
+    from ioplace.ops.ft_term import FtTermRef
+    rs, nl = _straddler()
+    with pytest.raises(ValueError, match="pin"):
+        FtTermRef(_pin_ref(nl, rs), np.zeros((4, 4)))
