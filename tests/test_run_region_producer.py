@@ -109,13 +109,32 @@ def test_empty_region_in_the_prior_is_refused_with_a_usable_message():
     other region's cells away from that bin", and both candidates -- the die
     box and a zero-area polygon -- test as containing every bin
     (hull.py:222,238), so either would silently corrupt Eq.1."""
-    from ioplace.drivers.run_region_producer import check_every_region_nonempty
-    check_every_region_nonempty(np.array([0, 1, 1, 0]), 2, "mtkahypar")
+    from ioplace.drivers.run_region_producer import check_membership
+    check_membership(np.array([0, 1, 1, 0]), 2, "mtkahypar")
     with pytest.raises(ValueError) as exc:
-        check_every_region_nonempty(np.array([0, 0, 2, 2]), 3, "mtkahypar")
+        check_membership(np.array([0, 0, 2, 2]), 3, "mtkahypar")
     msg = str(exc.value)
     assert "[1]" in msg and "mtkahypar" in msg
     assert "Lower --k" in msg, "the message must tell the operator what to do"
+
+
+def test_out_of_range_membership_labels_are_refused_up_front():
+    """Fix round 2, minor 4. `np.bincount(...)[:k]` silently DROPS a label
+    >= k, so the empty-region report and EA_k would both be computed as if
+    those cells did not exist, and the only thing that would notice is
+    GroupingTerm.set_tables' assert -- inside the first iteration callback,
+    minutes into a run. A negative label is worse: np.bincount raises its own
+    opaque error from inside the count."""
+    from ioplace.drivers.run_region_producer import check_membership
+    with pytest.raises(ValueError) as high:
+        check_membership(np.array([0, 1, 2, 1]), 2, "mtkahypar")
+    msg = str(high.value)
+    assert "outside [0, 2)" in msg and "[2]" in msg      # the offending index
+    assert "Raise --k to at least 3" in msg
+    with pytest.raises(ValueError, match=r"outside \[0, 2\)"):
+        check_membership(np.array([0, -1, 1, 1]), 2, "hierarchy")
+    # the in-range case still reaches (and passes) the empty-region check
+    check_membership(np.array([0, 1, 1, 0]), 2, "mtkahypar")
 
 
 def test_the_die_box_placeholder_hull_would_have_contained_every_bin():
@@ -260,6 +279,31 @@ def test_grad_l1_agrees_with_the_normalizer_probe_the_driver_uses():
     norms = nz.probe(0, pos, lambda p: p.abs().sum(),
                      {"iteration": 0, "overflow": 0.0, "tau": 0.0, "gamma": 0.0})
     assert norms["group"] == pytest.approx(term.grad_l1(pos), rel=1e-12)
+
+
+def test_lookup_does_not_mutate_the_stored_anchor_tables():
+    """Fix round 2, minor 1 made `_lookup`'s denormalisation in place
+    (`.double().mul_(bin_size)`) to drop a second live (M,2) float64 temporary
+    -- measured ~175 MB of transient GP peak at M = 30M. That is only safe
+    because the
+    tables are fp16, so `.double()` is always a fresh copy. If anyone ever
+    widens AnchorTables to float64, `mul_` would scale the stored table in
+    place and every subsequent lookup would compound it. Pin both halves."""
+    import torch
+    term, pos = _grad_l1_fixture()
+    assert term.tables.pull_off.dtype is torch.float16
+    assert term.tables.push_off.dtype is torch.float16
+    before_pull = term.tables.pull_off.clone()
+    before_push = term.tables.push_off.clone()
+    x, y = term._centres(pos)
+    first = term._lookup(x, y)[2].clone()
+    term._lookup(x, y)
+    again = term._lookup(x, y)[2]
+    assert torch.equal(term.tables.pull_off, before_pull)
+    assert torch.equal(term.tables.push_off, before_push)
+    assert torch.equal(first, again), "repeated lookups must be idempotent"
+    # the energy is likewise stable across repeated evaluations
+    assert float(term(pos, lam=1.0)) == float(term(pos, lam=1.0))
 
 
 def test_grad_l1_is_zero_without_tables():

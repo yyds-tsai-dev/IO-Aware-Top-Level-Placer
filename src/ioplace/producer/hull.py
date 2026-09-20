@@ -259,6 +259,11 @@ def nearest_on_polygon_boundary(px, py, verts, chunk=16384):
 
 
 FP16_OFFSET_LIMIT = 32768.0
+FP16_RELATIVE_EPS = 2.0 ** -11          # fp16 has 11 mantissa bits
+QUANTISATION_BUDGET_BINS = 0.25         # the bound AnchorTables documents
+# The lattice at which the documented quantisation bound is exactly met:
+# error == FP16_RELATIVE_EPS * L bins, so L == 0.25 / 2**-11 == 512.
+MAX_LATTICE = int(QUANTISATION_BUDGET_BINS / FP16_RELATIVE_EPS)
 
 
 def check_anchor_table_range(die, lattice):
@@ -266,20 +271,36 @@ def check_anchor_table_range(die, lattice):
     driver can fail fast BEFORE it starts a GP instead of aborting inside the
     first hull rebuild (P-C Task 10 fix round 1, finding I3).
 
-    Two conditions, both `ValueError` rather than `assert` because python -O
-    strips asserts and these are input contracts:
+    Every condition raises `ValueError` rather than asserting, because
+    python -O strips asserts and these are input contracts.
 
-    * The die must have a strictly positive extent on both axes. The offset
-      tables are normalised by the bin size, so a degenerate die would divide
-      by zero and store `nan`/`inf`.
-    * A normalised offset is at most the lattice L (the largest offset an axis
-      can produce is that axis's whole extent, which is L bins), so L must stay
-      under fp16's range with margin. `FP16_OFFSET_LIMIT` keeps the 2x margin
-      against fp16's 65504 that the previous, die-extent-based form used; at
-      the lattice 512 this codebase uses, the limit is 64x away and unreachable
-      -- which is the point of the normalisation (see `AnchorTables`).
+    * The die must be finite and have a strictly positive extent on both axes.
+      The offset tables are normalised by the bin size, so a zero extent
+      divides by zero -- and an INFINITE extent is worse, because it passes
+      every magnitude test and then stores an all-`nan` table (fix round 2,
+      minor 2: `inf >= 32768` used to be caught by the old die-extent form and
+      became silent when the guard moved to the lattice).
+    * `MAX_LATTICE` (fix round 2, minor 3). A normalised offset is at most the
+      lattice L, so fp16's 2**-11 relative precision costs up to
+      `FP16_RELATIVE_EPS * L == L/2048` BINS of quantisation:
+      `QUANTISATION_BUDGET_BINS` (0.25) at L = 512, but a full bin at L = 2048.
+      Since the guard no longer inspects the die, the lattice is the only thing
+      standing between the offsets and fp16, so the bound that `AnchorTables`
+      documents is machine-checked here rather than left as a comment. This is
+      the BINDING limit.
+    * `FP16_OFFSET_LIMIT` is the looser range limit the normalisation argument
+      rests on -- fp16's finite maximum is 65504 and a normalised offset is at
+      most L, so L must stay under it with margin. `MAX_LATTICE` (512) is 64x
+      stricter, so this branch is unreachable while the quarter-bin budget
+      stands; it is kept because it is the condition that makes the *store*
+      well-defined, independent of how accurate anyone wants it to be.
     """
     xl, yl, xh, yh = (float(v) for v in die)
+    if not all(math.isfinite(v) for v in (xl, yl, xh, yh)):
+        raise ValueError(
+            f"anchor_tables: die {(xl, yl, xh, yh)!r} must be finite; a "
+            "non-finite bound makes every bin centre nan or inf and the whole "
+            "offset table nan")
     if not (xh > xl and yh > yl):
         raise ValueError(
             f"anchor_tables: die {(xl, yl, xh, yh)!r} must have a positive "
@@ -288,6 +309,14 @@ def check_anchor_table_range(die, lattice):
     L = int(lattice)
     if L <= 0:
         raise ValueError(f"anchor_tables: lattice must be positive, got {L!r}")
+    if L > MAX_LATTICE:
+        raise ValueError(
+            f"anchor_tables: lattice {L} > {MAX_LATTICE} would erode the "
+            f"documented fp16 bound: the offsets are stored in bin widths, so "
+            f"the quantisation error is 2**-11 * L == {FP16_RELATIVE_EPS * L:g} "
+            f"bins, over the {QUANTISATION_BUDGET_BINS} bin budget "
+            "AnchorTables states. Re-derive that bound (or widen the store "
+            "past fp16) before raising the lattice")
     if L >= FP16_OFFSET_LIMIT:
         raise ValueError(
             f"anchor_tables: lattice {L} >= {FP16_OFFSET_LIMIT} would overflow "

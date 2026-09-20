@@ -70,9 +70,17 @@ class GroupingTerm(torch.nn.Module):
         them in BIN WIDTHS -- fp16's range then depends on the lattice rather
         than on the die size, which is what keeps a 30M-cell die from tripping
         the overflow guard (P-C Task 10 fix round 1, finding I3) -- so this is
-        the one place that multiplies them back by the bin size. One extra
-        (M, 2) multiply per lookup; the fp16 quantisation is unchanged, still
-        bounded by 1/4 bin.
+        the one place that multiplies them back by the bin size. The multiply
+        is IN PLACE (fix round 2, minor 1): `.double()` on an fp16 table is
+        always a fresh copy -- `AnchorTables` stores fp16 and
+        test_table_shapes_dtypes_and_memory_budget pins that -- so `mul_` is
+        safe on it, and it avoids a second live (M, 2) float64 temporary per
+        table. Measured on an H100 at M = 2e6, lattice 512: the lookup's
+        transient peak drops 173.5 -> 161.8 MB, i.e. ~175 MB saved at
+        M = 30M. (Less than the 2 x (M,2) f64 == 960 MB the allocation count
+        suggests, because the caching allocator already reuses the first
+        table's freed intermediate for the second.) The fp16 quantisation is
+        unchanged, still bounded by 1/4 bin.
         """
         t = self.tables
         xl, yl, xh, yh = t.die
@@ -87,9 +95,9 @@ class GroupingTerm(torch.nn.Module):
             cy = yl + (iy.double() + 0.5) * ch
             bin_size = torch.tensor([cw, ch], dtype=torch.float64,
                                     device=x.device)
-            return (cx, cy, t.pull_off[k, b].double() * bin_size,
+            return (cx, cy, t.pull_off[k, b].double().mul_(bin_size),
                     t.pull_on[k, b],
-                    t.push_off[k, b].double() * bin_size,
+                    t.push_off[k, b].double().mul_(bin_size),
                     t.push_cnt[k, b].double())
 
     def forward(self, pos, lam):

@@ -80,9 +80,18 @@ class _GroupAdapter(object):
         return self.term.forward(pos, 1.0)
 
 
-def check_every_region_nonempty(part, k, source):
-    """Fix round 1, finding I1: refuse a membership prior that leaves a region
-    with no movable cells, BEFORE the GP starts.
+def check_membership(part, k, source):
+    """Refuse an unusable membership prior BEFORE the GP starts: a label
+    outside `[0, k)` (fix round 2, minor 4), or a region with no movable cells
+    (fix round 1, finding I1).
+
+    An out-of-range label is not cosmetic. `GroupingTerm.set_tables` asserts
+    `tables.k > part.max()`, but that fires inside the FIRST iteration
+    callback, minutes into a run; below it, `np.bincount(...)[:k]` would have
+    silently dropped the overflowing label, so the region-count report and
+    `ea_scaled` would already have been computed as if those cells did not
+    exist. A negative label is worse still -- `np.bincount` raises its own
+    opaque "argument must have no negative elements" from inside the count.
 
     There is no safe placeholder hull for an empty region.
     `hull.anchor_tables` reads "bin centre is inside hull s" as "region s
@@ -103,7 +112,19 @@ def check_every_region_nonempty(part, k, source):
     is no in-driver repair, because inventing geometry for a region with no
     cells is exactly the corruption above.
     """
-    counts = np.bincount(np.asarray(part, dtype=np.int64).ravel(), minlength=k)
+    labels = np.asarray(part, dtype=np.int64).ravel()
+    if labels.size:
+        lo, hi = int(labels.min()), int(labels.max())
+        if lo < 0 or hi >= k:
+            bad = np.flatnonzero((labels < 0) | (labels >= k))
+            raise ValueError(
+                "membership source %r produced %d label(s) outside [0, %d): "
+                "range [%d, %d], first offenders at movable indices %r. The "
+                "grouping term indexes the anchor tables by label, so a label "
+                "outside the region range has no hull to be pulled to. Raise "
+                "--k to at least %d, or fix the prior."
+                % (source, bad.size, k, lo, hi, bad[:5].tolist(), hi + 1))
+    counts = np.bincount(labels, minlength=k)
     empty = np.flatnonzero(counts[:k] == 0).tolist()
     if empty:
         raise ValueError(
@@ -180,7 +201,7 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
         part = build_membership(membership_source, nl=nl0, node_names=node_names,
                                 num_movable=int(placedb.num_movable_nodes), k=k,
                                 epsilon=epsilon, seed=seed, depth=hierarchy_depth)
-        check_every_region_nonempty(part, k, membership_source)
+        check_membership(part, k, membership_source)
 
     # ---- initialize: scaled coordinate system ----------------------------
     with timer.phase("initialize"):
@@ -251,12 +272,12 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
         for kk in range(k):
             sel = (part_t == kk).nonzero(as_tuple=True)[0]
             # Unreachable: `part` is fixed for the whole run and
-            # `check_every_region_nonempty` rejected an empty region before the
-            # GP started. Kept as an assert rather than a placeholder hull
+            # `check_membership` rejected an empty region before the GP
+            # started. Kept as an assert rather than a placeholder hull
             # because there is no correct placeholder -- see that function
             # (fix round 1, finding I1).
             assert sel.numel() > 0, (
-                "region %d became empty after check_every_region_nonempty" % kk)
+                "region %d became empty after check_membership" % kk)
             if cx.is_cuda:
                 pts = hull_mod.reduce_candidates_torch(cx[sel], cy[sel])
             else:

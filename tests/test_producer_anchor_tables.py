@@ -22,7 +22,26 @@ def test_nearest_on_polygon_boundary_inside_and_outside():
     assert proj[2].tolist() == pytest.approx([3.5, 2.0])   # tie -> first edge in order
 
 
+def test_offsets_are_stored_in_bin_widths_not_die_units():
+    """Fix round 2, minor 5. The three semantics tests below all run at
+    bin size exactly 1.0 (DIE 8x8 at lattice 8), so they read identically
+    under either unit convention and pin nothing. This one uses lattice 4 on
+    the same die -- bin size 2.0 -- so the stored value is half the die-unit
+    offset, and it is the test that actually fixes the convention."""
+    t = hull.anchor_tables([SQ, BIG], DIE, lattice=4, device="cpu")
+    b = _bin(0, 0, lattice=4)                # bin centre (1.0, 1.0)
+    # nearest point of SQ to (1,1) is its corner (2,2): die-unit offset (1,1),
+    # which is (0.5, 0.5) in bin widths.
+    assert bool(t.pull_on[0, b])
+    assert t.pull_off[0, b].double().tolist() == pytest.approx([0.5, 0.5],
+                                                               abs=1e-3)
+
+
 def test_pull_table_is_zero_inside_and_the_projection_offset_outside():
+    # NOTE: DIE is 8x8 at lattice 8, so the bin size is exactly 1.0 and the
+    # numbers below are the same in bin widths and in die units. The unit
+    # convention is pinned by test_offsets_are_stored_in_bin_widths_not_die_units
+    # above, not here.
     t = hull.anchor_tables([SQ, BIG], DIE, lattice=8, device="cpu")
     assert t.k == 2 and t.lattice == 8
     b_out = _bin(0, 0)          # bin centre (0.5, 0.5), outside SQ
@@ -142,6 +161,35 @@ def test_anchor_tables_rejects_a_lattice_that_would_overflow_fp16():
     with pytest.raises(ValueError, match="lattice"):
         hull.check_anchor_table_range(DIE, 0)
     hull.check_anchor_table_range(DIE, 512)               # the production value
+
+
+def test_anchor_tables_rejects_a_non_finite_die():
+    """Fix round 2, minor 2. `inf` used to be caught by the old die-extent
+    guard (`inf >= 32768`) and became silent when the guard moved to the
+    lattice: it passes every magnitude test, then `centre` is inf and the
+    whole offset table is nan."""
+    for bad in ((0.0, 0.0, float("inf"), 8.0),
+                (0.0, 0.0, 8.0, float("nan")),
+                (float("-inf"), 0.0, 8.0, 8.0)):
+        with pytest.raises(ValueError, match="finite"):
+            hull.anchor_tables([BIG], bad, lattice=8, device="cpu")
+
+
+def test_lattice_is_capped_at_the_quarter_bin_quantisation_budget():
+    """Fix round 2, minor 3: machine-check the coupling the bound rests on.
+    The fp16 error is 2**-11 * L bins -- 0.25 at L=512, a full bin at L=2048 --
+    and since the guard no longer inspects the die, the lattice is the only
+    thing between the offsets and fp16."""
+    assert hull.MAX_LATTICE == 512
+    assert hull.FP16_RELATIVE_EPS * hull.MAX_LATTICE == \
+        hull.QUANTISATION_BUDGET_BINS
+    hull.check_anchor_table_range(DIE, hull.MAX_LATTICE)          # exactly ok
+    with pytest.raises(ValueError, match="bins"):
+        hull.check_anchor_table_range(DIE, hull.MAX_LATTICE + 1)
+    with pytest.raises(ValueError, match="bins"):
+        hull.check_anchor_table_range(DIE, 2048)
+    # and the cap is strictly tighter than the fp16 range limit it protects
+    assert hull.MAX_LATTICE < hull.FP16_OFFSET_LIMIT
 
 
 def test_anchor_tables_rejects_a_degenerate_die():
