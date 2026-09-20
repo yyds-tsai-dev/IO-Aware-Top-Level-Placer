@@ -162,30 +162,48 @@ def test_anneal_reduces_the_area_imbalance_it_is_given():
     assert int((out == 1).sum()) > int((lab == 1).sum())
 
 
-def test_lo_offset_cancels_and_does_not_affect_the_outcome(monkeypatch):
-    """Fix-round 1 adjudication: total() is affine per term, so every lo_j
-    offset cancels exactly in a Delta E and the accept test never sees an
-    absolute normalised level -- only span_j (hi_j - lo_j) is behaviourally
-    meaningful. Verified here as it was during adjudication (seed=7, 32x32):
-    forcing lo to zero right after calibration must reproduce bit-identical
-    labels, e_raw_final and t0."""
-    lab = np.zeros((32, 32), dtype=np.int16)
-    lab[:, 16:] = 1
-    ea = np.array([512.0, 512.0])
-    cfg = sa.SaConfig(seed=7)
+def test_lo_offset_cancels_at_fixed_span(monkeypatch):
+    """Fix-round 2: the property to pin is offset-invariance at FIXED span --
+    total() is affine per term, so adding the same constant c_j to both lo_j
+    and hi_j leaves span_j = hi_j - lo_j unchanged and shifts only the
+    offset, which must cancel exactly in every Delta E.
+
+    (Round 1's version zeroed lo alone on a balanced fixture whose calibrated
+    lo was already all zeros -- vacuous, and it also changed span_j, which the
+    re-reviewer showed produces genuinely different runs.) This fixture has a
+    real area deficit (region 1 far under its target area), so lo[0] != 0
+    after calibration; that is asserted below so this test cannot silently go
+    vacuous again."""
+    lab = np.zeros((16, 16), dtype=np.int16)
+    lab[:, 14:] = 1
+    ea = np.array([128.0, 128.0])
+    cfg = sa.SaConfig(probe_moves=60, levels=40, moves_per_level=30, seed=3)
     out_a, rep_a = sa.anneal(lab, 2, ea, 1.0, cfg)
 
-    orig_calibrate = sa.SaState.calibrate
+    lo_a = np.asarray(rep_a["norm_lo"])
+    span_a = np.asarray(rep_a["norm_span"])
+    assert lo_a[0] != 0.0, "fixture must calibrate to a nonzero lo, or this test is vacuous"
 
-    def _zeroed_calibrate(self, rng):
+    orig_calibrate = sa.SaState.calibrate
+    # A different constant per term, small enough that hi_j + c_j - (lo_j + c_j)
+    # stays within float64 rounding of hi_j - lo_j (large offsets like 1e3
+    # against spans of O(1) lose bits to cancellation -- that is a float64
+    # artefact of the test's own arithmetic, not a property of total()).
+    offset = np.array([10.0, -10.0, 10.0, 10.0])
+
+    def _offset_calibrate(self, rng):
         lo, hi, t0 = orig_calibrate(self, rng)
-        self.lo = np.zeros_like(self.lo)
+        self.lo = self.lo + offset
+        self.hi = self.hi + offset
         return self.lo, self.hi, t0
 
-    monkeypatch.setattr(sa.SaState, "calibrate", _zeroed_calibrate)
+    monkeypatch.setattr(sa.SaState, "calibrate", _offset_calibrate)
     out_b, rep_b = sa.anneal(lab, 2, ea, 1.0, cfg)
 
+    span_b = np.asarray(rep_b["norm_span"])
+    assert np.allclose(span_a, span_b, atol=1e-9), "the perturbation must leave span unchanged"
+    assert not np.array_equal(np.asarray(rep_b["norm_lo"]), lo_a), \
+        "the perturbation must actually move lo, or this test is vacuous"
     assert np.array_equal(out_a, out_b)
     assert rep_a["e_raw_final"] == rep_b["e_raw_final"]
-    assert rep_a["t0"] == rep_b["t0"]
     assert rep_a["levels_run"] == rep_b["levels_run"]
