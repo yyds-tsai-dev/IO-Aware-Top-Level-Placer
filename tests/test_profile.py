@@ -32,6 +32,12 @@ def test_phase_peaks_do_not_cross_contaminate():
         del small
 
     assert timer.phases["a"]["peak_alloc_gb"] > timer.phases["b"]["peak_alloc_gb"]
+    # Re-review N2: restore an independent premise for the assertion above --
+    # without this, the test only trusts PhaseTimer's own baseline_alloc_gb to
+    # be small, which would also pass (vacuously) if a bug recorded the
+    # baseline as the phase's own exit-time max_memory_allocated() instead of
+    # its entry-time memory_allocated().
+    assert timer.phases["b"]["baseline_alloc_gb"] < 0.05
     assert timer.phases["b"]["peak_above_baseline_gb"] < 0.05   # not 300MB
     assert timer.phases["a"]["peak_alloc_gb"] > 0.2
     for name in ("a", "b"):
@@ -147,7 +153,11 @@ def test_phase_timer_reset_peak_false_skips_reset_and_marks_disabled():
     `profile_lifetime.LifetimeRecorder` owns GPU-peak accounting instead
     (see profile.py's PhaseTimer/_Phase docstrings). peak_alloc_gb/
     peak_reserved_gb are explicitly None (not 0.0 -- "not measured here",
-    not "measured, found empty"), and peak_semantics names why."""
+    not "measured, found empty"), and peak_semantics names why.
+    peak_above_baseline_gb follows peak_alloc_gb's own convention (None, not
+    0.0) since there is no peak to subtract the baseline from here -- while
+    baseline_alloc_gb itself is still a real reading, since it needs no
+    reset to measure (re-review N3)."""
     timer = PhaseTimer(reset_peak=False)
     with timer.phase("a"):
         torch.empty(1_000_000, dtype=torch.uint8, device="cuda")
@@ -155,6 +165,8 @@ def test_phase_timer_reset_peak_false_skips_reset_and_marks_disabled():
     assert phase["peak_alloc_gb"] is None
     assert phase["peak_reserved_gb"] is None
     assert phase["peak_semantics"] == "disabled_owned_by_lifetime_recorder"
+    assert phase["baseline_alloc_gb"] is not None
+    assert phase["peak_above_baseline_gb"] is None
     assert phase["t_s"] >= 0.0
     assert phase["host_rss_hwm_at_phase_end"] > 0.0
 
