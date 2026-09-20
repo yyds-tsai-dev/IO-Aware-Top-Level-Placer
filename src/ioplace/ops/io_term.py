@@ -376,8 +376,19 @@ class IoTerm(torch.nn.Module):
         self.register_buffer("deg_bucket", torch.as_tensor(csr.deg_bucket, dtype=torch.int64,
                                                             device=device))
 
+        # P-F fix round 1 item 3(b): match "rects"'s production habit above
+        # (cast to pos's own dtype at each call, never forced to fp64) rather
+        # than anchor_offsets's fp64 default -- self.rects.dtype is the best
+        # available proxy for pos's dtype here (IoTerm never sees pos itself
+        # until forward()), and _anchor_xy/anchor_xy already re-casts to
+        # x.dtype on every use, so this only changes what's *resident*, never
+        # what's computed. An fp32 pos/rects config now gets fp32 anchor
+        # buffers instead of a forced fp64 pair (half the resident bytes);
+        # the current production configs' rects are fp64 already
+        # (rect_table's np.float64), so this is a no-op for them today.
         dx, dy = anchor_offsets(node_anchor, node_size_x, node_size_y,
-                                self.num_physical, device=device)
+                                self.num_physical, device=device,
+                                dtype=self.rects.dtype)
         self.register_buffer("anchor_dx", dx)
         self.register_buffer("anchor_dy", dy)
 

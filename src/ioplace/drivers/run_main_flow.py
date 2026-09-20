@@ -172,12 +172,24 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
                    freeze_window=50, freeze_overflow=0.15, freeze_tau_rel=0.05,
                    freeze_churn=0.005, argmax_chunk=4, ignore_net_degree=None,
                    w_mode="unit", dp_seed=None, deterministic=None,
-                   check_invariant=False, timer=None):
+                   check_invariant=False, timer=None, node_anchor="center"):
     """Phase 1 + phase 2. Writes soft.npz, frozen_membership.npz, freeze.json
     and the active policy's normalisation trace (norm_trace.jsonl, or
     legacy_trace.jsonl under --norm-policy legacy); returns the record the
     caller folds into result.json as `soft_summary`."""
     import torch
+    # P-F fix round 1 item 4: run_main_flow is a driver too, and freeze.py
+    # already takes membership at the cell centre (freeze.py:9) -- wire the
+    # same --node-anchor handling here as run_placement_io.run_io (default
+    # 'center', 'pin' rejected before any CUDA/_load_dreamplace call) so this
+    # driver stops optimising at the lower-left while freezing at the centre.
+    if node_anchor not in ("lower_left", "center", "pin"):
+        raise ValueError("node_anchor must be lower_left, center or pin, got %r"
+                         % (node_anchor,))
+    if node_anchor == "pin":
+        raise ValueError(
+            "node_anchor='pin' is an IoTermRef-only bias probe (design v2 sec 7); "
+            "no driver may run it -- use src/scripts/run_anchor_comparison.py")
     if every <= 0 or freeze_window % every:
         raise ValueError("freeze_window must be a positive multiple of --every "
                          f"(got window={freeze_window}, every={every})")
@@ -248,7 +260,9 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
         csr = build_net_node_csr(nl, ignore_net_degree)
         io_term = IoTerm(csr=csr, rects=rects, rect2region=r2k, K=k,
                          num_movable=nl.num_movable, num_physical=nl.num_physical,
-                         num_nodes=placedb.num_nodes, device="cuda", w_mode=w_mode)
+                         num_nodes=placedb.num_nodes, device="cuda", w_mode=w_mode,
+                         node_anchor=node_anchor,
+                         node_size_x=nl.node_size_x, node_size_y=nl.node_size_y)
         ft_term, distance = None, None
         if f_ft_max > 0:
             from ioplace.region_graph import region_graph
@@ -579,7 +593,7 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
                   argmax_chunk=4, density_clamp_lo=0.25, density_clamp_hi=4.0,
                   ignore_net_degree=None, w_mode="unit", dp_seed=None,
                   deterministic=None, check_invariant=False,
-                  benchmark_kind="real", extra_terms=()):
+                  benchmark_kind="real", extra_terms=(), node_anchor="center"):
     import torch
     if phase not in ("all", "soft", "fence"):
         raise ValueError(f"unknown phase {phase!r}")
@@ -587,6 +601,17 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
         raise ValueError(f"unknown init {init!r}")
     if norm_policy not in NORM_POLICIES:
         raise ValueError(f"unknown norm policy {norm_policy!r}")
+    # P-F fix round 1 item 4: reject here too (not just inside run_soft_phase)
+    # so --phase fence -- which never calls run_soft_phase, since IO/FT are
+    # off after the freeze -- still rejects a bad --node-anchor up front,
+    # before os.makedirs/torch.cuda.mem_get_info below.
+    if node_anchor not in ("lower_left", "center", "pin"):
+        raise ValueError("node_anchor must be lower_left, center or pin, got %r"
+                         % (node_anchor,))
+    if node_anchor == "pin":
+        raise ValueError(
+            "node_anchor='pin' is an IoTermRef-only bias probe (design v2 sec 7); "
+            "no driver may run it -- use src/scripts/run_anchor_comparison.py")
     os.makedirs(out_dir, exist_ok=True)
     device_baseline_gb = 0.0
     if torch.cuda.is_available():
@@ -613,7 +638,8 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
                 argmax_chunk=argmax_chunk,
                 ignore_net_degree=ignore_net_degree, w_mode=w_mode,
                 dp_seed=dp_seed, deterministic=deterministic,
-                check_invariant=check_invariant, timer=timer)
+                check_invariant=check_invariant, timer=timer,
+                node_anchor=node_anchor)
             # Everything the soft phase decided that result.json would otherwise
             # lose: region_source, the resolved init record, the prior
             # (including `remapped`, which is the --remap-blocks auto decision
@@ -758,6 +784,19 @@ def build_parser():
     parser.add_argument("--deterministic", type=int, default=None)
     parser.add_argument("--check-invariant", action="store_true")
     parser.add_argument("--benchmark-kind", default="real", choices=["real", "synthetic"])
+    # v2 P-F (design sec 7): the anchor at which the soft region assignment is
+    # evaluated. --phase fence is a no-op (IO/FT are off after the freeze).
+    parser.add_argument("--node-anchor", choices=["lower_left", "center", "pin"],
+                        default="center",
+                        help="anchor for the soft region assignment: 'center' "
+                             "(default) evaluates the SDF at x+0.5*w, y+0.5*h, "
+                             "matching the freeze rule (freeze.py's membership "
+                             "is already the cell centre) and whole-cell fence "
+                             "ownership; 'lower_left' is the legacy anchor; "
+                             "'pin' is rejected by every driver -- it exists "
+                             "only in IoTermRef as a small-scale bias probe; "
+                             "no-op for --phase fence (IO/FT are off after "
+                             "the freeze)")
     return parser
 
 
@@ -780,7 +819,8 @@ def main(argv=None):
         density_clamp_hi=args.density_clamp_hi,
         ignore_net_degree=args.ignore_net_degree, w_mode=args.w_mode,
         dp_seed=args.dp_seed, deterministic=args.deterministic,
-        check_invariant=args.check_invariant, benchmark_kind=args.benchmark_kind)
+        check_invariant=args.check_invariant, benchmark_kind=args.benchmark_kind,
+        node_anchor=args.node_anchor)
     return result
 
 

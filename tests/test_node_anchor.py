@@ -199,3 +199,57 @@ def test_cli_defaults_node_anchor_to_center_and_offers_all_three():
 def test_result_fields_carry_the_anchor():
     from ioplace.drivers.run_placement_io import RESULT_FIELDS
     assert "node_anchor" in RESULT_FIELDS
+
+
+# ---------------------------------------------------------- fix round 1
+
+def test_the_class_default_is_lower_left_while_the_driver_default_is_center():
+    """P-F fix round 1, item 1 (review-task-1.md I-1): pins the two defaults
+    the plan's own global-constraints.md says are wired together in exactly
+    one place per driver -- the CLASS default on IoTermRef/IoTerm stays
+    'lower_left' (fourteen existing construction sites supply no node sizes,
+    which 'center' requires), while run_io's own keyword default is 'center'
+    (the flag's default, spec sec 0/sec 7). Nothing failed before this test
+    if either default silently reverted, since the CLI always passes the
+    value explicitly."""
+    import inspect
+    from ioplace.drivers.run_placement_io import run_io
+    for cls in (IoTermRef, IoTerm):
+        assert inspect.signature(cls.__init__).parameters["node_anchor"].default == "lower_left"
+    assert inspect.signature(run_io).parameters["node_anchor"].default == "center"
+
+
+def test_the_center_offset_is_half_the_cell_not_the_whole_cell():
+    """P-F fix round 1, item 2 (review-task-1.md I-2): a doubled offset left
+    every other test in this file green (measured: L_IO and ft_only both
+    1.0 either way), because the only assertion on the half-size was one
+    level above the apply site (anchor_offsets's return value, not what
+    _anchor_xy actually adds to x/y). x=40 with w=14: the centre (47) stays
+    in region 0, but x+w (54) would cross into region 1 -- so this fails if
+    the offset is ever applied twice (or is the whole cell instead of half).
+    Verified to FAIL against a temporarily-doubled offset (see task-1-report.md)."""
+    rs = make_grid_regions(DIE, 2, 2, lattice=10)
+    nl = _nl([(10., 10.), (40., 40.)], [[0, 1]])
+    nl.node_size_x = np.array([4., 14.]); nl.node_size_y = np.array([4., 14.])
+    pos = _pos(nl, device=DEV)
+    assert float(_ref(nl, rs, "center")(pos, 0.05, 1.0).detach()) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_run_main_flow_wires_node_anchor_like_the_other_drivers():
+    """P-F fix round 1, item 4 (promoted from the reviewer's m-7):
+    run_main_flow.py is a driver too, and freeze.py already freezes on cell
+    centres, so it must default to 'center' and reject 'pin' before CUDA
+    exactly like run_placement.py/run_placement_io.py do."""
+    from ioplace.drivers.run_main_flow import build_parser, run_main_flow, run_soft_phase
+    parser = build_parser()
+    args = parser.parse_args(["--config", "c.json", "--out-dir", "o"])
+    assert args.node_anchor == "center"
+    action, = [a for a in parser._actions if a.dest == "node_anchor"]
+    assert tuple(action.choices) == ("lower_left", "center", "pin")
+    with pytest.raises(ValueError, match="IoTermRef-only"):
+        run_main_flow("nonexistent.json", "unused_out_dir", node_anchor="pin")
+    with pytest.raises(ValueError, match="node_anchor must be"):
+        run_main_flow("nonexistent.json", "unused_out_dir", node_anchor="centre")
+    with pytest.raises(ValueError, match="IoTermRef-only"):
+        run_soft_phase("nonexistent.json", "unused_out_dir", k=4, rtype="grid", seed=0,
+                       node_anchor="pin")

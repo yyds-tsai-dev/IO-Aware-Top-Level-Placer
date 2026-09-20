@@ -215,9 +215,16 @@ def main(argv=None):
         rects, r2k = rect_table(rs)
         csr = build_net_node_csr(nl, args.ignore_net_degree)
 
+        # P-F fix round 1 item 3(d): build at the --node-anchor flag default
+        # (center), not the class default (lower_left), so this spike's
+        # resident-memory verdict covers the configuration the drivers
+        # actually ship (anchor_dx/anchor_dy add ~2*n_nodes*8B resident,
+        # unrecorded here before this change -- see task-1-report.md).
         io_term = IoTerm(csr=csr, rects=rects, rect2region=r2k, K=args.k,
                          num_movable=nl.num_movable, num_physical=nl.num_physical,
-                         num_nodes=nl.num_physical, device="cuda")
+                         num_nodes=nl.num_physical, device="cuda",
+                         node_anchor="center",
+                         node_size_x=nl.node_size_x, node_size_y=nl.node_size_y)
         ctx = GpuEvalContext(nl, rg, device="cuda")
 
         record["k_chunk"] = io_term.k_chunk
