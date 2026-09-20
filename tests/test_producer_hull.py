@@ -180,3 +180,48 @@ def test_reduce_candidates_torch_feeds_a_usable_hull():
     y = torch.as_tensor(pts[:, 1], device="cuda", dtype=torch.float64)
     v = hull.convex_hull(hull.reduce_candidates_torch(x, y))
     assert hull.polygon_area(v) == pytest.approx(100.0, rel=0.02)
+
+
+@pytest.mark.gpu
+def test_reduce_candidates_torch_matches_the_numpy_path_on_tied_grid_data():
+    """Grid-aligned input, unlike the continuous cloud above: many points
+    share the exact same projection for axis- and diagonal-aligned directions
+    among the m=16, so the quantile band collapses to ss == t and the k_dir
+    cutoff's tie-break is actually exercised. Both paths must land on the
+    identical point set -- a discrete equality, never a float tolerance --
+    which only holds if the GPU's stable sort breaks ties the same way as the
+    CPU's np.argsort(kind="stable")."""
+    xs, ys = np.meshgrid(np.arange(60, dtype=np.float64),
+                         np.arange(60, dtype=np.float64))
+    pts = np.stack([xs.ravel(), ys.ravel()], axis=1)
+    want = hull.reduce_candidates(pts)
+    x = torch.as_tensor(pts[:, 0], device="cuda", dtype=torch.float64)
+    y = torch.as_tensor(pts[:, 1], device="cuda", dtype=torch.float64)
+    got = hull.reduce_candidates_torch(x, y)
+    assert np.array_equal(got, want)
+
+
+@pytest.mark.gpu
+def test_reduce_candidates_torch_stride_subsamples_the_quantile_above_the_threshold():
+    """quantile_subsample makes the "n > QUANTILE_SUBSAMPLE" stride-subsample
+    branch reachable without allocating 8e6 points -- that branch is this
+    task's own motivation (torch.quantile's input-element limit) and would
+    otherwise go untested. With the threshold forced far below n, every
+    quantile is estimated from a strided subsample rather than the full
+    column; the documented invariants that estimate must still keep are
+    determinism (same input, same result) and ruling D1 (every direction's
+    true extreme point over the FULL data survives even though the threshold
+    itself is only an estimate)."""
+    rng = np.random.default_rng(21)
+    pts = rng.uniform(0.0, 10.0, size=(5_000, 2))
+    x = torch.as_tensor(pts[:, 0], device="cuda", dtype=torch.float64)
+    y = torch.as_tensor(pts[:, 1], device="cuda", dtype=torch.float64)
+    got1 = hull.reduce_candidates_torch(x, y, quantile_subsample=100)
+    got2 = hull.reduce_candidates_torch(x, y, quantile_subsample=100)
+    assert np.array_equal(got1, got2)
+    for j in range(hull.DIRECTIONS_M):
+        th = j * (2.0 * np.pi / hull.DIRECTIONS_M)
+        s = pts[:, 0] * np.cos(th) + pts[:, 1] * np.sin(th)
+        for sign in (1.0, -1.0):
+            extreme = pts[np.argmax(sign * s)]
+            assert (np.abs(got1 - extreme).sum(axis=1) < 1e-9).any()

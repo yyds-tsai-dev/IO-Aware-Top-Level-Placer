@@ -307,15 +307,26 @@ QUANTILE_SUBSAMPLE = 8_000_000
 
 
 def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
-                            alpha=BAND_ALPHA, k_dir=K_DIR):
+                            alpha=BAND_ALPHA, k_dir=K_DIR,
+                            quantile_subsample=QUANTILE_SUBSAMPLE):
     """Algorithm 1 on the device (spec section 2: "Algorithm-1 candidate
     reduction on GPU"). Same semantics as reduce_candidates; only the
     projections, the quantile and the top-k live on the GPU, and only the
     surviving <=2*m*k_dir candidates come back to the host for quickhull.
 
-    torch.quantile has an input-element limit, so above QUANTILE_SUBSAMPLE the
-    threshold is estimated from a deterministic stride subsample -- a threshold
+    torch.quantile has an input-element limit, so above quantile_subsample
+    (spec's QUANTILE_SUBSAMPLE=8_000_000 by default; exposed as a keyword only
+    so tests can drive the branch without allocating 8e6 points) the threshold
+    is estimated from a deterministic stride subsample -- a threshold
     estimate, not a filter: the band test still runs over every point.
+
+    The within-band cutoff is a stable ascending sort of (ss[idx] - t), not
+    torch.topk: topk makes no tie-break guarantee, while np.argsort(kind=
+    "stable") on the CPU path breaks ties by ascending original index. A
+    stable sort over idx (itself ascending, since it comes from nonzero)
+    reproduces that exact ordering, which matters because chip data is
+    grid-aligned and legitimately ties at the band edge (unlike a continuous
+    synthetic cloud, where ties have measure zero).
 
     Like the numpy path, each direction's support point is always kept
     (ruling D1), so the output bound is 2*m*(k_dir + 1) before dedup.
@@ -324,7 +335,7 @@ def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
     if n <= k_dir:
         return np.unique(torch.stack([x, y], dim=1).double().cpu().numpy(), axis=0)
     keep = torch.zeros(n, dtype=torch.bool, device=x.device)
-    stride = max(1, n // QUANTILE_SUBSAMPLE + (1 if n % QUANTILE_SUBSAMPLE else 0))
+    stride = max(1, n // quantile_subsample + (1 if n % quantile_subsample else 0))
     for j in range(m):
         th = j * (2.0 * math.pi / m)
         s = x.double() * math.cos(th) + y.double() * math.sin(th)
@@ -334,12 +345,14 @@ def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
             hi = ss.max()
             idx = ((ss >= t) & (ss <= t + alpha * (hi - t))).nonzero(as_tuple=True)[0]
             if idx.numel() > k_dir:
-                sel = torch.topk(ss[idx] - t, k_dir, largest=False, sorted=True).indices
-                idx = idx[sel]
+                order = torch.sort(ss[idx] - t, stable=True).indices
+                idx = idx[order[:k_dir]]
             keep[idx] = True
             # Ruling D1, same named deviation as the numpy path: the band plus
             # the k_dir cap drops the support points, and the hull of the
             # reduced set collapses (measured area 95.78 against a true 100).
-            keep[int(torch.argmax(ss))] = True
+            # No int()/.item() here: indexing keep with the 0-dim argmax
+            # tensor stays device-side and avoids a host sync every iteration.
+            keep[torch.argmax(ss)] = True
     return np.unique(
         torch.stack([x[keep], y[keep]], dim=1).double().cpu().numpy(), axis=0)
