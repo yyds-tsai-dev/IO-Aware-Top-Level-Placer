@@ -100,42 +100,42 @@ def _open_close_one(m):
     return ndimage.binary_erosion(d, _SE, border_value=1)
 
 
-def morph_open_close(labels, k):
-    """Per-partition binary opening then closing (digest section 2.2). Bins
-    claimed by more than one partition afterwards go to the partition with the
-    most 4-neighbours in the pre-morphology map (tie -> lowest id); bins claimed
-    by none become -1."""
-    masks = np.stack([_open_close_one(labels == kk) for kk in range(k)])
-    n_claim = masks.sum(axis=0)
-    out = np.full(labels.shape, -1, dtype=np.int16)
-    single = n_claim == 1
-    if single.any():
-        out[single] = masks[:, single].argmax(axis=0).astype(np.int16)
-    multi = np.nonzero(n_claim > 1)
-    if len(multi[0]):
-        cross = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=np.int32)
-        nb = np.stack([ndimage.convolve((labels == kk).astype(np.int32), cross,
-                                        mode="constant", cval=0)
-                       for kk in range(k)])
-        cand = np.where(masks[:, multi[0], multi[1]],
-                        nb[:, multi[0], multi[1]], -1)
-        out[multi] = cand.argmax(axis=0).astype(np.int16)
-    # Opening is allowed to shave a partition, never to delete it outright
-    # (spec section 10 risk 6), but the restoration must honour its own
-    # contract and never take a bin a neighbour legitimately won. In priority
-    # order:
-    #   (a) a bin that was originally this partition's own (`had`) AND is
-    #       still genuinely unclaimed (out < 0) after morphology;
-    #   (b) failing that, a bin that was originally this partition's own but
-    #       is now held by a neighbour that would still keep >= 2 bins
-    #       afterwards -- the same donor-count guard ensure_nonempty uses, so
-    #       the neighbour is never stripped to zero;
-    #   (c) failing even that, leave the partition vanished here. Its own
-    #       `had` footprint has no unclaimed bin and no neighbour can spare
-    #       one, so stealing here would only rob some other partition down to
-    #       nothing; ensure_nonempty (called downstream with coarse density,
-    #       not just this partition's pre-morphology footprint) is the right
-    #       place to find it a bin instead.
+def _restore_vanished(labels, out, k):
+    """Give back a bin to any partition with no bins in `out` (mutated and
+    returned), so opening/closing never deletes a partition outright (spec
+    section 10 risk 6). Pure per-bin logic, factored out of morph_open_close
+    so it can be driven from a hand-built `out` directly, without needing to
+    reverse-engineer an input through the structuring element to reach a
+    particular case.
+
+    This is a deliberately SIMPLER rescue than ensure_nonempty, and always
+    will be: it has no coarse density, and round-2 review accepted that it
+    should not gain one. In priority order:
+      (a) a bin that was originally this partition's own (`had`) AND is
+          still genuinely unclaimed (out < 0) after morphology;
+      (b) failing that, the raster-first `had` bin whose current owner would
+          still keep >= 2 bins afterwards -- only ensure_nonempty's donor-
+          count THRESHOLD is mirrored here, not its density-informed CHOICE
+          of which bin to take. ensure_nonempty runs immediately after
+          morph_open_close/largest_component in extract() and does the
+          density-informed rescue properly; threading coarse_dens through
+          this otherwise-pure per-bin function would duplicate that for no
+          benefit. Cost of the simplification: in this rare case the
+          restored bin is raster-first rather than densest, and the region
+          shape is marginally worse before SA refines it anyway.
+      (c) failing even that, leave the partition vanished. This is a
+          DEFENSIVE INVARIANT WITH NO KNOWN ORGANIC INPUT: reaching it needs
+          a `had` set whose every bin's current owner already has exactly 1
+          bin, and neither a directed construction (_open_close_one's
+          smallest nonzero survivor is 4 bins, confirmed by brute-force over
+          every 4x4 mask) nor a 200000-trial randomised fuzz has ever
+          produced one from real morphology (see the task-5 fix-round-2
+          report). Its only coverage is
+          test_restore_vanished_leaves_a_partition_vanished_when_every_donor_has_only_one_bin,
+          a hand-built `out` that bypasses morphology to exercise it
+          directly. ensure_nonempty, called downstream with coarse density,
+          is the correct place to find such a partition a bin for real.
+    """
     for kk in range(k):
         had = labels == kk
         if not had.any() or (out == kk).any():
@@ -151,6 +151,31 @@ def morph_open_close(labels, k):
         if donor_ok.any():
             out[np.unravel_index(int(np.argmax(donor_ok)), out.shape)] = np.int16(kk)
     return out
+
+
+def morph_open_close(labels, k):
+    """Per-partition binary opening then closing (digest section 2.2). Bins
+    claimed by more than one partition afterwards go to the partition with the
+    most 4-neighbours in the pre-morphology map (tie -> lowest id); bins claimed
+    by none become -1. Opening is allowed to shave a partition but never to
+    delete it outright -- see _restore_vanished for how a vanished partition
+    gets a bin back."""
+    masks = np.stack([_open_close_one(labels == kk) for kk in range(k)])
+    n_claim = masks.sum(axis=0)
+    out = np.full(labels.shape, -1, dtype=np.int16)
+    single = n_claim == 1
+    if single.any():
+        out[single] = masks[:, single].argmax(axis=0).astype(np.int16)
+    multi = np.nonzero(n_claim > 1)
+    if len(multi[0]):
+        cross = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=np.int32)
+        nb = np.stack([ndimage.convolve((labels == kk).astype(np.int32), cross,
+                                        mode="constant", cval=0)
+                       for kk in range(k)])
+        cand = np.where(masks[:, multi[0], multi[1]],
+                        nb[:, multi[0], multi[1]], -1)
+        out[multi] = cand.argmax(axis=0).astype(np.int16)
+    return _restore_vanished(labels, out, k)
 
 
 def largest_component(labels, k):

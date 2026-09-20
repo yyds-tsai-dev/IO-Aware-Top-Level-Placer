@@ -127,6 +127,41 @@ def test_morphology_never_deletes_a_whole_partition_2x2_edge_strip():
     assert int((out == 0).sum()) == 63   # region 0 keeps the rest of what it won
 
 
+def test_restore_vanished_skips_an_unsafe_donor_for_a_later_safe_one():
+    """Round-2 regression: the two morph_open_close tests above have exactly
+    one candidate donor each, which is always safe, so they cannot tell the
+    fixed selection apart from the pre-fix (commit 06f5f4c) unconditional
+    raster-order pick -- both produce the same answer on a single-donor input.
+    This drives _restore_vanished directly from a hand-built `out` (bypassing
+    morphology, per the round-2 refactor) with TWO candidate donors: the
+    raster-FIRST `had` bin, (0, 0), is owned by partition 1, whose only bin in
+    `out` this is (count 1, unsafe -- taking it would empty partition 1); the
+    raster-LATER bin, (0, 1), is owned by partition 0, which has plenty
+    (count 3, safe). Verified against an inlined copy of the pre-fix
+    selection: it takes (0, 0) unconditionally and empties partition 1
+    (see the task-5 fix-round-2 report)."""
+    labels = np.array([[2, 2], [0, 0]], dtype=np.int16)   # kk=2's had: (0,0), (0,1)
+    out = np.array([[1, 0], [0, 0]], dtype=np.int16)
+    result = extract._restore_vanished(labels, out.copy(), 3)
+    assert result[0, 1] == 2            # takes the later, SAFE bin
+    assert result[0, 0] == 1            # partition 1's only bin is untouched
+    assert int((result == 1).sum()) == 1
+
+
+def test_restore_vanished_leaves_a_partition_vanished_when_every_donor_has_only_one_bin():
+    """Branch (c) (see _restore_vanished's docstring): a defensive invariant
+    with no known organic input, exercised here by bypassing morphology
+    entirely. kk=2's had bins are owned by two different partitions, each of
+    which already has exactly one bin in `out` -- nothing to spare -- so kk
+    must be left vanished rather than stealing either down to zero."""
+    labels = np.array([[2, 2], [0, 1]], dtype=np.int16)   # kk=2's had: (0,0), (0,1)
+    out = np.array([[0, 1], [-1, -1]], dtype=np.int16)
+    result = extract._restore_vanished(labels, out.copy(), 3)
+    assert not (result == 2).any()      # left vanished, not stolen from either donor
+    assert result[0, 0] == 0 and int((result == 0).sum()) == 1
+    assert result[0, 1] == 1 and int((result == 1).sum()) == 1
+
+
 def test_largest_component_drops_a_detached_island():
     lab = _two_l_shapes(16)
     lab[1:4, 1:4] = 1                   # a 3x3 island that survives opening
