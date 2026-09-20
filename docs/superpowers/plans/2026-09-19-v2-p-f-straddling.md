@@ -107,7 +107,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 
 **Why this is a one-line change per call site.** `region_sdf_l1` is a pure function of a point; the anchor only decides *which* point. Adding a per-node constant `h` before it leaves every tensor shape identical and every gradient identical, because `d f(x+h)/dx == f'(x+h)` — the same value `_IoFn.backward` already computes by running `torch.autograd.grad` on `region_sdf_l1` at the evaluated point (`io_term.py:261-283`). So the anchor is applied exactly where `x`/`y` leave `pos`: `IoTermRef._split_xy`, `IoTerm.forward`, `IoTerm.diagnostics`, `FtTerm._evaluate_parts`, `FtTermRef._values`. `pin` cannot be expressed this way at all — it re-indexes the accumulation from `(N,K)` over nodes to `(P,K)` over pins — which is precisely why spec §7 confines it to `IoTermRef`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_node_anchor.py`:
 
@@ -283,12 +283,12 @@ def test_result_fields_carry_the_anchor():
     assert "node_anchor" in RESULT_FIELDS
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_node_anchor.py -v`
 Expected: FAIL — `ImportError: cannot import name 'NODE_ANCHORS' from 'ioplace.ops.soft_assign'` at collection.
 
-- [ ] **Step 3: Add `anchor_offsets` to `soft_assign.py`**
+- [x] **Step 3: Add `anchor_offsets` to `soft_assign.py`**
 
 Append to `src/ioplace/ops/soft_assign.py`, immediately after `region_sdf_l1` (line 31):
 
@@ -330,7 +330,7 @@ def anchor_offsets(node_anchor, node_size_x, node_size_y, num_physical, *,
     return 0.5 * dx, 0.5 * dy
 ```
 
-- [ ] **Step 4: Thread the anchor through `IoTermRef` and `IoTerm`**
+- [x] **Step 4: Thread the anchor through `IoTermRef` and `IoTerm`**
 
 In `src/ioplace/ops/io_term.py`, extend the import at line 13-14 to
 `from ioplace.ops.soft_assign import (rect_table, region_sdf_l1, softmax_stats, chunk_p_ell, d_star_from_m, _chunks, NODE_ANCHORS, anchor_offsets)`.
@@ -430,7 +430,7 @@ In `IoTerm.forward` (lines 343-346), insert the anchor between the slices and th
 
 In `IoTerm.diagnostics`, after the two slices at lines 374-375 and before `rects = ...`, insert `x, y = self._anchor_xy(x, y)`. (The `grad_share` loop already routes through `self.forward`, which anchors itself.)
 
-- [ ] **Step 5: Thread the anchor through `FtTerm` and `FtTermRef`**
+- [x] **Step 5: Thread the anchor through `FtTerm` and `FtTermRef`**
 
 In `src/ioplace/ops/ft_term.py`, `FtTerm._evaluate_parts` (lines 152-156) becomes:
 
@@ -455,7 +455,7 @@ In `FtTermRef.__init__` (line 169), after `super().__init__()`, insert:
 
 In `FtTermRef._values`, after the existing detach-and-concatenate of `x`/`y` (lines 188-189), insert `x, y = meta._anchor_xy(x, y)`.
 
-- [ ] **Step 6: Add the flag to the CLI and the driver**
+- [x] **Step 6: Add the flag to the CLI and the driver**
 
 In `src/ioplace/drivers/run_placement.py`, add to `build_parser()` immediately before `return ap` (line 532):
 
@@ -504,22 +504,22 @@ In `src/ioplace/drivers/run_placement_io.py`:
 
 5. Add `"node_anchor": node_anchor,` to the `result` dict, next to `"w_mode": w_mode,` (line 851).
 
-- [ ] **Step 7: Run the new tests**
+- [x] **Step 7: Run the new tests**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_node_anchor.py -v`
 Expected: PASS — 16 passed.
 
-- [ ] **Step 8: Run every test that touches the terms or the driver**
+- [x] **Step 8: Run every test that touches the terms or the driver**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_io_term.py tests/test_io_term_chunked.py tests/test_ft_term.py tests/test_soft_assign.py tests/test_driver_io.py tests/test_driver_t8a.py tests/test_norm_driver.py tests/test_ft_reweight.py -m "not slow" -v`
 Expected: PASS. These construct `IoTerm`/`IoTermRef` without `node_anchor` and must be unaffected — the class default is `lower_left` and `_anchor_xy` short-circuits on `anchor_dx is None`, so their objective values are bit-identical, not merely close. If any of them fails, the anchor leaked into the default path; fix that rather than the test.
 
-- [ ] **Step 9: Run the full fast suite**
+- [x] **Step 9: Run the full fast suite**
 
 Run: `"$IOPLACE_PYTHON" -m pytest -m "not slow"`
 Expected: PASS, no new failures against the pre-task baseline. `run_io`'s default changed from the (previously implicit) lower-left anchor to `center`, so any *slow* driver test that pins an absolute `io_count` may move; record the before/after numbers in the commit message rather than re-pinning silently.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/ioplace/ops/soft_assign.py src/ioplace/ops/io_term.py \
@@ -556,7 +556,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Margin and diagnostics under `pin`.** `d_star` becomes per-pin, so `margin_penalty` would sum over `P'` instead of `N` and its scale would silently change. The arm therefore rejects a non-zero `lambda_margin`, and `diagnostics()` — whose `frac_soft` denominator and `grad_share` attribution are both node-based — raises rather than returning a number that looks comparable and is not.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_node_anchor.py`:
 
@@ -662,12 +662,12 @@ def test_ft_term_ref_rejects_a_pin_anchored_io_term():
         FtTermRef(_pin_ref(nl, rs), np.zeros((4, 4)))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_node_anchor.py -k pin -v`
 Expected: FAIL — `ImportError: cannot import name 'build_net_pin_csr' from 'ioplace.ops.io_term'`.
 
-- [ ] **Step 3: Add `PinCsr` and `build_net_pin_csr`**
+- [x] **Step 3: Add `PinCsr` and `build_net_pin_csr`**
 
 In `src/ioplace/ops/io_term.py`, after `build_net_node_csr` (line 52):
 
@@ -705,7 +705,7 @@ def build_net_pin_csr(nl, csr):
                   pos[keep])
 ```
 
-- [ ] **Step 4: Register the pin buffers**
+- [x] **Step 4: Register the pin buffers**
 
 In `IoTermRef.__init__`, replace the `dx = dy = None` line inside the `if node_anchor == "pin":` branch Task 1 added with:
 
@@ -724,7 +724,7 @@ In `IoTermRef.__init__`, replace the `dx = dy = None` line inside the `if node_a
             dx = dy = None
 ```
 
-- [ ] **Step 5: Add the pin forward branch**
+- [x] **Step 5: Add the pin forward branch**
 
 Replace `IoTermRef._forward_io` (lines 112-120) with:
 
@@ -776,17 +776,17 @@ At the top of `IoTermRef.diagnostics` (line 136), insert:
                 "look comparable with the node arms and are not (design v2 sec 7)")
 ```
 
-- [ ] **Step 6: Run the new tests**
+- [x] **Step 6: Run the new tests**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_node_anchor.py -v`
 Expected: PASS — 23 passed (Task 1's 16 plus these 7).
 
-- [ ] **Step 7: Run the term suites**
+- [x] **Step 7: Run the term suites**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_io_term.py tests/test_io_term_chunked.py tests/test_ft_term.py -m "not slow" -v`
 Expected: PASS, unchanged counts.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/ioplace/ops/io_term.py tests/test_node_anchor.py
@@ -829,7 +829,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 4. **Quadrant area split.** Out-of-owner area is accumulated over the (at most) four rectangles the *first* lattice line in each axis cuts the box into, each attributed to its own corner's region. The four areas sum to `w*h` exactly. For a cell spanning at most two lattice cells per axis — every standard cell on a 512-lattice — this is exact. Wider cells are approximated and counted in `straddle_wide_cells`, so the approximation is measured, not silent. Rejected: exact rasterisation over the full lattice span, which needs the pow2 bucketing machinery `_process_segments` carries and buys nothing for a diagnostic whose straddle test is already four-corner.
 5. **Pin re-attribution by distinct-region count.** `straddle_pin_split_nets` counts nets whose number of distinct pin regions *drops* when every pin of a straddling cell moves to that cell's owner. `per_net_lambda` is the only crossing measure that is a function of pin→region attribution alone: the MST-geometry `per_net_crossings` is a function of coordinates, which re-attribution does not change, and `per_net_steiner` would need the whole Λ≥4 Steiner pass re-run (`evaluator_gpu.py:634-642`) for no extra information. `λ_e − 1` is exactly the per-net crossing lower bound realised after fence LG, when no cell straddles — which is why it is the right target for "the direct attribution of `lg_loss`". `per_net_pin_split` is kept *signed*: re-attribution can also raise a net's λ, and that number is evidence too.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_straddle.py`:
 
@@ -1014,12 +1014,12 @@ def test_lambda_matches_the_evaluators_own_per_net_lambda():
         == res.per_net_lambda.tolist()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_straddle.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'ioplace.straddle'`.
 
-- [ ] **Step 3: Write `src/ioplace/straddle.py`**
+- [x] **Step 3: Write `src/ioplace/straddle.py`**
 
 ```python
 """Straddling diagnostics (design v2 sec 7, diagnostics 1-3).
@@ -1176,7 +1176,7 @@ def straddle_diagnostics(nl, node_x, node_y, rg, *, pin_rid=None):
         per_net_pin_split=split)
 ```
 
-- [ ] **Step 4: Extend `EvalResult` and `evaluate`**
+- [x] **Step 4: Extend `EvalResult` and `evaluate`**
 
 In `src/ioplace/evaluator_ref.py`, append to the `EvalResult` dataclass (after `per_net_home`, line 25):
 
@@ -1221,17 +1221,17 @@ and add to the `EvalResult(...)` call:
 
 `pin_rid_all` is already computed at line 113 from the same `px`/`py`, so no pin position is gathered twice.
 
-- [ ] **Step 5: Run the new tests**
+- [x] **Step 5: Run the new tests**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_straddle.py -v`
 Expected: PASS — 11 passed.
 
-- [ ] **Step 6: Run the reference-evaluator suite**
+- [x] **Step 6: Run the reference-evaluator suite**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_evaluator_ref.py tests/test_region_grid.py tests/test_budgeted_routing.py tests/test_route_crossings_s3.py -v`
 Expected: PASS, unchanged counts. `EvalResult` gained only defaulted fields, so every positional construction elsewhere still works.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/ioplace/straddle.py src/ioplace/evaluator_ref.py tests/test_straddle.py
@@ -1263,7 +1263,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Why the mirror can be bit-exact on the integers.** Every integer the diagnostics produce comes from `_to_idx` + a `grid_t` gather + integer comparisons, which `evaluator_gpu.py:10-26` already argues are bit-identical between numpy float64 and torch float64 as long as the lattice division goes through the 0-dim `_cell_w_t`/`_cell_h_t` tensors rather than python floats (the C1 reciprocal-multiply hazard). The new lattice-line coordinate `xl + (ix0 + 1) * cell_w` must use the same tensors for the same reason. The float fields are reductions and therefore only carry the `rel <= 1e-12` contract.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_evaluator_gpu.py`:
 
@@ -1458,12 +1458,12 @@ and append at the end of its body:
 
 Because `_STRADDLE_INT_SCALARS`/`_STRADDLE_FLOAT_SCALARS` are referenced from inside it, move those two module-level tuples (and `_assert_straddle_equal`) **above** `_assert_batch_invariant_fields` rather than appending them at the end of the file.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_evaluator_gpu.py -k straddle -v`
 Expected: FAIL — `AssertionError` on `straddle_cells` (ref reports a positive count, the GPU still returns the dataclass default 0).
 
-- [ ] **Step 3: Add the constructor flag and the size tensors**
+- [x] **Step 3: Add the constructor flag and the size tensors**
 
 In `GpuEvalContext.__init__` (line 94), change the signature to
 
@@ -1503,7 +1503,7 @@ Right after `self.pin_offset_y_t = ...` (line 225), insert:
             self.node_size_x_t = self.node_size_y_t = None
 ```
 
-- [ ] **Step 4: Add the torch mirror**
+- [x] **Step 4: Add the torch mirror**
 
 Insert after `_pin_positions` (line 306):
 
@@ -1586,7 +1586,7 @@ Insert after `_pin_positions` (line 306):
 
 `per_net_lambda` is passed in rather than recomputed: `evaluate` already derives it from `pin_bm`'s popcount (line 602), and it is by construction the same quantity `_distinct_regions_per_net(pin_rid)` would return — reusing it saves a `torch.unique` and removes any chance of the two disagreeing.
 
-- [ ] **Step 5: Wire it into `evaluate`**
+- [x] **Step 5: Wire it into `evaluate`**
 
 Change the signature (line 531) to `def evaluate(self, node_x, node_y, *, straddle=None):` and insert at the top of the body:
 
@@ -1629,22 +1629,22 @@ def evaluate_gpu(nl, node_x, node_y, rg, max_degree=256, device="cuda", straddle
                           straddle=straddle).evaluate(node_x, node_y)
 ```
 
-- [ ] **Step 6: Run the new tests**
+- [x] **Step 6: Run the new tests**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_evaluator_gpu.py -k straddle -v`
 Expected: PASS — 14 passed (5 seeds + 3 K shapes + 6 singles).
 
-- [ ] **Step 7: Run the whole evaluator parity suite**
+- [x] **Step 7: Run the whole evaluator parity suite**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_evaluator_gpu.py tests/test_evaluator_ref.py tests/test_straddle.py -m "not slow" -v`
 Expected: PASS, no regressions. Every pre-existing test now also runs `_assert_batch_invariant_fields`' new straddle clauses.
 
-- [ ] **Step 8: Run the slow evaluator regressions (GPU permitting)**
+- [x] **Step 8: Run the slow evaluator regressions (GPU permitting)**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_evaluator_gpu.py -m slow -v`
 Expected: PASS — `test_legacy_fields_bit_exact_regression_adaptec1_k16_grid_flat`, the bigblue4 batch-invariance run and the two memory-budget tests. The memory tests are the ones at risk: they assert bigblue4 K=32 peak reduction and mempool_group K=32 under 2 GB, and this task adds two persistent `(num_physical,)` float64 tensors (bigblue4 ≈ 2.2M nodes → 35 MB; mempool_group ≈ 3M → 48 MB). If either budget now binds, do **not** loosen the assertion: pass `straddle=False` in that test's context construction and record why in the commit message.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/ioplace/evaluator_gpu.py tests/test_evaluator_gpu.py
@@ -1685,7 +1685,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Why `_pack_straddle_metrics` is separate from `_pack_eval_metrics`.** `_pack_eval_metrics` (`run_placement.py:114-119`) feeds `run_flat`, `run_two_stage` and `run_reweight` as well, none of which has a `RESULT_FIELDS` gate; widening it would silently add keys to three other drivers' `result.json`. A separate packer spread only into `run_io` (and, guarded, `run_main_flow`) keeps the blast radius at zero.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_evaluation_export.py`:
 
@@ -1773,12 +1773,12 @@ def test_run_io_result_fields_carry_every_straddle_scalar():
         assert name in RESULT_FIELDS, name
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_evaluation_export.py tests/test_straddle.py -v`
 Expected: FAIL — `assert data["metadata"]["schema_version"] == 2` gets `1`, and `ImportError: cannot import name '_pack_straddle_metrics'`.
 
-- [ ] **Step 3: Bump the `evaluation.npz` schema**
+- [x] **Step 3: Bump the `evaluation.npz` schema**
 
 In `src/ioplace/export/evaluation.py`, replace lines 14-18 with:
 
@@ -1841,7 +1841,7 @@ and insert after the existing per-net total checks (line 135):
             raise ValueError("evaluator total mismatch: per_net_pin_split")
 ```
 
-- [ ] **Step 4: Add the metric packer and wire `run_io`**
+- [x] **Step 4: Add the metric packer and wire `run_io`**
 
 In `src/ioplace/drivers/run_placement.py`, after `_pack_eval_metrics` (line 119):
 
@@ -1876,17 +1876,17 @@ In `src/ioplace/drivers/run_placement_io.py`:
 with the comment `# sec 7 diagnostics are a final-placement report, not a per-callback cost`.
 4. After line 785 (`metrics = _pack_eval_metrics(res)`), add `metrics.update(_pack_straddle_metrics(res))`.
 
-- [ ] **Step 5: Run the fast tests**
+- [x] **Step 5: Run the fast tests**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_evaluation_export.py tests/test_straddle.py tests/test_node_anchor.py -v`
 Expected: PASS — 7 + 13 + 23 passed.
 
-- [ ] **Step 6: Run everything that reads `evaluation.npz`**
+- [x] **Step 6: Run everything that reads `evaluation.npz`**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_route_eval_s2.py tests/test_stage2_calibration.py tests/test_stage2_identity.py tests/test_evaluate_placement.py tests/test_route_feedback.py -m "not slow" -v`
 Expected: PASS. These are the `load_evaluation`/`pin_regions_from_evaluation` consumers; `SUPPORTED_SCHEMA_VERSIONS` is what keeps them green.
 
-- [ ] **Step 7: P-B-guarded wiring**
+- [x] **Step 7: P-B-guarded wiring**
 
 Check whether P-B has landed:
 
@@ -1937,12 +1937,12 @@ def test_main_flow_result_fields_carry_the_p_f_diagnostics():
 
 **If `PENDING`** — make no edit under `src/ioplace/artifacts.py` or `run_main_flow.py` (they do not exist), and instead append this line to the plan's own Task 8 doc-sync note: *"P-F's seven `result.json` fields (`node_anchor` + the six straddle scalars) are wired into `run_placement_io.RESULT_FIELDS` only; P-B must add the identical seven to `artifacts.MAIN_FLOW_RESULT_FIELDS` and to `run_main_flow`'s result dict, and `--node-anchor` to its parser, when it lands."* Then open the follow-up by adding the same sentence to `docs/superpowers/plans/2026-09-19-v2-p-b-main-flow.md` Task 7's Interfaces block as a one-line **P-F dependency** note. That single cross-plan line is the only edit P-F makes to another plan.
 
-- [ ] **Step 8: Run the full fast suite**
+- [x] **Step 8: Run the full fast suite**
 
 Run: `"$IOPLACE_PYTHON" -m pytest -m "not slow"`
 Expected: PASS, no new failures.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/ioplace/export/evaluation.py src/ioplace/drivers/run_placement.py \
@@ -1983,7 +1983,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 `io_fence_gp` is *not* re-measurable: P-B writes `soft.npz` and the final `placement.npz`, but the pre-legalisation fence-GP positions are never persisted (that is what `io_fence_gp_source` exists to vouch for). `verify_io_identity` therefore accepts a `measured` dict containing any subset of the three and only checks what it was given — with `io_soft` and `io_count` alone, the identity is already fully constrained.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_io_identity.py`:
 
@@ -2134,12 +2134,12 @@ def test_identity_closes_on_a_real_gcd_main_flow_run(tmp_path):
         assert p_f_diagnostics(json.load(handle)) == five
 ```
 
-- [ ] **Step 2: Run the fast tests to verify they fail**
+- [x] **Step 2: Run the fast tests to verify they fail**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_io_identity.py -m "not slow" -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'ioplace.io_identity'`.
 
-- [ ] **Step 3: Write `src/ioplace/io_identity.py`**
+- [x] **Step 3: Write `src/ioplace/io_identity.py`**
 
 ```python
 """Verification of design v2 sec 7's accounting identity
@@ -2234,18 +2234,18 @@ def p_f_diagnostics(result):
     return out
 ```
 
-- [ ] **Step 4: Run the fast tests**
+- [x] **Step 4: Run the fast tests**
 
 Run: `"$IOPLACE_PYTHON" -m pytest tests/test_io_identity.py -m "not slow" -v`
 Expected: PASS — 11 passed.
 
-- [ ] **Step 5: Run the GCD gate (only if GPU 3 is free)**
+- [x] **Step 5: Run the GCD gate (only if GPU 3 is free)**
 
 Run: `nvidia-smi` first. If GPU 3 is idle:
 `CUDA_VISIBLE_DEVICES=3 "$IOPLACE_PYTHON" -m pytest tests/test_io_identity.py -m slow -v`
 Expected: PASS if P-B has landed; `SKIPPED [1] ... P-B has not landed` otherwise. A skip is an acceptable state for this task but **not** for F's exit criterion — record it in the commit message and re-run this single test the day P-B lands.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/ioplace/io_identity.py tests/test_io_identity.py
@@ -2772,7 +2772,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: the flag and field names Tasks 1, 3, 4 and 5 introduced. Nothing consumes this task.
 
-- [ ] **Step 1: Add the P-F section to `docs/dev-env.md`**
+- [x] **Step 1: Add the P-F section to `docs/dev-env.md`**
 
 Insert immediately before `## Installed toolchain` (line 74):
 
@@ -2829,12 +2829,12 @@ between `evaluator_ref` and `evaluator_gpu` and across `mst_chunk_budget` /
 criterion from a `result.json`.
 ```
 
-- [ ] **Step 2: Verify the docs still lint and the suite is green**
+- [x] **Step 2: Verify the docs still lint and the suite is green**
 
 Run: `"$IOPLACE_PYTHON" -m pytest -m "not slow"`
 Expected: PASS, matching the Task 5 baseline.
 
-- [ ] **Step 3: Tick this plan's completed checkboxes and record the P-B state**
+- [x] **Step 3: Tick this plan's completed checkboxes and record the P-B state**
 
 If Task 5 Step 7 took the `PENDING` branch, make sure the cross-plan note is in
 `docs/superpowers/plans/2026-09-19-v2-p-b-main-flow.md` Task 7's Interfaces

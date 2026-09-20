@@ -129,6 +129,106 @@ export IOPLACE_MTKAHYPAR_THREADS=1 CUDA_VISIBLE_DEVICES=3
   --norm-policy grandplan
 ```
 
+### Straddling / anchor (P-F) flag and diagnostics
+
+All three drivers (`ioplace.drivers.run_placement --mode io`,
+`ioplace.drivers.run_placement_io.run_io`, and
+`python -m ioplace.drivers.run_main_flow`) accept `--node-anchor`, choosing
+the point at which the soft region assignment evaluates the region SDF
+(v2 design section 7):
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--node-anchor` | `center` | `center` evaluates at `x+0.5*w, y+0.5*h`, matching the freeze rule and whole-cell fence ownership; `lower_left` is the legacy anchor; `pin` is **rejected by every driver, and by `IoTerm`'s constructor before it allocates any CUDA buffer** -- it is implemented only in `ops/io_term.IoTermRef`, a small-scale bias probe, because it costs `(P,K)` instead of `(N,K)` and double-counts a cell carrying two pins of one net |
+
+The two defaults intentionally differ: the driver flag defaults to `center`,
+but the *class-level* default of `node_anchor` on `IoTerm`/`IoTermRef` stays
+`lower_left`, because fourteen existing construction sites (tests, spike
+scripts, `run_component_models.py`) build these terms with no node sizes,
+which `center` requires. Both defaults are pinned by
+`tests/test_node_anchor.py::test_the_class_default_is_lower_left_while_the_driver_default_is_center`.
+The anchor is a per-node constant offset applied where `x`/`y` leave `pos`
+(`ops/soft_assign.anchor_offsets`), so no tensor shape and no gradient
+changes; `FtTerm`/`FtTermRef` inherit it from the `IoTerm`/`IoTermRef` they
+wrap.
+
+Both evaluators (`evaluator_ref.evaluate` and `evaluator_gpu.GpuEvalContext`)
+report straddle diagnostics whose conventions -- closed four-corner box,
+cell-centre owner, movable cells only, quadrant area split with wide cells
+counted separately, pin re-attribution scored by distinct-region count -- are
+fixed once in `src/ioplace/straddle.py`'s module docstring; that file is the
+contract the GPU mirror reproduces bit-for-bit, not restated here:
+
+| Field | Meaning |
+| --- | --- |
+| `straddle_cells` | movable cells whose box `[x,x+w]x[y,y+h]` meets more than one region |
+| `straddle_area_fraction` | out-of-owner area over total movable area |
+| `straddle_pin_split_nets` | nets whose distinct-pin-region count drops when every straddling cell's pins are re-attributed to that cell's owner |
+| `straddle_out_area` / `straddle_movable_area` | the fraction's numerator and denominator |
+| `straddle_wide_cells` | cells spanning more than two lattice cells per axis, where the quadrant area split is approximate |
+| `per_node_straddle` / `per_net_pin_split` | the two per-element arrays backing the scalars above |
+
+They cost two persistent `(num_physical,)` float64 tensors on the GPU context
+and one extra `torch.unique` per `evaluate()`, so both `GpuEvalContext(...,
+straddle=False)` and `ctx.evaluate(..., straddle=False)` exist; the in-loop
+diagnostic callback in `run_placement_io` uses the per-call form to skip the
+extra cost on iterations it does not report.
+
+Parity contract (spec section 9), narrower than a blanket bit-exactness
+claim: `straddle_cells`, `straddle_pin_split_nets`, `straddle_wide_cells`,
+`per_node_straddle` and `per_net_pin_split` are **integer** fields and are
+**bit-exact** between `evaluator_ref` and `evaluator_gpu` and across
+`mst_chunk_budget`/`seg_chunk_budget`/`edge_batch_size`. `straddle_area_fraction`,
+`straddle_out_area` and `straddle_movable_area` are **float** fields and carry
+only the `rel <= 1e-12` contract `tree_wl`/`hpwl` already carry -- float64
+addition is not associative and numpy's and torch's reduction orders differ.
+A future change to either evaluator must preserve that distinction rather
+than blur it into one contract.
+
+`evaluation.npz` is at `export.evaluation.SCHEMA_VERSION = 2`; it adds
+`per_node_straddle` `(num_physical,)` uint8, `per_net_pin_split` `(num_nets,)`
+int32 (signed) and a `metadata["straddle"]` block (`None` exactly when the
+evaluator ran with `straddle=False`). `SUPPORTED_SCHEMA_VERSIONS = (1, 2)`:
+`load_evaluation` still accepts a schema-1 archive, so historical evidence
+under `results/` stays pairable; anything outside `(1, 2)` raises
+`ValueError: unsupported evaluator evidence schema`. A later subproject takes
+schema 3.
+
+`result.json` gained `node_anchor` plus the six straddle scalars
+(`straddle_cells`, `straddle_area_fraction`, `straddle_pin_split_nets`,
+`straddle_out_area`, `straddle_movable_area`, `straddle_wide_cells`), on both
+`run_placement_io.RESULT_FIELDS` and `artifacts.MAIN_FLOW_RESULT_FIELDS`;
+the latter is an exact-membership contract enforced by
+`artifacts.save_result`, so an omitted or misspelled field fails the write,
+not a downstream read.
+
+Two landed details worth calling out because they were easy to miss:
+
+- `placement.npz` is now written through `artifacts.save_positions` with
+  `kind="placement"`, in native (pre-`placedb.initialize().scale()`) units,
+  matching every other cross-phase artefact (`soft.npz` included). It had
+  been a bare `np.savez_compressed(node_x=, node_y=)` in the placer's scaled
+  frame with none of `save_positions`' stamped fields, so `load_positions`
+  raised `KeyError: 'schema_version'` on it -- caught only because
+  `test_io_identity.py`'s slow end-to-end gate round-trips `placement.npz`
+  through `load_positions`; fixed in `b3ed94c`.
+- `lg_loss` (`io_count` measured after fence LG, minus `io_fence_gp` measured
+  just before it) can be **negative** -- the fence legaliser is free to
+  remove IO crossings, not just add them. On the GCD acceptance case the
+  slow `test_io_identity.py` gate measured `io_soft=114`,
+  `io_fence_gp=121`, `io_count=115`, `io_delta_at_freeze=7`, `lg_loss=-6`
+  (the fence legaliser removed six crossings), closing the identity
+  `114 + 7 + (-6) = 115` at residual 0. `io_identity.verify_io_identity`
+  checks that closing identity against IO counts re-measured from
+  `soft.npz` and `placement.npz`; a negative `lg_loss` is legal arithmetic
+  there, even though the field name reads like a strictly non-negative
+  penalty.
+
+`ioplace.io_identity.p_f_diagnostics` extracts P-F's five-diagnostic exit
+criterion (`straddle_cells`, `straddle_area_fraction`,
+`straddle_pin_split_nets`, `io_delta_at_freeze`, `fence_compliance`) from a
+`result.json`.
+
 ## Installed toolchain
 
 | Component | Version / configuration |
