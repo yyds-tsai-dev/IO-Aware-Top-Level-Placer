@@ -253,3 +253,34 @@ def test_run_main_flow_wires_node_anchor_like_the_other_drivers():
     with pytest.raises(ValueError, match="IoTermRef-only"):
         run_soft_phase("nonexistent.json", "unused_out_dir", k=4, rtype="grid", seed=0,
                        node_anchor="pin")
+
+
+def test_run_main_flow_rejects_node_anchor_under_phase_fence_before_any_side_effect():
+    """P-F fix round 2 (review-task-1.md round 2): the test above calls
+    run_main_flow with phase='all' (its default), which delegates to
+    run_soft_phase -- and run_soft_phase re-validates node_anchor with
+    identical messages, so that test would still pass even if run_main_flow's
+    OWN checks (run_main_flow.py, right after the phase/init/norm_policy
+    checks, before os.makedirs) were moved or deleted; run_soft_phase's
+    checks would mask the regression. --phase fence is the one scenario that
+    never calls run_soft_phase (IO/FT are off after the freeze -- see
+    run_main_flow.py's own comment above its node_anchor check), so it is the
+    only case that actually exercises run_main_flow's own validation in
+    isolation. Also asserts the rejection happens before any side effect
+    (out_dir is never created) -- the property the brief's 'before any CUDA
+    allocation' requirement generalizes to."""
+    import os
+    import tempfile
+    from ioplace.drivers.run_main_flow import run_main_flow
+
+    with tempfile.TemporaryDirectory() as tmp:
+        out_dir = os.path.join(tmp, "unused_out_dir")
+        with pytest.raises(ValueError, match="IoTermRef-only"):
+            run_main_flow("nonexistent.json", out_dir, phase="fence", node_anchor="pin")
+        assert not os.path.exists(out_dir), \
+            "run_main_flow created out_dir before validating node_anchor"
+
+        with pytest.raises(ValueError, match="node_anchor must be"):
+            run_main_flow("nonexistent.json", out_dir, phase="fence", node_anchor="centre")
+        assert not os.path.exists(out_dir), \
+            "run_main_flow created out_dir before validating node_anchor"
