@@ -75,6 +75,11 @@ def test_schema_2_round_trips_the_straddle_block(tmp_path):
     assert straddle["anchor"] == "center" and straddle["box"] == "closed_four_corner"
     np.testing.assert_array_equal(data["per_node_straddle"], [0, 1, 1, 0])
     np.testing.assert_array_equal(data["per_net_pin_split"], [-1, 0, 1, -1])
+    # Fix round 1 item 2: an int array silently becoming float through npz is
+    # the classic failure in this exact code path, and the integer straddle
+    # fields carry a bit-exactness contract (global constraints).
+    assert data["per_node_straddle"].dtype == np.uint8
+    assert data["per_net_pin_split"].dtype == np.int32
 
 
 def test_evidence_without_diagnostics_records_that_fact(tmp_path):
@@ -110,3 +115,38 @@ def test_a_schema_1_archive_still_loads(tmp_path):
     data = load_evaluation(path)
     assert data["metadata"]["schema_version"] == 1
     assert data["metadata"].get("straddle") is None
+
+
+def test_a_future_schema_version_is_rejected_not_silently_misparsed(tmp_path):
+    """Fix round 1 item 1. The contract (SUPPORTED_SCHEMA_VERSIONS,
+    export/evaluation.py) is read-v1-or-v2, reject anything else -- in
+    particular a FUTURE version this reader was never taught, since a later
+    subproject takes schema 3 and the read-vs-reject line then moves. An
+    untested rejection path is exactly what would silently start mis-parsing
+    the day that version bump lands."""
+    path, _, _, _ = _straddling_evidence(tmp_path)
+    import json
+    with np.load(path, allow_pickle=False) as archive:
+        arrays = {key: archive[key] for key in archive.files}
+    metadata = json.loads(str(arrays["metadata"]))
+    metadata["schema_version"] = 3
+    arrays["metadata"] = np.asarray(json.dumps(metadata, sort_keys=True))
+    np.savez_compressed(path, **arrays)
+    with pytest.raises(ValueError, match="unsupported evaluator evidence schema"):
+        load_evaluation(path)
+
+
+def test_an_unknown_non_numeric_schema_version_is_also_rejected(tmp_path):
+    """Same contract, exercised from the other direction: schema_version
+    missing/garbage (not just numerically ahead) must not be treated as
+    supported either."""
+    path, _, _, _ = _straddling_evidence(tmp_path)
+    import json
+    with np.load(path, allow_pickle=False) as archive:
+        arrays = {key: archive[key] for key in archive.files}
+    metadata = json.loads(str(arrays["metadata"]))
+    metadata["schema_version"] = "not-a-version"
+    arrays["metadata"] = np.asarray(json.dumps(metadata, sort_keys=True))
+    np.savez_compressed(path, **arrays)
+    with pytest.raises(ValueError, match="unsupported evaluator evidence schema"):
+        load_evaluation(path)
