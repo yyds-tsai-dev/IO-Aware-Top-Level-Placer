@@ -196,7 +196,8 @@ class PhaseTimer:
     reusable primitive outside the drivers -- see the reset caveat below)
     + a host-RSS snapshot for each of sec 6.1's named phases (`read`,
     `initialize`, `gp`, `lg`, ...). `phases[name]` holds `{t_s,
-    peak_alloc_gb, peak_reserved_gb, host_rss_hwm_at_phase_end}` once the
+    peak_alloc_gb, peak_reserved_gb, baseline_alloc_gb,
+    peak_above_baseline_gb, host_rss_hwm_at_phase_end}` once the
     `with timer.phase(name):` block exits.
 
     GPU vs host isolation is NOT symmetric here:
@@ -210,6 +211,12 @@ class PhaseTimer:
         that share a process; a correct per-arm ablation still needs each
         arm in its own subprocess (the pattern `run_ablation_m2.py` does
         not currently follow either -- this is the same gap as driver B1).
+        `baseline_alloc_gb` (`torch.cuda.memory_allocated()` at phase entry)
+        and `peak_above_baseline_gb` (`peak_alloc_gb - baseline_alloc_gb`)
+        make that caveat legible instead of silent: in the main flow, the
+        soft phase's own positions are exactly this kind of live-at-entry
+        residency that `peak_alloc_gb` alone charges to whichever phase
+        opens next.
       - `host_rss_hwm_at_phase_end` is NOT phase-scoped -- see
         `host_rss_gb()`'s docstring. It is the process's cumulative peak
         RSS *as of* this phase's end, not this phase's own contribution.
@@ -243,6 +250,13 @@ class _Phase:
             # zeroes the allocator's peak-tracking counters, not any tensor
             # still resident from a previous phase in the same process.
             torch.cuda.reset_peak_memory_stats()
+        # reset_peak_memory_stats() only zeroes the high-water-mark counter,
+        # not what's actually allocated -- peak_alloc_gb below still gets
+        # charged for whatever is live at entry (e.g. the soft phase's own
+        # positions), so record what that is here and let __exit__ report it
+        # alongside peak_alloc_gb.
+        self._baseline_alloc_gb = (torch.cuda.memory_allocated() / 2**30
+                                   if torch.cuda.is_available() else None)
         self._t0 = time.perf_counter()
         return self
 
@@ -263,6 +277,10 @@ class _Phase:
                 "peak_alloc_gb": None,
                 "peak_reserved_gb": None,
                 "peak_semantics": "disabled_owned_by_lifetime_recorder",
+                "baseline_alloc_gb": self._baseline_alloc_gb,
+                # Not measured here either -- peak_alloc_gb is None on this
+                # path, so there is nothing to subtract the baseline from.
+                "peak_above_baseline_gb": None,
                 "host_rss_hwm_at_phase_end": host_rss_gb(),
             }
             return False
@@ -270,13 +288,45 @@ class _Phase:
                          if torch.cuda.is_available() else 0.0)
         peak_reserved_gb = (torch.cuda.max_memory_reserved() / 2**30
                             if torch.cuda.is_available() else 0.0)
+        baseline_alloc_gb = self._baseline_alloc_gb if self._baseline_alloc_gb is not None else 0.0
         self._timer.phases[self._name] = {
             "t_s": dt,
             "peak_alloc_gb": peak_alloc_gb,
             "peak_reserved_gb": peak_reserved_gb,
+            "baseline_alloc_gb": baseline_alloc_gb,
+            # reset_peak_memory_stats() at phase entry zeroes the HWM
+            # counter but not what was already live (this phase's docstring,
+            # "necessary but not sufficient") -- this is peak_alloc_gb minus
+            # that live baseline, i.e. what THIS phase itself added.
+            "peak_above_baseline_gb": peak_alloc_gb - baseline_alloc_gb,
             "host_rss_hwm_at_phase_end": host_rss_gb(),
         }
         return False
+
+
+def release_cuda_scratch():
+    """Release ATen's per-(handle, stream) cuBLAS workspace: a fixed
+    32 MiB (33,554,432 B) one-time retention diagnosed on the fence-bearing
+    drivers, held in a C++ static map by
+    `at::cuda::getCurrentCUDABlasHandle()` -- not a Python object, so `gc`
+    cannot see it and `torch.cuda.empty_cache()` alone cannot reclaim it (the
+    workspace is active, not cached). It is triggered by
+    `$DREAMPLACE_ROOT/dreamplace/PlaceObj.py:321`'s
+    `self.wirelength + self.density_weight.dot(self.density)`, taken only
+    when `len(self.placedb.regions) > 0` (the fence branch).
+
+    Safety: `torch._C._cuda_clearCublasWorkspaces()` is unsafe only if
+    another thread is concurrently issuing cuBLAS calls on this process.
+    Nothing here does -- `DeviceMemSampler`'s background thread only calls
+    `mem_get_info()` -- so calling this after the sampler has stopped is
+    safe.
+    """
+    if not torch.cuda.is_available():
+        return
+    torch.cuda.synchronize()
+    if hasattr(torch._C, "_cuda_clearCublasWorkspaces"):
+        torch._C._cuda_clearCublasWorkspaces()
+    torch.cuda.empty_cache()
 
 
 def _sha256(path):

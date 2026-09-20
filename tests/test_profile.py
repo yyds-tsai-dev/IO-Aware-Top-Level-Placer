@@ -22,16 +22,17 @@ def test_phase_peaks_do_not_cross_contaminate():
     # live on the device when phase "b" opens counts towards it. Earlier tests
     # in the same process can leave allocations behind that no Python object
     # references any more -- run_main_flow leaves ~32MB that survives gc and
-    # empty_cache -- so the phase's own footprint is measured against the
-    # baseline at phase entry, not against an assumed-empty device. The bug
-    # this test guards is unaffected: a's freed 300MB is not in the baseline.
-    baseline_gb = torch.cuda.memory_allocated() / 2 ** 30
+    # empty_cache -- so the phase's own footprint is measured against
+    # PhaseTimer's own baseline_alloc_gb (recorded fresh at phase entry), not
+    # against an assumed-empty device or a baseline this test computes itself.
+    # The bug this test guards is unaffected: a's freed 300MB is not in the
+    # baseline.
     with timer.phase("b"):
         small = torch.empty(20_000_000, dtype=torch.uint8, device="cuda")  # ~20MB
         del small
 
     assert timer.phases["a"]["peak_alloc_gb"] > timer.phases["b"]["peak_alloc_gb"]
-    assert timer.phases["b"]["peak_alloc_gb"] - baseline_gb < 0.05   # not 300MB
+    assert timer.phases["b"]["peak_above_baseline_gb"] < 0.05   # not 300MB
     assert timer.phases["a"]["peak_alloc_gb"] > 0.2
     for name in ("a", "b"):
         assert timer.phases[name]["t_s"] >= 0.0

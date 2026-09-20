@@ -5,6 +5,7 @@ from ioplace.drivers.run_placement import (_load_dreamplace, _place,
 from ioplace.fence_inject import inject_fence_regions
 from ioplace.netlist import netlist_from_placedb
 from ioplace.partition.mtkahypar_runner import partition_netlist
+from ioplace.profile import release_cuda_scratch
 from ioplace.region_grid import RegionGrid
 
 def _pick_escape_cell(node2fence_region_map, parts, node_size_x, node_size_y, k):
@@ -259,6 +260,12 @@ def run_two_stage(config_json, k, rtype, seed, out_json):
               if torch.cuda.is_available() else 0.0,
               "initial_cut_io_lb": int(lam), "fence_compliance": compliance,
               **metrics}
+    # Fix wave item 4: this is a fence-bearing driver too (inject_fence_regions
+    # above), so it leaves the same fixed 32 MiB cuBLAS workspace behind
+    # (profile.release_cuda_scratch's docstring). `peak_mem_mb` above is
+    # already a plain float inside `result` by this point, so releasing the
+    # workspace here cannot perturb this run's own reported numbers.
+    release_cuda_scratch()
     os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)
     with open(out_json, "w") as f:
         json.dump(result, f, indent=1)
