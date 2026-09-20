@@ -131,6 +131,12 @@ class SaState:
     (returns None, already rolled back) if it fragments or empties a region,
     otherwise returns the normalised energy delta; then exactly one of
     `commit()` / `rollback()`.
+
+    Only `span = hi - lo` is behaviourally meaningful: `total()` is affine per
+    term, so every `lo_j` offset cancels exactly in a `ΔE`, and the accept test
+    never sees an absolute normalised level, only `ΔE`. `e_norm_*` in the
+    `anneal()` report can therefore leave [0, 1] -- that is expected, not a
+    bug (adjudicated 2026 fix-round 1).
     """
 
     def __init__(self, labels0, k, ea, bin_area, cfg):
@@ -155,6 +161,19 @@ class SaState:
             e_diff(self.labels, self.labels0)], dtype=np.float64)
 
     def total(self, raw):
+        """Affine per term: `norm_j = (raw_j - lo_j) / span_j`. `lo_j` cancels
+        exactly in any `ΔE = total(raw_a) - total(raw_b)`, so only `span_j` is
+        behaviourally meaningful -- `lo_j` shifts the reported `e_norm_*`
+        level but never the accept decision (verified: forcing `lo = 0` after
+        calibration reproduces bit-identical labels, `e_raw_final` and `t0`).
+        A term whose `hi_j == lo_j` (no sensitivity across the probe moves)
+        falls back to `span_j = 1.0` below, i.e. that term enters `ΔE` in RAW
+        units with weight `beta_j` instead of being scaled to the others. This
+        is harmless for a term that truly never moves (observed for
+        `e_compact` when a fixture never changes bounding-box fill), but is
+        the one latent hazard here: a term that is flat over the probes yet
+        moves later would then be uncalibrated for the rest of the run.
+        """
         span = np.where(self.hi > self.lo, self.hi - self.lo, 1.0)
         norm = (np.asarray(raw, dtype=np.float64) - self.lo) / span
         return float(np.dot(np.asarray(self.cfg.beta, dtype=np.float64), norm)), norm
@@ -331,11 +350,17 @@ def anneal(labels0, k, ea, bin_area, cfg=None):
             break
         temp *= cfg.cooling
     raw_final = st.raw()
+    # norm_span / beta_over_span: the behaviourally meaningful quantities (see
+    # SaState.total's docstring) -- lo is only an offset that cancels in every
+    # accept decision, so a reader should look at the scales, not the levels.
+    norm_span = np.where(st.hi > st.lo, st.hi - st.lo, 1.0)
+    beta_over_span = np.asarray(cfg.beta, dtype=np.float64) / norm_span
     report = {
         "t0": float(t0), "levels_run": int(level),
         "moves_proposed": int(proposed), "moves_accepted": int(accepted),
         "beta": list(cfg.beta),
         "norm_lo": st.lo.tolist(), "norm_hi": st.hi.tolist(),
+        "norm_span": norm_span.tolist(), "beta_over_span": beta_over_span.tolist(),
         "e_raw_initial": raw_initial.tolist(), "e_raw_final": raw_final.tolist(),
         "e_norm_initial": st.total(raw_initial)[1].tolist(),
         "e_norm_final": st.total(raw_final)[1].tolist(),

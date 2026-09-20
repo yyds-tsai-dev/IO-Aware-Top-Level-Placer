@@ -142,7 +142,17 @@ def test_anneal_keeps_every_region_non_empty_and_connected():
 
 def test_anneal_reduces_the_area_imbalance_it_is_given():
     """Region 1 starts far under its target area; area-balancing moves exist,
-    so the final E_area must not be worse than the initial one."""
+    so the final E_area must not be worse than the initial one.
+
+    This monotonicity is not a general SA guarantee -- the annealer minimises
+    the beta-weighted total, and a move can legitimately trade a little
+    E_area for a lot of E_boundary/E_compact. It holds for this fixture
+    because the area deficit dominates the beta-weighted total (initial
+    E_area 29.4 versus the worst-case final E_area of 5.43 measured across
+    seeds 0-499, 0/500 failures at fix-round-1 adjudication). Keep the
+    assertion as written; do not weaken it on the strength of this comment
+    alone if a future seed disagrees.
+    """
     lab = np.zeros((16, 16), dtype=np.int16)
     lab[:, 14:] = 1
     ea = np.array([128.0, 128.0])
@@ -150,3 +160,32 @@ def test_anneal_reduces_the_area_imbalance_it_is_given():
     out, rep = sa.anneal(lab, 2, ea, 1.0, cfg)
     assert rep["e_raw_final"][0] <= rep["e_raw_initial"][0] + 1e-9
     assert int((out == 1).sum()) > int((lab == 1).sum())
+
+
+def test_lo_offset_cancels_and_does_not_affect_the_outcome(monkeypatch):
+    """Fix-round 1 adjudication: total() is affine per term, so every lo_j
+    offset cancels exactly in a Delta E and the accept test never sees an
+    absolute normalised level -- only span_j (hi_j - lo_j) is behaviourally
+    meaningful. Verified here as it was during adjudication (seed=7, 32x32):
+    forcing lo to zero right after calibration must reproduce bit-identical
+    labels, e_raw_final and t0."""
+    lab = np.zeros((32, 32), dtype=np.int16)
+    lab[:, 16:] = 1
+    ea = np.array([512.0, 512.0])
+    cfg = sa.SaConfig(seed=7)
+    out_a, rep_a = sa.anneal(lab, 2, ea, 1.0, cfg)
+
+    orig_calibrate = sa.SaState.calibrate
+
+    def _zeroed_calibrate(self, rng):
+        lo, hi, t0 = orig_calibrate(self, rng)
+        self.lo = np.zeros_like(self.lo)
+        return self.lo, self.hi, t0
+
+    monkeypatch.setattr(sa.SaState, "calibrate", _zeroed_calibrate)
+    out_b, rep_b = sa.anneal(lab, 2, ea, 1.0, cfg)
+
+    assert np.array_equal(out_a, out_b)
+    assert rep_a["e_raw_final"] == rep_b["e_raw_final"]
+    assert rep_a["t0"] == rep_b["t0"]
+    assert rep_a["levels_run"] == rep_b["levels_run"]
