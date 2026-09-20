@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 from ioplace.netlist import Netlist
+from ioplace.partition.mtkahypar_runner import partition_netlist
 from ioplace.producer import membership
 
 
@@ -50,6 +51,35 @@ def test_hierarchy_accepts_str_names_too():
     assert part[0] == part[1] and part[0] != part[2]
 
 
+def test_hierarchy_depth_caps_when_name_is_shallower_than_depth():
+    """A name with fewer path components than `depth` uses its full
+    available hierarchy (all components but the leaf), not a truncated
+    first-`depth` slice and not the "" catch-all reserved for names with
+    no '/' at all. "top/mid/x*" has exactly depth=3 components (capped to
+    "top/mid"); "top/y*" has only 2 (capped to "top"): both are shallower
+    than-or-equal-to depth, so this pins the fallback branch of `_prefix`,
+    not its `len(parts) > depth` branch."""
+    names = np.array([b"top/mid/x0", b"top/mid/x1", b"top/y0", b"top/y1"])
+    part = membership.hierarchy_membership(names, 4, 2, depth=3)
+    assert part[0] == part[1]      # "top/mid/x0", "top/mid/x1" -> "top/mid"
+    assert part[2] == part[3]      # "top/y0", "top/y1" -> "top" (capped)
+    assert part[0] != part[2]
+
+
+def test_hierarchy_ignores_names_past_num_movable():
+    """`node_names` may run past `num_movable` (real netlists append
+    terminal/IO names after the movable prefix); hierarchy_membership must
+    key off the first `num_movable` entries. A slice bug that took the last
+    `num_movable` instead would read "b/y*" and "z/term*" here instead of
+    "a/x*" and "b/y*", changing every label."""
+    base = _names([("a/x", 5), ("b/y", 3)])          # exactly num_movable=8
+    tail = _names([("z/term", 4)])                     # never movable
+    names_with_tail = np.concatenate([base, tail])      # 12 names, 8 movable
+    part_with_tail = membership.hierarchy_membership(names_with_tail, 8, 2)
+    part_reference = membership.hierarchy_membership(base, 8, 2)
+    assert np.array_equal(part_with_tail, part_reference)
+
+
 def _two_clique_netlist(n_per=20):
     """Two 20-node cliques joined by a single net -- a hypergraph any
     partitioner must cut in exactly one place."""
@@ -86,6 +116,39 @@ def test_mtkahypar_membership_shape_range_and_determinism():
     assert int(a.min()) >= 0 and int(a.max()) < 2
     b = membership.mtkahypar_membership(nl, 2, seed=0)
     assert np.array_equal(a, b)
+
+
+def _two_clique_netlist_with_terminals(n_per=20, n_term=4):
+    """Same two-clique hypergraph as `_two_clique_netlist`, plus `n_term`
+    extra fixed (non-movable) physical nodes appended after the movable
+    prefix and never referenced by any net, so num_movable < num_physical --
+    the shape the brief warned `mtkahypar_membership`'s
+    `part[:nl.num_movable]` truncation has to get right."""
+    nl = _two_clique_netlist(n_per)
+    pad = lambda arr, extra: np.concatenate([arr, extra])
+    return Netlist(
+        node_x=pad(nl.node_x, np.zeros(n_term)),
+        node_y=pad(nl.node_y, np.zeros(n_term)),
+        node_size_x=pad(nl.node_size_x, np.ones(n_term)),
+        node_size_y=pad(nl.node_size_y, np.ones(n_term)),
+        num_movable=nl.num_movable, num_terminals=n_term, num_terminal_NIs=0,
+        pin_offset_x=nl.pin_offset_x, pin_offset_y=nl.pin_offset_y,
+        pin2node=nl.pin2node, pin2net=nl.pin2net,
+        flat_net2pin=nl.flat_net2pin, flat_net2pin_start=nl.flat_net2pin_start,
+        xl=nl.xl, yl=nl.yl, xh=nl.xh, yh=nl.yh)
+
+
+def test_mtkahypar_membership_truncates_to_movable_not_physical():
+    pytest.importorskip("mtkahypar")
+    nl = _two_clique_netlist_with_terminals()
+    assert nl.num_movable < nl.num_physical
+    full = partition_netlist(nl, 2, seed=0)      # untruncated, num_physical-long
+    a = membership.mtkahypar_membership(nl, 2, seed=0)
+    assert a.dtype == np.int32 and a.shape == (nl.num_movable,)
+    assert a.shape != (nl.num_physical,)
+    # the movable prefix, in order -- not the terminal suffix and not the
+    # full physical-length array
+    assert np.array_equal(a, full[:nl.num_movable])
 
 
 def test_build_membership_dispatches_and_rejects_unknown_sources():

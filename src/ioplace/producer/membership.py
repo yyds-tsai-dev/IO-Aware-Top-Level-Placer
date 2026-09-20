@@ -28,6 +28,19 @@ def mtkahypar_membership(nl, k, epsilon=0.03, seed=0, threads=8):
 
 
 def _prefix(name, depth):
+    """First `depth` slash-separated path components of `name`, above its
+    leaf. When `name` has `depth` or fewer components (`len(parts) <=
+    depth`), there is no full `depth`-deep hierarchy to take, so the prefix
+    is explicitly capped to whatever hierarchy actually exists: all
+    components but the leaf (`len(parts) > 1`), covered by
+    test_hierarchy_depth_caps_when_name_is_shallower_than_depth. A bare leaf
+    with no '/' at all (`len(parts) == 1`) has no hierarchy above it and
+    falls into the single "" catch-all group shared by every such name,
+    rather than becoming its own singleton group -- see the "d" case in
+    test_hierarchy_groups_share_a_label_and_are_balanced. The `len(parts) >
+    1` cap branch is unreachable at the default `depth=1` (it requires
+    `2 <= len(parts) <= depth`), so it is only load-bearing for `depth >=
+    2`; it is not dead code, it is depth-conditional."""
     s = name.decode() if isinstance(name, (bytes, np.bytes_)) else str(name)
     parts = s.split("/")
     return "/".join(parts[:depth]) if len(parts) > depth else (
@@ -42,6 +55,12 @@ def hierarchy_membership(node_names, num_movable, k, depth=1):
     m = int(num_movable)
     names = list(node_names)[:m]
     keys = [_prefix(n, depth) for n in names]
+    # numpy>=2.0 changed the shape `return_inverse=True` hands back for a
+    # 1-D input (it started tracking the *original* array's shape instead of
+    # always flattening) -- pinned numpy here is 1.26.4, where `inv` stays
+    # 1-D and lines up with `keys`/`names` element-for-element, but a future
+    # numpy bump could silently reshape it and break the `group_bucket[inv]`
+    # indexing below. See preflight ruling E1.
     uniq, inv = np.unique(np.array(keys, dtype=object), return_inverse=True)
     if len(uniq) < k:
         raise ValueError(
