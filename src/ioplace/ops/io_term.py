@@ -11,7 +11,8 @@ import torch
 import torch.nn.functional as F
 
 from ioplace.ops.soft_assign import (rect_table, region_sdf_l1, softmax_stats,
-                                     chunk_p_ell, d_star_from_m, _chunks)
+                                     chunk_p_ell, d_star_from_m, _chunks,
+                                     NODE_ANCHORS, anchor_offsets, anchor_xy)
 
 DEG_BUCKET_EDGES = (2, 3, 4, 8, 16, 32, 64, 100)
 DEG_BUCKET_LABELS = ("2", "3", "4-7", "8-15", "16-31", "32-63", "64-99")
@@ -68,10 +69,16 @@ class IoTermRef(torch.nn.Module):
     """
 
     def __init__(self, csr, rects, rect2region, K, num_movable, num_physical,
-                 num_nodes, device="cuda", w_mode="unit"):
+                 num_nodes, device="cuda", w_mode="unit", *,
+                 node_anchor="lower_left", node_size_x=None, node_size_y=None,
+                 pin_csr=None):
         super().__init__()
         if w_mode not in ("unit", "inv_deg"):
             raise ValueError(f"w_mode must be 'unit' or 'inv_deg', got {w_mode!r}")
+        if node_anchor not in NODE_ANCHORS:
+            raise ValueError("node_anchor must be one of %r, got %r"
+                             % (NODE_ANCHORS, node_anchor))
+        self.node_anchor = node_anchor
         self.K = int(K)
         self.num_movable = int(num_movable)
         self.num_physical = int(num_physical)
@@ -98,16 +105,39 @@ class IoTermRef(torch.nn.Module):
         self.register_buffer("deg_bucket", torch.as_tensor(csr.deg_bucket, dtype=torch.int64,
                                                             device=device))
 
+        if node_anchor == "pin":
+            # The pin arm re-indexes the accumulation from nodes to pins; it is
+            # not an offset. Task 2 registers its buffers and forward branch --
+            # until then, and forever after if the caller forgets the CSR, this
+            # must never silently fall back to the node-level accumulation.
+            if pin_csr is None:
+                raise ValueError("node_anchor='pin' requires pin_csr "
+                                 "(ioplace.ops.io_term.build_net_pin_csr)")
+            dx = dy = None
+        else:
+            dx, dy = anchor_offsets(node_anchor, node_size_x, node_size_y,
+                                    self.num_physical, device=device)
+        self.register_buffer("anchor_dx", dx)
+        self.register_buffer("anchor_dy", dy)
+
+    def _anchor_xy(self, x, y):
+        """Apply the sec 7 anchor. A per-node *constant* offset, so every
+        gradient w.r.t. pos is unchanged; only the point at which the region
+        SDF is evaluated moves."""
+        return anchor_xy(self.anchor_dx, self.anchor_dy, x, y)
+
     def _split_xy(self, pos):
         """I4: slice pos into (x,y) over the physical nodes, detaching the
         terminal tail so it still participates in the forward value (its
         region membership is real) but never receives gradient. Filler
-        positions (index >= num_physical) are never indexed at all."""
+        positions (index >= num_physical) are never indexed at all. The sec 7
+        anchor is applied here, after the terminal detach, so every caller
+        (forward, diagnostics) sees the same anchored coordinates."""
         x = pos[:self.num_physical]
         y = pos[self.num_nodes:self.num_nodes + self.num_physical]
         x = torch.cat([x[:self.num_movable], x[self.num_movable:].detach()])
         y = torch.cat([y[:self.num_movable], y[self.num_movable:].detach()])
-        return x, y
+        return self._anchor_xy(x, y)
 
     def _forward_io(self, x, y, tau):
         """-> (L_io scalar, lam (n_active,), d_star (N,))"""
@@ -305,10 +335,21 @@ class IoTerm(torch.nn.Module):
     """
 
     def __init__(self, csr, rects, rect2region, K, num_movable, num_physical,
-                 num_nodes, device="cuda", w_mode="unit", chunk_budget: int = 8_000_000):
+                 num_nodes, device="cuda", w_mode="unit", chunk_budget: int = 8_000_000,
+                 *, node_anchor="lower_left", node_size_x=None, node_size_y=None):
         super().__init__()
         if w_mode not in ("unit", "inv_deg"):
             raise ValueError(f"w_mode must be 'unit' or 'inv_deg', got {w_mode!r}")
+        if node_anchor == "pin":
+            raise ValueError(
+                "IoTerm supports node_anchor 'lower_left' or 'center'; 'pin' is "
+                "implemented only in IoTermRef (design v2 sec 7: the pin arm "
+                "reintroduces (P,K) cost and multi-pin double counting, so it is "
+                "a small-scale bias probe, never a production path)")
+        if node_anchor not in NODE_ANCHORS:
+            raise ValueError("node_anchor must be one of %r, got %r"
+                             % (NODE_ANCHORS, node_anchor))
+        self.node_anchor = node_anchor
         self.K = int(K)
         self.num_movable = int(num_movable)
         self.num_physical = int(num_physical)
@@ -335,14 +376,26 @@ class IoTerm(torch.nn.Module):
         self.register_buffer("deg_bucket", torch.as_tensor(csr.deg_bucket, dtype=torch.int64,
                                                             device=device))
 
+        dx, dy = anchor_offsets(node_anchor, node_size_x, node_size_y,
+                                self.num_physical, device=device)
+        self.register_buffer("anchor_dx", dx)
+        self.register_buffer("anchor_dy", dy)
+
         self._n_pins_dedup = int(self.node_idx.numel())
         denom = max(self.num_physical, self._n_pins_dedup, 1)
         self.k_chunk = max(1, min(self.K, chunk_budget // denom))
         self.last_peak_chunk_elems = self.k_chunk * max(self.num_physical, self._n_pins_dedup)
 
+    def _anchor_xy(self, x, y):
+        """Apply the sec 7 anchor. A per-node *constant* offset, so every
+        gradient w.r.t. pos is unchanged; only the point at which the region
+        SDF is evaluated moves."""
+        return anchor_xy(self.anchor_dx, self.anchor_dy, x, y)
+
     def forward(self, pos, tau, lambda_io, lambda_margin=0.0, margin_m=0.0, margin_tau=1.0):
         x = pos[:self.num_physical]
         y = pos[self.num_nodes:self.num_nodes + self.num_physical]
+        x, y = self._anchor_xy(x, y)
         return _IoFn.apply(x, y, self, tau, lambda_io, lambda_margin, margin_m, margin_tau)
 
     def io_grad_l1(self, pos, tau) -> float:
@@ -373,6 +426,7 @@ class IoTerm(torch.nn.Module):
         with torch.no_grad():
             x = pos.detach()[:self.num_physical]
             y = pos.detach()[self.num_nodes:self.num_nodes + self.num_physical]
+            x, y = self._anchor_xy(x, y)
             rects = self.rects.to(dtype=x.dtype)
 
             _, t_mv, _ = softmax_stats(x[:self.num_movable], y[:self.num_movable],

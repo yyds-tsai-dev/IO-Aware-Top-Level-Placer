@@ -31,6 +31,54 @@ def region_sdf_l1(x, y, rects, rect2region, k_lo, k_hi):
     return out
 
 
+NODE_ANCHORS = ("lower_left", "center", "pin")
+
+
+def anchor_offsets(node_anchor, node_size_x, node_size_y, num_physical, *,
+                   device, dtype=torch.float64):
+    """Per-node constant (dx, dy) added to the lower-left position before any
+    region SDF is taken (design v2 sec 7).
+
+    `lower_left` returns (None, None) so callers skip the add entirely and the
+    legacy path stays bit-identical rather than merely numerically equal.
+    `center` returns half the cell size: the anchor that agrees with the freeze
+    membership (sec 3 phase 2) and with whole-cell fence ownership.
+
+    `pin` never reaches here. It is not an offset at all -- it re-indexes the
+    whole accumulation from nodes to pins, reintroducing the (P,K) cost and the
+    multi-pin double counting that
+    docs/superpowers/specs/2026-08-06-m2-differentiable-io-design.md:105 chose
+    node anchoring to avoid -- and is implemented only in IoTermRef.
+    """
+    if node_anchor == "lower_left":
+        return None, None
+    if node_anchor != "center":
+        raise ValueError(
+            "anchor_offsets handles 'lower_left' and 'center'; got %r "
+            "(anchor 'pin' is not an offset and is implemented only in IoTermRef)"
+            % (node_anchor,))
+    if node_size_x is None or node_size_y is None:
+        raise ValueError("node_anchor='center' requires node_size_x and node_size_y")
+    dx = torch.as_tensor(node_size_x, dtype=dtype, device=device).reshape(-1)
+    dy = torch.as_tensor(node_size_y, dtype=dtype, device=device).reshape(-1)
+    if dx.shape != (num_physical,) or dy.shape != (num_physical,):
+        raise ValueError(
+            "node_size_x/node_size_y must both have shape (%d,), got %s and %s"
+            % (num_physical, tuple(dx.shape), tuple(dy.shape)))
+    return 0.5 * dx, 0.5 * dy
+
+
+def anchor_xy(anchor_dx, anchor_dy, x, y):
+    """Apply the sec 7 anchor. A per-node *constant* offset, so every gradient
+    w.r.t. pos is unchanged; only the point at which the region SDF is
+    evaluated moves. Shared by IoTermRef and IoTerm (and, through their
+    `_anchor_xy` methods, by FtTerm/FtTermRef) so the anchor logic lives in
+    exactly one place rather than being pasted into both classes."""
+    if anchor_dx is None:
+        return x, y
+    return x + anchor_dx.to(dtype=x.dtype), y + anchor_dy.to(dtype=x.dtype)
+
+
 def _chunks(K, chunk):
     if chunk is None or chunk >= K:
         return [(0, K)]

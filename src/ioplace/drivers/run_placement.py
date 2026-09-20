@@ -531,6 +531,16 @@ def build_parser():
                     help="write norm_trace.jsonl here (default "
                          "<out>.norm_trace.jsonl for non-legacy policies, "
                          "no trace for legacy)")
+    # v2 P-F (design sec 7): the anchor at which the soft region assignment is
+    # evaluated. mode=io only; no-op for the other modes.
+    ap.add_argument("--node-anchor", choices=["lower_left", "center", "pin"],
+                    default="center",
+                    help="anchor for the soft region assignment: 'center' "
+                         "(default) evaluates the SDF at x+0.5*w, y+0.5*h, "
+                         "matching the freeze rule and whole-cell fence "
+                         "ownership; 'lower_left' is the legacy anchor; 'pin' "
+                         "is rejected by every driver -- it exists only in "
+                         "IoTermRef as a small-scale bias probe")
     return ap
 
 
@@ -568,7 +578,8 @@ def main():
               norm_policy=args.norm_policy, norm_p=args.norm_p,
               norm_ramp_period=args.norm_ramp_period, norm_wt_max=args.norm_wt_max,
               norm_probe_every=args.norm_probe_every,
-              norm_target_share=args.norm_target_share, norm_trace=args.norm_trace)
+              norm_target_share=args.norm_target_share, norm_trace=args.norm_trace,
+              node_anchor=args.node_anchor)
 
 if __name__ == "__main__":
     main()

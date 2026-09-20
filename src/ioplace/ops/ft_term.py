@@ -152,6 +152,7 @@ class FtTerm(torch.nn.Module):
         meta = self.io_term
         x = pos[:meta.num_physical]
         y = pos[meta.num_nodes:meta.num_nodes + meta.num_physical]
+        x, y = meta._anchor_xy(x, y)          # design v2 sec 7: same anchor as IoTerm
         return _FtFn.apply(x, y, meta, self.D, self.home, tau, lambda_io,
                            io_scale, ft_scale, lambda_margin, margin_m, margin_tau)
 
@@ -168,6 +169,11 @@ class FtTermRef(torch.nn.Module):
     """Independent dense autograd oracle. For small numerical tests only."""
     def __init__(self, io_term, D):
         super().__init__()
+        if getattr(io_term, "node_anchor", "lower_left") == "pin":
+            raise ValueError(
+                "FtTermRef reads io_term's node-level CSR (node_idx/net_idx); a "
+                "pin-anchored IoTermRef exposes a pin-level one, so the two cannot "
+                "be combined (design v2 sec 7)")
         self.io_term = io_term
         self.register_buffer("D", torch.as_tensor(D, dtype=torch.float64,
                                                   device=io_term.rects.device).clone())
@@ -187,6 +193,7 @@ class FtTermRef(torch.nn.Module):
         y = pos[meta.num_nodes:meta.num_nodes + meta.num_physical]
         x = torch.cat((x[:meta.num_movable], x[meta.num_movable:].detach()))
         y = torch.cat((y[:meta.num_movable], y[meta.num_movable:].detach()))
+        x, y = meta._anchor_xy(x, y)
         rects = meta.rects.to(dtype=x.dtype)
         m, t, am = softmax_stats(x, y, rects, meta.rect2region, meta.K, tau)
         sdf = region_sdf_l1(x, y, rects, meta.rect2region, 0, meta.K)

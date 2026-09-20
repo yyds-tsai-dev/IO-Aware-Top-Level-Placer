@@ -68,7 +68,9 @@ RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  # and artefact.
                  "norm_policy", "norm_p", "norm_ramp_period", "norm_wt_max",
                  "norm_probe_every", "norm_target_share", "norm_trace",
-                 "lambda_ft_final")
+                 "lambda_ft_final",
+                 # v2 P-F (design sec 7): soft-assign anchor
+                 "node_anchor")
 
 
 #: Policy B's default IO force share when `--norm-target-share` is silent
@@ -213,11 +215,18 @@ def run_io(config_json, k, rtype, seed, out_json, *,
            discrete_mode="none", discrete_max_active=65536,
            norm_policy="legacy", norm_p=1, norm_ramp_period=100,
            norm_wt_max=1.0, norm_probe_every=50, norm_target_share=None,
-           norm_trace=None):
+           norm_trace=None, node_anchor="center"):
     if discrete_mode not in ("none","ce","refine","ce_refine") or discrete_max_active<0:
         raise ValueError("invalid discrete postprocess configuration")
     if callback_order not in ("legacy", "atomic"):
         raise ValueError("callback_order must be legacy or atomic")
+    if node_anchor not in ("lower_left", "center", "pin"):
+        raise ValueError("node_anchor must be lower_left, center or pin, got %r"
+                         % (node_anchor,))
+    if node_anchor == "pin":
+        raise ValueError(
+            "node_anchor='pin' is an IoTermRef-only bias probe (design v2 sec 7); "
+            "no driver may run it -- use src/scripts/run_anchor_comparison.py")
     if wl_reweight not in ("off", "crossings", "ft_rg"):
         raise ValueError("wl_reweight must be off, crossings or ft_rg")
     if f_ft_max < 0 or (f_ft_max > 0 and (callback_order != "atomic" or rho_max <= 0)):
@@ -361,7 +370,9 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         csr = build_net_node_csr(nl, ignore_net_degree)
         io_term = IoTerm(csr=csr, rects=rects, rect2region=r2k, K=k,
                          num_movable=nl.num_movable, num_physical=nl.num_physical,
-                         num_nodes=placedb.num_nodes, device="cuda", w_mode=w_mode)
+                         num_nodes=placedb.num_nodes, device="cuda", w_mode=w_mode,
+                         node_anchor=node_anchor,
+                         node_size_x=nl.node_size_x, node_size_y=nl.node_size_y)
         ft_term = None
         distance = None
         if f_ft_max > 0 or topology_diagnostics:
@@ -951,6 +962,7 @@ def run_io(config_json, k, rtype, seed, out_json, *,
             "rho_max": rho_max, "tau_hi": tau_hi, "tau_lo": tau_lo,
             "of_on": of_on, "of_end": of_end, "alpha_io": alpha_io,
             "w_mode": w_mode, "d_max": ignore_net_degree, "rho_margin": rho_margin,
+            "node_anchor": node_anchor,
             "margin_m": margin_m, "lambda_io_final": lambda_io_final,
             "lambda_ft_final": lambda_ft_final,
             "norm_policy": norm_policy, "norm_p": norm_p,
