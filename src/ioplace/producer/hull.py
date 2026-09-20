@@ -5,7 +5,10 @@ docs/research/2026-09-18-grandplan-digest.md section 2.1, with the constants
 fixed by the v2 spec section 2: m=16, q=0.90, alpha=0.25, K_dir=64, so quickhull
 never sees more than 2*m*(K_dir+1) = 2080 points per region even at 11M cells.
 """
+from dataclasses import dataclass
+
 import numpy as np
+import torch
 from scipy.spatial import ConvexHull, QhullError
 
 DIRECTIONS_M = 16
@@ -156,3 +159,128 @@ def build_hull(pts, a_max, m=DIRECTIONS_M, q=QUANTILE_Q, alpha=BAND_ALPHA,
     return shrink_to_area(
         convex_hull(reduce_candidates(pts, m=m, q=q, alpha=alpha, k_dir=k_dir)),
         a_max)
+
+
+@dataclass
+class AnchorTables:
+    """Eq.1's two anchor fields, rasterised onto a lattice x lattice bin grid.
+
+    pull_off (K, L*L, 2) fp16 : Pi_{H_k}(centre(b)) - centre(b), zero inside H_k.
+    pull_on  (K, L*L)   bool  : centre(b) is OUTSIDE H_k (Eq.1's 1{x not in Omega_k}).
+    push_off (K, L*L, 2) fp16 : mean over foreign hulls s != k containing b of
+                                Pi_{dH_s}(centre(b)), minus centre(b).
+    push_cnt (K, L*L)   uint8 : how many foreign hulls contain centre(b).
+
+    Offsets rather than absolute coordinates because fp16 has ~11 mantissa bits:
+    an absolute die coordinate would quantise to ~0.1% of the die, while the
+    offset's fp16 error is negligible against a bin width. The consumer
+    reconstructs anchor = centre(bin(x)) + offset.
+
+    (mean, count) rather than one anchor per foreign hull because
+    sum_s ||x - a_s||^2 = n*||x - abar||^2 + (sum_s ||a_s||^2 - n*||abar||^2):
+    the bracket does not depend on x, so this reproduces Eq.2's push gradient
+    exactly and Eq.1's push value up to a frozen constant, while keeping the
+    per-cell cost O(1) instead of O(K) -- the hotspot spec section 2 calls out.
+    """
+    lattice: int
+    die: tuple
+    pull_off: torch.Tensor
+    pull_on: torch.Tensor
+    push_off: torch.Tensor
+    push_cnt: torch.Tensor
+
+    @property
+    def k(self):
+        return int(self.pull_off.shape[0])
+
+
+def nearest_on_polygon_boundary(px, py, verts, chunk=16384):
+    """Nearest point on a CONVEX polygon's boundary, plus an inside test.
+
+    For a convex H this single routine yields both of Eq.1's anchors: the
+    nearest boundary point is Pi_{H}(x) when x is outside H and Pi_{dH}(x) when
+    x is inside it. Ties between equidistant edges break on the first edge in
+    vertex order (torch.argmin's own rule) -- deterministic, which is all the
+    frozen-anchor semantics require.
+
+    px, py: (B,) float64 tensors. verts: (V,2) counter-clockwise.
+    Returns (proj (B,2) float64, inside (B,) bool) on px's device.
+    """
+    dev = px.device
+    v = torch.as_tensor(np.asarray(verts, dtype=np.float64), device=dev)
+    a = v
+    e = torch.roll(v, -1, dims=0) - v                       # (V,2) edge vectors
+    ee = (e * e).sum(dim=1).clamp(min=1e-30)                # (V,)
+    nrm = torch.stack([e[:, 1], -e[:, 0]], dim=1)           # outward normal (CCW)
+    n = int(px.shape[0])
+    proj = torch.empty((n, 2), dtype=torch.float64, device=dev)
+    inside = torch.empty((n,), dtype=torch.bool, device=dev)
+    for lo in range(0, n, chunk):
+        hi = min(lo + chunk, n)
+        qx, qy = px[lo:hi], py[lo:hi]
+        wx = qx.unsqueeze(1) - a[:, 0].unsqueeze(0)         # (c,V)
+        wy = qy.unsqueeze(1) - a[:, 1].unsqueeze(0)
+        t = ((wx * e[:, 0] + wy * e[:, 1]) / ee).clamp(0.0, 1.0)
+        cxv = a[:, 0] + t * e[:, 0]
+        cyv = a[:, 1] + t * e[:, 1]
+        d2 = (qx.unsqueeze(1) - cxv) ** 2 + (qy.unsqueeze(1) - cyv) ** 2
+        j = d2.argmin(dim=1, keepdim=True)
+        proj[lo:hi, 0] = cxv.gather(1, j).squeeze(1)
+        proj[lo:hi, 1] = cyv.gather(1, j).squeeze(1)
+        inside[lo:hi] = ((wx * nrm[:, 0] + wy * nrm[:, 1]) <= 0.0).all(dim=1)
+    return proj, inside
+
+
+def anchor_tables(hulls, die, lattice, device="cuda", bin_chunk=16384):
+    """Rasterise Eq.1's anchors for every hull onto the lattice bin grid.
+
+    hulls: list of (V,2) counter-clockwise vertex arrays, one per region, in
+    region-id order. die: (xl, yl, xh, yh) in the SAME coordinate system the
+    consumer's positions are in (inside GP that is the scaled post-initialize()
+    system, not the native one).
+    """
+    xl, yl, xh, yh = (float(v) for v in die)
+    L = int(lattice)
+    cw, ch = (xh - xl) / L, (yh - yl) / L
+    idx = torch.arange(L, dtype=torch.float64, device=device)
+    gx = (xl + (idx + 0.5) * cw).repeat(L)                  # bin b = iy*L + ix
+    gy = (yl + (idx + 0.5) * ch).repeat_interleave(L)
+    centre = torch.stack([gx, gy], dim=1)
+    K, B = len(hulls), L * L
+
+    pull_off = torch.zeros((K, B, 2), dtype=torch.float16, device=device)
+    pull_on = torch.zeros((K, B), dtype=torch.bool, device=device)
+    own_off = torch.zeros((K, B, 2), dtype=torch.float32, device=device)
+    own_in = torch.zeros((K, B), dtype=torch.bool, device=device)
+    sum_off = torch.zeros((B, 2), dtype=torch.float64, device=device)
+    sum_n = torch.zeros((B,), dtype=torch.int32, device=device)
+
+    zero2 = torch.zeros((B, 2), dtype=torch.float64, device=device)
+    for k, verts in enumerate(hulls):
+        # Ruling D11: nearest_on_polygon_boundary builds (chunk, V) temporaries
+        # and nothing bounds V below 2*m*(k_dir+1); at V=2048 a 16384 chunk
+        # would be ~268 MiB per temporary. Measured V after reduction is 6-13,
+        # so this clamp never binds in practice and costs nothing.
+        v_count = len(np.asarray(verts, dtype=np.float64).reshape(-1, 2))
+        chunk = max(1024, bin_chunk // max(1, v_count // 16))
+        proj, inside = nearest_on_polygon_boundary(gx, gy, verts, chunk=chunk)
+        off = proj - centre
+        pull_off[k] = torch.where(inside.unsqueeze(1), zero2, off).half()
+        pull_on[k] = ~inside
+        own_off[k] = off.float()
+        own_in[k] = inside
+        sum_off += torch.where(inside.unsqueeze(1), off, zero2)
+        sum_n += inside.to(torch.int32)
+
+    push_off = torch.zeros((K, B, 2), dtype=torch.float16, device=device)
+    push_cnt = torch.zeros((K, B), dtype=torch.uint8, device=device)
+    for k in range(K):
+        n = (sum_n - own_in[k].to(torch.int32)).clamp(min=0)
+        s = sum_off - torch.where(own_in[k].unsqueeze(1),
+                                  own_off[k].double(), zero2)
+        mean = s / n.clamp(min=1).unsqueeze(1).double()
+        push_off[k] = torch.where((n > 0).unsqueeze(1), mean, zero2).half()
+        push_cnt[k] = n.clamp(max=255).to(torch.uint8)
+
+    return AnchorTables(lattice=L, die=(xl, yl, xh, yh), pull_off=pull_off,
+                        pull_on=pull_on, push_off=push_off, push_cnt=push_cnt)
