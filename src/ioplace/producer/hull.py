@@ -166,10 +166,17 @@ def build_hull(pts, a_max, m=DIRECTIONS_M, q=QUANTILE_Q, alpha=BAND_ALPHA,
 class AnchorTables:
     """Eq.1's two anchor fields, rasterised onto a lattice x lattice bin grid.
 
-    pull_off (K, L*L, 2) fp16 : Pi_{H_k}(centre(b)) - centre(b), zero inside H_k.
+    Both offset tables are stored in BIN WIDTHS, i.e. the x component divided
+    by (xh-xl)/L and the y component by (yh-yl)/L -- NOT in the die's own
+    units. The consumer reconstructs
+    `anchor = centre(bin(x)) + offset * (bin_w, bin_h)`;
+    `grouping_term.GroupingTerm._lookup` is the one place that does it.
+
+    pull_off (K, L*L, 2) fp16 : (Pi_{H_k}(centre(b)) - centre(b)) / bin size,
+                                zero inside H_k.
     pull_on  (K, L*L)   bool  : centre(b) is OUTSIDE H_k (Eq.1's 1{x not in Omega_k}).
     push_off (K, L*L, 2) fp16 : mean over foreign hulls s != k containing b of
-                                Pi_{dH_s}(centre(b)), minus centre(b).
+                                (Pi_{dH_s}(centre(b)) - centre(b)) / bin size.
     push_cnt (K, L*L)   uint8 : how many foreign hulls contain centre(b).
 
     Offsets rather than absolute coordinates because fp16 has ~11 mantissa bits:
@@ -182,7 +189,19 @@ class AnchorTables:
     in place of Pi_H(x_cell) can differ by up to a bin's half-diagonal): fp16
     does not add a dominant error term, and an fp32 pull table would cost
     +16 MiB at K=16 (+32 MiB at K=32) of GPU memory for no measurable gain.
-    The consumer reconstructs anchor = centre(bin(x)) + offset.
+
+    Dividing by the bin size does not change that bound -- it is the SAME
+    statement in different units (a normalised offset is at most L, and
+    2**-11 * L == L/2048 == 0.25 bin at L = 512) -- but it removes the bound's
+    dependence on absolute die size from the fp16 *range*. Storing raw scaled
+    units made the largest representable offset the die extent, so the
+    `>= 32768` overflow guard below was a hard ceiling on die size: P-C Task 10
+    measured `mempool_tile_wrap` at 4168 scaled units with 127,433 movable
+    cells, and a 30M-cell NanGate45 die is ~15.4x that linearly (~64,000),
+    which would have aborted inside the first hull rebuild -- at the scale this
+    project exists to reach. Normalised, the largest magnitude any die can
+    produce is L itself, so the guard is on the lattice and is unreachable at
+    every lattice this codebase uses.
 
     (mean, count) rather than one anchor per foreign hull because
     sum_s ||x - a_s||^2 = n*||x - abar||^2 + (sum_s ||a_s||^2 - n*||abar||^2):
@@ -239,6 +258,43 @@ def nearest_on_polygon_boundary(px, py, verts, chunk=16384):
     return proj, inside
 
 
+FP16_OFFSET_LIMIT = 32768.0
+
+
+def check_anchor_table_range(die, lattice):
+    """Precondition of `anchor_tables`' fp16 offset store, factored out so a
+    driver can fail fast BEFORE it starts a GP instead of aborting inside the
+    first hull rebuild (P-C Task 10 fix round 1, finding I3).
+
+    Two conditions, both `ValueError` rather than `assert` because python -O
+    strips asserts and these are input contracts:
+
+    * The die must have a strictly positive extent on both axes. The offset
+      tables are normalised by the bin size, so a degenerate die would divide
+      by zero and store `nan`/`inf`.
+    * A normalised offset is at most the lattice L (the largest offset an axis
+      can produce is that axis's whole extent, which is L bins), so L must stay
+      under fp16's range with margin. `FP16_OFFSET_LIMIT` keeps the 2x margin
+      against fp16's 65504 that the previous, die-extent-based form used; at
+      the lattice 512 this codebase uses, the limit is 64x away and unreachable
+      -- which is the point of the normalisation (see `AnchorTables`).
+    """
+    xl, yl, xh, yh = (float(v) for v in die)
+    if not (xh > xl and yh > yl):
+        raise ValueError(
+            f"anchor_tables: die {(xl, yl, xh, yh)!r} must have a positive "
+            "extent on both axes; the fp16 offsets are stored in bin widths, "
+            "so a zero extent divides by zero")
+    L = int(lattice)
+    if L <= 0:
+        raise ValueError(f"anchor_tables: lattice must be positive, got {L!r}")
+    if L >= FP16_OFFSET_LIMIT:
+        raise ValueError(
+            f"anchor_tables: lattice {L} >= {FP16_OFFSET_LIMIT} would overflow "
+            "the fp16 pull_off/push_off tables, whose offsets are stored in "
+            "bin widths and so are bounded by the lattice")
+
+
 def anchor_tables(hulls, die, lattice, device="cuda", bin_chunk=16384):
     """Rasterise Eq.1's anchors for every hull onto the lattice bin grid.
 
@@ -246,19 +302,14 @@ def anchor_tables(hulls, die, lattice, device="cuda", bin_chunk=16384):
     region-id order. die: (xl, yl, xh, yh) in the SAME coordinate system the
     consumer's positions are in (inside GP that is the scaled post-initialize()
     system, not the native one).
+
+    The returned offsets are in BIN WIDTHS -- see `AnchorTables`.
     """
+    check_anchor_table_range(die, lattice)
     xl, yl, xh, yh = (float(v) for v in die)
-    # fp16's finite maximum is 65504; an offset can be as large as the die
-    # extent (a hull can degenerate to a point at one corner while a bin sits
-    # at the opposite one), so cap the extent at 32768 -- a 2x margin -- to
-    # keep pull_off/push_off from overflowing to inf. A real ValueError, not
-    # an assert, since python -O strips asserts and this is an input contract.
-    if max(xh - xl, yh - yl) >= 32768.0:
-        raise ValueError(
-            f"anchor_tables: die extent {max(xh - xl, yh - yl)!r} >= 32768.0 "
-            "would overflow the fp16 pull_off/push_off tables")
     L = int(lattice)
     cw, ch = (xh - xl) / L, (yh - yl) / L
+    bin_size = torch.tensor([cw, ch], dtype=torch.float64, device=device)
     idx = torch.arange(L, dtype=torch.float64, device=device)
     gx = (xl + (idx + 0.5) * cw).repeat(L)                  # bin b = iy*L + ix
     gy = (yl + (idx + 0.5) * ch).repeat_interleave(L)
@@ -281,7 +332,9 @@ def anchor_tables(hulls, die, lattice, device="cuda", bin_chunk=16384):
         v_count = len(np.asarray(verts, dtype=np.float64).reshape(-1, 2))
         chunk = max(1024, bin_chunk // max(1, v_count // 16))
         proj, inside = nearest_on_polygon_boundary(gx, gy, verts, chunk=chunk)
-        off = proj - centre
+        # in BIN WIDTHS from here down: every consumer of pull_off/push_off
+        # multiplies by `bin_size` again (AnchorTables' docstring).
+        off = (proj - centre) / bin_size
         pull_off[k] = torch.where(inside.unsqueeze(1), zero2, off).half()
         pull_on[k] = ~inside
         own_off[k] = off.float()

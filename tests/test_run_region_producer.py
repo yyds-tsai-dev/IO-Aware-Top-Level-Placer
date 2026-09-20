@@ -103,6 +103,68 @@ def test_the_driver_registers_the_group_term_with_no_activation_ramp():
     assert nz.states["group"].lam_applied == pytest.approx(lam)
 
 
+def test_empty_region_in_the_prior_is_refused_with_a_usable_message():
+    """Fix round 1, finding I1. An empty region has no safe placeholder hull:
+    hull.anchor_tables reads "bin centre inside hull s" as "s pushes every
+    other region's cells away from that bin", and both candidates -- the die
+    box and a zero-area polygon -- test as containing every bin
+    (hull.py:222,238), so either would silently corrupt Eq.1."""
+    from ioplace.drivers.run_region_producer import check_every_region_nonempty
+    check_every_region_nonempty(np.array([0, 1, 1, 0]), 2, "mtkahypar")
+    with pytest.raises(ValueError) as exc:
+        check_every_region_nonempty(np.array([0, 0, 2, 2]), 3, "mtkahypar")
+    msg = str(exc.value)
+    assert "[1]" in msg and "mtkahypar" in msg
+    assert "Lower --k" in msg, "the message must tell the operator what to do"
+
+
+def test_the_die_box_placeholder_hull_would_have_contained_every_bin():
+    """Why I1 is a refusal and not a repair: this is what the removed
+    placeholder did. Region 1's hull is the die, so every bin centre is inside
+    it, so region 0 gets push_cnt == 1 everywhere -- a die-wide spurious push
+    on every one of its cells."""
+    import torch
+    from ioplace.producer import hull as hull_mod
+    die = (0.0, 0.0, 8.0, 8.0)
+    small = np.array([[2., 2.], [3., 2.], [3., 3.], [2., 3.]])
+    die_box = np.array([[0., 0.], [8., 0.], [8., 8.], [0., 8.]])
+    t = hull_mod.anchor_tables([small, die_box], die, lattice=8, device="cpu")
+    assert int(t.push_cnt[0].min()) == 1        # every bin, not just a few
+    # a zero-area placeholder is no better: it too contains every bin
+    degenerate = np.array([[4., 4.], [4., 4.], [4., 4.]])
+    t2 = hull_mod.anchor_tables([small, degenerate], die, lattice=8,
+                                device="cpu")
+    assert int(t2.push_cnt[0].min()) == 1
+
+
+def test_producer_refuses_an_unpopulatable_k_before_it_starts_placing(tmp_path):
+    """The same check, wired where it belongs: simple.json has 8 movable
+    nodes, so k=9 cannot populate every region, and the driver must refuse in
+    the `prior` phase -- before placedb.initialize() and before any GP."""
+    from ioplace.drivers.run_region_producer import run_producer
+    with pytest.raises(ValueError, match="no movable cells"):
+        run_producer(CFG, str(tmp_path / "bad"), k=9, extract_bins=32,
+                     t_hull=20, probe_every=20, gp_iterations=20)
+
+
+def test_anchor_table_range_is_checked_before_the_gp_starts(tmp_path,
+                                                             monkeypatch):
+    """Fix round 1, finding I3. anchor_tables is first called from inside the
+    iteration callback, so a violated fp16 precondition used to abort mid-GP.
+    Drive the predicate over its limit and check the driver refuses in the
+    `initialize` phase, before NonLinearPlace is constructed at all."""
+    from ioplace.drivers import run_region_producer as mod
+    from ioplace.producer import hull as hull_mod
+    monkeypatch.setattr(mod, "LATTICE", int(hull_mod.FP16_OFFSET_LIMIT))
+    built = []
+    monkeypatch.setattr(hull_mod, "anchor_tables",
+                        lambda *a, **kw: built.append(1))
+    with pytest.raises(ValueError, match="lattice"):
+        mod.run_producer(CFG, str(tmp_path / "bad"), k=2, extract_bins=32,
+                         t_hull=20, probe_every=20, gp_iterations=20)
+    assert not built, "the check must fire before any hull rebuild"
+
+
 def test_rectify_falls_back_to_32_bins_and_records_the_path():
     """Ruling D3: exhausting the rect budget at 64 bins is a driver fallback,
     not an abort and not an operator instruction."""
@@ -210,6 +272,39 @@ def test_grad_l1_is_zero_without_tables():
     assert term.grad_l1(torch.zeros(2, dtype=torch.float64)) == 0.0
 
 
+def test_grouping_term_is_exact_on_a_30m_scale_die(tmp_path):
+    """Fix round 1, finding I3, end to end through the consumer rather than
+    just through anchor_tables. 64,000 scaled units is roughly a 30M-cell
+    NanGate45 die (~15.4x mempool_tile_wrap's measured 4168 linearly) -- the
+    size at which the old die-extent fp16 guard aborted inside the first hull
+    rebuild. With the offsets stored in bin widths the anchor the grouping
+    term reconstructs is still within the documented 1/4 bin of the exact
+    projection, and Eq.1's energy is finite."""
+    import torch
+    from ioplace.producer import hull as hull_mod
+    from ioplace.producer.grouping_term import GroupingTerm
+    die = (0.0, 0.0, 64000.0, 64000.0)
+    L = 512
+    bin_w = 64000.0 / L
+    sq = np.array([[0., 0.], [8000., 0.], [8000., 8000.], [0., 8000.]])
+    t = GroupingTerm(part=np.zeros(2, dtype=np.int64),
+                     node_size_x=np.zeros(2), node_size_y=np.zeros(2),
+                     num_movable=2, num_nodes=2, device="cpu")
+    t.set_tables(hull_mod.anchor_tables([sq], die, lattice=L, device="cpu"))
+    # one cell at the far corner (the largest offset the table must carry),
+    # one inside the hull
+    pos = torch.tensor([63000.0, 4000.0, 63000.0, 4000.0], dtype=torch.float64)
+    x, y = t._centres(pos)
+    cx, cy, pull_off, pull_on, _, _ = t._lookup(x, y)
+    anchor_xy = torch.stack([cx + pull_off[:, 0], cy + pull_off[:, 1]], dim=1)
+    exact, inside = hull_mod.nearest_on_polygon_boundary(cx, cy, sq)
+    assert bool(pull_on[0]) and not bool(pull_on[1])
+    assert (anchor_xy[0] - exact[0]).abs().max() <= 0.25 * bin_w
+    e = float(t(pos, lam=1.0))
+    assert np.isfinite(e) and e > 0.0
+    assert np.isfinite(t.grad_l1(pos))
+
+
 @pytest.mark.slow
 def test_producer_emits_all_four_artefacts_on_simple(tmp_path):
     from ioplace.drivers.run_region_producer import run_producer
@@ -284,16 +379,37 @@ def test_producer_is_reproducible_with_the_same_seeds(tmp_path):
     from ioplace.drivers.run_region_producer import run_producer
     a = str(tmp_path / "a")
     b = str(tmp_path / "b")
-    for out in (a, b):
-        run_producer(CFG, out, k=2, extract_bins=32, seed=0, sa_seed=0,
-                     t_hull=20, probe_every=20, dp_seed=1000, deterministic=1,
-                     gp_iterations=200)
+    res = [run_producer(CFG, out, k=2, extract_bins=32, seed=0, sa_seed=0,
+                        t_hull=20, probe_every=20, dp_seed=1000,
+                        deterministic=1, gp_iterations=200)
+           for out in (a, b)]
     pa = artifacts.load_membership(os.path.join(a, "membership.npz")).part
     pb = artifacts.load_membership(os.path.join(b, "membership.npz")).part
     assert np.array_equal(pa, pb)
     ja = json.load(open(os.path.join(a, "regions.json")))
     jb = json.load(open(os.path.join(b, "regions.json")))
     assert ja["regions"] == jb["regions"]
+    sa = artifacts.load_positions(os.path.join(a, "seed.npz"))
+    sb = artifacts.load_positions(os.path.join(b, "seed.npz"))
+    assert np.array_equal(sa.node_x, sb.node_x)
+    assert np.array_equal(sa.node_y, sb.node_y)
+    # Fix round 1, finding I2: pin run_producer's
+    # `np.random.seed(params.random_seed)` immediately before NonLinearPlace.
+    # BasicPlace draws its centre noise and filler init from numpy's *global*
+    # RNG, so without that line the two runs start from different positions.
+    # The four assertions above do NOT catch it on this benchmark -- measured
+    # with the line deleted, `seed.npz` stays bit-identical because LG snaps
+    # all 8 cells onto the same sites, and the 32-bin regions quantise the
+    # difference away. What does catch it is anything read BEFORE
+    # legalization: with the line deleted, hpwl_gp was 254.32931518554688 vs
+    # 254.13211059570312, final_overflow 0.42511194944381714 vs
+    # 0.42377859354019165, and ratio_ema_final 0.21657921539685232 vs
+    # 0.21139078542032638. Compared bitwise, not approximately: with the line
+    # present these are the same float.
+    for field in ("hpwl_gp", "final_overflow", "ratio_ema_final"):
+        assert res[0][field] == res[1][field], field
+    assert [p["grad_l1_wl"] for p in res[0]["probes"]] == \
+           [p["grad_l1_wl"] for p in res[1]["probes"]]
 
 
 @pytest.mark.slow

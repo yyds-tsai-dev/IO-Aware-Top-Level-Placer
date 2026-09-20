@@ -64,7 +64,16 @@ class GroupingTerm(torch.nn.Module):
 
     def _lookup(self, x, y):
         """-> (bin_centre_x, bin_centre_y, pull_off, pull_on, push_off, push_cnt),
-        all detached: the anchor is frozen inside the gradient."""
+        all detached: the anchor is frozen inside the gradient.
+
+        The returned offsets are in the die's own units. `AnchorTables` stores
+        them in BIN WIDTHS -- fp16's range then depends on the lattice rather
+        than on the die size, which is what keeps a 30M-cell die from tripping
+        the overflow guard (P-C Task 10 fix round 1, finding I3) -- so this is
+        the one place that multiplies them back by the bin size. One extra
+        (M, 2) multiply per lookup; the fp16 quantisation is unchanged, still
+        bounded by 1/4 bin.
+        """
         t = self.tables
         xl, yl, xh, yh = t.die
         L = t.lattice
@@ -76,8 +85,12 @@ class GroupingTerm(torch.nn.Module):
             k = self.part
             cx = xl + (ix.double() + 0.5) * cw
             cy = yl + (iy.double() + 0.5) * ch
-            return (cx, cy, t.pull_off[k, b].double(), t.pull_on[k, b],
-                    t.push_off[k, b].double(), t.push_cnt[k, b].double())
+            bin_size = torch.tensor([cw, ch], dtype=torch.float64,
+                                    device=x.device)
+            return (cx, cy, t.pull_off[k, b].double() * bin_size,
+                    t.pull_on[k, b],
+                    t.push_off[k, b].double() * bin_size,
+                    t.push_cnt[k, b].double())
 
     def forward(self, pos, lam):
         if self.tables is None or lam == 0.0:

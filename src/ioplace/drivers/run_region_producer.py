@@ -8,8 +8,10 @@ GrandPlan grouping loss (hull tables rebuilt every T_hull from the iteration
 callback) -> flat LG -> density-argmax extraction -> SA -> rect_max -> RegionSet.
 
 Coordinate contract: everything inside the GP is in the SCALED post-initialize()
-system; everything written out is in the NATIVE post-read() system
-(x_native = x_scaled / scale_factor + shift_factor[0]).
+system; every geometric quantity written out is in the NATIVE post-read() system
+(x_native = x_scaled / scale_factor + shift_factor[0]). The two exceptions are
+producer.json's `hpwl_gp`/`hpwl_lg`, which stay SCALED -- see where they are
+recorded below.
 
 Normalisation: Eq.3's coefficient for the grouping term is derived by
 ioplace.norm.TermNormalizer (policy "grandplan", norm_p=1) -- spec section 0's
@@ -78,6 +80,40 @@ class _GroupAdapter(object):
         return self.term.forward(pos, 1.0)
 
 
+def check_every_region_nonempty(part, k, source):
+    """Fix round 1, finding I1: refuse a membership prior that leaves a region
+    with no movable cells, BEFORE the GP starts.
+
+    There is no safe placeholder hull for an empty region.
+    `hull.anchor_tables` reads "bin centre is inside hull s" as "region s
+    pushes every cell of every other region away from bin b"
+    (`hull.py:294-300`), and `nearest_on_polygon_boundary`'s half-plane test is
+    `<= 0` on every edge (`hull.py:222,238`), so BOTH candidate placeholders --
+    the die box and a zero-area polygon -- test as containing every bin. Either
+    one would give every other region a spurious die-wide push and silently
+    corrupt Eq.1 rather than fail.
+
+    Reachable in practice, which is why this is a check and not an assert:
+    Mt-KaHyPar balances over the whole hypergraph and `membership.py:18-27`
+    then truncates its labels to the movable prefix, so a part can be empty on
+    the movables while being non-empty overall.
+
+    A caller who hits this should lower `--k` (the usual cause is asking for
+    more regions than the prior can populate) or switch `--membership`; there
+    is no in-driver repair, because inventing geometry for a region with no
+    cells is exactly the corruption above.
+    """
+    counts = np.bincount(np.asarray(part, dtype=np.int64).ravel(), minlength=k)
+    empty = np.flatnonzero(counts[:k] == 0).tolist()
+    if empty:
+        raise ValueError(
+            "membership source %r left region(s) %r with no movable cells "
+            "(counts=%r): the grouping term cannot build a hull for an empty "
+            "region, and every placeholder hull contains every bin and would "
+            "push all other regions away. Lower --k or use a different "
+            "--membership prior." % (source, empty, counts[:k].tolist()))
+
+
 def rectify_with_fallback(build, rectify_fn, requested_bins, fallback_bins=32):
     """Ruling D3: `--extract-bins 32` is a driver fallback, not an operator
     instruction.
@@ -144,6 +180,7 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
         part = build_membership(membership_source, nl=nl0, node_names=node_names,
                                 num_movable=int(placedb.num_movable_nodes), k=k,
                                 epsilon=epsilon, seed=seed, depth=hierarchy_depth)
+        check_every_region_nonempty(part, k, membership_source)
 
     # ---- initialize: scaled coordinate system ----------------------------
     with timer.phase("initialize"):
@@ -155,6 +192,11 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
         assert_optimizer_lock(params)
         die_scaled = (float(placedb.xl), float(placedb.yl),
                       float(placedb.xh), float(placedb.yh))
+        # Fix round 1, finding I3. `anchor_tables` is first called from inside
+        # the iteration callback, so a violated precondition used to abort
+        # mid-GP after minutes of setup. Check the exact same predicate here,
+        # before NonLinearPlace is even constructed.
+        hull_mod.check_anchor_table_range(die_scaled, LATTICE)
         scale = float(params.scale_factor)
         shift = (float(params.shift_factor[0]), float(params.shift_factor[1]))
         m = int(placedb.num_movable_nodes)
@@ -199,9 +241,6 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
     part_t = torch.as_tensor(part.astype(np.int64), device=device)
     half_x = torch.as_tensor(0.5 * size_x, dtype=torch.float64, device=device)
     half_y = torch.as_tensor(0.5 * size_y, dtype=torch.float64, device=device)
-    die_box = np.array([[die_scaled[0], die_scaled[1]], [die_scaled[2], die_scaled[1]],
-                        [die_scaled[2], die_scaled[3]], [die_scaled[0], die_scaled[3]]])
-
     def rebuild(pos):
         """Recompute every partition's hull from the current cell centres and
         re-rasterise the anchor tables. Frozen until the next rebuild."""
@@ -211,9 +250,13 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
         hulls = []
         for kk in range(k):
             sel = (part_t == kk).nonzero(as_tuple=True)[0]
-            if sel.numel() == 0:
-                hulls.append(die_box)
-                continue
+            # Unreachable: `part` is fixed for the whole run and
+            # `check_every_region_nonempty` rejected an empty region before the
+            # GP started. Kept as an assert rather than a placeholder hull
+            # because there is no correct placeholder -- see that function
+            # (fix round 1, finding I1).
+            assert sel.numel() > 0, (
+                "region %d became empty after check_every_region_nonempty" % kk)
             if cx.is_cuda:
                 pts = hull_mod.reduce_candidates_torch(cx[sel], cy[sel])
             else:
@@ -295,6 +338,8 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
     def _timed_legalize(p):
         gp_phase.__exit__(None, None, None)
         with torch.no_grad():
+            # SCALED units (hpwl_op runs on the post-initialize() placedb);
+            # recorded that way on purpose -- see the payload below.
             hpwl["hpwl_gp"] = float(placer.op_collections.hpwl_op(p))
         with timer.phase("lg"):
             out = orig_legalize(p)
@@ -403,6 +448,11 @@ def run_producer(config_json, out_dir, *, k=16, membership_source="mtkahypar",
         "num_nets": int(nl0.num_nets), "target_density": target_density,
         "gp_iterations_run": int(cb_state["last_iteration"]) + 1,
         "final_overflow": final_overflow,
+        # SCALED, not native, unlike every other geometric field here:
+        # `hpwl_op` runs on the post-initialize() placedb, so these are
+        # native_hpwl / site_width. Left scaled deliberately, for comparability
+        # with drivers/run_placement.py:386-390, which records them the same
+        # way; `scale_factor` above makes the conversion recoverable.
         "hpwl_gp": hpwl.get("hpwl_gp"), "hpwl_lg": hpwl.get("hpwl_lg"),
         "sa": sa_report, "sa_seed": int(sa_seed),
         "rects_per_region": [int(c) for c in counts],

@@ -105,11 +105,49 @@ def test_pull_off_fp16_error_is_bounded_on_a_realistic_die_size():
     off = proj - torch.stack([torch.as_tensor(cx), torch.as_tensor(cy)], dim=1)
     ref = torch.where(inside.unsqueeze(1), torch.zeros_like(off), off)
 
-    bin_width = 4737.0 / 512
-    assert (t.pull_off.double() - ref).abs().max() <= 0.25 * bin_width
+    # P-C Task 10 fix round 1 (I3): the tables now store offsets in BIN
+    # WIDTHS, so the reference has to be normalised the same way. The bound is
+    # the SAME 0.25 bin the earlier adjudication established -- it is one
+    # statement in two unit systems -- so it is asserted both normalised and
+    # denormalised here.
+    bin_w, bin_h = 4737.0 / 512, 4737.2 / 512
+    bin_size = torch.tensor([bin_w, bin_h], dtype=torch.float64)
+    ref_norm = ref / bin_size
+    assert (t.pull_off.double() - ref_norm).abs().max() <= 0.25
+    assert ((t.pull_off.double() - ref_norm) * bin_size).abs().max() \
+        <= 0.25 * max(bin_w, bin_h)
+    # and the normalised magnitudes really are bounded by the lattice, which is
+    # what makes the fp16 range independent of die size
+    assert t.pull_off.double().abs().max() <= 512.0
 
 
-def test_anchor_tables_rejects_a_die_extent_that_would_overflow_fp16():
-    huge_die = (0.0, 0.0, 32768.0, 100.0)
-    with pytest.raises(ValueError):
-        hull.anchor_tables([BIG], huge_die, lattice=8, device="cpu")
+def test_a_die_far_past_the_old_fp16_ceiling_is_now_accepted():
+    """P-C Task 10 fix round 1 (I3). Storing the offsets in scaled units made
+    the fp16 range a hard ceiling on die size: this die -- roughly a 30M-cell
+    NanGate45 chip, ~15.4x mempool_tile_wrap's 4168 scaled units linearly --
+    used to raise ValueError inside the first hull rebuild. In bin widths the
+    largest magnitude is the lattice, whatever the die."""
+    huge_die = (0.0, 0.0, 64000.0, 64000.0)
+    sq = np.array([[0., 0.], [1000., 0.], [1000., 1000.], [0., 1000.]])
+    t = hull.anchor_tables([sq], huge_die, lattice=64, device="cpu")
+    assert torch.isfinite(t.pull_off).all() and torch.isfinite(t.push_off).all()
+    assert t.pull_off.double().abs().max() <= 64.0        # <= the lattice
+
+
+def test_anchor_tables_rejects_a_lattice_that_would_overflow_fp16():
+    """The guard survives the I3 change, but it now bounds the LATTICE-
+    normalised magnitude rather than the die extent (hull.FP16_OFFSET_LIMIT)."""
+    with pytest.raises(ValueError, match="lattice"):
+        hull.check_anchor_table_range(DIE, int(hull.FP16_OFFSET_LIMIT))
+    with pytest.raises(ValueError, match="lattice"):
+        hull.check_anchor_table_range(DIE, 0)
+    hull.check_anchor_table_range(DIE, 512)               # the production value
+
+
+def test_anchor_tables_rejects_a_degenerate_die():
+    """New precondition introduced by I3: the offsets are divided by the bin
+    size, so a zero-extent axis would store nan rather than a wrong number."""
+    with pytest.raises(ValueError, match="positive"):
+        hull.anchor_tables([BIG], (0.0, 0.0, 0.0, 8.0), lattice=8, device="cpu")
+    with pytest.raises(ValueError, match="positive"):
+        hull.anchor_tables([BIG], (0.0, 0.0, 8.0, 0.0), lattice=8, device="cpu")
