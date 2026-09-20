@@ -34,7 +34,7 @@ FREEZE_SCHEMA_VERSION = 1
 MAIN_FLOW_RESULT_SCHEMA_VERSION = 1
 PRODUCER_SCHEMA_VERSION = 1
 
-POSITION_KINDS = ("seed", "soft")
+POSITION_KINDS = ("seed", "soft", "placement")
 
 FREEZE_FIELDS = (
     "schema_version", "iteration", "reason", "overflow", "tau", "tau_rel",

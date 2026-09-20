@@ -545,7 +545,14 @@ def run_fence_gp(config_json, out_dir, *, region_set, part, positions,
                                         "shift_factor": list(info["shift_factor"]),
                                         "scale_factor": info["scale_factor"]})
             placement_path = os.path.join(out_dir, PLACEMENT_NPZ)
-            np.savez_compressed(placement_path, node_x=node_x, node_y=node_y)
+            native_placement_x = _to_native(node_x, info["shift_factor"][0],
+                                            info["scale_factor"])
+            native_placement_y = _to_native(node_y, info["shift_factor"][1],
+                                            info["scale_factor"])
+            save_positions(placement_path, native_placement_x, native_placement_y,
+                           die=info["die_native"], shift_factor=info["shift_factor"],
+                           scale_factor=info["scale_factor"],
+                           placedb_sha256=info["placedb_sha256"], kind="placement")
             final_overflow = float(placer.model.overflow.max())
             m = placedb.num_movable_nodes
             compliance = fence_compliance(

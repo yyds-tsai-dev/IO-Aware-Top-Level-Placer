@@ -287,7 +287,9 @@ def test_run_main_flow_maps_fence_compliance_and_matches_the_result_schema(
                           timer=None):
         placement_path = str(out / PLACEMENT_NPZ)
         evaluation_path = str(out / EVALUATION_NPZ)
-        np.savez_compressed(placement_path, node_x=node_x, node_y=node_y)
+        save_positions(placement_path, node_x, node_y, die=die,
+                       shift_factor=(0.0, 0.0), scale_factor=1.0,
+                       placedb_sha256="fake", kind="placement")
         np.savez_compressed(evaluation_path, node_x=node_x, node_y=node_y)
         return {
             "metrics": real_metrics, "eval_result": real_eval_result,
@@ -321,6 +323,22 @@ def test_run_main_flow_maps_fence_compliance_and_matches_the_result_schema(
 
     on_disk = json.loads((out / RESULT_JSON).read_text())
     assert set(on_disk) == set(MAIN_FLOW_RESULT_FIELDS)
+
+    # Regression: placement.npz must round-trip through load_positions like
+    # every other positions artefact (soft.npz, seed.npz) -- it used to be
+    # written with a bare np.savez_compressed that carried none of the
+    # schema_version/die/shift_factor/scale_factor/placedb_sha256/kind
+    # stamps load_positions requires, and the fake in this very test used to
+    # mirror that same bare-savez bug instead of catching it.
+    from ioplace.artifacts import load_positions
+    loaded = load_positions(str(out / PLACEMENT_NPZ))
+    assert np.array_equal(loaded.node_x, node_x)
+    assert np.array_equal(loaded.node_y, node_y)
+    assert loaded.die == die
+    assert loaded.shift_factor == (0.0, 0.0)
+    assert loaded.scale_factor == 1.0
+    assert loaded.placedb_sha256 == "fake"
+    assert loaded.kind == "placement"
 
 
 @pytest.mark.slow
