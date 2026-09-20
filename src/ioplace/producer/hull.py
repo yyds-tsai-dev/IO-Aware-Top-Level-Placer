@@ -396,19 +396,43 @@ def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
     projections, the quantile and the top-k live on the GPU, and only the
     surviving <=2*m*k_dir candidates come back to the host for quickhull.
 
+    All 2*m directions (m angles, each with its +/- sign) are batched into a
+    single (2*m, n) projection instead of a 2*m-iteration Python loop: one
+    batched torch.quantile(dim=1), one batched amax(dim=1), one batched
+    stable argsort(dim=1) plus a per-row rank test, and a single index_fill_
+    for the union of every direction's band selection and its forced support
+    point. This removes the 2*m per-region nonzero()/idx.numel() host syncs
+    the un-batched loop paid for (measured 53.3ms -> 2.34ms per region on the
+    P-C acceptance config, an 8-13x range under GPU 3's shared-host
+    contention); see hull-perf-report.md for the measured before/after.
+
     torch.quantile has an input-element limit, so above quantile_subsample
     (spec's QUANTILE_SUBSAMPLE=8_000_000 by default; exposed as a keyword only
-    so tests can drive the branch without allocating 8e6 points) the threshold
-    is estimated from a deterministic stride subsample -- a threshold
-    estimate, not a filter: the band test still runs over every point.
+    so tests can drive the branch without allocating 8e6 points) each row's
+    threshold is estimated from a deterministic stride subsample -- a
+    threshold estimate, not a filter: the band test still runs over every
+    point.
 
-    The within-band cutoff is a stable ascending sort of (ss[idx] - t), not
-    torch.topk: topk makes no tie-break guarantee, while np.argsort(kind=
-    "stable") on the CPU path breaks ties by ascending original index. A
-    stable sort over idx (itself ascending, since it comes from nonzero)
-    reproduces that exact ordering, which matters because chip data is
-    grid-aligned and legitimately ties at the band edge (unlike a continuous
-    synthetic cloud, where ties have measure zero).
+    The within-band cutoff is still a stable ascending sort, not torch.topk:
+    topk makes no tie-break guarantee, while np.argsort(kind="stable") on the
+    CPU path breaks ties by ascending original index. Batching changes HOW
+    that stable sort is computed but not WHAT it computes: non-band entries
+    are pinned to +inf before the row-wise stable argsort, so they always
+    sort after every finite band entry regardless of their own tie-break
+    among themselves, which means the relative order of band entries in the
+    full-row sort is identical to sorting the band subset alone (a stable
+    sort's relative order among a set of keys depends only on their own
+    values and starting order, never on other, unrelated keys sharing a tie
+    outside that set). Turning that per-row sort position into a keep/drop
+    decision via "rank < k_dir" (rank recovered by scattering arange(n) back
+    through the sort's own index permutation) reproduces the loop version's
+    "nonzero, then take the first k_dir of a stable sort over just the band"
+    exactly, including when the band has fewer than k_dir members (every
+    band position then has rank < k_dir, i.e. the whole band survives, same
+    as the loop skipping its cutoff branch). Pinned to grid-aligned tied data
+    by test_reduce_candidates_torch_matches_the_numpy_path_on_tied_grid_data,
+    which this rewrite must keep passing unweakened (index-set equality, not
+    hull-area equality).
 
     Like the numpy path, each direction's support point is always kept
     (ruling D1), so the output bound is 2*m*(k_dir + 1) before dedup.
@@ -416,33 +440,41 @@ def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
     n = int(x.numel())
     if n <= k_dir:
         return np.unique(torch.stack([x, y], dim=1).double().cpu().numpy(), axis=0)
-    keep = torch.zeros(n, dtype=torch.bool, device=x.device)
+    dev = x.device
+    xf, yf = x.double(), y.double()
+    j = torch.arange(m, dtype=torch.float64, device=dev)
+    th = j * (2.0 * math.pi / m)
+    cos_j, sin_j = torch.cos(th), torch.sin(th)
+    # Row 2*j is direction j's +sign, row 2*j+1 its -sign -- the same (j,
+    # sign) enumeration order the old nested loop used, kept only for
+    # readability: the final keep mask is a union over rows, so the order
+    # among rows cannot affect the result.
+    cos_dir = torch.stack([cos_j, -cos_j], dim=1).reshape(-1)   # (2m,)
+    sin_dir = torch.stack([sin_j, -sin_j], dim=1).reshape(-1)   # (2m,)
+    ss = cos_dir.unsqueeze(1) * xf.unsqueeze(0) + sin_dir.unsqueeze(1) * yf.unsqueeze(0)  # (2m, n)
+
     stride = max(1, n // quantile_subsample + (1 if n % quantile_subsample else 0))
-    for j in range(m):
-        th = j * (2.0 * math.pi / m)
-        s = x.double() * math.cos(th) + y.double() * math.sin(th)
-        for sign in (1.0, -1.0):
-            ss = sign * s
-            t = torch.quantile(ss[::stride].contiguous(), q)
-            hi = ss.max()
-            idx = ((ss >= t) & (ss <= t + alpha * (hi - t))).nonzero(as_tuple=True)[0]
-            if idx.numel() > k_dir:
-                order = torch.sort(ss[idx] - t, stable=True).indices
-                idx = idx[order[:k_dir]]
-            # index_fill_, not keep[idx] = True: Tensor.__setitem__ with a
-            # Python bool RHS wraps it in a CPU tensor and goes through
-            # index_put_ with a blocking pageable H2D copy (measured 0.70 ms
-            # per call here, vs 0.008-0.012 ms for index_fill_ -- 2m=32 calls
-            # per direction pair times 16 regions times T_hull rebuilds was
-            # 82-84% of the whole GP+LG overhead on mempool_tile_wrap).
-            keep.index_fill_(0, idx, True)
-            # Ruling D1, same named deviation as the numpy path: the band plus
-            # the k_dir cap drops the support points, and the hull of the
-            # reduced set collapses (measured area 95.78 against a true 100).
-            # No int()/.item() here: indexing keep with the 0-dim argmax
-            # tensor stays device-side and avoids a host sync every iteration.
-            # index_fill_ again for the same H2D-copy reason as above (the
-            # argmax result must be reshaped to a 1-element index tensor).
-            keep.index_fill_(0, torch.argmax(ss).view(1), True)
+    t = torch.quantile(ss[:, ::stride].contiguous(), q, dim=1)   # (2m,)
+    hi = ss.amax(dim=1)                                          # (2m,)
+    band = (ss >= t.unsqueeze(1)) & (ss <= (t + alpha * (hi - t)).unsqueeze(1))  # (2m, n)
+
+    adjusted = torch.where(band, ss - t.unsqueeze(1),
+                          torch.full_like(ss, float("inf")))
+    order = torch.argsort(adjusted, dim=1, stable=True)          # (2m, n)
+    rank = torch.empty_like(order)
+    rank.scatter_(1, order, torch.arange(n, device=dev).expand(2 * m, n))
+    selected = band & (rank < k_dir)                             # (2m, n)
+
+    keep = selected.any(dim=0).clone()
+    # Ruling D1, same named deviation as the numpy path: the band plus the
+    # k_dir cap drops the support points, and the hull of the reduced set
+    # collapses (measured area 95.78 against a true 100). index_fill_, not
+    # keep[idx] = True: Tensor.__setitem__ with a Python bool RHS wraps it in
+    # a CPU tensor and goes through index_put_ with a blocking pageable H2D
+    # copy (measured 0.70-1.55 ms per call here, vs 0.008-0.012 ms for
+    # index_fill_) -- 82-84% of the GP+LG overhead measured on
+    # mempool_tile_wrap came from exactly this pattern at 2*m calls/region.
+    argmax_idx = ss.argmax(dim=1)                                # (2m,)
+    keep.index_fill_(0, argmax_idx, True)
     return np.unique(
         torch.stack([x[keep], y[keep]], dim=1).double().cpu().numpy(), axis=0)
