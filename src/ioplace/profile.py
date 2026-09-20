@@ -320,13 +320,24 @@ def release_cuda_scratch():
     Nothing here does -- `DeviceMemSampler`'s background thread only calls
     `mem_get_info()` -- so calling this after the sampler has stopped is
     safe.
+
+    Best-effort cleanup only: every driver calls this from a `finally:`
+    block, possibly while unwinding from an in-flight exception (e.g. a
+    sticky CUDA fault). `torch.cuda.synchronize()` can itself raise in that
+    state, and a bare `finally:` would let that new exception replace the
+    original one the caller is trying to report. The body is therefore
+    wrapped so a failure here can never mask or alter the exception the
+    caller is propagating -- it is swallowed, not surfaced.
     """
     if not torch.cuda.is_available():
         return
-    torch.cuda.synchronize()
-    if hasattr(torch._C, "_cuda_clearCublasWorkspaces"):
-        torch._C._cuda_clearCublasWorkspaces()
-    torch.cuda.empty_cache()
+    try:
+        torch.cuda.synchronize()
+        if hasattr(torch._C, "_cuda_clearCublasWorkspaces"):
+            torch._C._cuda_clearCublasWorkspaces()
+        torch.cuda.empty_cache()
+    except Exception:
+        pass
 
 
 def _sha256(path):
