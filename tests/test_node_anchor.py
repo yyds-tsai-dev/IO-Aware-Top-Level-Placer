@@ -452,8 +452,16 @@ def test_pin_arm_bias_grows_from_zero_and_stays_above_the_node_arm():
     stays hard, and grows once tau softens it. Deliberately does not assert
     the exact float value at any tau (that is a property of softmax_stats'
     numerics, not of this task's contract) -- only the structure that
-    matters: zero in the hard regime, non-decreasing, pin >= node throughout,
-    and distinctly nonzero by the largest tau probed."""
+    matters: zero in the hard regime, pin >= node (within the noise band)
+    throughout, strictly increasing once the signal clears that band, and
+    distinctly nonzero by the largest tau probed.
+
+    tau=2.0 sits right at the float64 noise floor (~4.2e-11 measured on this
+    host, DEV-dependent -- a different GPU/CUDA build or a CPU fallback could
+    flip its sign) and gets only a loose sanity bound, never an exact-zero,
+    ordering or sign claim against its neighbours; tau>=3.0's ~1.7e-7 and up
+    is two-plus orders of magnitude clear of that noise and gets the real
+    monotonicity check (round 2 fix, review-task-2.md)."""
     rs = make_grid_regions(DIE, 2, 2, lattice=10)
     nl = _nl([(10., 10.), (90., 10.)], [[0, 1, 1]])   # node 1 carries two pins
     nl.node_size_x = np.ones(2)
@@ -461,6 +469,11 @@ def test_pin_arm_bias_grows_from_zero_and_stays_above_the_node_arm():
     pos = _pos(nl, device=DEV)
     node_term = _ref(nl, rs, "lower_left")
     pin_term = _pin_ref(nl, rs)
+
+    # noise band: ~20x the ~4.2e-11 noise observed at tau=2.0, ~180x below the
+    # genuine ~1.7e-7 signal at tau=3.0 -- comfortably separates "zero" from
+    # "real" without depending on the sign of a 1e-11 quantity.
+    NOISE_TOL = 1e-9
 
     taus = (0.05, 1.0, 2.0, 3.0, 5.0, 12.5)
     biases = []
@@ -474,14 +487,15 @@ def test_pin_arm_bias_grows_from_zero_and_stays_above_the_node_arm():
         biases.append(bias)
         print(f"{tau:<9} {float(lam_node.detach()):.8f}   {float(lam_pin.detach()):.8f}   {bias:+.8f}")
 
-    # hard regime: bit-exact zero (both arms saturate to the same crossing).
-    assert biases[0] == 0.0
-    assert biases[1] == 0.0
-    # pin arm never below the node arm, at any tau probed.
-    assert all(b >= -1e-15 for b in biases)
-    # non-decreasing throughout, and strictly increasing once the softmax has
-    # softened enough to tell the two arms apart (tau >= 2.0 here).
-    assert biases == sorted(biases)
-    tail = biases[2:]
+    # hard regime (tau 0.05, 1.0): zero within the noise band, not literal ==.
+    assert abs(biases[0]) < NOISE_TOL
+    assert abs(biases[1]) < NOISE_TOL
+    # tau=2.0: at the noise floor -- weak sanity only, no sign/ordering claim.
+    assert abs(biases[2]) < 1e-6
+    # pin arm never meaningfully below the node arm, at any tau probed.
+    assert all(b >= -NOISE_TOL for b in biases)
+    # from tau=3.0 on the signal is well clear of noise: strictly increasing,
+    # and clearly nonzero by the largest tau.
+    tail = biases[3:]
     assert all(a < b for a, b in zip(tail, tail[1:]))
     assert tail[-1] > 1e-3, "expected the bias to be clearly nonzero by the largest tau probed"
