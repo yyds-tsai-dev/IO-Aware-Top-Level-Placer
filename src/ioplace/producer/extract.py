@@ -120,15 +120,36 @@ def morph_open_close(labels, k):
         cand = np.where(masks[:, multi[0], multi[1]],
                         nb[:, multi[0], multi[1]], -1)
         out[multi] = cand.argmax(axis=0).astype(np.int16)
-    # Opening is allowed to shave a partition, never to delete it: a partition
-    # made entirely of specks would otherwise vanish here and leave
-    # ensure_nonempty with no donor at all on small designs.
+    # Opening is allowed to shave a partition, never to delete it outright
+    # (spec section 10 risk 6), but the restoration must honour its own
+    # contract and never take a bin a neighbour legitimately won. In priority
+    # order:
+    #   (a) a bin that was originally this partition's own (`had`) AND is
+    #       still genuinely unclaimed (out < 0) after morphology;
+    #   (b) failing that, a bin that was originally this partition's own but
+    #       is now held by a neighbour that would still keep >= 2 bins
+    #       afterwards -- the same donor-count guard ensure_nonempty uses, so
+    #       the neighbour is never stripped to zero;
+    #   (c) failing even that, leave the partition vanished here. Its own
+    #       `had` footprint has no unclaimed bin and no neighbour can spare
+    #       one, so stealing here would only rob some other partition down to
+    #       nothing; ensure_nonempty (called downstream with coarse density,
+    #       not just this partition's pre-morphology footprint) is the right
+    #       place to find it a bin instead.
     for kk in range(k):
         had = labels == kk
-        if had.any() and not (out == kk).any():
-            out[had & (out < 0)] = np.int16(kk)
-            if not (out == kk).any():
-                out[np.unravel_index(int(np.argmax(had)), out.shape)] = np.int16(kk)
+        if not had.any() or (out == kk).any():
+            continue
+        unclaimed = had & (out < 0)
+        if unclaimed.any():
+            out[unclaimed] = np.int16(kk)
+            continue
+        counts = np.bincount(out[out >= 0].ravel(), minlength=k)
+        owned = had & (out >= 0)
+        donor_ok = np.zeros(out.shape, dtype=bool)
+        donor_ok[owned] = counts[out[owned]] >= 2
+        if donor_ok.any():
+            out[np.unravel_index(int(np.argmax(donor_ok)), out.shape)] = np.int16(kk)
     return out
 
 
@@ -215,8 +236,13 @@ def canonicalise_connectivity(labels, k):
                 if c == keep:
                     continue
                 sel = cc == c
+                # A halo pixel here can never itself carry label kk: any
+                # pixel 4-adjacent to `sel` that also equals kk would, by
+                # ndimage.label's own definition, belong to the same
+                # component as sel (contradicting `& ~sel`), and this loop
+                # only ever moves kk-pixels to some OTHER label, never the
+                # reverse -- so no `nb == kk` filter is needed here.
                 nb = out[_halo(sel) & ~sel]
-                nb = nb[nb != kk]
                 if not nb.size:
                     continue
                 out[sel] = np.int16(np.bincount(nb, minlength=k).argmax())

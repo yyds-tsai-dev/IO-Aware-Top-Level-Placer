@@ -61,6 +61,21 @@ def test_majority_downsample_marks_a_fully_empty_block():
     assert extract.majority_downsample(fine, 2, 2).tolist() == [[1, -1], [-1, -1]]
 
 
+def test_argmax_labels_breaks_a_genuine_tie_on_the_lowest_partition_id():
+    dens = np.zeros((3, 2, 2))
+    dens[0, 0, 0] = 5.0
+    dens[1, 0, 0] = 5.0                 # a genuine tie between partitions 0 and 1
+    dens[2, 0, 0] = 1.0
+    lab = extract.argmax_labels(dens)
+    assert lab[0, 0] == 0
+
+
+def test_majority_downsample_breaks_a_genuine_tie_on_the_lowest_partition_id():
+    fine = np.array([[0, 1], [0, 1]], dtype=np.int16)   # 2 votes each, a genuine tie
+    out = extract.majority_downsample(fine, 1, 2)
+    assert out[0, 0] == 0
+
+
 def test_opening_does_not_erode_a_solid_rectangle():
     """The 3x3 square structuring element is chosen precisely for this: the
     4-connected cross would strip all four corners of every rectangle."""
@@ -78,13 +93,38 @@ def test_opening_removes_an_isolated_speck():
 def test_morphology_never_deletes_a_whole_partition():
     """Opening removes an isolated speck, but a partition whose only bins were
     specks must not vanish outright -- it is restored from the pre-morphology
-    map wherever the post-morphology map is unclaimed."""
+    map wherever the post-morphology map is unclaimed.
+
+    Region 0's own closing legitimately recovers the (0, 0) corner (it grows
+    from 31 to 32 bins), so restoring region 2's single speck must take
+    exactly that one bin back and leave region 0 with everything else it
+    legitimately won (31 of its 32 bins), never more."""
     lab = np.zeros((8, 8), dtype=np.int16)
     lab[:, 4:] = 1
     lab[0, 0] = 2                       # region 2 is a single speck
     out = extract.morph_open_close(lab, 3)
     assert (out == 2).any()
     assert out[0, 0] == 2
+    assert int((out == 2).sum()) == 1
+    assert int((out == 0).sum()) == 31   # region 0 keeps the rest of what it won
+
+
+def test_morphology_never_deletes_a_whole_partition_2x2_edge_strip():
+    """Sibling of the corner-speck case above, using the reviewer's second
+    reproducer: a 2x2 block along an EDGE (not a corner) has no erosion
+    support of its own (unlike a 2x2 CORNER block, which survives -- see
+    test_opening_does_not_erode_a_solid_rectangle) and opens away entirely.
+    Region 0 legitimately recovers all 4 bins via closing (64 total); giving
+    region 1 back its single restored bin must take exactly one of those 4
+    back, leaving region 0 with the other 63 -- not the whole notch, and not
+    zero."""
+    lab = np.zeros((8, 8), dtype=np.int16)
+    lab[0:2, 4:6] = 1                   # region 1 is a 2x2 edge strip, not a corner
+    out = extract.morph_open_close(lab, 2)
+    assert int((out == 1).sum()) == 1
+    ry, rx = np.argwhere(out == 1)[0]
+    assert lab[ry, rx] == 1             # the restored bin is one of region 1's own
+    assert int((out == 0).sum()) == 63   # region 0 keeps the rest of what it won
 
 
 def test_largest_component_drops_a_detached_island():
@@ -93,6 +133,19 @@ def test_largest_component_drops_a_detached_island():
     out = extract.largest_component(lab, 2)
     assert (out[1:4, 1:4] == -1).all()
     assert (out[8:, 8:] == 1).all()
+
+
+def test_largest_component_breaks_a_size_tie_on_raster_order():
+    """Two equal-sized components of the same partition: ndimage.label numbers
+    components in raster order and np.argmax returns the lowest index on a
+    tie, so the earlier component (by raster order) is kept and the later,
+    equally-sized one is dropped."""
+    lab = np.zeros((8, 8), dtype=np.int16)
+    lab[0, 0:2] = 1                     # earlier component, raster order
+    lab[7, 6:8] = 1                     # later component, same size (2 bins)
+    out = extract.largest_component(lab, 2)
+    assert (out[0, 0:2] == 1).all()
+    assert (out[7, 6:8] == -1).all()
 
 
 def test_ensure_nonempty_rescues_a_vanished_partition():
