@@ -57,8 +57,12 @@ STRADDLE_SCALARS = ("straddle_cells", "straddle_area_fraction",
 STRADDLE_ARRAYS = ("per_node_straddle", "per_net_pin_split")
 
 # (net_id, region_id) are packed into one int64 as net*_REGION_STRIDE + region,
-# the same packing evaluator_gpu.py:575 uses for pin_bm -- keep the two equal so
-# the CPU and GPU unique/bincount passes are the same arithmetic.
+# the same packing evaluator_gpu.py's evaluate() uses for pin_bm via its own
+# net_region_key local (a bare 64, independent of this constant by design --
+# see GpuEvalContext._distinct_regions_per_net, which imports this constant
+# by name instead) -- keep the two equal so the CPU and GPU unique/bincount
+# passes are the same arithmetic. Named by symbol, not line number: line
+# numbers in evaluator_gpu.py drift across edits.
 _REGION_STRIDE = np.int64(64)
 
 

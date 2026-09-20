@@ -127,8 +127,15 @@ class GpuEvalContext:
         evaluate(), an O(N) geometry pass plus one extra torch.unique over the
         pin keys -- small next to the MST, but not free at 30M cells, so it is
         switchable both here (skip the allocation) and per call
-        (evaluate(..., straddle=False), which the in-loop diagnostic callback in
-        run_placement_io uses).
+        (evaluate(..., straddle=False), which is intended for the in-loop
+        diagnostic callback Task 5/6 wires up in run_placement_io -- that call
+        site does not exist yet).
+
+        num_movable/num_physical and the two size tensors are snapshotted here
+        at construction time, like every other cached tensor on this class
+        (grid_t, pin2node_t, ...); a caller that mutates `nl` between
+        construction and evaluate() gets a silent ref/GPU divergence, same as
+        it would for any other cached field.
         """
         self.nl, self.rg = nl, rg
         self.device = torch.device(device)
@@ -148,6 +155,15 @@ class GpuEvalContext:
         # docs/superpowers/specs/2026-08-13-m4-scale-up-design-draft.md §4.2 and
         # docs/reviews/2026-08-13-m4-draft-v1-adversarial-codex.md finding 9.
         assert self.k <= 32, f"GpuEvalContext bitmask vectorization requires rg.k <= 32, got rg.k={self.k}"
+        # v2 P-F / M1: the straddle diagnostics' (net, region) packing in
+        # _distinct_regions_per_net uses _REGION_STRIDE (imported from
+        # ioplace.straddle) as its stride -- mirror straddle_diagnostics'
+        # own guard (straddle.py:131-134) rather than relying only on the
+        # k<=32 assert above, which is sufficient today only because the
+        # stride happens to be 64.
+        assert self.k <= int(_REGION_STRIDE), (
+            "straddle diagnostics pack (net, region) into one int64 with "
+            "stride %d; got k=%d" % (int(_REGION_STRIDE), self.k))
 
         # ---- static region-grid tensors: grid + Ph/Pv crossing prefix sums ----
         # M4 T2 item 5: grid_t holds raw region ids (0..K-1, K<=32) and Ph/Pv hold
@@ -396,9 +412,17 @@ class GpuEvalContext:
         pin_rid_re = torch.where(per_node[node_of_pin].bool(),
                                  owner_full[node_of_pin], pin_rid.to(torch.int64))
         split = (per_net_lambda - self._distinct_regions_per_net(pin_rid_re))
+        # v2 P-F fix round 1 (I2): follow this file's own explicit-del memory
+        # discipline (see the "CPython function frames aren't block-scoped"
+        # comment in evaluate()) -- these (M,)/(n_pins,) temporaries are done
+        # contributing once split/out_area are in hand, and at 30M cells/~100M
+        # pins leaving them referenced for the rest of this frame is several
+        # GB of avoidable peak.
+        del node_of_pin, pin_rid_re, owner_full
 
         total_area = float((w * h).sum().item())
         out_total = float(out_area.sum().item())
+        del r00, r10, r01, r11, owner, xm, ym, lw, rw, bh, th, out_area
         return {
             "straddle_cells": int(straddle.sum().item()),
             "straddle_area_fraction": (out_total / total_area) if total_area > 0.0 else 0.0,
@@ -685,7 +709,7 @@ class GpuEvalContext:
         net_region_key = self.pin2net_t.to(torch.int64) * 64 + pin_rid.to(torch.int64)
         del pin_ix, pin_iy
         if not want_straddle:
-            pin_rid = None      # only net_region_key above needed it
+            del pin_rid          # only net_region_key above needed it
         uniq_keys, uniq_counts = torch.unique(net_region_key, return_counts=True)
         del net_region_key
         uniq_net = uniq_keys // 64
@@ -717,10 +741,14 @@ class GpuEvalContext:
 
         # v2 P-F (design sec 7): per_net_lambda is in hand and pin_rid is still
         # alive, which is the only point in evaluate() where both are true.
+        # v2 P-F fix round 1 (I2): explicit del, not reassignment to None --
+        # matching this file's own discipline (see the "CPython function
+        # frames aren't block-scoped" comment above): pin_rid is a (n_pins,)
+        # int64 tensor and nothing after this point needs it.
         if want_straddle:
             straddle_stats = self._straddle_stats(node_x, node_y, pin_rid,
                                                   per_net_lambda)
-            pin_rid = None
+            del pin_rid
         else:
             straddle_stats = {}
 

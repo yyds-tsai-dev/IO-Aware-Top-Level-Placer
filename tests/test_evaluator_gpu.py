@@ -798,6 +798,80 @@ def test_gpu_straddle_matches_reference_on_lattice_boundaries():
     _assert_straddle_equal(ref, gpu)
 
 
+def test_gpu_straddle_matches_reference_on_edge_exact_boundaries():
+    """Review fix round 1 (I1): the lattice-boundaries test above only makes
+    cells *cross* a boundary; convention 1's closed-box `<=` (a cell whose
+    right/top edge lands EXACTLY on a region line counts as straddling, but a
+    cell whose left/bottom edge lands exactly on one does not) was previously
+    pinned only in tests/test_straddle.py's numpy-only fixtures, never
+    ref-vs-GPU. DIE=(0,0,100,100), lattice=10 -> cell_w=cell_h=10; a 2x2
+    region grid puts the boundary at x=y=50 (same grid tests/test_straddle.py
+    ::_grid builds)."""
+    from ioplace.netlist import Netlist
+    rg = RegionGrid(make_grid_regions(DIE, 2, 2, lattice=10))
+    node_x = np.array([46.0, 50.0, 46.0, 45.0])
+    node_y = np.array([10.0, 10.0, 46.0, 45.0])
+    node_size = np.array([4.0, 4.0, 4.0, 10.0])
+    nl = Netlist(node_x=node_x, node_y=node_y,
+                 node_size_x=node_size, node_size_y=node_size,
+                 num_movable=4, num_terminals=0, num_terminal_NIs=0,
+                 pin_offset_x=np.zeros(4), pin_offset_y=np.zeros(4),
+                 pin2node=np.array([0, 1, 2, 3], np.int32),
+                 pin2net=np.array([0, 0, 1, 1], np.int32),
+                 flat_net2pin=np.arange(4, dtype=np.int32),
+                 flat_net2pin_start=np.array([0, 2, 4], np.int32),
+                 xl=0., yl=0., xh=100., yh=100.)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    # node 0: right edge exactly on x=50 -> straddles (closed box).
+    # node 1: left edge exactly on x=50 -> does not spuriously straddle.
+    # node 2: both the x=50 and y=50 lines exactly on its edges -> straddles.
+    # node 3: 10x10 cell centred exactly on the boundary intersection (50,50).
+    assert ref.per_node_straddle.tolist() == [1, 0, 1, 1]
+    _assert_straddle_equal(ref, gpu)
+
+
+def test_gpu_straddle_matches_reference_on_a_nonzero_noninteger_die_origin():
+    """Review fix round 1 (I1): every other parity test uses xl=yl=0, so the
+    `self.xl + (ix0+1)*cell_w` cut-line term (and the plain `self.xl`/`self.yl`
+    offsets `_to_idx` divides by) are never exercised against a non-zero,
+    non-integer die origin -- real DEF diearea boxes routinely have one.
+    DIE=(17.3,4.7,217.3,204.7), 3x3 regions, lattice=30 -> cell_w=cell_h=
+    200/30 (not exactly representable in binary64), and the 3-way partition's
+    boundary falls exactly at lattice index 10 (30/3), i.e. xl+10*cell_w /
+    yl+10*cell_h -- so the boundary itself is also off the die origin and
+    built from an inexact cell size, same as the four boundary-exact cases in
+    test_gpu_straddle_matches_reference_on_edge_exact_boundaries above, just
+    translated and rescaled onto this die."""
+    from ioplace.netlist import Netlist
+    DIE_ND = (17.3, 4.7, 217.3, 204.7)
+    rg = RegionGrid(make_grid_regions(DIE_ND, 3, 3, lattice=30))
+    xl, yl = DIE_ND[0], DIE_ND[1]
+    cw, ch = rg.cell_w, rg.cell_h
+    bx, by = xl + 10 * cw, yl + 10 * ch          # exact region-column/row line
+    sx, sy = 0.4 * cw, 0.4 * ch                  # same 0.4-of-a-lattice-cell
+                                                  # proportions as the integer
+                                                  # boundary test above (4/10)
+    safe_y = yl + 3 * ch                          # well inside the first row
+    node_x = np.array([bx - sx, bx, bx - sx, bx - 0.5 * cw])
+    node_y = np.array([safe_y, safe_y, by - sy, by - 0.5 * ch])
+    node_size_x = np.array([sx, sx, sx, cw])
+    node_size_y = np.array([sy, sy, sy, ch])
+    nl = Netlist(node_x=node_x, node_y=node_y,
+                 node_size_x=node_size_x, node_size_y=node_size_y,
+                 num_movable=4, num_terminals=0, num_terminal_NIs=0,
+                 pin_offset_x=np.zeros(4), pin_offset_y=np.zeros(4),
+                 pin2node=np.array([0, 1, 2, 3], np.int32),
+                 pin2net=np.array([0, 0, 1, 1], np.int32),
+                 flat_net2pin=np.arange(4, dtype=np.int32),
+                 flat_net2pin_start=np.array([0, 2, 4], np.int32),
+                 xl=DIE_ND[0], yl=DIE_ND[1], xh=DIE_ND[2], yh=DIE_ND[3])
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    assert ref.straddle_cells > 0     # the case actually exercises the path
+    _assert_straddle_equal(ref, gpu)
+
+
 def test_gpu_straddle_bit_exact_across_batch_sizes_and_chunk_budgets():
     from ioplace.evaluator_gpu import GpuEvalContext
     rg = RegionGrid(make_grid_regions(DIE, 8, 4, lattice=32))
