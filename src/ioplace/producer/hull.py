@@ -3,7 +3,7 @@
 Algorithm 1 (directional-extrema candidate reduction) and the area cap of
 docs/research/2026-09-18-grandplan-digest.md section 2.1, with the constants
 fixed by the v2 spec section 2: m=16, q=0.90, alpha=0.25, K_dir=64, so quickhull
-never sees more than ~1024 points per region even at 11M cells.
+never sees more than 2*m*(K_dir+1) = 2080 points per region even at 11M cells.
 """
 import numpy as np
 from scipy.spatial import ConvexHull, QhullError
@@ -83,7 +83,16 @@ def convex_hull(pts):
     if len(uniq) == 0:
         raise ValueError("convex_hull needs at least one point")
     lo, hi = uniq.min(axis=0), uniq.max(axis=0)
-    eps = np.maximum((hi - lo) * 1e-6, 1e-9)
+    # Scale eps to the coordinate magnitude, not just the (possibly zero)
+    # span (hi - lo): a single point far from the origin otherwise inflates
+    # to an absolute-1e-9-sided box whose area underflows to zero -- not
+    # merely because the box is tiny, but because the shoelace formula
+    # differences O(coord**2)-sized terms, which loses everything below
+    # ~coord**2 * 2**-52. The scale factor here must clear that floor (empirically
+    # verified down to 1e-7); 1e-6 matches the span-relative term above and
+    # leaves a >10x margin.
+    scale = np.maximum(np.abs(lo), np.abs(hi))
+    eps = np.maximum((hi - lo) * 1e-6, np.maximum(scale * 1e-6, 1e-9))
     hi = np.maximum(hi, lo + eps)
     return np.array([[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]])
 
@@ -93,6 +102,8 @@ def shrink_to_area(verts, a_max, rel_tol=1e-3, max_iter=60):
     Area(H) <= A_max (digest section 2.1). Spec section 2 mandates bisection to
     1e-3 relative area; the closed form s = sqrt(a_max/a) is the oracle the unit
     test checks this against."""
+    if a_max <= 0.0:
+        raise ValueError("shrink_to_area requires a_max > 0")
     v = np.asarray(verts, dtype=np.float64)
     a = polygon_area(v)
     if a <= a_max or a <= 0.0:
@@ -116,7 +127,12 @@ def macro_pseudo_points(x, y, w, h, pitch_x, pitch_y,
     """Macro enrichment (digest section 2.1): a regular grid of points inside
     each macro footprint at the mean standard-cell pitch, capped at
     max_per_macro per macro (spec section 2). x, y are lower-left corners.
-    Points sit at sub-cell centres so they are strictly inside the footprint."""
+    Points sit at sub-cell centres, which lie strictly inside the footprint
+    for macros with positive width and height; a macro with zero width and/or
+    height has no interior to be strictly inside, so its point(s) fall on
+    that degenerate edge/corner instead."""
+    if pitch_x <= 0.0 or pitch_y <= 0.0:
+        raise ValueError("macro_pseudo_points requires positive pitch_x and pitch_y")
     cap_side = max(1, int(np.floor(np.sqrt(max_per_macro))))
     out = []
     for xi, yi, wi, hi in zip(np.asarray(x, dtype=np.float64),
