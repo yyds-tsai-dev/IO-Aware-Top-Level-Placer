@@ -171,8 +171,17 @@ def enforce_rect_max(labels, k, rect_max=8):
                 f"region {worst} has {counts[worst]} rects (> {rect_max}) and "
                 "neither a feasible notch fill nor a feasible shed remains; "
                 "lower --extract-bins or K")
+    # Budget exhausted (ruling D4): name the region and count the arg-max
+    # target had on this final pass so Task 10's --extract-bins 32 fallback
+    # can log which region forced the retry, same as the in-loop RuntimeError
+    # above.
+    counts = region_rect_counts(lab, k)
+    worst = int(np.argmax(counts))
     raise RuntimeError(
-        f"enforce_rect_max did not converge within {budget} passes")
+        f"enforce_rect_max did not converge within {budget} passes: region "
+        f"{worst} still has {counts[worst]} rects (> {rect_max}); the arg-max "
+        "target kept switching between regions (ruling D4 -- no monotone "
+        "potential excludes a cycle)")
 
 
 def rects_to_regionset(labels, k, die, lattice=512, name_fmt="P{}"):

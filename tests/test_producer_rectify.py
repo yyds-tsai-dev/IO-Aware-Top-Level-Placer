@@ -32,13 +32,19 @@ def test_mask_to_rects_on_an_l_shape_gives_two_rects():
     assert sorted(r.tolist()) == [[0, 0, 4, 2], [0, 2, 2, 4]]
 
 
-def test_mask_to_rects_area_always_matches_the_mask():
+def test_mask_to_rects_reconstructs_the_mask_exactly():
+    """Area alone can hide an overlap and a gap of equal size cancelling out
+    in the sum; rasterise the returned rects back into a grid and require it
+    to be pixel-identical to the input, not just equal in total area."""
     rng = np.random.default_rng(0)
     for _ in range(20):
         m = rng.random((12, 12)) < 0.4
         r = rectify.mask_to_rects(m)
-        area = int(((r[:, 2] - r[:, 0]) * (r[:, 3] - r[:, 1])).sum()) if len(r) else 0
-        assert area == int(m.sum())
+        recon = np.zeros_like(m)
+        for x0, y0, x1, y1 in r.tolist():
+            assert not recon[y0:y1, x0:x1].any(), "rects overlap"
+            recon[y0:y1, x0:x1] = True
+        assert np.array_equal(recon, m)
 
 
 def test_region_rect_counts_sees_the_comb():
@@ -112,6 +118,76 @@ def test_repeated_shedding_drops_exactly_one_rect_a_time_and_terminates():
             assert m.any()
             assert ndimage.label(m, structure=st)[1] == 1
     assert previous < start
+
+
+def test_enforce_rect_max_sheds_when_absorption_would_empty_the_donor():
+    """Integration test through the public enforce_rect_max entry point (not
+    the private helpers), covering ruling D3's absorption-then-shedding
+    composition end to end. Region 1 is a frame -- top/bottom bands plus a
+    left and a right margin column -- that spans the entire grid, so its
+    bbox IS the grid and region 0 (a left blob, a one-row neck, and a right
+    blob, all one 4-connected piece) is its only bbox-hole component.
+    Absorbing that single hole would consume every region-0 cell, which
+    _fill_one_notch's feasibility test correctly refuses (a donor must stay
+    non-empty); enforce_rect_max must then fall through to
+    _shed_one_strip, which gives away region 1's smallest strip -- the
+    left margin column, redundant because the top/bottom bands already stay
+    connected through the right margin alone -- to region 0."""
+    lab = np.ones((9, 17), dtype=np.int16)
+    lab[2:7, 1:6] = 0      # left blob
+    lab[2:7, 11:16] = 0    # right blob
+    lab[4, 6:11] = 0       # one-row neck joining the two blobs
+    assert rectify.region_rect_counts(lab, 2) == [5, 6]
+    # Absorption is infeasible by construction: confirmed directly before
+    # relying on it, so the enforce_rect_max assertions below are known to
+    # exercise the shedding branch and not a lucky absorption.
+    assert rectify._fill_one_notch(lab.copy(), 1) is False
+
+    out = rectify.enforce_rect_max(lab, 2, rect_max=5)
+    counts = rectify.region_rect_counts(out, 2)
+    assert max(counts) <= 5
+
+    expected = lab.copy()
+    expected[2:7, 0] = 0    # the shed left-margin column, given to region 0
+    assert np.array_equal(out, expected)
+
+    st = ndimage.generate_binary_structure(2, 1)
+    for k in range(2):
+        m = out == k
+        assert m.any()
+        assert ndimage.label(m, structure=st)[1] == 1
+
+
+def test_enforce_rect_max_raises_when_neither_move_is_feasible():
+    """A solid two-region tiling -- each region already exactly fills its own
+    bounding box -- with an impossible rect_max=0 budget: _fill_one_notch has
+    no notch to fill (mask already equals bbox) and _shed_one_strip has
+    nothing to shed (already a single rect), so enforce_rect_max must raise
+    the in-loop RuntimeError (ruling D3: an abort here is legitimate
+    behaviour, not a bug) naming the offending region and its rect count."""
+    lab = np.zeros((4, 8), dtype=np.int16)
+    lab[:, 4:] = 1
+    with pytest.raises(RuntimeError, match=r"region 0 has 1 rects \(> 0\)"):
+        rectify.enforce_rect_max(lab, 2, rect_max=0)
+
+
+def test_enforce_rect_max_raises_on_budget_exhaustion_when_the_target_cycles():
+    """Ruling D4: there is no monotone potential, so the arg-max target can
+    legitimately ping-pong between regions forever. This 3x4 tiling is
+    verified to cycle under an impossible rect_max=1: region 0's top row and
+    region 1's 2x2 block trade a single row back and forth via shedding, so
+    enforce_rect_max must exhaust the k*B^2 pass budget and raise -- naming
+    the region and its rect count on the final pass -- rather than loop
+    forever."""
+    lab = np.array([
+        [0, 0, 0, 0],
+        [1, 1, 0, 0],
+        [1, 1, 0, 0],
+    ], dtype=np.int16)
+    budget = 2 * lab.size + 1
+    with pytest.raises(RuntimeError,
+                        match=rf"did not converge within {budget} passes"):
+        rectify.enforce_rect_max(lab, 2, rect_max=1)
 
 
 @pytest.mark.parametrize("bins", [32, 64])
