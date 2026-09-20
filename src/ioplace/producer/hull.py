@@ -5,6 +5,7 @@ docs/research/2026-09-18-grandplan-digest.md section 2.1, with the constants
 fixed by the v2 spec section 2: m=16, q=0.90, alpha=0.25, K_dir=64, so quickhull
 never sees more than 2*m*(K_dir+1) = 2080 points per region even at 11M cells.
 """
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -300,3 +301,45 @@ def anchor_tables(hulls, die, lattice, device="cuda", bin_chunk=16384):
 
     return AnchorTables(lattice=L, die=(xl, yl, xh, yh), pull_off=pull_off,
                         pull_on=pull_on, push_off=push_off, push_cnt=push_cnt)
+
+
+QUANTILE_SUBSAMPLE = 8_000_000
+
+
+def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
+                            alpha=BAND_ALPHA, k_dir=K_DIR):
+    """Algorithm 1 on the device (spec section 2: "Algorithm-1 candidate
+    reduction on GPU"). Same semantics as reduce_candidates; only the
+    projections, the quantile and the top-k live on the GPU, and only the
+    surviving <=2*m*k_dir candidates come back to the host for quickhull.
+
+    torch.quantile has an input-element limit, so above QUANTILE_SUBSAMPLE the
+    threshold is estimated from a deterministic stride subsample -- a threshold
+    estimate, not a filter: the band test still runs over every point.
+
+    Like the numpy path, each direction's support point is always kept
+    (ruling D1), so the output bound is 2*m*(k_dir + 1) before dedup.
+    """
+    n = int(x.numel())
+    if n <= k_dir:
+        return np.unique(torch.stack([x, y], dim=1).double().cpu().numpy(), axis=0)
+    keep = torch.zeros(n, dtype=torch.bool, device=x.device)
+    stride = max(1, n // QUANTILE_SUBSAMPLE + (1 if n % QUANTILE_SUBSAMPLE else 0))
+    for j in range(m):
+        th = j * (2.0 * math.pi / m)
+        s = x.double() * math.cos(th) + y.double() * math.sin(th)
+        for sign in (1.0, -1.0):
+            ss = sign * s
+            t = torch.quantile(ss[::stride].contiguous(), q)
+            hi = ss.max()
+            idx = ((ss >= t) & (ss <= t + alpha * (hi - t))).nonzero(as_tuple=True)[0]
+            if idx.numel() > k_dir:
+                sel = torch.topk(ss[idx] - t, k_dir, largest=False, sorted=True).indices
+                idx = idx[sel]
+            keep[idx] = True
+            # Ruling D1, same named deviation as the numpy path: the band plus
+            # the k_dir cap drops the support points, and the hull of the
+            # reduced set collapses (measured area 95.78 against a true 100).
+            keep[int(torch.argmax(ss))] = True
+    return np.unique(
+        torch.stack([x[keep], y[keep]], dim=1).double().cpu().numpy(), axis=0)

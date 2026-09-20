@@ -145,3 +145,38 @@ def test_build_hull_applies_reduction_then_cap():
     # binds here (the uncapped hull is ~100), so the shrink must land ON it.
     assert area >= 0.9 * 25.0
     assert len(v) >= 3
+
+
+import torch
+
+
+@pytest.mark.gpu
+def test_reduce_candidates_torch_matches_the_numpy_path():
+    """Continuous random data, so exact ties (where torch.topk and numpy's
+    stable argsort could disagree) have measure zero."""
+    rng = np.random.default_rng(11)
+    pts = rng.normal(size=(50_000, 2)) * np.array([3.0, 1.0])
+    want = hull.reduce_candidates(pts)
+    x = torch.as_tensor(pts[:, 0], device="cuda", dtype=torch.float64)
+    y = torch.as_tensor(pts[:, 1], device="cuda", dtype=torch.float64)
+    got = hull.reduce_candidates_torch(x, y)
+    assert got.shape[1] == 2
+    assert {tuple(r) for r in got.tolist()} == {tuple(r) for r in want.tolist()}
+
+
+@pytest.mark.gpu
+def test_reduce_candidates_torch_passes_small_sets_through():
+    x = torch.tensor([0.0, 1.0, 0.0], device="cuda", dtype=torch.float64)
+    y = torch.tensor([0.0, 0.0, 1.0], device="cuda", dtype=torch.float64)
+    got = hull.reduce_candidates_torch(x, y)
+    assert sorted(map(tuple, got.tolist())) == [(0.0, 0.0), (0.0, 1.0), (1.0, 0.0)]
+
+
+@pytest.mark.gpu
+def test_reduce_candidates_torch_feeds_a_usable_hull():
+    rng = np.random.default_rng(12)
+    pts = rng.uniform(0.0, 10.0, size=(20_000, 2))
+    x = torch.as_tensor(pts[:, 0], device="cuda", dtype=torch.float64)
+    y = torch.as_tensor(pts[:, 1], device="cuda", dtype=torch.float64)
+    v = hull.convex_hull(hull.reduce_candidates_torch(x, y))
+    assert hull.polygon_area(v) == pytest.approx(100.0, rel=0.02)
