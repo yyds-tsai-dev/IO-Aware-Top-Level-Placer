@@ -398,13 +398,16 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
             argmax = centre_argmax(pos)
             res = ctx.evaluate(pos.data[:n_phys], pos.data[n_all:n_all + n_phys])
             monitor.observe(cb_state["last_iteration"] + 1, argmax)
-            # Fix wave item 2: cb_state["overflow"] is a snapshot from the
-            # START of the last callback, taken before that iteration's
-            # optimizer step; `pos` above is read AFTER the final step, so
-            # the two disagree by one iteration on this path (review I3).
-            # The "criterion" path (except branch below) has no such gap --
-            # snapshot() there is called from inside the same callback that
-            # measured `overflow`, alongside the very `pos` it is given.
+            # Both paths carry the same one-step skew and neither can avoid it:
+            # DREAMPlace writes model.overflow at NonLinearPlace.py:419, BEFORE
+            # that iteration's optimizer step (:447-459), and fires the callback
+            # after it (:521-523, see its own ":525 reports the metric before
+            # step"). So every `overflow` in this driver -- probe_samples, the
+            # freeze criterion, freeze.json and run_fence_gp's final_overflow --
+            # is evaluated one step before the positions it is filed with. The
+            # fresh read here only removes the dependency on cb_state; it is
+            # value-identical, because nothing updates model.overflow between the
+            # last callback and placer(...) returning.
             overflow = float(placer.model.overflow.max())
             shot = snapshot(cb_state["last_iteration"], pos, overflow,
                             "gp_end", res.io_count, argmax)
