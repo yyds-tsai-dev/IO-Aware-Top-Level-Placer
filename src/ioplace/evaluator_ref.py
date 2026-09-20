@@ -2,6 +2,7 @@ import numpy as np
 from dataclasses import dataclass, field
 from ioplace.netlist import pin_positions
 from ioplace.region_graph import region_graph as build_region_graph, next_hop_table, steiner_tree_stats
+from ioplace.straddle import straddle_diagnostics
 
 @dataclass
 class EvalResult:
@@ -23,6 +24,16 @@ class EvalResult:
     ft_rg: int = 0
     per_net_steiner: np.ndarray = None   # (E,) int32, ST_e
     per_net_home: np.ndarray = None      # (E,) uint8, argmax-pin-count region (ties -> smallest id)
+    # v2 P-F (design v2 sec 7 diagnostics 1-3). Defaults are the "not computed"
+    # state, which evaluate(straddle=False) and any pre-P-F caller both land on.
+    straddle_cells: int = 0
+    straddle_area_fraction: float = 0.0
+    straddle_pin_split_nets: int = 0
+    straddle_out_area: float = 0.0
+    straddle_movable_area: float = 0.0
+    straddle_wide_cells: int = 0
+    per_node_straddle: np.ndarray = None   # (num_physical,) uint8
+    per_net_pin_split: np.ndarray = None   # (num_nets,) int32, signed
 
 def net_mst_edges(px, py):
     d = len(px)
@@ -80,13 +91,15 @@ def edge_regions_and_crossings(rg, x0, y0, x1, y1):
     n2 = _walk_segment(rg, x1, y0, x1, y1, regions, pairs)   # 垂直段
     return regions, n1 + n2, pairs
 
-def evaluate(nl, node_x, node_y, rg, max_degree=256, *, route_wirelength_budget=None):
+def evaluate(nl, node_x, node_y, rg, max_degree=256, *, route_wirelength_budget=None, straddle=True):
     """Evaluate legacy MST L-routes or opt into budgeted detour geometry.
 
     A budget of .05 allows +5% per MST branch; pin HPWL and connectivity stay
     fixed. The opt-in mode recomputes crossings, FT and pair demand from the
     selected segments. It requires in-die pins and models no routing obstacles.
     Nets above max_degree retain the legacy lower-bound treatment.
+
+    straddle=False skips the sec 7 diagnostics; the legacy fields are bit-identical either way.
     """
     router = None
     if route_wirelength_budget is not None:
@@ -160,6 +173,8 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256, *, route_wirelength_budget=
     hard_lambda_sum = int(np.maximum(per_net_lambda - 1, 0).sum())
     io_rg = int(per_net_steiner.sum())
     ft_rg = io_rg - hard_lambda_sum
+    st = straddle_diagnostics(nl, node_x, node_y, rg,
+                              pin_rid=pin_rid_all) if straddle else None
     return EvalResult(
         io_count=int(per_net_crossings.sum()),
         ft_count=int(per_net_ft.sum()),
@@ -169,4 +184,12 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256, *, route_wirelength_budget=
         hard_lambda_sum=hard_lambda_sum,
         per_net_lambda=per_net_lambda,
         io_rg=io_rg, ft_rg=ft_rg,
-        per_net_steiner=per_net_steiner, per_net_home=per_net_home)
+        per_net_steiner=per_net_steiner, per_net_home=per_net_home,
+        straddle_cells=st.straddle_cells if st else 0,
+        straddle_area_fraction=st.straddle_area_fraction if st else 0.0,
+        straddle_pin_split_nets=st.straddle_pin_split_nets if st else 0,
+        straddle_out_area=st.straddle_out_area if st else 0.0,
+        straddle_movable_area=st.straddle_movable_area if st else 0.0,
+        straddle_wide_cells=st.straddle_wide_cells if st else 0,
+        per_node_straddle=st.per_node_straddle if st else None,
+        per_net_pin_split=st.per_net_pin_split if st else None)
