@@ -172,9 +172,16 @@ class AnchorTables:
     push_cnt (K, L*L)   uint8 : how many foreign hulls contain centre(b).
 
     Offsets rather than absolute coordinates because fp16 has ~11 mantissa bits:
-    an absolute die coordinate would quantise to ~0.1% of the die, while the
-    offset's fp16 error is negligible against a bin width. The consumer
-    reconstructs anchor = centre(bin(x)) + offset.
+    an absolute die coordinate would quantise to ~0.1% of the die. An offset is
+    bounded by the die extent E, so fp16's 2^-11 relative error gives an
+    absolute error of at most 2**-11 * E == (E/512)/4 == 1/4 bin width,
+    independent of die size -- the 512 lattice and fp16's 11 mantissa bits
+    cancel. That is well under the >= sqrt(2)/2 bin the frozen rasterisation
+    itself already costs (projection is 1-Lipschitz, so using Pi_H(centre(b))
+    in place of Pi_H(x_cell) can differ by up to a bin's half-diagonal): fp16
+    does not add a dominant error term, and an fp32 pull table would cost
+    +16 MiB at K=16 (+32 MiB at K=32) of GPU memory for no measurable gain.
+    The consumer reconstructs anchor = centre(bin(x)) + offset.
 
     (mean, count) rather than one anchor per foreign hull because
     sum_s ||x - a_s||^2 = n*||x - abar||^2 + (sum_s ||a_s||^2 - n*||abar||^2):
@@ -240,6 +247,15 @@ def anchor_tables(hulls, die, lattice, device="cuda", bin_chunk=16384):
     system, not the native one).
     """
     xl, yl, xh, yh = (float(v) for v in die)
+    # fp16's finite maximum is 65504; an offset can be as large as the die
+    # extent (a hull can degenerate to a point at one corner while a bin sits
+    # at the opposite one), so cap the extent at 32768 -- a 2x margin -- to
+    # keep pull_off/push_off from overflowing to inf. A real ValueError, not
+    # an assert, since python -O strips asserts and this is an input contract.
+    if max(xh - xl, yh - yl) >= 32768.0:
+        raise ValueError(
+            f"anchor_tables: die extent {max(xh - xl, yh - yl)!r} >= 32768.0 "
+            "would overflow the fp16 pull_off/push_off tables")
     L = int(lattice)
     cw, ch = (xh - xl) / L, (yh - yl) / L
     idx = torch.arange(L, dtype=torch.float64, device=device)

@@ -81,3 +81,35 @@ def test_anchor_tables_is_deterministic():
     assert torch.equal(a.pull_off, b.pull_off)
     assert torch.equal(a.push_off, b.push_off)
     assert torch.equal(a.push_cnt, b.push_cnt)
+
+
+def test_pull_off_fp16_error_is_bounded_on_a_realistic_die_size():
+    # Fix round 1: the earlier "negligible against a bin width" docstring
+    # claim was never exercised by the 8-unit toy DIE above. Use a real
+    # (scaled) die size -- mempool_tile_wrap is 4737.0 x 4737.2 -- and a
+    # small hull in the origin corner, so most bins are far outside it and
+    # exercise the largest offsets the fp16 store has to carry.
+    big_die = (0.0, 0.0, 4737.0, 4737.2)
+    sq = np.array([[0., 0.], [94.7, 0.], [94.7, 94.7], [0., 94.7]])
+    t = hull.anchor_tables([sq], big_die, lattice=512, device="cpu")
+    assert torch.isfinite(t.pull_off).all()
+    assert torch.isfinite(t.push_off).all()
+
+    L = 512
+    idx = np.arange(L, dtype=np.float64)
+    ix, iy = np.meshgrid(idx, idx, indexing="xy")
+    cx = (0.0 + (ix.ravel() + 0.5) * (4737.0 / L))
+    cy = (0.0 + (iy.ravel() + 0.5) * (4737.2 / L))
+    proj, inside = hull.nearest_on_polygon_boundary(
+        torch.as_tensor(cx), torch.as_tensor(cy), sq)
+    off = proj - torch.stack([torch.as_tensor(cx), torch.as_tensor(cy)], dim=1)
+    ref = torch.where(inside.unsqueeze(1), torch.zeros_like(off), off)
+
+    bin_width = 4737.0 / 512
+    assert (t.pull_off.double() - ref).abs().max() <= 0.25 * bin_width
+
+
+def test_anchor_tables_rejects_a_die_extent_that_would_overflow_fp16():
+    huge_die = (0.0, 0.0, 32768.0, 100.0)
+    with pytest.raises(ValueError):
+        hull.anchor_tables([BIG], huge_die, lattice=8, device="cpu")
