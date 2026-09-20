@@ -387,3 +387,101 @@ def test_ft_term_ref_rejects_a_pin_anchored_io_term():
     rs, nl = _straddler()
     with pytest.raises(ValueError, match="pin"):
         FtTermRef(_pin_ref(nl, rs), np.zeros((4, 4)))
+
+
+# ---------------------------------------------- task 2 fix round 1
+
+def test_pin_arm_forward_and_backward_scatter_correctly_for_a_repeated_pin_index():
+    """test_pin_arm_double_counts_a_node_carrying_two_pins_of_one_net only
+    checks PinCsr's shape/counts; it never runs the repeated pin_node entry
+    through forward+backward. The whole point of the pin arm is that repeat,
+    so pin its VALUE and its GRADIENT against an independent ground truth: a
+    physical-layout twin where node 1 is split into two separate movable
+    nodes at the identical position. The node arm's own (net, node) dedup CSR
+    then sees exactly three distinct (position) contributions -- the same
+    triple of floating-point values, accumulated in the same order, that the
+    pin arm's gather (x[pin_node] with pin_node=[0, 1, 1]) produces directly.
+    Forward value must therefore match bit-for-bit (`==`, not `approx`), and
+    node 1's single gradient in the pin case must equal the SUM of the two
+    split nodes' gradients in the twin case: a wrong scatter target (e.g.
+    pin_net_idx swapped for pin_node) or a dropped duplicate (only one of the
+    two pins contributing) would break one or both."""
+    rs = make_grid_regions(DIE, 2, 2, lattice=10)
+    tau = 12.5   # bias table (see test_pin_arm_bias_grows_from_zero_...): nonzero here
+
+    nl_pin = _nl([(10., 10.), (90., 10.)], [[0, 1, 1]])   # node 1 carries two pins
+    nl_pin.node_size_x = np.ones(2)
+    nl_pin.node_size_y = np.ones(2)
+    pos_pin = _pos(nl_pin, device=DEV)
+    pin_term = _pin_ref(nl_pin, rs)
+    L_pin = pin_term(pos_pin, tau, 1.0)
+    g_pin, = torch.autograd.grad(L_pin, pos_pin)
+
+    # ground truth: node 1 "split" into two physically-coincident nodes, one
+    # net over all three -- literally the same triple of (position) values.
+    nl_dup = _nl([(10., 10.), (90., 10.), (90., 10.)], [[0, 1, 2]])
+    nl_dup.node_size_x = np.ones(3)
+    nl_dup.node_size_y = np.ones(3)
+    pos_dup = _pos(nl_dup, device=DEV)
+    dup_term = _ref(nl_dup, rs, "lower_left")
+    L_dup = dup_term(pos_dup, tau, 1.0)
+    g_dup, = torch.autograd.grad(L_dup, pos_dup)
+
+    assert float(L_pin.detach()) == float(L_dup.detach())
+    assert float(L_pin.detach()) > 0.0    # sanity: not a vacuously-zero comparison
+
+    n_pin, n_dup = nl_pin.num_physical, nl_dup.num_physical
+    gx_pin, gy_pin = g_pin[:n_pin], g_pin[n_pin:2 * n_pin]
+    gx_dup, gy_dup = g_dup[:n_dup], g_dup[n_dup:2 * n_dup]
+
+    # node 0 (one pin, both cases) is untouched by the duplication.
+    assert float(gx_pin[0]) == float(gx_dup[0])
+    assert float(gy_pin[0]) == float(gy_dup[0])
+    # node 1's gradient must be the SUM of the two split nodes' gradients --
+    # the multiplicity check a lost duplicate or a wrong scatter target fails.
+    assert float(gx_pin[1]) == float(gx_dup[1]) + float(gx_dup[2])
+    assert float(gy_pin[1]) == float(gy_dup[1]) + float(gy_dup[2])
+    assert float(gx_pin[1]) != 0.0 or float(gy_pin[1]) != 0.0
+
+
+def test_pin_arm_bias_grows_from_zero_and_stays_above_the_node_arm():
+    """Runnable reproduction of the sec 7 bias table (task-2-report.md): the
+    pin arm's extra (P,K) row for node 1's duplicate pin can only add mass to
+    its net's soft assignment sum, never remove it, so the pin arm's soft
+    Sum_k q_k is >= the node arm's at every tau, exactly 0 while the softmax
+    stays hard, and grows once tau softens it. Deliberately does not assert
+    the exact float value at any tau (that is a property of softmax_stats'
+    numerics, not of this task's contract) -- only the structure that
+    matters: zero in the hard regime, non-decreasing, pin >= node throughout,
+    and distinctly nonzero by the largest tau probed."""
+    rs = make_grid_regions(DIE, 2, 2, lattice=10)
+    nl = _nl([(10., 10.), (90., 10.)], [[0, 1, 1]])   # node 1 carries two pins
+    nl.node_size_x = np.ones(2)
+    nl.node_size_y = np.ones(2)
+    pos = _pos(nl, device=DEV)
+    node_term = _ref(nl, rs, "lower_left")
+    pin_term = _pin_ref(nl, rs)
+
+    taus = (0.05, 1.0, 2.0, 3.0, 5.0, 12.5)
+    biases = []
+    print("\ntau       node_lam       pin_lam        bias(pin-node)")
+    for tau in taus:
+        x, y = node_term._split_xy(pos)
+        _, lam_node, _ = node_term._forward_io(x, y, tau)
+        x2, y2 = pin_term._split_xy(pos)
+        _, lam_pin, _ = pin_term._forward_io(x2, y2, tau)
+        bias = float(lam_pin.detach()) - float(lam_node.detach())
+        biases.append(bias)
+        print(f"{tau:<9} {float(lam_node.detach()):.8f}   {float(lam_pin.detach()):.8f}   {bias:+.8f}")
+
+    # hard regime: bit-exact zero (both arms saturate to the same crossing).
+    assert biases[0] == 0.0
+    assert biases[1] == 0.0
+    # pin arm never below the node arm, at any tau probed.
+    assert all(b >= -1e-15 for b in biases)
+    # non-decreasing throughout, and strictly increasing once the softmax has
+    # softened enough to tell the two arms apart (tau >= 2.0 here).
+    assert biases == sorted(biases)
+    tail = biases[2:]
+    assert all(a < b for a, b in zip(tail, tail[1:]))
+    assert tail[-1] > 1e-3, "expected the bias to be clearly nonzero by the largest tau probed"
