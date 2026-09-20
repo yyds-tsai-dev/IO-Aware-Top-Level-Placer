@@ -21,12 +21,22 @@ drifts:
 3. Movable cells only (i < nl.num_movable). per_node_straddle is still shaped
    (num_physical,), zero on the terminal tail, so it aligns with
    evaluation.npz's node_region.
-4. Quadrant area split. Out-of-owner area is summed over the at most four
-   rectangles the FIRST lattice line in each axis cuts the box into, each
-   attributed to its own corner's region; the four areas sum to w*h exactly.
-   Exact for a cell spanning at most two lattice cells per axis (every standard
-   cell on a 512-lattice); wider cells are approximated and counted in
-   straddle_wide_cells, so the approximation is measured, not silent.
+4. Quadrant area split. The box is cut by at most one vertical line -- the
+   lattice column boundary immediately to the right of the column containing
+   x, i.e. xl + (ix0+1)*cell_w where ix0 = to_idx(x)'s column, clipped to x+w
+   if the box does not reach that far -- and at most one horizontal line
+   defined the same way from y. Together they split the box into up to four
+   rectangles: lower-left owned by r00's region, lower-right by r10's,
+   upper-left by r01's, upper-right by r11's. Out-of-owner area sums exactly
+   the rectangles whose own corner's region differs from the owner's. The four
+   rectangles' areas sum to w*h in real-number arithmetic; float64 addition is
+   not associative, so that sum is pinned bit-exact only for the
+   integer-valued geometries this module's own tests use, not claimed for
+   arbitrary floats (the same caveat the rel<=1e-12 float-field contract
+   already carries for tree_wl/hpwl). Exact for a cell spanning at most two
+   lattice cells per axis (every standard cell on a 512-lattice); wider cells
+   are approximated and counted in straddle_wide_cells, so the approximation
+   is measured, not silent.
 5. Pin re-attribution by distinct-region count. per_net_lambda is the only
    crossing measure that is a function of pin->region attribution alone: the
    MST-geometry per_net_crossings depends on coordinates, which re-attribution
@@ -72,6 +82,10 @@ def straddle_geometry(rg, x, y, w, h):
     out_area: float64, quadrant area not belonging to the owner.
     wide:     bool, the box spans more than two lattice cells in some axis, so
               out_area is approximate (convention 4).
+
+    See the module docstring's convention 4 for the exact definition of the
+    two candidate cut lines (xm, ym below) and which rectangle each of the
+    four corners owns.
     """
     xr = x + w
     yt = y + h
@@ -84,6 +98,9 @@ def straddle_geometry(rg, x, y, w, h):
 
     ix0, iy0 = rg.to_idx(x, y)
     ix1, iy1 = rg.to_idx(xr, yt)
+    # xm/ym: the single vertical/horizontal cut line each axis gets (the
+    # lattice line just past x's column / y's row), clipped to the box's own
+    # far edge when the box does not reach it.
     xm = np.minimum(xr, rg.die[0] + (ix0 + 1) * rg.cell_w)
     ym = np.minimum(yt, rg.die[1] + (iy0 + 1) * rg.cell_h)
     lw = np.maximum(xm - x, 0.0)

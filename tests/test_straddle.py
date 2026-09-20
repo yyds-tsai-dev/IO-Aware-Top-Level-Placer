@@ -100,12 +100,117 @@ def test_wide_cells_are_flagged_and_approximated_not_silently_wrong():
 
 def test_cell_touching_a_boundary_exactly_counts_as_straddling():
     """Closed-box convention: the right edge landing exactly on x=50 puts the
-    (x+w) corner in region 1."""
+    (x+w) corner in region 1. This exercises only the x-axis pair of the
+    OR-chain (r10 != r00 and, since y does not also cross, r11 != r00 too);
+    see the y-axis counterpart below for the pair this test cannot exercise."""
     rg = _grid()
     straddle, owner, out_area, _ = straddle_geometry(
         rg, np.array([46.]), np.array([10.]), np.array([4.]), np.array([4.]))
     assert straddle.tolist() == [True] and owner.tolist() == [0]
     assert out_area.tolist() == [0.]     # every quadrant with area is region 0
+
+
+def test_top_edge_touching_a_boundary_exactly_counts_as_straddling():
+    """The y-axis counterpart of the test above: the top edge landing exactly
+    on y=50 puts the (y+h) corner in region 2, firing the r01/r11 pair of the
+    OR-chain instead of the r10/r11 pair. A bug confined to the x-axis path,
+    or an x/y transposition, would still make the test above pass (the 2x2
+    grid is symmetric) but would break the owner/out_area values here, or the
+    straddle boolean itself if the transposition swapped w and h too."""
+    rg = _grid()
+    straddle, owner, out_area, _ = straddle_geometry(
+        rg, np.array([10.]), np.array([46.]), np.array([4.]), np.array([4.]))
+    assert straddle.tolist() == [True] and owner.tolist() == [0]
+    assert out_area.tolist() == [0.]     # every quadrant with area is region 0
+
+
+def test_left_edge_on_a_boundary_does_not_spuriously_straddle():
+    """Negative case: the left edge sitting exactly on x=50 puts the whole
+    box (which only ever extends rightward from x) in the column to the
+    right, per to_idx's floor+clamp -- not split across the line. Guards
+    against an off-by-one that treats the box's low edge (x, y) differently
+    from its high edge (x+w, y+h) under the same closed-box convention."""
+    rg = _grid()
+    straddle, owner, out_area, _ = straddle_geometry(
+        rg, np.array([50.]), np.array([10.]), np.array([4.]), np.array([4.]))
+    assert straddle.tolist() == [False] and owner.tolist() == [1]
+    assert out_area.tolist() == [0.]
+
+
+def test_bottom_edge_on_a_boundary_does_not_spuriously_straddle():
+    """The y-axis counterpart of the negative case above."""
+    rg = _grid()
+    straddle, owner, out_area, _ = straddle_geometry(
+        rg, np.array([10.]), np.array([50.]), np.array([4.]), np.array([4.]))
+    assert straddle.tolist() == [False] and owner.tolist() == [2]
+    assert out_area.tolist() == [0.]
+
+
+def test_zero_width_cell_can_straddle_with_zero_area():
+    """A degenerate zero-width cell can still cross a lattice line -- w=0
+    forces xr=x, so r10 always equals r00 and r11 always equals r01, but the
+    r01-vs-r00 term can still fire on the y-axis. lw=rw=xm-x=xr-xm=0 in that
+    case (xr equals x, and the cut line xm clips to xr), so out_area is
+    exactly zero regardless: the quadrant-area identity (convention 4)
+    degenerates to 0 == w*h == 0. This is what the code does today, not an
+    unexercised corner."""
+    rg = _grid()
+    straddle, owner, out_area, wide = straddle_geometry(
+        rg, np.array([10.]), np.array([46.]), np.array([0.]), np.array([6.]))
+    assert straddle.tolist() == [True]
+    assert owner.tolist() == [0]
+    assert out_area.tolist() == [0.]
+    assert wide.tolist() == [False]
+
+
+def test_quadrant_area_split_sums_to_the_cell_area_bit_exactly_on_integer_geometry():
+    """Convention 4's identity -- the four quadrant rectangles (not just
+    out_area, which only sums the ones that disagree with the owner) sum to
+    w*h -- is only claimed bit-exact for integer-valued geometry on this
+    integer lattice; float64 addition is not associative in general (the same
+    caveat the rel<=1e-12 float-field contract already carries). Pin it with
+    `==`, not `pytest.approx`, mirroring straddle_geometry's own xm/ym/lw/rw/
+    bh/th arithmetic against the fixtures already used elsewhere in this
+    file, so the claim in the module docstring is checked, not just stated."""
+    rg = _grid()
+    cases = [
+        (30., 10., 35., 4.),   # the wide-cell case
+        (46., 10., 4., 4.),    # the x+w-on-boundary case
+        (48., 48., 4., 4.),    # corner_case's node 2, all four regions touched
+    ]
+    for x, y, w, h in cases:
+        xr, yt = x + w, y + h
+        ix0, iy0 = rg.to_idx(np.array([x]), np.array([y]))
+        xm = min(xr, rg.die[0] + (int(ix0[0]) + 1) * rg.cell_w)
+        ym = min(yt, rg.die[1] + (int(iy0[0]) + 1) * rg.cell_h)
+        lw, rw = xm - x, xr - xm
+        bh, th = ym - y, yt - ym
+        total = lw * bh + rw * bh + lw * th + rw * th
+        assert total == w * h
+
+
+def test_movable_only_guard_excludes_a_straddling_terminal():
+    """A terminal that genuinely spans a region boundary must not be counted
+    anywhere: straddle_cells, per_node_straddle and the area totals are all
+    movable-only (convention 3). Node 1 here is positioned exactly like
+    _corner_case's straddling node 1, but as a terminal (num_movable=1) -- if
+    the movable-only guard in straddle_diagnostics broke silently, this is
+    the case that would catch it."""
+    nl = Netlist(node_x=np.array([10., 48.]), node_y=np.array([10., 10.]),
+                 node_size_x=np.full(2, 4.), node_size_y=np.full(2, 4.),
+                 num_movable=1, num_terminals=1, num_terminal_NIs=0,
+                 pin_offset_x=np.zeros(2), pin_offset_y=np.zeros(2),
+                 pin2node=np.array([0, 1], np.int32),
+                 pin2net=np.array([0, 0], np.int32),
+                 flat_net2pin=np.arange(2, dtype=np.int32),
+                 flat_net2pin_start=np.array([0, 2], np.int32),
+                 xl=0., yl=0., xh=100., yh=100.)
+    rg = _grid()
+    st = straddle_diagnostics(nl, nl.node_x, nl.node_y, rg)
+    assert st.straddle_cells == 0
+    assert st.per_node_straddle.tolist() == [0, 0]
+    assert st.straddle_out_area == 0.0
+    assert st.straddle_movable_area == pytest.approx(16.0)   # node 0 only, 4x4
 
 
 def test_distinct_regions_per_net_is_zero_for_degree_one_nets():
