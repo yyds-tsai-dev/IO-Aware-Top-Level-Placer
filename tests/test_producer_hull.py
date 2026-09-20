@@ -225,3 +225,24 @@ def test_reduce_candidates_torch_stride_subsamples_the_quantile_above_the_thresh
         for sign in (1.0, -1.0):
             extreme = pts[np.argmax(sign * s)]
             assert (np.abs(got1 - extreme).sum(axis=1) < 1e-9).any()
+
+
+def test_reduce_candidates_torch_direction_table_matches_numpy():
+    """CPU-only regression guard for the CUDA-trig ulp bug: hull._direction_table
+    must build the 2*m batched-direction constants with np.cos/np.sin (host),
+    never torch.cos/torch.sin (device). CUDA's torch.sin differs from np.sin
+    by 1 ulp at j=7 for m=16 (0.38268343236508984 vs 0.3826834323650899),
+    which silently broke bitwise parity between reduce_candidates_torch's
+    per-row projections and reduce_candidates' np.cos(th)/np.sin(th) (1758
+    differing elements on the 60x60 grid used by the tied-grid test above).
+    No GPU needed here: this pins the pure-numpy construction directly, so
+    a future edit that moves the trig back onto the device fails this test
+    before it ever reaches a CUDA run."""
+    m = hull.DIRECTIONS_M
+    cos_dir, sin_dir = hull._direction_table(m)
+    j = np.arange(m, dtype=np.float64)
+    th = j * (2.0 * np.pi / m)
+    want_cos = np.stack([np.cos(th), -np.cos(th)], axis=1).reshape(-1)
+    want_sin = np.stack([np.sin(th), -np.sin(th)], axis=1).reshape(-1)
+    assert np.array_equal(cos_dir, want_cos)
+    assert np.array_equal(sin_dir, want_sin)

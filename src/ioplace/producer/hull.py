@@ -388,6 +388,33 @@ def anchor_tables(hulls, die, lattice, device="cuda", bin_chunk=16384):
 QUANTILE_SUBSAMPLE = 8_000_000
 
 
+def _direction_table(m):
+    """The 2*m batched-direction (cos, sin) pairs for reduce_candidates_torch,
+    built on the HOST with np.cos/np.sin -- never torch.cos/torch.sin on the
+    device. CUDA's torch.sin differs from np.sin by 1 ulp at j=7 for m=16
+    (0.38268343236508984 vs 0.3826834323650899), which silently broke
+    bitwise parity between the GPU's per-row projections and
+    reduce_candidates' np.cos(th)/np.sin(th) (1758 differing elements on a
+    60x60 grid) -- turning the module's exact tie-break guarantee into a
+    merely probabilistic one. Keeping this table's construction in a
+    dedicated, numpy-only function (tested directly by
+    test_reduce_candidates_torch_direction_table_matches_numpy) is what
+    stops a future edit from moving the trig back onto the device.
+
+    Row 2*j is direction j's +sign, row 2*j+1 its -sign, matching
+    reduce_candidates' (j, sign) enumeration order; reduce_candidates_torch's
+    final keep mask is a union over rows, so this order does not affect its
+    result.
+
+    Returns (cos_dir, sin_dir), each a (2*m,) float64 numpy array.
+    """
+    j = np.arange(m, dtype=np.float64)
+    th = j * (2.0 * math.pi / m)
+    cos_j, sin_j = np.cos(th), np.sin(th)
+    return (np.stack([cos_j, -cos_j], axis=1).reshape(-1),
+            np.stack([sin_j, -sin_j], axis=1).reshape(-1))
+
+
 def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
                             alpha=BAND_ALPHA, k_dir=K_DIR,
                             quantile_subsample=QUANTILE_SUBSAMPLE):
@@ -402,9 +429,33 @@ def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
     stable argsort(dim=1) plus a per-row rank test, and a single index_fill_
     for the union of every direction's band selection and its forced support
     point. This removes the 2*m per-region nonzero()/idx.numel() host syncs
-    the un-batched loop paid for (measured 53.3ms -> 2.34ms per region on the
-    P-C acceptance config, an 8-13x range under GPU 3's shared-host
-    contention); see hull-perf-report.md for the measured before/after.
+    the un-batched loop paid for. Measured per-region time on the real P-C
+    acceptance region sizes (mempool_tile_wrap, K=16, ~7984 movable
+    cells/region) on shared GPU 3: an interleaved low-contention window gave
+    ~12.4ms (pre-index_fill_) -> ~1.10ms (batched), about 11x; a
+    high-contention window on the same two commits gave ~52.1ms -> ~21.0ms,
+    about 2.5x, because the removed keep[idx]=True path's blocking pageable
+    H2D copy gets more expensive under contention while the batched path has
+    no such copy to begin with. Both windows are on this host on the same
+    day; see hull-perf-report.md for the full trial tables -- there is no
+    single "Nx" number, only a measured range that depends on contention.
+
+    Scale limitation (not yet fixed; see hull-perf-report.md fix round 2):
+    the full-row stable argsort makes `order` and `rank` two (2m, n) index
+    buffers, and peak device memory is about 1.14 kB/point (measured 2168
+    MiB at n=2,000,000, against 113 MiB for the pre-batch loop). By n~=2e6
+    the argsort's cost erases the batching win entirely (measured 36.7ms
+    batched vs 37.4ms loop, median); at n=700k batched is still ahead (12.5ms
+    vs 28.4ms). The v2 spec's K~=4-32 at up to 30M cells lands n in
+    1-7.5M/region, i.e. at or past this crossover for the largest
+    configs -- fine for the 127k-cell acceptance config this rewrite was
+    measured against, but a real risk at the top of the spec's stated scale.
+    The identified fix, deferred until it can be driven by a real large-n
+    measurement rather than guessed at: replace the rank sort with
+    torch.topk(k_dir) plus a cumsum-based tie-selection (measured 2.45ms vs
+    14.5ms for argsort alone at n=2e6, and it drops the order/rank (2m, n)
+    buffers -- already int32 here, see below -- entirely), or chunk the
+    direction rows to bound peak memory.
 
     torch.quantile has an input-element limit, so above quantile_subsample
     (spec's QUANTILE_SUBSAMPLE=8_000_000 by default; exposed as a keyword only
@@ -442,15 +493,9 @@ def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
         return np.unique(torch.stack([x, y], dim=1).double().cpu().numpy(), axis=0)
     dev = x.device
     xf, yf = x.double(), y.double()
-    j = torch.arange(m, dtype=torch.float64, device=dev)
-    th = j * (2.0 * math.pi / m)
-    cos_j, sin_j = torch.cos(th), torch.sin(th)
-    # Row 2*j is direction j's +sign, row 2*j+1 its -sign -- the same (j,
-    # sign) enumeration order the old nested loop used, kept only for
-    # readability: the final keep mask is a union over rows, so the order
-    # among rows cannot affect the result.
-    cos_dir = torch.stack([cos_j, -cos_j], dim=1).reshape(-1)   # (2m,)
-    sin_dir = torch.stack([sin_j, -sin_j], dim=1).reshape(-1)   # (2m,)
+    cos_dir_np, sin_dir_np = _direction_table(m)
+    cos_dir = torch.as_tensor(cos_dir_np, device=dev)   # (2m,)
+    sin_dir = torch.as_tensor(sin_dir_np, device=dev)   # (2m,)
     ss = cos_dir.unsqueeze(1) * xf.unsqueeze(0) + sin_dir.unsqueeze(1) * yf.unsqueeze(0)  # (2m, n)
 
     stride = max(1, n // quantile_subsample + (1 if n % quantile_subsample else 0))
@@ -460,12 +505,21 @@ def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
 
     adjusted = torch.where(band, ss - t.unsqueeze(1),
                           torch.full_like(ss, float("inf")))
-    order = torch.argsort(adjusted, dim=1, stable=True)          # (2m, n)
+    # int32, not int64: these are the two (2m, n) index buffers driving this
+    # function's memory footprint (see the scale-limitation note above), and
+    # n never approaches int32's ~2.1e9 range at the region sizes this
+    # rewrite targets. scatter_ accepts an int32 index on this torch build;
+    # verified against the int64 path with torch.equal before switching.
+    order = torch.argsort(adjusted, dim=1, stable=True).to(torch.int32)  # (2m, n)
     rank = torch.empty_like(order)
-    rank.scatter_(1, order, torch.arange(n, device=dev).expand(2 * m, n))
+    rank.scatter_(1, order,
+                  torch.arange(n, device=dev, dtype=torch.int32).expand(2 * m, n))
     selected = band & (rank < k_dir)                             # (2m, n)
 
-    keep = selected.any(dim=0).clone()
+    # any(dim=0) always allocates a fresh tensor (a reduction, never a view
+    # of `selected`), so the in-place index_fill_ below is safe without an
+    # extra .clone().
+    keep = selected.any(dim=0)
     # Ruling D1, same named deviation as the numpy path: the band plus the
     # k_dir cap drops the support points, and the hull of the reduced set
     # collapses (measured area 95.78 against a true 100). index_fill_, not
