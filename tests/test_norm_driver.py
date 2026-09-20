@@ -243,11 +243,19 @@ def test_legacy_publish_atomic_is_wired_with_the_correct_tau_ecc_gamma(tmp_path,
 
     monkeypatch.setattr(ft_callback_mod, "publish_atomic", spy)
 
+    # P-F fix round 3: this test's schedule-property checks below (gamma
+    # tracks DREAMPlace's own overflow-driven Lgamma schedule) were recorded
+    # against the physical GP trajectory the lower-left anchor produces, the
+    # only anchor that existed before the P-F range. run_io's own default
+    # flipped to "center" (design v2 sec 7), and the anchor changes the real
+    # IO gradient the optimizer descends, so it changes the trajectory these
+    # checks are pinned to -- pin the anchor explicitly rather than letting
+    # it silently track run_io's default.
     out = str(tmp_path / "legacy_spy.json")
     result = run_io(config, k, "grid", 0, out,
                     rho_max=.4, every=5, of_on=2., of_full=1.,
                     callback_order="atomic", f_ft_max=.25, ft_ramp_mode="constant",
-                    no_diag=True)
+                    no_diag=True, node_anchor="lower_left")
     assert calls, "publish_atomic was never called"
 
     # Recompute L_R independently the same way run_io does, from the config's

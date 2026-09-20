@@ -72,8 +72,18 @@ def test_legacy_driver_trajectory_matches_the_pre_ph_golden(tmp_path):
         "the golden config changed (simple.json at %s?) -- this test would be "
         "comparing two different placements" % (SIMPLE,))
 
+    # P-F fix round 3: the fixture was recorded at 43854b2, before any of the
+    # anchor commits existed -- run_io had no node_anchor parameter at all
+    # then, so its only behaviour was what --node-anchor=lower_left now names
+    # explicitly. run_io's own default flipped to "center" (design v2 sec 7),
+    # and lambda_io is derived from a MEASURED IO gradient, so the golden
+    # numbers below are only meaningful reproduced under lower_left -- this is
+    # a historical-parity fixture, not a knob to retune. Not part of
+    # RUN_KWARGS: that dict is checked verbatim against the fixture's own
+    # recorded `provenance.run_io_kwargs`, which (correctly) has no
+    # `node_anchor` key, since the parameter did not exist yet at 43854b2.
     result = run_io(config, 4, "grid", 0, str(tmp_path / "legacy_golden.json"),
-                    **RUN_KWARGS)
+                    node_anchor="lower_left", **RUN_KWARGS)
     assert result["norm_policy"] == "legacy"
 
     keys = tuple(fixture["keys"])
