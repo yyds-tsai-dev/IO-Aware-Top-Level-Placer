@@ -429,12 +429,20 @@ def reduce_candidates_torch(x, y, m=DIRECTIONS_M, q=QUANTILE_Q,
             if idx.numel() > k_dir:
                 order = torch.sort(ss[idx] - t, stable=True).indices
                 idx = idx[order[:k_dir]]
-            keep[idx] = True
+            # index_fill_, not keep[idx] = True: Tensor.__setitem__ with a
+            # Python bool RHS wraps it in a CPU tensor and goes through
+            # index_put_ with a blocking pageable H2D copy (measured 0.70 ms
+            # per call here, vs 0.008-0.012 ms for index_fill_ -- 2m=32 calls
+            # per direction pair times 16 regions times T_hull rebuilds was
+            # 82-84% of the whole GP+LG overhead on mempool_tile_wrap).
+            keep.index_fill_(0, idx, True)
             # Ruling D1, same named deviation as the numpy path: the band plus
             # the k_dir cap drops the support points, and the hull of the
             # reduced set collapses (measured area 95.78 against a true 100).
             # No int()/.item() here: indexing keep with the 0-dim argmax
             # tensor stays device-side and avoids a host sync every iteration.
-            keep[torch.argmax(ss)] = True
+            # index_fill_ again for the same H2D-copy reason as above (the
+            # argmax result must be reshaped to a 1-element index tensor).
+            keep.index_fill_(0, torch.argmax(ss).view(1), True)
     return np.unique(
         torch.stack([x[keep], y[keep]], dim=1).double().cpu().numpy(), axis=0)
