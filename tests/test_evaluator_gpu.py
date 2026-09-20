@@ -375,6 +375,12 @@ def test_legacy_fields_bit_exact_regression_adaptec1_k16_grid_flat():
 
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     saved_path = os.path.join(repo, "results/m2/ablation/adaptec1_A0_k16_grid.json")
+    # The JSON is committed; its companion .npz of node positions is host-local
+    # scratch that never was, so the golden is only checkable where that run's
+    # artefacts still sit on disk.
+    if not os.path.exists(saved_path + ".npz"):
+        pytest.skip(f"{saved_path}.npz not present on this host "
+                    "(re-run the M2 A0 ablation to regenerate it)")
     saved = json.load(open(saved_path))
     npz = np.load(saved_path + ".npz")
 
