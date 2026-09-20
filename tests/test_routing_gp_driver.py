@@ -148,7 +148,8 @@ def test_gp_modes_and_self_generated_legal_calibration(tmp_path, mode):
         assert any(row["published_observation_version"] == 2 for row in report["trace"])
 
 
-def test_publication_report_leaves_early_stop_observation_pending():
+def test_publication_report_leaves_early_stop_observation_pending(monkeypatch):
+    monkeypatch.setenv("IOPLACE_ENABLE_GR_IN_LOOP", "1")
     from scripts.run_route_gp import observation_publication
     observations = [dict(observation_version=1, iteration=-1),
                     dict(observation_version=2, iteration=7),
@@ -163,7 +164,8 @@ def test_publication_report_leaves_early_stop_observation_pending():
 
 
 @pytest.mark.slow
-def test_saved_tile_row_gap_checkpoint_repairs_without_running_gp(tmp_path):
+def test_saved_tile_row_gap_checkpoint_repairs_without_running_gp(tmp_path, monkeypatch):
+    monkeypatch.setenv("IOPLACE_ENABLE_GR_IN_LOOP", "1")
     import torch
     from ioplace.drivers.run_placement import _load_dreamplace
     from scripts.run_route_gp import repair_routed_snapshot

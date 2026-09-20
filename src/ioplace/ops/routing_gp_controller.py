@@ -1,10 +1,10 @@
 """Publish frozen route objectives and router observations between GP steps."""
 import math
-import os
 
 import torch
 
 from ioplace.dp_hook import refresh_nesterov_secant
+from ioplace.gr_in_loop import require_gr_in_loop
 from ioplace.norm import TermNormalizer
 from ioplace.ops.steiner_gp import tensor_digest
 
@@ -18,11 +18,7 @@ class RoutingGPController:
     """
     def __init__(self, term, placer, *, mode="joint", start=200, rebuild_every=20,
                  tau=1., route_strength=.1, router_every=0, router_callback=None):
-        if os.environ.get("IOPLACE_ENABLE_GR_IN_LOOP") != "1":
-            raise RuntimeError(
-                "in-loop GR is retired by the v2 design (sec 1): the final GRT "
-                "protocol runs once, after placement. Set "
-                "IOPLACE_ENABLE_GR_IN_LOOP=1 to use this unmaintained path.")
+        require_gr_in_loop()
         if mode not in ("wa_standard", "wa", "paper", "joint"):
             raise ValueError("unknown GP mode")
         if start < 1 or rebuild_every < 1 or router_every < 0:

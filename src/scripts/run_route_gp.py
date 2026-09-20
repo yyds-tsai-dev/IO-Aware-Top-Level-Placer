@@ -3,6 +3,10 @@
 Retired by the v2 design (sec 1): requires IOPLACE_ENABLE_GR_IN_LOOP=1 and is
 unmaintained. The supported protocol is one GRT call after placement.
 """
+from ioplace.gr_in_loop import require_gr_in_loop
+
+require_gr_in_loop()
+
 import argparse
 import json
 import os

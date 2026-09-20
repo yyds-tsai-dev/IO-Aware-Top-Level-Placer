@@ -45,7 +45,8 @@ Total 100 120 120.00% 3 / 2 / 13
         adapter.parse_native_congestion("Total 100 0 0% 0 / 0 / 0")
 
 
-def test_final_routing_does_not_inherit_fast_feedback_policy():
+def test_final_routing_does_not_inherit_fast_feedback_policy(monkeypatch):
+    monkeypatch.setenv("IOPLACE_ENABLE_GR_IN_LOOP", "1")
     from scripts.run_route_gp import routing_policy
     args = SimpleNamespace(feedback_grt_iterations=5, feedback_allow_congestion=True,
         final_grt_iterations=50, final_allow_congestion=False, grt_threads=4)
