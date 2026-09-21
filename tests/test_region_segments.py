@@ -613,3 +613,91 @@ def test_edge_segment_ids_agrees_with_evaluator_ref_on_a_larger_lattice():
             rg, x0, y0, x1, y1)
         assert len(ids) == ncross
         assert ours == pairs_ref
+
+
+# ---------------------------------------------------------------------------
+# Fix round 2 (review of 82574f2): the round-1 evaluator_ref parity tests
+# were interior-only (cell centers, continuous random points). The one
+# committed test that touched a junction (the (50,50) 4-way case) was only
+# checked against the local raster brute helper, never against evaluator_ref
+# -- exactly the coordinate class where the two independent implementations
+# could plausibly diverge, and the only place that risk was actually
+# retired was an ad-hoc, unrepeated 20,000-edge sweep reported in prose.
+# These two tests replace that sweep with a committed, repeatable check.
+# ---------------------------------------------------------------------------
+
+def test_edge_segment_ids_agrees_with_evaluator_ref_at_boundary_aligned_endpoints():
+    """Endpoints/elbows placed exactly on a boundary line (but not on a
+    junction of 3+ regions) resolve unambiguously under RegionGrid.to_idx's
+    floor-and-clip convention; this pins that both edge_segment_ids and the
+    independently-implemented evaluator_ref.edge_regions_and_crossings
+    resolve them the same way."""
+    rg2 = RegionGrid(make_grid_regions((0., 0., 100., 100.), 2, 2, lattice=4))
+    table2 = enumerate_segments(rg2)
+    cases2 = [
+        (10., 10., 50., 10.),   # endpoint exactly on the x=50 boundary line
+        (10., 10., 10., 50.),   # endpoint exactly on the y=50 boundary line
+        (10., 50., 90., 10.),   # elbow exactly on the y=50 boundary line
+    ]
+    rg3 = RegionGrid(RegionSet(
+        die=(0., 0., 4., 4.), lattice=4,
+        regions=[RegionSpec("A", np.asarray([[0., 0., 2., 4.]])),
+                 RegionSpec("B", np.asarray([[2., 0., 4., 1.], [2., 3., 4., 4.]])),
+                 RegionSpec("C", np.asarray([[2., 1., 4., 3.]]))]))
+    table3 = enumerate_segments(rg3)
+    cases3 = [
+        (0.5, 0.5, 2.0, 0.5),   # endpoint exactly on the x=2 boundary line
+    ]
+    for rg, table, cases in ((rg2, table2, cases2), (rg3, table3, cases3)):
+        for x0, y0, x1, y1 in cases:
+            ids = edge_segment_ids(rg, table, x0, y0, x1, y1)
+            ours = [(int(table.pair_a[s]), int(table.pair_b[s])) for s in ids]
+            _regs, ncross, pairs_ref = evaluator_ref.edge_regions_and_crossings(
+                rg, x0, y0, x1, y1)
+            assert len(ids) == ncross, (x0, y0, x1, y1, len(ids), ncross)
+            assert ours == pairs_ref, (x0, y0, x1, y1, ours, pairs_ref)
+
+
+def test_edge_segment_ids_agrees_with_evaluator_ref_at_region_junctions():
+    """The coordinate class round 1 flagged as under-covered: an elbow (or
+    endpoint) landing exactly on a point where 3 or more regions meet,
+    compared directly against evaluator_ref -- not the local brute helper.
+
+    `plug()` has genuine 3-way junctions at (2.0, 1.0) and (2.0, 3.0) where
+    regions A/B/C all meet; the 2x2 grid fixture has a 4-way junction at
+    (50, 50). If edge_segment_ids' axis composition (RegionGrid.to_idx's
+    floor-and-clip convention feeding row/col lookups) ever disagreed with
+    evaluator_ref's independent raster walk about which region a junction
+    coordinate belongs to, it would show up here."""
+    rg = RegionGrid(RegionSet(
+        die=(0., 0., 4., 4.), lattice=4,
+        regions=[RegionSpec("A", np.asarray([[0., 0., 2., 4.]])),
+                 RegionSpec("B", np.asarray([[2., 0., 4., 1.], [2., 3., 4., 4.]])),
+                 RegionSpec("C", np.asarray([[2., 1., 4., 3.]]))]))
+    table = enumerate_segments(rg)
+    grid = rg.grid
+    assert len({int(grid[0, 2]), int(grid[1, 2]), int(grid[0, 1]), int(grid[1, 1])}) >= 3, \
+        "fixture's (2.0, 1.0) junction assumption drifted"
+    cases = [
+        (0.5, 1.0, 2.0, 3.5),   # elbow exactly on the 3-way junction (2.0, 1.0)
+        (0.5, 3.0, 2.0, 0.5),   # elbow exactly on the 3-way junction (2.0, 3.0)
+        (2.0, 1.0, 2.0, 3.0),   # both endpoints exactly on a 3-way junction
+        (2.0, 1.0, 3.5, 3.5),   # start point exactly on a 3-way junction
+    ]
+
+    rg2 = RegionGrid(make_grid_regions((0., 0., 100., 100.), 2, 2, lattice=4))
+    table2 = enumerate_segments(rg2)
+    cases2 = [
+        (10., 50., 50., 10.),   # elbow exactly on the 4-way junction (50, 50)
+        (10., 10., 50., 50.),   # end point exactly on the 4-way junction
+        (50., 50., 50., 50.),   # both endpoints exactly on the 4-way junction
+    ]
+
+    for rg_, table_, cases_ in ((rg, table, cases), (rg2, table2, cases2)):
+        for x0, y0, x1, y1 in cases_:
+            ids = edge_segment_ids(rg_, table_, x0, y0, x1, y1)
+            ours = [(int(table_.pair_a[s]), int(table_.pair_b[s])) for s in ids]
+            _regs, ncross, pairs_ref = evaluator_ref.edge_regions_and_crossings(
+                rg_, x0, y0, x1, y1)
+            assert len(ids) == ncross, (x0, y0, x1, y1, len(ids), ncross)
+            assert ours == pairs_ref, (x0, y0, x1, y1, ours, pairs_ref)
