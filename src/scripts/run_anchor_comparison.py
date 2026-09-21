@@ -11,6 +11,24 @@ If `pin` is closest, LG displacement exceeds half a cell and LG must be examined
 io_count (MST-geometry crossings) is carried as context only: the surrogate
 contains no MST, so scoring against it would confound anchor bias with routing
 geometry.
+
+*** Fix round 2 (adversarial review): the single-scalar `compare()` below is
+DEGENERATE as a predictive metric. All three anchors' l_io_soft sit on the same
+side of hard_lambda_sum (over 136k nets, over- and under-counting cancels
+before scoring ever happens), so `argmin |l_io_soft - hard_lambda_sum|` is
+identical to `argmin l_io_soft` -- a magnitude comparison, not a prediction
+comparison. Worse: the truth (evaluator_gpu.py's per_net_lambda, a popcount
+over actual PIN coordinates -- NOT the `node_region_convention:
+lower_left_position` in export/evaluation.py, which governs a different,
+unrelated array) is itself pin-anchored, so scoring `pin` against it with a
+magnitude metric can penalise `pin` for a bias that has nothing to do with LG
+displacement. `net_l1_report()` below is the metric fix: a per-net paired L1,
+Σ_e |lambda_soft_e - lambda_hard_e| restricted to 2<=deg<100, computed
+whenever `<out-dir>/evaluation.npz` is available. `main()` computes both and
+`render_markdown()` prints an unconditional caveat next to the scalar table
+so a reader cannot mistake `closest` there for the sec 7 answer on its own.
+See docs/results/2026-09-19-p-f-anchor-comparison.md for the worked example
+and the reasoning in full. ***
 """
 import argparse
 import json
@@ -77,7 +95,7 @@ def compare(rows, truth):
     return out
 
 
-def render_markdown(rows, *, degraded, reason=None):
+def render_markdown(rows, *, degraded, reason=None, l1=None):
     lines = ["| " + " | ".join(ANCHOR_TABLE_COLUMNS) + " |",
              "|" + "---|" * len(ANCHOR_TABLE_COLUMNS)]
     for row in rows:
@@ -91,17 +109,93 @@ def render_markdown(rows, *, degraded, reason=None):
             else:
                 cells.append(str(value))
         lines.append("| " + " | ".join(cells) + " |")
+    # Fix round 2: this caveat is unconditional (not just under --degraded) --
+    # `closest` above is argmin over a single shared scalar (hard_lambda_sum),
+    # and every anchor's l_io_soft sits on the same side of it, so this ranks
+    # by raw magnitude (argmin l_io_soft), not by prediction accuracy. See
+    # net_l1_report()/the section below for the metric that actually measures
+    # prediction, and this module's docstring for why the scalar is degenerate.
+    lines.append("")
+    lines.append("**Note:** `closest` above is `argmin |l_io_soft - hard_lambda_sum|` "
+                 "over a single shared scalar; since every anchor's l_io_soft sits on "
+                 "the same side of hard_lambda_sum, this is equivalent to "
+                 "`argmin l_io_soft` and does not by itself show which anchor PREDICTS "
+                 "the post-fence-LG truth (design v2 sec 7 fix round 2 -- see the "
+                 "per-net L1 section below, or docs/results/2026-09-19-p-f-anchor-"
+                 "comparison.md, for the metric that does).")
     if degraded:
         lines.append("")
         lines.append("**DEGRADED** -- %s. This table does not answer design v2 "
                      "sec 7's question and must not be published as its result."
                      % (reason,))
+    if l1 is not None:
+        lines.append("")
+        lines.append("### Per-net L1 (the predictive metric)")
+        lines.append("")
+        lines.append("Sum_e |lambda_soft_e - lambda_hard_e|, restricted to "
+                     "2 <= net_degree < %d, lambda_hard read from "
+                     "evaluation.npz's per_net_lambda (PIN-anchored truth)."
+                     % l1["deg_hi"])
+        lines.append("")
+        lines.append("| anchor | l1_abs_err | band_nets |")
+        lines.append("|---|---|---|")
+        for anchor, value in l1["l1"].items():
+            lines.append("| %s | %.1f | %d |" % (anchor, value, l1["band_nets"]))
+        boot = l1.get("bootstrap_center_vs_lower_left")
+        if boot is not None:
+            lines.append("")
+            lines.append(
+                "Paired bootstrap (n_boot=%d, seed=%d) over per-net |error|, "
+                "d_i = |err_center_i| - |err_lower_left_i| (negative => centre "
+                "better): mean(d)=%.6g, sum(d)=%.6g, 95%% CI=[%.6g, %.6g] (%s)."
+                % (boot["n_boot"], boot["seed"], boot["mean_d"], boot["sum_d"],
+                   boot["ci95"][0], boot["ci95"][1],
+                   "excludes zero" if boot["excludes_zero"] else "includes zero"))
     return "\n".join(lines)
 
 
+def _io_term_lam(term, pos, tau):
+    """Per-active-net soft lambda for an IoTerm instance (the 'lower_left'/
+    'center' anchors), ordered exactly like `term.net_idx`/the CSR's
+    `net_ids` -- i.e. the order surrogate_io's caller must scatter it back
+    into full net-id space with.
+
+    This replicates IoTerm's own FWD-1/FWD-2 (`_IoFn.forward`, io_term.py)
+    under no_grad. `IoTerm.diagnostics()` computes exactly this internally
+    but only returns the aggregate `soft_lambda_sum` -- it was never asked to
+    return the per-net array before the sec 7 fix-round L1 rescoring needed
+    one, so this is duplicated here rather than changing io_term.py's public
+    contract for a script-only need."""
+    import torch
+    from ioplace.ops.soft_assign import _chunks, chunk_p_ell, region_sdf_l1, softmax_stats
+    with torch.no_grad():
+        x = pos[:term.num_physical]
+        y = pos[term.num_nodes:term.num_nodes + term.num_physical]
+        x, y = term._anchor_xy(x, y)
+        rects = term.rects.to(dtype=x.dtype)
+        m, t, am = softmax_stats(x, y, rects, term.rect2region, term.K, tau, chunk=term.k_chunk)
+        lam = torch.zeros(term.n_active, dtype=torch.float64, device=x.device)
+        for lo, hi in _chunks(term.K, term.k_chunk):
+            sdf_c = region_sdf_l1(x, y, rects, term.rect2region, lo, hi)
+            _, ell_c = chunk_p_ell(sdf_c, m, t, am, lo, tau)
+            S_c = torch.zeros((term.n_active, hi - lo), dtype=torch.float64,
+                              device=x.device).index_add_(0, term.net_idx,
+                                                          ell_c[term.node_idx].double())
+            lam = lam + (-torch.expm1(S_c)).sum(dim=1)
+    return lam
+
+
 def surrogate_io(nl, placedb, rs_scaled, node_x, node_y, anchor, tau, *,
-                 ignore_net_degree, device="cuda"):
-    """L_IO and sum_e lambda_e at one anchor, on already-scaled coordinates."""
+                 ignore_net_degree, device="cuda", return_per_net=False):
+    """L_IO and sum_e lambda_e at one anchor, on already-scaled coordinates.
+
+    return_per_net=True additionally returns `lam_active` (the per-active-net
+    soft lambda, float64 numpy array) and `net_ids` (the netlist net ids each
+    entry of `lam_active` belongs to, ascending, from the same NetCsr) -- fix
+    round 2's input to net_l1_report(). It costs one extra chunked pass for
+    the node anchors (diagnostics() alone doesn't expose the per-net array);
+    the pin anchor gets it for free since _forward_io already returns it.
+    """
     import torch
     from ioplace.ops.io_term import (IoTerm, IoTermRef, build_net_node_csr,
                                      build_net_pin_csr)
@@ -124,6 +218,7 @@ def surrogate_io(nl, placedb, rs_scaled, node_x, node_y, anchor, tau, *,
     pos[:nl.num_physical] = torch.as_tensor(node_x[:nl.num_physical], device=device)
     pos[num_nodes:num_nodes + nl.num_physical] = torch.as_tensor(
         node_y[:nl.num_physical], device=device)
+    lam = None
     if anchor == "pin":
         with torch.no_grad():
             # IoTermRef.diagnostics() is deliberately refused under the pin
@@ -131,6 +226,10 @@ def surrogate_io(nl, placedb, rs_scaled, node_x, node_y, anchor, tau, *,
             # lambda_io=1, lambda_margin=0, so L_io here IS the surrogate.
             l_io_t, lam, _ = term._forward_io(*term._split_xy(pos), tau)
             l_io, lambda_sum = float(l_io_t), float(lam.sum())
+    elif return_per_net:
+        lam = _io_term_lam(term, pos, tau)
+        l_io = float((term.w * (lam - 1.0).clamp(min=0)).sum())
+        lambda_sum = float(lam.sum())
     else:
         # diagnostics() returns both numbers. It must NOT run inside
         # torch.no_grad(): its grad_share loop takes one backward pass per
@@ -139,8 +238,70 @@ def surrogate_io(nl, placedb, rs_scaled, node_x, node_y, anchor, tau, *,
         # gradient lives.
         diag = term.diagnostics(pos, tau)
         l_io, lambda_sum = float(diag["l_io"]), float(diag["soft_lambda_sum"])
-    return {"anchor": anchor, "l_io_soft": l_io, "lambda_sum_soft": lambda_sum,
-            "n_active": int(term.n_active), "tau": float(tau)}
+    out = {"anchor": anchor, "l_io_soft": l_io, "lambda_sum_soft": lambda_sum,
+           "n_active": int(term.n_active), "tau": float(tau)}
+    if return_per_net:
+        out["lam_active"] = lam.detach().cpu().numpy()
+        out["net_ids"] = np.asarray(csr.net_ids)
+    return out
+
+
+def net_l1_report(nl, placedb, out_dir, per_net, *, deg_lo=2, deg_hi=100,
+                  n_boot=10000, boot_seed=1000):
+    """Fix round 2's metric fix: per-net paired L1 against evaluation.npz's
+    per-net hard truth, restricted to the same degree band build_net_node_csr
+    uses. Unlike `compare()`'s single scalar, this cannot degenerate into
+    "smallest number wins": each net is scored against its OWN hard truth, so
+    over- and under-counting across nets no longer cancel before scoring.
+
+    The truth (`per_net_lambda`, evaluator_gpu.py's popcount over PIN
+    coordinates) is pin-anchored, NOT lower-left -- `node_region_convention:
+    lower_left_position` in evaluation.npz's metadata governs only the
+    separate `node_region` export array, not lambda.
+
+    `per_net`: {anchor: (net_ids, lam_active)} from surrogate_io(...,
+    return_per_net=True) -- same soft solution, same tau, every anchor.
+
+    Returns None if <out_dir>/evaluation.npz does not exist (e.g. the
+    --degraded fallback path, which never runs the real evaluator). Raises
+    ValueError (via load_evaluation's own net_names check) if the net order
+    this call's `nl`/`placedb` were loaded with does not match
+    evaluation.npz's -- the per-net pairing is meaningless otherwise, and
+    fix round 2's finding was exactly that this must be checked, not assumed.
+    """
+    path = os.path.join(out_dir, "evaluation.npz")
+    if not os.path.exists(path):
+        return None
+    from ioplace.export.evaluation import load_evaluation
+    data = load_evaluation(path, net_names=placedb.net_names)
+    hard = np.asarray(data["per_net_lambda"], dtype=np.float64)
+    degrees = np.asarray(data["net_degrees"], dtype=np.int64)
+    band = (degrees >= deg_lo) & (degrees < deg_hi)
+
+    full = {}
+    for anchor, (net_ids, lam_active) in per_net.items():
+        arr = np.ones(nl.num_nets, dtype=np.float64)  # single-node nets: trivially 1 region
+        arr[np.asarray(net_ids)] = lam_active
+        full[anchor] = arr
+    abs_err = {anchor: np.abs(arr - hard)[band] for anchor, arr in full.items()}
+    l1 = {anchor: float(err.sum()) for anchor, err in abs_err.items()}
+
+    boot = None
+    if "center" in abs_err and "lower_left" in abs_err:
+        d = abs_err["center"] - abs_err["lower_left"]
+        rng = np.random.default_rng(boot_seed)
+        n = d.shape[0]
+        means = np.empty(n_boot, dtype=np.float64)
+        for b in range(n_boot):
+            idx = rng.integers(0, n, size=n)
+            means[b] = d[idx].mean()
+        ci_lo, ci_hi = np.percentile(means, [2.5, 97.5])
+        boot = {"mean_d": float(d.mean()), "sum_d": float(d.sum()),
+                "ci95": [float(ci_lo), float(ci_hi)],
+                "excludes_zero": bool(not (ci_lo <= 0.0 <= ci_hi)),
+                "n_boot": int(n_boot), "seed": int(boot_seed)}
+    return {"deg_lo": deg_lo, "deg_hi": deg_hi, "band_nets": int(band.sum()),
+           "l1": l1, "bootstrap_center_vs_lower_left": boot}
 
 
 def _load_soft(path):
@@ -191,11 +352,24 @@ def main(argv=None):
     if ignore is None:
         ignore = int(params.ignore_net_degree)
 
-    rows = [surrogate_io(nl, placedb, rs_scaled, node_x, node_y, anchor, tau,
-                         ignore_net_degree=ignore) for anchor in args.anchors]
+    # Fix round 2: compute the per-net array whenever the real evaluator
+    # ran (evaluation.npz present) so net_l1_report below has something to
+    # score against -- the --degraded fallback path never writes one, so
+    # return_per_net there just costs nothing extra and l1_report is None.
+    want_per_net = os.path.exists(os.path.join(args.out_dir, "evaluation.npz"))
+    rows_raw = [surrogate_io(nl, placedb, rs_scaled, node_x, node_y, anchor, tau,
+                             ignore_net_degree=ignore, return_per_net=want_per_net)
+               for anchor in args.anchors]
+    per_net = {r["anchor"]: (r["net_ids"], r["lam_active"]) for r in rows_raw
+              if want_per_net}
+    rows = [{k: v for k, v in r.items() if k not in ("lam_active", "net_ids")}
+           for r in rows_raw]
     with open(truth_json) as handle:
         truth = json.load(handle)
     rows = compare(rows, truth)
+
+    l1_report = net_l1_report(nl, placedb, args.out_dir, per_net,
+                              deg_hi=ignore) if want_per_net else None
 
     record = {"config": os.path.abspath(args.config), "k": args.k,
               "rtype": args.rtype, "seed": args.seed, "tau": tau,
@@ -208,11 +382,12 @@ def main(argv=None):
                         ("hard_lambda_sum", "io_count", "straddle_cells",
                          "straddle_area_fraction", "straddle_pin_split_nets",
                          "fence_compliance", "fence_compliance_center")},
-              "columns": list(ANCHOR_TABLE_COLUMNS), "rows": rows}
+              "columns": list(ANCHOR_TABLE_COLUMNS), "rows": rows,
+              "l1": l1_report}
     with open(os.path.join(args.out_dir, "anchor_comparison.json"), "w") as handle:
         json.dump(record, handle, indent=1)
     markdown = render_markdown(rows, degraded=args.degraded,
-                               reason=args.degraded_reason)
+                               reason=args.degraded_reason, l1=l1_report)
     with open(os.path.join(args.out_dir, "anchor_comparison.md"), "w") as handle:
         handle.write(markdown + "\n")
     print(markdown)
