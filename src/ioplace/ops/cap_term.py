@@ -39,7 +39,8 @@ zero at zero demand, and the penalty expression itself is unchanged.
 import numpy as np
 import torch
 
-from ioplace.ops.soft_assign import chunk_p_ell, region_sdf_l1, softmax_stats
+from ioplace.ops.soft_assign import (_chunks, chunk_p_ell, region_sdf_l1,
+                                     softmax_stats)
 
 # pen''(d) = 12d + 2 is unbounded, so sec 4's "max_s pen''" has no supremum.
 # The declared curvature is pen'' at the overflow level the design tolerates.
@@ -130,7 +131,8 @@ def l1_point_box_grad(cx, cy, box):
 class _CapBase(torch.nn.Module):
     """Shared candidate/segment bookkeeping for CapTermRef and CapTerm."""
 
-    def __init__(self, io_term, seg_box, seg_capacity, *, tau_b):
+    def __init__(self, io_term, seg_box, seg_capacity, *, tau_b,
+                 curvature_dref=CAP_CURVATURE_DREF):
         super().__init__()
         self.io_term = io_term
         device = io_term.rects.device
@@ -147,6 +149,9 @@ class _CapBase(torch.nn.Module):
         if not (tau_b > 0):
             raise ValueError("tau_b must be positive")
         self.tau_b = float(tau_b)
+        # pen'' is evaluated here for the declared curvature; Task 8's
+        # --cap-curvature-dref moves it.
+        self.curvature_dref = float(curvature_dref)
         self.register_buffer("seg_box", box)
         self.register_buffer("C", capacity)
         self.register_buffer("deg", torch.bincount(
@@ -275,3 +280,234 @@ class CapTermRef(_CapBase):
         d, _inv = normalised_overflow(demand, self.C)
         self.last_demand, self.last_d = demand.detach(), d.detach()
         return lambda_cap * cap_penalty(d).sum()
+
+
+class _CapFn(torch.autograd.Function):
+    """Chunked-k forward/backward, structurally identical to `_FtFn`
+    (ops/ft_term.py): FWD-1 reduce (m/t/argmax over all K), FWD-2 accumulate
+    (per chunk q -> the per-candidate cofactor caches), BWD-1 reduce (A_i over
+    all K), BWD-2 scatter (dL/dz -> positions via a local autograd.grad on
+    region_sdf_l1). Nothing of shape (N,K)/(P,K)/(E,K) is ever allocated; the
+    only candidate-sized state is qa/qb, two (M,) float64 arrays -- sec 5's
+    "both cofactors are cached per candidate ... so no (E,K) tensor appears".
+
+    `x`/`y` arrive already anchored (CapTerm.forward applies
+    `meta._anchor_xy` first, as `CapTermRef._demand` and `IoTerm.forward`
+    do), so q's region SDF and the net centroid read the same point.
+
+    Gradient contract (CapTermRef's autograd, audited in Task 4):
+      g_c   = pen'(d_s) * inv_s                       (dL/dD_s, s = seg(c))
+      P_c   = w_e * count_c * q_{e,u} * q_{e,v}
+      q:     dL/dq_{e,u} += g_c * P_c/q_u * alpha_c  (exact product rule)
+      alpha: dL/du_c = alpha_c (g_c P_c - sum_{c' in group} alpha_c' g_c' P_c'),
+             u_c = -d1_c / tau_b, d1 through l1_point_box_grad, c_e = mean.
+    """
+
+    @staticmethod
+    def forward(ctx, x, y, meta, cap, tau, lambda_cap):
+        rects = meta.rects.to(dtype=x.dtype)
+        # FWD-1 (reduce): m, t, argmax over ALL K regions.
+        m, t, am = softmax_stats(x, y, rects, meta.rect2region, meta.K, tau,
+                                 chunk=meta.k_chunk)
+        size = cap.cand_net.numel()
+        qa = torch.zeros(size, dtype=torch.float64, device=x.device)
+        qb = torch.zeros(size, dtype=torch.float64, device=x.device)
+        # FWD-2 (accumulate): per chunk q -> the two (M,) cofactor caches.
+        for lo, hi in _chunks(meta.K, meta.k_chunk):
+            sdf_c = region_sdf_l1(x, y, rects, meta.rect2region, lo, hi)
+            _p_c, ell_c = chunk_p_ell(sdf_c, m, t, am, lo, tau)
+            S_c = torch.zeros((meta.n_active, hi - lo), dtype=torch.float64,
+                              device=x.device).index_add_(
+                                  0, meta.net_idx, ell_c[meta.node_idx].double())
+            q_c = -torch.expm1(S_c)
+            sel = (cap.cand_u >= lo) & (cap.cand_u < hi)
+            if bool(sel.any()):
+                qa[sel] = q_c[cap.cand_net[sel], cap.cand_u[sel] - lo]
+            sel = (cap.cand_v >= lo) & (cap.cand_v < hi)
+            if bool(sel.any()):
+                qb[sel] = q_c[cap.cand_net[sel], cap.cand_v[sel] - lo]
+
+        cx, cy = cap._centroids(x, y)
+        alpha = cap._alpha(cx, cy)
+        # w_e * count_c: charge per observed crossing, exactly as
+        # CapTermRef._demand does (Task 4 fix round 1 item 3).
+        wc = cap.w_cand().double() * cap.cand_count.to(torch.float64)
+        demand = torch.zeros(cap.num_segments, dtype=torch.float64,
+                             device=x.device).index_add_(
+                                 0, cap.cand_seg, wc * qa * qb * alpha)
+        d, inv = normalised_overflow(demand, cap.C)
+        value = cap_penalty(d).sum()
+
+        cap.last_demand, cap.last_d = demand.detach(), d.detach()
+        meta.last_peak_chunk_elems = meta.k_chunk * max(meta.num_physical,
+                                                        meta._n_pins_dedup)
+        ctx.save_for_backward(x, y, m, t, am, qa, qb, alpha, d, inv, cx, cy,
+                              wc.detach().clone())
+        ctx.meta, ctx.cap, ctx.tau, ctx.lambda_cap = meta, cap, tau, lambda_cap
+        return lambda_cap * value
+
+    @staticmethod
+    @torch.autograd.function.once_differentiable
+    def backward(ctx, gout):
+        x, y, m, t, am, qa, qb, alpha, d, inv, cx, cy, wc = ctx.saved_tensors
+        meta, cap, tau, lambda_cap = ctx.meta, ctx.cap, ctx.tau, ctx.lambda_cap
+        rects = meta.rects.to(dtype=x.dtype)
+        n = x.shape[0]
+
+        with torch.no_grad():
+            # dL/dD_s, held fixed while D_s is differentiated (chain rule).
+            g_seg = cap_penalty_grad(d) * inv
+            g_cand = g_seg[cap.cand_seg]
+
+            # ---- alpha path: closed form, only (M,)/(E,) tensors. Not gated
+            # on q; a singleton group gives exactly 0 here (limitation D-4).
+            dl_dalpha = g_cand * wc * qa * qb
+            pooled = torch.zeros(cap.n_groups, dtype=torch.float64,
+                                 device=x.device)
+            pooled.index_add_(0, cap.cand_group, alpha * dl_dalpha)
+            dl_du = alpha * (dl_dalpha - pooled[cap.cand_group])
+            dl_dd1 = -dl_du / cap.tau_b                  # u = -d1 / tau_b
+            ddx, ddy = l1_point_box_grad(cx[cap.cand_net], cy[cap.cand_net],
+                                         cap.seg_box[cap.cand_seg])
+            gcx = torch.zeros(meta.n_active, dtype=torch.float64, device=x.device)
+            gcy = torch.zeros(meta.n_active, dtype=torch.float64, device=x.device)
+            gcx.index_add_(0, cap.cand_net, dl_dd1 * ddx)
+            gcy.index_add_(0, cap.cand_net, dl_dd1 * ddy)
+            gx = torch.zeros(n, dtype=torch.float64, device=x.device)
+            gy = torch.zeros(n, dtype=torch.float64, device=x.device)
+            gx.index_add_(0, meta.node_idx, (gcx / cap.deg)[meta.net_idx])
+            gy.index_add_(0, meta.node_idx, (gcy / cap.deg)[meta.net_idx])
+
+            # ---- q path: the exact product derivative, both cofactors ----
+            coeff_u = g_cand * wc * qb * alpha           # dL/dq_{e,u}
+            coeff_v = g_cand * wc * qa * alpha           # dL/dq_{e,v}
+
+            def coeff_chunk(lo, hi):
+                out = torch.zeros((meta.n_active, hi - lo), dtype=torch.float64,
+                                  device=x.device)
+                sel = (cap.cand_u >= lo) & (cap.cand_u < hi)
+                if bool(sel.any()):
+                    out.index_put_((cap.cand_net[sel], cap.cand_u[sel] - lo),
+                                   coeff_u[sel], accumulate=True)
+                sel = (cap.cand_v >= lo) & (cap.cand_v < hi)
+                if bool(sel.any()):
+                    out.index_put_((cap.cand_net[sel], cap.cand_v[sel] - lo),
+                                   coeff_v[sel], accumulate=True)
+                return out
+
+            # BWD-1 (reduce): A_i = sum over ALL k of c_{i,k} * p_{i,k}.
+            acc = torch.zeros(n, dtype=torch.float64, device=x.device)
+            for lo, hi in _chunks(meta.K, meta.k_chunk):
+                sdf_c = region_sdf_l1(x, y, rects, meta.rect2region, lo, hi)
+                p_c, ell_c = chunk_p_ell(sdf_c, m, t, am, lo, tau)
+                ell_pins = ell_c[meta.node_idx].double()
+                S_c = torch.zeros((meta.n_active, hi - lo), dtype=torch.float64,
+                                  device=x.device).index_add_(0, meta.net_idx,
+                                                              ell_pins)
+                c_pins = (coeff_chunk(lo, hi)[meta.net_idx]
+                          * torch.exp(S_c[meta.net_idx] - ell_pins))
+                c_nodes = torch.zeros((n, hi - lo), dtype=torch.float64,
+                                      device=x.device).index_add_(
+                                          0, meta.node_idx, c_pins)
+                acc = acc + (c_nodes * p_c.double()).sum(dim=1)
+
+            # BWD-2 (scatter): dL/dz = p*(c - A); dL/dx += dL/dz * (-1/tau) *
+            # d(sdf)/dx, through a *local* autograd.grad on the very same
+            # region_sdf_l1 the reference differentiates, so ties and boundary
+            # subgradients match CapTermRef exactly.
+            for lo, hi in _chunks(meta.K, meta.k_chunk):
+                with torch.enable_grad():
+                    xg = x.detach().requires_grad_(True)
+                    yg = y.detach().requires_grad_(True)
+                    sdf_c = region_sdf_l1(xg, yg, rects, meta.rect2region, lo, hi)
+                p_c, ell_c = chunk_p_ell(sdf_c.detach(), m, t, am, lo, tau)
+                ell_pins = ell_c[meta.node_idx].double()
+                S_c = torch.zeros((meta.n_active, hi - lo), dtype=torch.float64,
+                                  device=x.device).index_add_(0, meta.net_idx,
+                                                              ell_pins)
+                c_pins = (coeff_chunk(lo, hi)[meta.net_idx]
+                          * torch.exp(S_c[meta.net_idx] - ell_pins))
+                c_nodes = torch.zeros((n, hi - lo), dtype=torch.float64,
+                                      device=x.device).index_add_(
+                                          0, meta.node_idx, c_pins)
+                dl_dz = p_c.double() * (c_nodes - acc.unsqueeze(1))
+                w_out = dl_dz * (-1.0 / tau)
+                gxc, gyc = torch.autograd.grad(sdf_c, [xg, yg],
+                                               grad_outputs=w_out.to(sdf_c.dtype))
+                gx = gx + gxc.double()
+                gy = gy + gyc.double()
+
+            scale = lambda_cap * gout.double()
+            gx = gx * scale
+            gy = gy * scale
+            gx[meta.num_movable:] = 0.0       # fixed + filler never move
+            gy[meta.num_movable:] = 0.0
+        return gx.to(x.dtype), gy.to(y.dtype), None, None, None, None
+
+
+class CapTerm(_CapBase):
+    """Chunked production capacity term. Same value/gradient contract as
+    `CapTermRef`, routed through `_CapFn` so no forward or backward path ever
+    allocates an (N,K)/(P,K)/(E,K) tensor. **This is the only class a driver
+    may use.** `lambda_cap` is an argument: a caller must pass the
+    normalizer's applied value (`applied_lambda(name, iteration)`, ruling
+    D-6), never read `lambdas[name]`."""
+
+    @property
+    def curvature(self):
+        """Handed to `TermNormalizer.register(..., curvature=...)` (sec 4)."""
+        return cap_curvature(self.curvature_dref)
+
+    def forward(self, pos, tau, lambda_cap):
+        if lambda_cap == 0.0 or self.cand_net.numel() == 0:
+            return pos.new_zeros(())
+        meta = self.io_term
+        x = pos[:meta.num_physical]
+        y = pos[meta.num_nodes:meta.num_nodes + meta.num_physical]
+        # sec 7 anchor, applied once before q's SDF *and* the centroid read
+        # x/y -- the same order as CapTermRef._demand and IoTerm.forward.
+        x, y = meta._anchor_xy(x, y)
+        return _CapFn.apply(x, y, meta, self, tau, lambda_cap)
+
+    def demand(self, pos, tau):
+        """Per-segment soft demand D_s, no grad -- the GP surrogate side of the
+        sec 9 rank-correlation experiment."""
+        with torch.no_grad():
+            if self.cand_net.numel() == 0:
+                return torch.zeros(self.num_segments, dtype=torch.float64,
+                                   device=self.C.device)
+            self.forward(pos.detach(), tau, 1.0)
+            return self.last_demand.clone()
+
+    def diagnostics(self, pos, tau):
+        """Reporting only. The driver logs `max_d` every probe so the declared
+        curvature (pen'' at d_ref) stays auditable against real data."""
+        with torch.no_grad():
+            if self.cand_net.numel() == 0:
+                return {"l_cap": 0.0, "demand_total": 0.0, "max_d": 0.0,
+                        "num_over_capacity": 0, "num_candidates": 0,
+                        "num_groups": 0, "frac_singleton_groups": 0.0}
+            value = float(self.forward(pos.detach(), tau, 1.0))
+            sizes = torch.bincount(self.cand_group, minlength=self.n_groups)
+            return {"l_cap": value,
+                    "demand_total": float(self.last_demand.sum()),
+                    "max_d": float(self.last_d.max()),
+                    "num_over_capacity": int((self.last_d > 0).sum()),
+                    "num_candidates": int(self.cand_net.numel()),
+                    "num_groups": int(self.n_groups),
+                    # limitation D-4: a group of size 1 has no alpha gradient
+                    # in any phase; on grid geometry every group is one.
+                    "frac_singleton_groups": float((sizes == 1).double().mean())}
+
+
+class CapNormTerm(object):
+    """`TermNormalizer` adapter, alongside `ops/norm_terms.IoNormTerm` and
+    `FtNormTerm`: `value(pos, ctx)` returns the *unweighted* L_cap at the
+    schedule's live tau, and the normalizer owns the backward, the
+    fixed/filler masking and the norm order (design sec 4)."""
+
+    def __init__(self, cap_term):
+        self.cap_term = cap_term
+
+    def value(self, pos, ctx):
+        return self.cap_term(pos, ctx["tau"], 1.0)

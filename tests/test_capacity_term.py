@@ -422,3 +422,465 @@ def test_reference_gradient_matches_finite_differences():
     assert float(val.detach()) > 0.0            # over capacity here
     np.testing.assert_allclose(analytic, fd, rtol=1e-4, atol=1e-6)
     assert float(np.abs(analytic).sum()) > 0.0
+
+
+from ioplace.ops.cap_term import CapNormTerm, CapTerm
+
+
+def _pair_case(chunk, capacity, k=3):
+    """One 3-pin net spanning all three regions of the strip, so the candidate
+    list carries two distinct demand pairs and both boundaries."""
+    nl, rg, table, io, _csr = _setup([(15., 15.), (45., 20.), (75., 10.)],
+                                     [[0, 1, 2]], k=k, chunk=chunk)
+    cand = select_candidates(np.zeros(2, dtype=np.int64),
+                             np.array([0, 1], dtype=np.int64),
+                             np.array([1, 2], dtype=np.int64),
+                             np.array([0, 1], dtype=np.int64),
+                             np.ones(2, dtype=np.int64), table)
+    caps = np.full(table.num_segments, capacity)
+    production = CapTerm(io, table.box, caps, tau_b=2. * rg.cell_w)
+    reference = CapTermRef(io, table.box, caps, tau_b=2. * rg.cell_w)
+    production.set_candidates(cand)
+    reference.set_candidates(cand)
+    return nl, production, reference
+
+
+@pytest.mark.parametrize("chunk", [1, 2, 3])
+@pytest.mark.parametrize("capacity", [0.2, 0.6, 5.0, 0.0])
+def test_production_matches_the_reference_value_and_gradient(chunk, capacity):
+    nl, production, reference = _pair_case(chunk, capacity)
+    pa, pb = _pos(nl), _pos(nl)
+    va = production(pa, 3.0, 1.7)
+    vb = reference(pb, 3.0, 1.7)
+    assert torch.allclose(va, vb, atol=1e-10, rtol=1e-10)
+    va.backward()
+    vb.backward()
+    assert torch.allclose(pa.grad, pb.grad, atol=1e-10, rtol=1e-10)
+
+
+def test_production_gradient_matches_autograd_on_a_200_cell_toy():
+    """sec 9's 'gradient vs autograd on a 200-cell toy'. The oracle is
+    CapTermRef's ordinary autograd; _CapFn's hand-written backward must agree
+    on a case big enough to exercise every chunk boundary and several
+    candidates per net."""
+    rng = np.random.default_rng(7)
+    k = 4
+    rs = make_grid_regions((0., 0., 120., 40.), k, 1, lattice=12)
+    rg = RegionGrid(rs)
+    table = enumerate_segments(rg)
+    n_cells = 200
+    xy = list(zip(rng.uniform(1., 119., n_cells), rng.uniform(1., 39., n_cells)))
+    nets = [sorted(rng.choice(n_cells, int(rng.integers(2, 5)), replace=False).tolist())
+            for _ in range(60)]
+    nl = _nl(xy, nets)
+    csr = build_net_node_csr(nl, 100)
+    rects, r2k = rect_table(rs)
+    common = dict(csr=csr, rects=rects, rect2region=r2k, K=k,
+                  num_movable=n_cells, num_physical=nl.num_physical,
+                  num_nodes=nl.num_physical, device="cpu")
+    io = IoTerm(chunk_budget=2 * len(csr.flat_net2node), **common)
+    # every active net gets both boundaries of a random adjacent pair
+    n_active = len(csr.net_ids)
+    nets_idx, us, vs, segs = [], [], [], []
+    for e in range(n_active):
+        pair = int(rng.integers(0, k - 1))
+        for seg in np.nonzero((table.pair_a == pair) & (table.pair_b == pair + 1))[0]:
+            nets_idx.append(e)
+            us.append(pair)
+            vs.append(pair + 1)
+            segs.append(int(seg))
+    cand = select_candidates(np.asarray(nets_idx, dtype=np.int64),
+                             np.asarray(us, dtype=np.int64),
+                             np.asarray(vs, dtype=np.int64),
+                             np.asarray(segs, dtype=np.int64),
+                             np.ones(len(segs), dtype=np.int64), table)
+    caps = np.full(table.num_segments, 3.0)
+    production = CapTerm(io, table.box, caps, tau_b=2. * rg.cell_w)
+    reference = CapTermRef(io, table.box, caps, tau_b=2. * rg.cell_w)
+    production.set_candidates(cand)
+    reference.set_candidates(cand)
+    pa, pb = _pos(nl), _pos(nl)
+    va, vb = production(pa, 4.0, 1.0), reference(pb, 4.0, 1.0)
+    assert float(va.detach()) > 0.0
+    assert torch.allclose(va, vb, atol=1e-10, rtol=1e-10)
+    va.backward()
+    vb.backward()
+    assert torch.allclose(pa.grad, pb.grad, atol=1e-10, rtol=1e-10)
+    assert float(pa.grad.abs().sum()) > 0.0
+
+
+def test_the_q_product_gradient_is_exact_not_linearised():
+    """Isolate the q path: freeze alpha by giving every candidate its own
+    singleton group, then check d L / d q_u against the analytic q_v cofactor
+    by perturbing one node along x and comparing with a central difference of
+    the *whole* term. A linearised product (q_u*q_v^frozen) would match the
+    value but not this derivative."""
+    nl, production, reference = _pair_case(chunk=1, capacity=0.2)
+    p = _pos(nl)
+    value = production(p, 4.0, 1.0)
+    value.backward()
+    analytic = p.grad.clone()
+    base = p.detach().clone()
+    h = 1e-6
+    for index in (0, 1, 2):
+        probe = base.clone()
+        probe[index] += h
+        up = float(production(probe.requires_grad_(False), 4.0, 1.0).detach())
+        probe = base.clone()
+        probe[index] -= h
+        down = float(production(probe.requires_grad_(False), 4.0, 1.0).detach())
+        assert analytic[index].item() == pytest.approx((up - down) / (2 * h),
+                                                       rel=1e-4, abs=1e-9)
+
+
+def _split_boundary():
+    """Region 0 touches region 1 along two disjoint vertical runs (region 2
+    plugs the middle), so one net can carry two genuine alternative segments
+    on the same boundary pair -- the configuration in which alpha has a
+    gradient at all."""
+    from ioplace.regions import RegionSet, RegionSpec
+    rs = RegionSet(die=DIE, lattice=9, regions=[
+        RegionSpec("A", np.array([[0., 0., 30., 30.]])),
+        RegionSpec("B", np.array([[30., 0., 60., 10.], [30., 20., 60., 30.]])),
+        RegionSpec("C", np.array([[30., 10., 60., 20.], [60., 0., 90., 30.]]))])
+    rs.validate()
+    return rs
+
+
+def _split_case(capacity=0.1, chunk=4):
+    rs = _split_boundary()
+    rg = RegionGrid(rs)
+    table = enumerate_segments(rg)
+    alternatives = [s for s in range(table.num_segments)
+                    if (int(table.pair_a[s]), int(table.pair_b[s])) == (0, 1)]
+    assert len(alternatives) == 2
+    nl = _nl([(15., 5.), (45., 5.)], [[0, 1]])
+    csr = build_net_node_csr(nl, 100)
+    rects, r2k = rect_table(rs)
+    io = IoTerm(csr=csr, rects=rects, rect2region=r2k, K=3, num_movable=2,
+                num_physical=nl.num_physical, num_nodes=nl.num_physical,
+                device="cpu", chunk_budget=chunk * len(csr.flat_net2node))
+    cand = select_candidates(np.zeros(2, dtype=np.int64),
+                             np.zeros(2, dtype=np.int64),
+                             np.ones(2, dtype=np.int64),
+                             np.asarray(alternatives, dtype=np.int64),
+                             np.ones(2, dtype=np.int64), table)
+    assert cand.n_groups == 1                    # one group, two alternatives
+    caps = np.full(table.num_segments, capacity)
+    production = CapTerm(io, table.box, caps, tau_b=2. * rg.cell_w)
+    reference = CapTermRef(io, table.box, caps, tau_b=2. * rg.cell_w)
+    production.set_candidates(cand)
+    reference.set_candidates(cand)
+    return nl, production, reference
+
+
+def test_the_alpha_path_survives_a_saturated_q():
+    """After the freeze q is 0/1 and carries no gradient (sec 3); the term must
+    still move cells *along* a boundary through alpha. tau is tiny here, so q
+    is saturated and every bit of the surviving gradient is the alpha path --
+    and it lies purely in y, the coordinate along the boundary."""
+    nl, production, reference = _split_case()
+    pa, pb = _pos(nl), _pos(nl)
+    va, vb = production(pa, 1e-3, 1.0), reference(pb, 1e-3, 1.0)
+    va.backward()
+    vb.backward()
+    assert torch.allclose(pa.grad, pb.grad, atol=1e-10, rtol=1e-10)
+    assert torch.isfinite(pa.grad).all()
+    assert float(pa.grad.abs().sum()) > 0.0
+    n = nl.num_physical
+    assert float(pa.grad[:n].abs().sum()) == pytest.approx(0.0, abs=1e-12)  # x
+    assert float(pa.grad[n:].abs().sum()) > 0.0                             # y
+    # the group's two alternatives share exactly one unit of demand
+    assert float(production.last_demand.sum()) == pytest.approx(1.0, abs=1e-6)
+
+
+def test_a_singleton_alpha_group_has_no_alpha_gradient():
+    """Recorded limitation D-4, pinned so nobody 'fixes' it by accident: a
+    softmax over one element is identically 1, so a group with a single
+    candidate contributes nothing once q saturates. This is why
+    frac_singleton_groups is a reported diagnostic."""
+    nl, rg, table, io, _csr = _setup([(15., 15.), (45., 15.)], [[0, 1]], k=3)
+    cand = select_candidates(np.zeros(1, dtype=np.int64),
+                             np.zeros(1, dtype=np.int64),
+                             np.ones(1, dtype=np.int64),
+                             np.zeros(1, dtype=np.int64),
+                             np.ones(1, dtype=np.int64), table)
+    production = CapTerm(io, table.box, np.full(table.num_segments, 0.1),
+                         tau_b=2. * rg.cell_w)
+    production.set_candidates(cand)
+    p = _pos(nl)
+    production(p, 1e-3, 1.0).backward()
+    assert float(p.grad.abs().sum()) == pytest.approx(0.0, abs=1e-12)
+    assert production.diagnostics(_pos(nl), 1e-3)["frac_singleton_groups"] == 1.0
+
+
+def test_no_candidates_is_an_exact_zero_detached_from_the_graph():
+    """The empty term returns pos.new_zeros(()) -- the same shape IoTerm and
+    FtTerm return through term_fn. It has no grad_fn, which is correct:
+    DREAMPlace adds it to an objective that does."""
+    nl, rg, table, io, _csr = _setup([(15., 15.), (45., 15.)], [[0, 1]])
+    production = CapTerm(io, table.box, np.ones(table.num_segments),
+                         tau_b=2. * rg.cell_w)
+    value = production(_pos(nl), 3.0, 1.0)
+    assert float(value.detach()) == 0.0
+    assert value.requires_grad is False
+    assert production.diagnostics(_pos(nl), 3.0)["num_candidates"] == 0
+
+
+def test_fixed_and_filler_nodes_never_receive_gradient():
+    nl, rg, table, io_full, _csr = _setup([(15., 15.), (45., 15.), (75., 15.)],
+                                          [[0, 1], [1, 2]])
+    rs = _strip(3)
+    rects, r2k = rect_table(rs)
+    csr = build_net_node_csr(nl, 100)
+    io = IoTerm(csr=csr, rects=rects, rect2region=r2k, K=3, num_movable=2,
+                num_physical=nl.num_physical, num_nodes=nl.num_physical,
+                device="cpu", chunk_budget=4 * len(csr.flat_net2node))
+    cand = select_candidates(np.array([0, 1], dtype=np.int64),
+                             np.array([0, 1], dtype=np.int64),
+                             np.array([1, 2], dtype=np.int64),
+                             np.array([0, 1], dtype=np.int64),
+                             np.ones(2, dtype=np.int64), table)
+    production = CapTerm(io, table.box, np.full(table.num_segments, 0.1),
+                         tau_b=2. * rg.cell_w)
+    production.set_candidates(cand)
+    p = _pos(nl)
+    production(p, 3.0, 1.0).backward()
+    n = nl.num_physical
+    assert p.grad[2].item() == 0.0            # node 2 is fixed
+    assert p.grad[n + 2].item() == 0.0
+
+
+def test_diagnostics_and_curvature():
+    nl, production, _reference = _pair_case(chunk=2, capacity=0.2)
+    diag = production.diagnostics(_pos(nl), 3.0)
+    assert set(diag) == {"l_cap", "demand_total", "max_d", "num_over_capacity",
+                         "num_candidates", "num_groups", "frac_singleton_groups"}
+    assert diag["num_candidates"] == 2 and diag["num_groups"] == 2
+    assert diag["max_d"] == pytest.approx(3.997371310542147, rel=1e-9)
+    assert diag["num_over_capacity"] == 2
+    assert diag["frac_singleton_groups"] == 1.0
+    assert production.curvature == pytest.approx(14.0)
+
+
+def test_cap_norm_term_exposes_the_unweighted_value():
+    nl, production, _reference = _pair_case(chunk=2, capacity=0.2)
+    adapter = CapNormTerm(production)
+    p = _pos(nl)
+    got = adapter.value(p, {"tau": 3.0, "iteration": 0, "overflow": 0.2,
+                            "gamma": 1.0})
+    torch.testing.assert_close(got, production(p, 3.0, 1.0))
+
+
+def test_set_candidates_rejects_malformed_input():
+    nl, rg, table, io, _csr = _setup([(15., 15.), (45., 15.)], [[0, 1]])
+    production = CapTerm(io, table.box, np.ones(table.num_segments),
+                         tau_b=2. * rg.cell_w)
+    good = select_candidates(np.zeros(1, dtype=np.int64),
+                             np.zeros(1, dtype=np.int64),
+                             np.ones(1, dtype=np.int64),
+                             np.zeros(1, dtype=np.int64),
+                             np.ones(1, dtype=np.int64), table)
+    import dataclasses
+    with pytest.raises(ValueError, match="active nets"):
+        production.set_candidates(dataclasses.replace(
+            good, net=np.array([99], dtype=np.int64)))
+    with pytest.raises(ValueError, match="segment id"):
+        production.set_candidates(dataclasses.replace(
+            good, seg=np.array([999], dtype=np.int64)))
+    with pytest.raises(ValueError, match="u < v"):
+        production.set_candidates(dataclasses.replace(
+            good, u=np.array([1], dtype=np.int64), v=np.array([0], dtype=np.int64)))
+
+
+# ------------------------------------ live-band parity (Task 5 additions) --
+# The flow's capacity band is tau = (0.057 .. 0.03) * L_R with
+# L_R = sqrt(die area / K) (run_main_flow.py); on this 90x30 / K=3 fixture
+# L_R = 30, so tau in [0.9, 1.71]. The brief's parity cases run at tau 3/4
+# (singleton groups only) or 1e-3 (q saturated); these pin parity where the
+# term is actually live, on a MULTI-member alpha group, under the centre
+# anchor, and with count > 1.
+_BAND_TAUS = (0.9, 1.3, 1.71)
+
+
+def _split_live_case(capacity, chunk, count=1, anchor="lower_left",
+                     xy=((28., 4.), (33., 24.))):
+    """_split_boundary's two alternatives on the (0,1) pair, pins placed
+    within ~1-2 tau of the boundary so q is NOT saturated, and the centroid
+    off-centre so alpha is non-uniform: both the q and the alpha channel
+    carry gradient."""
+    rs = _split_boundary()
+    rg = RegionGrid(rs)
+    table = enumerate_segments(rg)
+    alternatives = [s for s in range(table.num_segments)
+                    if (int(table.pair_a[s]), int(table.pair_b[s])) == (0, 1)]
+    nl = _nl(list(xy), [[0, 1]])
+    csr = build_net_node_csr(nl, 100)
+    rects, r2k = rect_table(rs)
+    extra = {}
+    if anchor == "center":
+        size = np.full(nl.num_physical, 2.0)
+        extra = dict(node_anchor="center", node_size_x=size, node_size_y=size)
+    io = IoTerm(csr=csr, rects=rects, rect2region=r2k, K=3, num_movable=2,
+                num_physical=nl.num_physical, num_nodes=nl.num_physical,
+                device="cpu", chunk_budget=chunk * len(csr.flat_net2node),
+                **extra)
+    assert io.k_chunk == min(chunk, 3)
+    cand = select_candidates(np.zeros(2, dtype=np.int64),
+                             np.zeros(2, dtype=np.int64),
+                             np.ones(2, dtype=np.int64),
+                             np.asarray(alternatives, dtype=np.int64),
+                             np.full(2, count, dtype=np.int64), table)
+    assert cand.n_groups == 1 and len(cand.net) == 2   # a 2-member group
+    caps = np.full(table.num_segments, capacity)
+    production = CapTerm(io, table.box, caps, tau_b=2. * rg.cell_w)
+    reference = CapTermRef(io, table.box, caps, tau_b=2. * rg.cell_w)
+    production.set_candidates(cand)
+    reference.set_candidates(cand)
+    return nl, production, reference
+
+
+def _assert_parity(nl, production, reference, tau, lam=1.3):
+    pa, pb = _pos(nl), _pos(nl)
+    va, vb = production(pa, tau, lam), reference(pb, tau, lam)
+    assert torch.allclose(va, vb, atol=1e-10, rtol=1e-10)
+    va.backward()
+    vb.backward()
+    assert torch.allclose(pa.grad, pb.grad, atol=1e-10, rtol=1e-10)
+    return pa.grad
+
+
+@pytest.mark.parametrize("tau", _BAND_TAUS)
+@pytest.mark.parametrize("chunk", [1, 2, 3])
+@pytest.mark.parametrize("capacity", [0.05, 0.3, 0.0])
+@pytest.mark.parametrize("count", [1, 3])
+@pytest.mark.parametrize("anchor", ["lower_left", "center"])
+def test_production_parity_on_a_two_member_alpha_group_in_the_live_tau_band(
+        tau, chunk, capacity, count, anchor):
+    nl, production, reference = _split_live_case(capacity, chunk, count, anchor)
+    grad = _assert_parity(nl, production, reference, tau)
+    n = nl.num_physical
+    # the alpha channel is live: the along-boundary (y) gradient is non-zero
+    assert float(grad[n:].abs().sum()) > 0.0
+    torch.testing.assert_close(production.last_demand, reference.last_demand,
+                               atol=1e-12, rtol=1e-12)
+
+
+@pytest.mark.parametrize("tau", _BAND_TAUS)
+def test_production_parity_mixes_over_and_under_capacity_and_group_sizes(tau):
+    """Two nets on the split boundary: net 0 carries a 2-member group, net 1
+    (a different net, same pair) a singleton on one alternative. Capacities
+    differ per segment so one segment is over and one under capacity."""
+    rs = _split_boundary()
+    rg = RegionGrid(rs)
+    table = enumerate_segments(rg)
+    alternatives = [s for s in range(table.num_segments)
+                    if (int(table.pair_a[s]), int(table.pair_b[s])) == (0, 1)]
+    nl = _nl([(28., 4.), (33., 24.), (27., 26.), (32., 27.)], [[0, 1], [2, 3]])
+    csr = build_net_node_csr(nl, 100)
+    rects, r2k = rect_table(rs)
+    io = IoTerm(csr=csr, rects=rects, rect2region=r2k, K=3, num_movable=4,
+                num_physical=nl.num_physical, num_nodes=nl.num_physical,
+                device="cpu", chunk_budget=1 * len(csr.flat_net2node))
+    cand = select_candidates(np.array([0, 0, 1], dtype=np.int64),
+                             np.zeros(3, dtype=np.int64),
+                             np.ones(3, dtype=np.int64),
+                             np.array([alternatives[0], alternatives[1],
+                                       alternatives[1]], dtype=np.int64),
+                             np.array([1, 1, 2], dtype=np.int64), table)
+    assert cand.n_groups == 2
+    caps = np.full(table.num_segments, 5.0)
+    caps[alternatives[0]] = 0.1           # over capacity
+    caps[alternatives[1]] = 5.0           # under capacity
+    production = CapTerm(io, table.box, caps, tau_b=2. * rg.cell_w)
+    reference = CapTermRef(io, table.box, caps, tau_b=2. * rg.cell_w)
+    production.set_candidates(cand)
+    reference.set_candidates(cand)
+    _assert_parity(nl, production, reference, tau)
+    d = production.last_d
+    assert float(d[alternatives[0]]) > 0.0 > float(d[alternatives[1]])
+    assert production.diagnostics(_pos(nl), tau)["frac_singleton_groups"] == 0.5
+
+
+def test_production_gradient_matches_finite_differences_on_a_two_member_group():
+    """The hand backward against the *production* forward's own central
+    difference, at a band tau, on a multi-member group -- independent of
+    CapTermRef, so a shared mistake in both would still be caught."""
+    nl, production, _reference = _split_live_case(0.05, chunk=1)
+    tau, lam = 1.3, 1.0
+    p = _pos(nl)
+    production(p, tau, lam).backward()
+    analytic = p.grad.detach().numpy().copy()
+    base = p.detach().clone()
+    h = 1e-6
+    for index in range(base.numel()):
+        up, down = base.clone(), base.clone()
+        up[index] += h
+        down[index] -= h
+        fd = (float(production(up, tau, lam)) - float(production(down, tau, lam))) / (2 * h)
+        assert analytic[index] == pytest.approx(fd, rel=1e-6, abs=1e-9)
+
+
+@pytest.mark.gpu
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
+def test_production_parity_on_cuda_in_the_live_tau_band():
+    nl, production, reference = _split_live_case(0.05, chunk=1, count=2,
+                                                  anchor="center")
+    production.io_term.cuda()   # shared by both terms
+    production.cuda()
+    reference.cuda()
+    pa = _pos(nl).detach().cuda().requires_grad_(True)
+    pb = _pos(nl).detach().cuda().requires_grad_(True)
+    va, vb = production(pa, 1.3, 1.0), reference(pb, 1.3, 1.0)
+    assert torch.allclose(va, vb, atol=1e-10, rtol=1e-10)
+    va.backward()
+    vb.backward()
+    assert torch.allclose(pa.grad, pb.grad, atol=1e-10, rtol=1e-10)
+
+
+def _l_boundary_case(capacity, chunk):
+    """Region B wraps region A on two sides, so the (0,1) pair has one
+    VERTICAL and one HORIZONTAL segment. On collinear alternatives (the split
+    boundary) the alpha path's across-boundary component cancels exactly
+    (equal d d1/d cx, softmax back-prop sums to 0 per group); here it does
+    not, so this is the only fixture exercising the x channel of the alpha
+    backward."""
+    from ioplace.regions import RegionSet, RegionSpec
+    rs = RegionSet(die=(0., 0., 60., 60.), lattice=6, regions=[
+        RegionSpec("A", np.array([[0., 0., 30., 30.]])),
+        RegionSpec("B", np.array([[30., 0., 60., 60.], [0., 30., 30., 60.]]))])
+    rs.validate()
+    rg = RegionGrid(rs)
+    table = enumerate_segments(rg)
+    assert table.num_segments == 2
+    nl = _nl([(25., 12.), (33., 22.)], [[0, 1]])
+    csr = build_net_node_csr(nl, 100)
+    rects, r2k = rect_table(rs)
+    io = IoTerm(csr=csr, rects=rects, rect2region=r2k, K=2, num_movable=2,
+                num_physical=nl.num_physical, num_nodes=nl.num_physical,
+                device="cpu", chunk_budget=chunk * len(csr.flat_net2node))
+    cand = select_candidates(np.zeros(2, dtype=np.int64),
+                             np.zeros(2, dtype=np.int64),
+                             np.ones(2, dtype=np.int64),
+                             np.array([0, 1], dtype=np.int64),
+                             np.ones(2, dtype=np.int64), table)
+    assert cand.n_groups == 1
+    caps = np.full(2, capacity)
+    production = CapTerm(io, table.box, caps, tau_b=2. * rg.cell_w)
+    reference = CapTermRef(io, table.box, caps, tau_b=2. * rg.cell_w)
+    production.set_candidates(cand)
+    reference.set_candidates(cand)
+    return nl, production, reference
+
+
+@pytest.mark.parametrize("tau_rel", [0.03, 0.045, 0.057])
+@pytest.mark.parametrize("chunk", [1, 2])
+@pytest.mark.parametrize("capacity", [0.05, 0.0])
+def test_production_parity_on_an_l_shaped_two_member_group(tau_rel, chunk, capacity):
+    nl, production, reference = _l_boundary_case(capacity, chunk)
+    tau = tau_rel * (60. * 60. / 2) ** 0.5            # L_R = sqrt(area / K)
+    _assert_parity(nl, production, reference, tau)
+    # saturated q: only the alpha path survives, and it has an x component
+    nl, production, reference = _l_boundary_case(capacity, chunk)
+    grad = _assert_parity(nl, production, reference, 1e-3)
+    assert float(grad[:nl.num_physical].abs().sum()) > 0.0
