@@ -1,0 +1,145 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="v2-main-flow" name="v2 main flow">
+    <mxGraphModel dx="1574" dy="1073" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2339" pageHeight="3300" math="1" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="start" value="Netlist &amp;amp; partition geometry&lt;br&gt;(K=16 regions, RegionSet)" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.start_1;whiteSpace=wrap;fontFamily=Times New Roman;fontSize=16;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="780" y="20" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="init" value="Initial placement&lt;br&gt;die centre / region centre / &lt;i&gt;seed.npz&lt;/i&gt; warm start" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="700" y="150" width="400" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="soft" value="&lt;b&gt;Phase 1 &amp;#8212; Soft-assign GP&lt;/b&gt; (DREAMPlace, flat)&lt;br&gt;$$\min \sum_e WA(e) + \lambda_D D + \lambda_{IO} L_{IO} + \lambda_{FT} L_{FT}$$soft membership $$q_{c,k} = \mathrm{softmax}_k(-\mathrm{SDF}_k(c)/\tau)$$" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="700" y="260" width="400" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="frz" value="$$\text{overflow} \le 0.15 \text{ and } \tau_{rel} \le 0.05 \\ \text{and churn} \le 0.5\% \text{ (50 iters)} \\ \text{or soft GP budget reached}$$" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.decision;whiteSpace=wrap;fontFamily=Times New Roman;fontSize=16;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="750" y="450" width="300" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="mem" value="&lt;b&gt;Phase 2 &amp;#8212; Freeze membership&lt;/b&gt;&lt;br&gt;cell &amp;#8594; argmax region of cell centre&lt;br&gt;&lt;i&gt;freeze.json, soft.npz&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="700" y="650" width="400" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="fence" value="&lt;b&gt;Phase 3 &amp;#8212; Fence-region GP&lt;/b&gt; (new PlaceDB, warm start)&lt;br&gt;$$\min \sum_e WA(e) + \sum_k \lambda_{D,k} D_k$$IO / FT off; initial density weight clamped to [0.25&amp;#215;, 4&amp;#215;] of phase 1" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="700" y="770" width="400" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="lg" value="&lt;b&gt;Phase 4 &amp;#8212; Fence LG&lt;/b&gt;&lt;br&gt;multi-fence-region legalization (hard containment)" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="700" y="940" width="400" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="eval" value="&lt;b&gt;GPU evaluator&lt;/b&gt;&lt;br&gt;io_count, hard_&amp;#955;_sum, FT count, HPWL,&lt;br&gt;straddle diagnostics, per-segment utilisation" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1050" width="400" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="grt" value="Final OpenROAD global route (once per arm)&lt;br&gt;&lt;i&gt;planned: P-G&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#ffffff;strokeColor=#999999;fontColor=#666666;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1180" width="400" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="end" value="Placement + result.json" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.terminator;whiteSpace=wrap;fontFamily=Times New Roman;fontSize=16;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="800" y="1290" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="start" target="init">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="init" target="soft">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="soft" target="frz">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="frz" target="soft">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="665" y="525" />
+              <mxPoint x="665" y="335" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="l4" value="No" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontFamily=Times New Roman;fontSize=16;connectable=0;" vertex="1" parent="1">
+          <mxGeometry x="680" y="495" width="60" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="frz" target="mem">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l5" value="Yes" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontFamily=Times New Roman;fontSize=16;connectable=0;" vertex="1" parent="1">
+          <mxGeometry x="915" y="612" width="60" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="mem" target="fence">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="fence" target="lg">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="lg" target="eval">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;dashed=1;" edge="1" parent="1" source="eval" target="grt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;dashed=1;" edge="1" parent="1" source="grt" target="end">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ptitle" value="&lt;b&gt;Region producer&lt;/b&gt; (separate driver, optional; GrandPlan-style)" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Times New Roman;fontSize=16;align=center;" vertex="1" parent="1">
+          <mxGeometry x="160" y="150" width="420" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p1" value="Membership prior&lt;br&gt;Mt-KaHyPar (K=16, &amp;#949;=0.03) or RTL hierarchy" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="160" y="190" width="420" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2" value="Flat GP + grouping hull loss&lt;br&gt;(pull to own hull, push out of foreign hulls; rebuild every 50 iters)" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="160" y="280" width="420" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p3" value="Region extraction&lt;br&gt;density argmax &amp;#8594; 64&amp;#178; majority vote &amp;#8594; open/close &amp;#8594; largest CC" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="160" y="380" width="420" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p4" value="Simulated annealing on 64&amp;#178; bins&lt;br&gt;&amp;#8594; rectilinear regions, &amp;#8804; 8 rects/region" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="160" y="480" width="420" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="pout" value="&lt;i&gt;regions.json, seed.npz, membership.npz&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Times New Roman;fontSize=16;align=center;" vertex="1" parent="1">
+          <mxGeometry x="160" y="550" width="420" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="pe0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0;exitY=0.5;entryX=0.5;entryY=0;dashed=1;" edge="1" parent="1" source="start" target="p1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="370" y="60" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="pe1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p1" target="p2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="pe2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p2" target="p3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="pe3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p3" target="p4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="pe4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=1;exitY=0.5;entryX=0;entryY=0.5;dashed=1;" edge="1" parent="1" source="p4" target="init">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="620" y="510" />
+              <mxPoint x="620" y="180" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nsoft" value="&amp;#955; from TermNormalizer, probed every 50 iters:&lt;br&gt;grandplan (default) / adaptive / legacy&lt;br&gt;&amp;#964; annealed, IO weight ramped with overflow" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Times New Roman;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="265" width="440" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="pcap" value="Capacity term $$\lambda_{cap}\sum_s (2[d_s]_+^3 + [d_s]_+^2)$$ on in both phases &amp;#8212; &lt;i&gt;planned: P-D&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#ffffff;strokeColor=#999999;fontColor=#666666;dashed=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="410" width="440" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="pft" value="Pseudo-point FT term (one movable point per 2-pin crossing net), on in both phases &amp;#8212; &lt;i&gt;planned: P-E&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;fontFamily=Times New Roman;fontSize=16;fillColor=#ffffff;strokeColor=#999999;fontColor=#666666;dashed=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="830" width="440" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="pc1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0;exitY=0.25;entryX=1;entryY=0.75;dashed=1;strokeColor=#999999;" edge="1" parent="1" source="pcap" target="soft">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="pc2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0.5;exitY=1;entryX=1;entryY=0.2;dashed=1;strokeColor=#999999;" edge="1" parent="1" source="pcap" target="fence">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1420" y="794" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="pf1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;exitX=0;exitY=0.5;entryX=1;entryY=0.8;dashed=1;strokeColor=#999999;" edge="1" parent="1" source="pft" target="fence">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
