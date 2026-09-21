@@ -357,7 +357,13 @@ class GpuEvalContext:
                     raise ValueError("segment_capacity must carry one value "
                                      "per segment")
         elif segment_capacity is not None:
-            raise ValueError("segment_capacity needs segments=")
+            # Task-7 fix round 1: same message as evaluator_ref.evaluate's
+            # equivalent guard (evaluator_ref.py), so a caller who forgets
+            # segments= gets an identical error on both sides rather than an
+            # error here and a silent no-op on the capacity_candidates path
+            # (guarded separately in evaluate() below, since that flag is a
+            # per-call argument here, not a constructor argument).
+            raise ValueError("segment_capacity/capacity_candidates need segments=")
 
     # ------------------------------------------------------------------
     # geometry helpers
@@ -782,6 +788,16 @@ class GpuEvalContext:
             raise ValueError("this GpuEvalContext was built with straddle=False, "
                              "so it holds no node-size tensors; rebuild it with "
                              "straddle=True to ask for the sec 7 diagnostics")
+        # Task-7 fix round 1: evaluator_ref.evaluate rejects
+        # capacity_candidates without segments= at call time (it takes both
+        # in one call); here segments= is bound at construction and
+        # capacity_candidates is a per-call argument, so the equivalent guard
+        # has to live here rather than in __init__ (which already rejects
+        # segment_capacity without segments= with the same message). Without
+        # this, a caller who forgets segments= got a ValueError on the CPU
+        # path and a silent cand_net=None no-op on the GPU path.
+        if capacity_candidates and self.segments is None:
+            raise ValueError("segment_capacity/capacity_candidates need segments=")
         dev = self.device
         node_x = torch.as_tensor(node_x, dtype=torch.float64, device=dev)
         node_y = torch.as_tensor(node_y, dtype=torch.float64, device=dev)
@@ -1082,8 +1098,13 @@ class GpuEvalContext:
                 "segment_demand", np.zeros(self.num_segments, dtype=np.int64))
             # sec 5: the Ph/Pv prefix-sum counts become a free assertion. One
             # device sync on two scalars, not per edge.
-            assert int(demand.sum()) == int(per_net_crossings.sum().item()) - large_lb, \
+            segment_demand_total = int(demand.sum())
+            assert segment_demand_total == int(per_net_crossings.sum().item()) - large_lb, \
                 "per-segment demand does not reconcile with the Ph/Pv crossing count"
+            # Task-7 fix round 1: the same sum the assert above already
+            # computes, not a second independent computation -- unconditional
+            # (does not need segment_capacity), mirroring evaluator_ref.
+            capacity_fields["segment_demand_total"] = segment_demand_total
             if self.segment_capacity is not None:
                 util, scalars = segment_utilisation(demand, self.segment_capacity)
                 capacity_fields["segment_capacity"] = self.segment_capacity

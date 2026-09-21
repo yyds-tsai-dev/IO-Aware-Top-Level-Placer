@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 torch = pytest.importorskip("torch")
@@ -477,6 +479,11 @@ def _assert_batch_invariant_fields(a, b, float_rel=1e-12, straddle=True):
     # segment_utilisation applied to the same bit-exact segment_demand.
     if a.segment_demand is not None or b.segment_demand is not None:
         np.testing.assert_array_equal(a.segment_demand, b.segment_demand)
+        # Task-7 fix round 1: named explicitly in the plan's parity contract
+        # alongside segment_demand -- redundant with it in value (it's the
+        # same sum) but checked separately since it is its own EvalResult
+        # field with its own population path on each side.
+        assert a.segment_demand_total == b.segment_demand_total
     if straddle:
         # v2 P-F: same split as everything above -- integers bit-exact, the
         # three float64 reductions at float_rel. `straddle=False` is only for
@@ -978,6 +985,11 @@ def _capacity_for(table, rng):
 
 def _assert_capacity_fields_bit_exact(a, b):
     np.testing.assert_array_equal(a.segment_demand, b.segment_demand)
+    # Task-7 fix round 1: plan-mandated parity field, computed from the same
+    # segment_demand.sum() the reconciliation assert already uses on both
+    # sides -- unconditional (present whenever segments= was given, not only
+    # when segment_capacity was also given).
+    assert a.segment_demand_total == b.segment_demand_total
     np.testing.assert_array_equal(a.segment_util, b.segment_util)
     np.testing.assert_array_equal(a.segment_capacity, b.segment_capacity)
     assert a.num_over_capacity == b.num_over_capacity
@@ -1044,9 +1056,32 @@ def test_gpu_capacity_fields_are_absent_without_segments():
     rg = RegionGrid(make_grid_regions(DIE, 4, 4, lattice=20))
     nl = _random_case(np.random.default_rng(0))
     gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
-    for name in ("segment_demand", "segment_util", "num_over_capacity",
-                "cand_net"):
+    for name in ("segment_demand", "segment_demand_total", "segment_util",
+                "num_over_capacity", "cand_net"):
         assert getattr(gpu, name) is None
+
+
+def test_gpu_and_reference_reject_capacity_candidates_without_segments():
+    """Task-7 fix round 1 (Important finding 1): evaluator_ref.evaluate raises
+    on capacity_candidates=True without segments= (evaluator_ref.py's
+    `elif segment_capacity is not None or capacity_candidates: raise
+    ValueError(...)`); evaluate_gpu used to silently no-op instead (cand_net
+    stayed None). Both sides must reject identically -- same exception type,
+    same message -- so a caller who forgets segments= does not get a
+    mysteriously-empty capacity term on the GPU only."""
+    rg = RegionGrid(make_grid_regions(DIE, 4, 4, lattice=20))
+    nl = _random_case(np.random.default_rng(0))
+    msg = "segment_capacity/capacity_candidates need segments="
+    with pytest.raises(ValueError, match=re.escape(msg)):
+        evaluate(nl, nl.node_x, nl.node_y, rg, capacity_candidates=True)
+    with pytest.raises(ValueError, match=re.escape(msg)):
+        evaluate_gpu(nl, nl.node_x, nl.node_y, rg, capacity_candidates=True)
+    # the segment_capacity-without-segments guard on both sides, too, since
+    # it shares the same message.
+    with pytest.raises(ValueError, match=re.escape(msg)):
+        evaluate(nl, nl.node_x, nl.node_y, rg, segment_capacity=np.zeros(3))
+    with pytest.raises(ValueError, match=re.escape(msg)):
+        evaluate_gpu(nl, nl.node_x, nl.node_y, rg, segment_capacity=np.zeros(3))
 
 
 def test_gpu_large_nets_never_contribute_segment_demand():

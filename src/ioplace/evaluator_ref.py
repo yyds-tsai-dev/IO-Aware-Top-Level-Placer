@@ -39,6 +39,13 @@ class EvalResult:
     # `evaluate(..., segments=...)` was asked for, so "not measured" and
     # "measured as zero" stay distinguishable.
     segment_demand: np.ndarray = None      # (S,) int64
+    # Task-7 fix round 1: named in the plan's Global Constraints parity
+    # contract alongside segment_demand/num_over_capacity/etc. as a required
+    # bit-exact field, and already computed as one of
+    # region_segments.CAPACITY_SCALARS -- unconditional whenever `segments`
+    # is supplied (like segment_demand itself), independent of whether
+    # `segment_capacity` was also given, since it needs no capacity value.
+    segment_demand_total: int = None       # == int(segment_demand.sum())
     segment_capacity: np.ndarray = None    # (S,) float64
     segment_util: np.ndarray = None        # (S,) float64, inf where C == 0 < D
     num_over_capacity: int = None
@@ -242,8 +249,13 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256, *, route_wirelength_budget=
     capacity_fields = {}
     if segments is not None:
         capacity_fields["segment_demand"] = segment_demand
-        assert int(segment_demand.sum()) == int(per_net_crossings.sum()) - large_lb, \
+        segment_demand_total = int(segment_demand.sum())
+        assert segment_demand_total == int(per_net_crossings.sum()) - large_lb, \
             "per-segment demand does not reconcile with the Ph/Pv crossing count"
+        # Task-7 fix round 1: the same sum the assert above already computes,
+        # not a second independent computation -- unconditional (does not
+        # need segment_capacity), unlike the scalars in the block below.
+        capacity_fields["segment_demand_total"] = segment_demand_total
         if segment_capacity is not None:
             capacity = np.asarray(segment_capacity, dtype=np.float64)
             util, scalars = segment_utilisation(segment_demand, capacity)
