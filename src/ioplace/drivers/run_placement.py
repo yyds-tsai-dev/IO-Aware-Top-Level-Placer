@@ -119,6 +119,41 @@ def _pack_eval_metrics(res):
                "io_rg": res.io_rg, "ft_rg": res.ft_rg}
 
 
+def _pack_capacity_metrics(res):
+    """v2 P-D (design sec 5). Deliberately separate from _pack_eval_metrics,
+    which also feeds run_flat / run_two_stage / run_reweight -- none of those
+    has a RESULT_FIELDS gate, so widening it would silently change three other
+    drivers' result.json. Every value is None when the run carried no
+    capacity.npz, so a missing measurement is visible rather than zero.
+
+    Every field except "num_segments" is read straight off `res` via
+    `getattr(res, name, None)`, never re-derived here:
+    `region_segments.CAPACITY_SCALARS` names the parity-contract fields
+    evaluator_ref/evaluator_gpu are required to agree on bit-exactly (Global
+    Constraints), and a second computation path in the driver is exactly how
+    that contract would silently drift out of sync with the evaluator.
+    "num_segments" is not one of those fields -- EvalResult carries no such
+    attribute on either evaluator, by design (it is a property of the
+    segment table, not a per-run measurement, same as export/evaluation.py's
+    own capacity block) -- so it is the one name derived from
+    `len(res.segment_demand)`."""
+    from ioplace.region_segments import CAPACITY_SCALARS
+    out = {}
+    for name in CAPACITY_SCALARS:
+        if name == "num_segments":
+            demand = getattr(res, "segment_demand", None)
+            out[name] = None if demand is None else int(len(demand))
+            continue
+        value = getattr(res, name, None)
+        if value is None:
+            out[name] = None
+        elif isinstance(value, (int, np.integer)):
+            out[name] = int(value)
+        else:
+            out[name] = float(value)
+    return out
+
+
 def _pack_straddle_metrics(res):
     """v2 P-F (design sec 7 diagnostics 1-3). Deliberately separate from
     _pack_eval_metrics: that one also feeds run_flat / run_two_stage /
@@ -567,6 +602,21 @@ def build_parser():
                     help="write norm_trace.jsonl here (default "
                          "<out>.norm_trace.jsonl for non-legacy policies, "
                          "no trace for legacy)")
+    # v2 P-D (design sec 5): per-segment boundary IO capacity. mode=io only.
+    ap.add_argument("--capacity", default=None,
+                    help="capacity.npz from ioplace.capacity.extract; enables "
+                         "the per-segment capacity term and the evaluator's "
+                         "per-segment hard check")
+    ap.add_argument("--cap-tau-b-cells", type=float, default=2.,
+                    help="alpha softmax temperature in lattice cell widths "
+                         "(design sec 5: tau_b = 2*cell_w)")
+    ap.add_argument("--cap-m-pairs", type=int, default=4,
+                    help="candidate alpha-groups kept per net (design sec 5)")
+    ap.add_argument("--cap-m-seg", type=int, default=2,
+                    help="candidate segments kept per group (design sec 5)")
+    ap.add_argument("--cap-curvature-dref", type=float, default=1.,
+                    help="declared curvature reference: the term registers "
+                         "pen''(d_ref) = 12*d_ref+2 with the TermNormalizer")
     # v2 P-F (design sec 7): the anchor at which the soft region assignment is
     # evaluated. mode=io only; no-op for the other modes.
     ap.add_argument("--node-anchor", choices=["lower_left", "center", "pin"],
@@ -615,6 +665,9 @@ def main():
               norm_ramp_period=args.norm_ramp_period, norm_wt_max=args.norm_wt_max,
               norm_probe_every=args.norm_probe_every,
               norm_target_share=args.norm_target_share, norm_trace=args.norm_trace,
+              capacity=args.capacity, cap_tau_b_cells=args.cap_tau_b_cells,
+              cap_m_pairs=args.cap_m_pairs, cap_m_seg=args.cap_m_seg,
+              cap_curvature_dref=args.cap_curvature_dref,
               node_anchor=args.node_anchor)
 
 if __name__ == "__main__":

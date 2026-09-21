@@ -10,14 +10,16 @@ import tempfile
 
 import numpy as np
 
+from ioplace.capacity.extract import CAPACITY_SEMANTICS
+from ioplace.region_segments import CAPACITY_SCALARS, segments_digest
 from ioplace.straddle import STRADDLE_SCALARS
 
 
-SCHEMA_VERSION = 2
-# v2 P-F: schema 2 adds the sec 7 straddle block. Schema 1 archives stay
-# readable -- results/ holds historical evidence the route-calibration tooling
-# still pairs against, and a diagnostics addition is no reason to orphan it.
-SUPPORTED_SCHEMA_VERSIONS = (1, 2)
+SCHEMA_VERSION = 3
+# v2 P-D: schema 3 adds the sec 5 per-segment capacity block next to P-F's
+# schema-2 straddle block. Older archives stay readable -- results/ holds
+# historical evidence the route-calibration tooling still pairs against.
+SUPPORTED_SCHEMA_VERSIONS = (1, 2, 3)
 PER_NET_FIELDS = (
     "per_net_crossings", "per_net_ft", "per_net_lambda",
     "per_net_steiner", "per_net_home",
@@ -72,7 +74,8 @@ def boundary_statistics(rg, demand):
 
 
 def save_evaluation(path, nl, rg, result, node_x, node_y, net_names, *,
-                    max_degree=256, provenance=None):
+                    max_degree=256, provenance=None, segments=None,
+                    capacity_metadata=None):
     """Persist an already computed result and its pin-region membership.
 
     Coordinates are in evaluator units (after PlaceDB scaling, when used by a
@@ -112,6 +115,41 @@ def save_evaluation(path, nl, rg, result, node_x, node_y, net_names, *,
                           else float(value)) for key, value in straddle.items()}
         straddle["anchor"] = "center"
         straddle["box"] = "closed_four_corner"
+    # v2 P-D (design sec 5). Present iff the evaluator actually computed the
+    # per-segment fields, so "not measured" and "measured as zero" stay
+    # distinguishable -- the same convention as P-F's straddle block above.
+    capacity = None
+    if getattr(result, "segment_demand", None) is not None:
+        demand = np.asarray(result.segment_demand, dtype=np.int64)
+        arrays["segment_demand"] = demand
+        # `getattr(..., None)`, not a bare `getattr`: "num_segments" is not an
+        # EvalResult field at all (it is a property of the segment table, not
+        # a per-run measurement, so it is always re-derived from `demand`
+        # below) -- a bare getattr would raise AttributeError for it.
+        # "segment_demand_total" IS a parity-contract EvalResult field
+        # (Global Constraints), so it must be read from `result`, never
+        # re-derived from `demand.sum()` here: a second computation path is
+        # exactly how the ref/GPU parity contract silently drifts.
+        capacity = {name: getattr(result, name, None) for name in CAPACITY_SCALARS}
+        capacity = {name: (None if value is None else
+                           (int(value) if isinstance(value, (int, np.integer))
+                            else float(value)))
+                    for name, value in capacity.items()}
+        capacity["num_segments"] = int(demand.size)
+        # Spec sec 5, verbatim (global constraints' capacity-semantics rule):
+        # baked in unconditionally, exactly like capacity.npz's own metadata,
+        # rather than left to an optional capacity_metadata pass-through --
+        # this evaluation.npz was measured against a per-segment capacity, so
+        # its semantics are never in question.
+        capacity["capacity_semantics"] = CAPACITY_SEMANTICS
+        if segments is not None:
+            capacity["segments_sha256"] = segments_digest(segments)
+        if getattr(result, "segment_capacity", None) is not None:
+            arrays["segment_capacity"] = np.asarray(result.segment_capacity,
+                                                    dtype=np.float64)
+            arrays["segment_util"] = np.asarray(result.segment_util,
+                                                dtype=np.float64)
+        capacity.update(capacity_metadata or {})
     metadata = dict(
         schema_version=SCHEMA_VERSION, num_nets=nl.num_nets,
         num_physical=nl.num_physical, num_movable=nl.num_movable,
@@ -124,6 +162,7 @@ def save_evaluation(path, nl, rg, result, node_x, node_y, net_names, *,
                  "tree_wl", "hpwl", "large_net_lb")},
         provenance=provenance or {},
         straddle=straddle,
+        capacity=capacity,
         **boundary_stats,
     )
     arrays["metadata"] = np.asarray(json.dumps(metadata, sort_keys=True))
@@ -170,6 +209,22 @@ def load_evaluation(path, *, net_names=None, rg=None):
             raise ValueError("evaluator total mismatch: per_node_straddle")
         if int((data["per_net_pin_split"] > 0).sum()) != straddle["straddle_pin_split_nets"]:
             raise ValueError("evaluator total mismatch: per_net_pin_split")
+    capacity = metadata.get("capacity")
+    if capacity is not None:
+        if "segment_demand" not in data:
+            raise ValueError("invalid evaluator evidence array: segment_demand")
+        demand = data["segment_demand"]
+        if demand.shape != (capacity["num_segments"],):
+            raise ValueError("invalid evaluator evidence array: segment_demand")
+        if int(demand.sum(dtype=np.int64)) != capacity["segment_demand_total"]:
+            raise ValueError("evaluator total mismatch: segment_demand")
+        if "segment_capacity" in data:
+            if data["segment_capacity"].shape != demand.shape or \
+                    data["segment_util"].shape != demand.shape:
+                raise ValueError("invalid evaluator evidence array: segment_capacity")
+            over = int((demand > data["segment_capacity"]).sum())
+            if over != capacity["num_over_capacity"]:
+                raise ValueError("evaluator total mismatch: num_over_capacity")
     data["metadata"] = metadata
     return data
 

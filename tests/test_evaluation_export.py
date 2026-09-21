@@ -3,7 +3,7 @@ import pytest
 
 from ioplace.evaluator_ref import evaluate
 from ioplace.export.evaluation import (
-    load_evaluation, pin_regions_from_evaluation, save_evaluation,
+    SCHEMA_VERSION, load_evaluation, pin_regions_from_evaluation, save_evaluation,
 )
 from ioplace.region_grid import RegionGrid
 from ioplace.regions import make_grid_regions
@@ -62,9 +62,13 @@ def _straddling_evidence(tmp_path, straddle=True):
 
 
 def test_schema_2_round_trips_the_straddle_block(tmp_path):
+    """Name kept for continuity with P-F's original test; the straddle block
+    itself is schema 2's addition, but P-D Task 8 bumped SCHEMA_VERSION to 3
+    for the sec 5 capacity block, so a freshly written archive now carries 3
+    -- the straddle block must still round-trip unchanged under it."""
     path, nl, rg, result = _straddling_evidence(tmp_path)
     data = load_evaluation(path, rg=rg)
-    assert data["metadata"]["schema_version"] == 2
+    assert data["metadata"]["schema_version"] == SCHEMA_VERSION
     straddle = data["metadata"]["straddle"]
     assert straddle["straddle_cells"] == 2
     assert straddle["straddle_pin_split_nets"] == 1
@@ -85,7 +89,7 @@ def test_schema_2_round_trips_the_straddle_block(tmp_path):
 def test_evidence_without_diagnostics_records_that_fact(tmp_path):
     path, _, rg, _ = _straddling_evidence(tmp_path, straddle=False)
     data = load_evaluation(path, rg=rg)
-    assert data["metadata"]["schema_version"] == 2
+    assert data["metadata"]["schema_version"] == SCHEMA_VERSION
     assert data["metadata"]["straddle"] is None
     assert "per_node_straddle" not in data and "per_net_pin_split" not in data
 
@@ -119,17 +123,20 @@ def test_a_schema_1_archive_still_loads(tmp_path):
 
 def test_a_future_schema_version_is_rejected_not_silently_misparsed(tmp_path):
     """Fix round 1 item 1. The contract (SUPPORTED_SCHEMA_VERSIONS,
-    export/evaluation.py) is read-v1-or-v2, reject anything else -- in
-    particular a FUTURE version this reader was never taught, since a later
-    subproject takes schema 3 and the read-vs-reject line then moves. An
-    untested rejection path is exactly what would silently start mis-parsing
-    the day that version bump lands."""
+    export/evaluation.py) is read-v1/v2/v3, reject anything else -- in
+    particular a FUTURE version this reader was never taught. Originally
+    written against schema 3 as the future version; P-D Task 8 took schema 3
+    for the sec 5 capacity block (global constraints' schema-version rule),
+    so the still-genuinely-unsupported probe moved to 4 -- the read-vs-reject
+    line moves again the day some later subproject claims it. An untested
+    rejection path is exactly what would silently start mis-parsing the day
+    that version bump lands."""
     path, _, _, _ = _straddling_evidence(tmp_path)
     import json
     with np.load(path, allow_pickle=False) as archive:
         arrays = {key: archive[key] for key in archive.files}
     metadata = json.loads(str(arrays["metadata"]))
-    metadata["schema_version"] = 3
+    metadata["schema_version"] = 4
     arrays["metadata"] = np.asarray(json.dumps(metadata, sort_keys=True))
     np.savez_compressed(path, **arrays)
     with pytest.raises(ValueError, match="unsupported evaluator evidence schema"):
@@ -150,3 +157,78 @@ def test_an_unknown_non_numeric_schema_version_is_also_rejected(tmp_path):
     np.savez_compressed(path, **arrays)
     with pytest.raises(ValueError, match="unsupported evaluator evidence schema"):
         load_evaluation(path)
+
+
+def _capacity_evidence(tmp_path, with_capacity=True):
+    from ioplace.evaluator_ref import evaluate as evaluate_ref
+    from ioplace.region_segments import enumerate_segments
+    from tests.test_evaluator_capacity import _strip_case
+    nl, rg, table = _strip_case()
+    capacity = np.array([0.5, 4.0]) if with_capacity else None
+    result = evaluate_ref(nl, nl.node_x, nl.node_y, rg, segments=table,
+                          segment_capacity=capacity)
+    path = tmp_path / "evaluation.npz"
+    save_evaluation(path, nl, rg, result, nl.node_x, nl.node_y, ["n0"],
+                    segments=table)
+    return path, nl, rg, result, table
+
+
+def test_capacity_block_round_trips(tmp_path):
+    path, _nl, rg, result, table = _capacity_evidence(tmp_path)
+    data = load_evaluation(path, rg=rg)
+    block = data["metadata"]["capacity"]
+    from ioplace.region_segments import CAPACITY_SCALARS, segments_digest
+    for name in CAPACITY_SCALARS:
+        assert name in block
+    assert block["num_over_capacity"] == 1
+    assert block["segment_demand_total"] == 2
+    assert block["segments_sha256"] == segments_digest(table)
+    assert block["capacity_semantics"] == (
+        "usable tracks crossing the segment; "
+        "one net crossing consumes one track")
+    np.testing.assert_array_equal(data["segment_demand"], result.segment_demand)
+    np.testing.assert_array_equal(data["segment_capacity"], [0.5, 4.0])
+    np.testing.assert_array_equal(data["segment_util"], result.segment_util)
+
+
+def test_evidence_without_capacity_records_that_fact(tmp_path):
+    from ioplace.evaluator_ref import evaluate as evaluate_ref
+    from tests.test_evaluator_capacity import _strip_case
+    nl, rg, _table = _strip_case()
+    result = evaluate_ref(nl, nl.node_x, nl.node_y, rg)
+    path = tmp_path / "evaluation.npz"
+    save_evaluation(path, nl, rg, result, nl.node_x, nl.node_y, ["n0"])
+    data = load_evaluation(path, rg=rg)
+    assert data["metadata"]["capacity"] is None
+    assert "segment_demand" not in data
+
+
+def test_a_corrupted_segment_demand_fails_total_validation(tmp_path):
+    import json
+    path, _nl, _rg, _result, _table = _capacity_evidence(tmp_path)
+    with np.load(path, allow_pickle=False) as archive:
+        arrays = {key: archive[key] for key in archive.files}
+    arrays["segment_demand"][0] += 5
+    np.savez_compressed(path, **arrays)
+    with pytest.raises(ValueError, match="total mismatch: segment_demand"):
+        load_evaluation(path)
+
+
+def test_older_schema_archives_still_load(tmp_path):
+    """The SUPPORTED_SCHEMA_VERSIONS convention P-F introduced: results/ holds
+    historical evidence the route-calibration tooling still pairs against."""
+    import json
+    from ioplace.export.evaluation import SUPPORTED_SCHEMA_VERSIONS
+    path, _nl, _rg, _result, _table = _capacity_evidence(tmp_path)
+    with np.load(path, allow_pickle=False) as archive:
+        arrays = {key: archive[key] for key in archive.files}
+    metadata = json.loads(str(arrays["metadata"]))
+    metadata["schema_version"] = SUPPORTED_SCHEMA_VERSIONS[0]
+    metadata.pop("capacity")
+    for key in ("segment_demand", "segment_capacity", "segment_util"):
+        arrays.pop(key)
+    arrays["metadata"] = np.asarray(json.dumps(metadata, sort_keys=True))
+    np.savez_compressed(path, **arrays)
+    data = load_evaluation(path)
+    assert data["metadata"]["schema_version"] == SUPPORTED_SCHEMA_VERSIONS[0]
+    assert data["metadata"].get("capacity") is None

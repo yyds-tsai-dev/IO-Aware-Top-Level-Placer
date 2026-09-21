@@ -26,9 +26,9 @@ from contextlib import ExitStack, contextmanager
 import numpy as np
 import scipy.stats
 from ioplace.drivers.run_placement import (_load_dreamplace, extract_final_positions,
-    _pack_eval_metrics, _pack_straddle_metrics, get_regions_for, _legalization_diagnostics,
-    _phase_summary, _t8a_provenance, _stop_overflow_reached, _gp_iteration_budget,
-    _effective_scale_fields)
+    _pack_eval_metrics, _pack_straddle_metrics, _pack_capacity_metrics, get_regions_for,
+    _legalization_diagnostics, _phase_summary, _t8a_provenance, _stop_overflow_reached,
+    _gp_iteration_budget, _effective_scale_fields)
 from ioplace.netlist import netlist_from_placedb
 from ioplace.region_grid import RegionGrid
 from ioplace.evaluator_gpu import GpuEvalContext
@@ -75,7 +75,28 @@ RESULT_FIELDS = ("mode", "config", "k", "rtype", "seed", "dp_seed", "det",
                  # v2 P-F (design sec 7 diagnostics 1-3)
                  "straddle_cells", "straddle_area_fraction",
                  "straddle_pin_split_nets", "straddle_out_area",
-                 "straddle_movable_area", "straddle_wide_cells")
+                 "straddle_movable_area", "straddle_wide_cells",
+                 # v2 P-D (design sec 5): per-segment boundary IO capacity.
+                 "capacity", "capacity_source", "lambda_cap_final",
+                 "cap_frac_singleton_groups", "cap_tau_b_cells",
+                 "cap_m_pairs", "cap_m_seg", "cap_curvature_dref",
+                 "num_segments", "segment_demand_total", "num_over_capacity",
+                 "num_zero_capacity_segments", "zero_capacity_demand",
+                 "max_util", "p99_util")
+
+
+def load_capacity_for_grid(path, rg):
+    """(SegmentTable, capacity, metadata) for this run's region grid. Raises
+    before any CUDA allocation if capacity.npz was built for a different
+    geometry -- the most damaging silent failure in P-D. Module-level (not
+    nested in `run_io`) so the geometry check is unit-testable without a GPU
+    placement, matching `_register_norm_terms`'s own reason for being split
+    out."""
+    from ioplace.capacity.extract import load_capacity
+    from ioplace.region_segments import enumerate_segments
+    table = enumerate_segments(rg)
+    data = load_capacity(path, table=table)
+    return table, data["capacity"], data["metadata"]
 
 
 #: Policy B's default IO force share when `--norm-target-share` is silent
@@ -85,12 +106,23 @@ DEFAULT_IO_TARGET_SHARE = 0.3
 #: 0.12 -> 0.05 maps through `tau_rel_from_overflow` to overflow 0.57 -> 0.25,
 #: and 0.30 is the same threshold the capacity term uses (design sec 5).
 FT_ACTIVATE_OVERFLOW = 0.30
+#: The capacity term's own activation gate (design sec 3/5): unlike io/ft it
+#: has no ScheduleState-driven external clock, so this is the plain
+#: overflow<=0.30 threshold `TermNormalizer._activate` latches on directly.
+CAP_ACTIVATE_OVERFLOW = 0.30
+#: Policy B's default capacity force share when `--norm-target-share` is
+#: silent (design sec 5 names no specific number; 0.1 mirrors FT's legacy
+#: f_ft_max order of magnitude for a term that, unlike io/ft, stays live
+#: after the freeze).
+DEFAULT_CAP_TARGET_SHARE = 0.1
 
 
 def _register_norm_terms(normalizer, io_term, ft_term, ecc_max, shares, of_on,
-                         n_ramp, f_ft_max, norm_policy, norm_wt_max):
-    """Register `io` (and `ft`, when FT is enabled) on `normalizer`, then
-    validate `--norm-target-share`'s keys against what was actually registered.
+                         n_ramp, f_ft_max, norm_policy, norm_wt_max,
+                         cap_term=None):
+    """Register `io` (and `ft`, when FT is enabled, and `cap`, when a
+    capacity.npz was given) on `normalizer`, then validate
+    `--norm-target-share`'s keys against what was actually registered.
 
     Split out of `run_io` so the registration contract is unit-testable without
     a GPU placement (review C1/I4/I6). Three things are load-bearing here:
@@ -105,7 +137,13 @@ def _register_norm_terms(normalizer, io_term, ft_term, ecc_max, shares, of_on,
       what each term's share is, so no override is installed.
     * An unknown `--norm-target-share` key used to fall through to the default
       silently (`io=0.3` for a typo'd `ioo=0.5`); it is now an error naming the
-      registered terms (review I6)."""
+      registered terms (review I6).
+
+    `cap` (design sec 4/5) declares no `requires`: unlike `ft` it is not
+    expressed relative to `io`'s coefficient, and it activates on its own
+    overflow gate (`CAP_ACTIVATE_OVERFLOW`, not `of_on`). Its curvature is
+    `cap_term.curvature` (`pen''(d_ref)`, ruling D-7-adjacent: read from the
+    term, not hand-derived here)."""
     normalizer.register("io", IoNormTerm(io_term), 1.0,
                         target_share=shares.get("io", DEFAULT_IO_TARGET_SHARE),
                         activate_overflow=of_on, n_ramp=n_ramp)
@@ -116,6 +154,12 @@ def _register_norm_terms(normalizer, io_term, ft_term, ecc_max, shares, of_on,
                             n_ramp=n_ramp, requires="io",
                             wt_max=(f_ft_max * norm_wt_max
                                     if norm_policy == "grandplan" else None))
+    if cap_term is not None:
+        from ioplace.ops.cap_term import CapNormTerm
+        normalizer.register("cap", CapNormTerm(cap_term), cap_term.curvature,
+                            target_share=shares.get("cap", DEFAULT_CAP_TARGET_SHARE),
+                            activate_overflow=CAP_ACTIVATE_OVERFLOW,
+                            n_ramp=n_ramp)
     unknown = sorted(set(shares) - set(normalizer.configs))
     if unknown:
         raise ValueError("--norm-target-share names unregistered terms %r "
@@ -220,9 +264,17 @@ def run_io(config_json, k, rtype, seed, out_json, *,
            discrete_mode="none", discrete_max_active=65536,
            norm_policy="legacy", norm_p=1, norm_ramp_period=100,
            norm_wt_max=1.0, norm_probe_every=50, norm_target_share=None,
-           norm_trace=None, node_anchor="center"):
+           norm_trace=None, node_anchor="center",
+           capacity=None, cap_tau_b_cells=2.0, cap_m_pairs=4, cap_m_seg=2,
+           cap_curvature_dref=1.0):
     if discrete_mode not in ("none","ce","refine","ce_refine") or discrete_max_active<0:
         raise ValueError("invalid discrete postprocess configuration")
+    if cap_m_pairs < 1 or cap_m_seg < 1 or cap_tau_b_cells <= 0:
+        raise ValueError("cap_m_pairs/cap_m_seg must be >= 1 and "
+                         "cap_tau_b_cells > 0")
+    if capacity is not None and callback_order != "atomic":
+        raise ValueError("the capacity term needs atomic callbacks "
+                         "(--callback-order atomic)")
     if callback_order not in ("legacy", "atomic"):
         raise ValueError("callback_order must be legacy or atomic")
     if node_anchor not in ("lower_left", "center", "pin"):
@@ -355,7 +407,17 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         die = (float(placedb.xl), float(placedb.yl), float(placedb.xh), float(placedb.yh))
         rs = get_regions_for(die, k, rtype, seed)
         rg = RegionGrid(rs)
-        ctx = GpuEvalContext(nl, rg, device="cuda")
+        # v2 P-D (design sec 5): loaded (and geometry-checked) before any CUDA
+        # allocation -- load_capacity_for_grid re-raises load_capacity's own
+        # "built for a different segment table" error, the most damaging
+        # silent failure in P-D, before ctx ever touches the GPU.
+        segment_table = cap_meta = None
+        segment_capacity = None
+        if capacity is not None:
+            segment_table, segment_capacity, cap_meta = \
+                load_capacity_for_grid(capacity, rg)
+        ctx = GpuEvalContext(nl, rg, device="cuda", segments=segment_table,
+                             segment_capacity=segment_capacity)
         if rec is not None:
             rec.add_root("eval_ctx", ctx)
             rec.phase_end("initialize")
@@ -386,6 +448,19 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         if f_ft_max > 0:
             from ioplace.ops.ft_term import FtTerm
             ft_term = FtTerm(io_term, distance)
+        cap_term = None
+        net_to_active = None
+        if segment_table is not None:
+            from ioplace.ops.cap_term import CapTerm
+            cap_term = CapTerm(io_term, segment_table.box, segment_capacity,
+                               tau_b=cap_tau_b_cells * float(rg.cell_w),
+                               curvature_dref=cap_curvature_dref)
+            # global net id -> IO-CSR active net index; the IO CSR drops nets
+            # above ignore_net_degree and nets collapsing to one node, and the
+            # capacity term only carries the nets it can differentiate.
+            net_to_active = np.full(nl.num_nets, -1, dtype=np.int64)
+            net_to_active[csr.net_ids] = np.arange(len(csr.net_ids),
+                                                    dtype=np.int64)
         if rec is not None:
             rec.add_root("io_term", io_term)
             rec.phase_end("io_term_build")
@@ -403,10 +478,15 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         # -- the term is never attached, so the objective is bit-identical to
         # run_flat. T6's flat baseline runs through this path to get the
         # io_gp/lg_loss/hard_lambda_sum columns it needs.
-        observer_mode = (rho_max == 0.0 and rho_margin == 0.0 and wl_reweight == "off")
+        # v2 P-D: a capacity.npz makes this run non-observer even with IO off
+        # (rho_max=0) -- the capacity term has its own activation gate,
+        # independent of IO's, so a capacity-only run must still attach
+        # term_fn, build the normalizer and open the trace.
+        observer_mode = (rho_max == 0.0 and rho_margin == 0.0
+                         and wl_reweight == "off" and capacity is None)
 
         from ioplace.norm import (TermNormalizer, VersionPair, _json_cap,
-                                 parse_target_shares)
+                                 applied_lambda_or_zero, parse_target_shares)
         from ioplace.norm_trace import NormTraceWriter
         shares = parse_target_shares(norm_target_share)
         norm_trace_path = norm_trace
@@ -432,7 +512,7 @@ def run_io(config_json, k, rtype, seed, out_json, *,
         _register_norm_terms(normalizer, io_term, ft_term,
                              float(distance.max()) if distance is not None else 1.0,
                              shares, of_on, state.n_ramp, f_ft_max,
-                             norm_policy, norm_wt_max)
+                             norm_policy, norm_wt_max, cap_term=cap_term)
 
         # Review I1b: the GP iteration whose coefficients the objective is
         # currently being evaluated against. Defined here, not in `cb_state`
@@ -470,13 +550,33 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                 # (unlike legacy above), so recovering kappa by division here,
                 # accepting last-ulp rounding against the traced lambda_ft, is fine.
                 kappa = lam_ft / lam_io if lam_io > 0.0 else 0.0
-            if not state.active or (lam_io == 0.0 and state.lambda_margin == 0.0):
+            # Ruling D-6: cap's coefficient must be read through
+            # applied_lambda, never normalizer.lambdas -- cap's registration
+            # does not override n_ramp (default 20), so a bare `lambdas` read
+            # would silently skip the whole activation ramp (the trap P-C's
+            # Task 10 hit). Read through the one shared helper (norm.py's
+            # applied_lambda_or_zero) so Task 9's norm_adapter extension
+            # cannot half-fix this the same way -- it also tolerates
+            # normalizer=None and a never-registered "cap", so this is safe
+            # to call unconditionally even when capacity was not given.
+            lam_cap = applied_lambda_or_zero(normalizer, "cap", norm_iteration["it"])
+            # design sec 3/5: cap has its own activation gate, independent of
+            # IO's `state.active` latch, so a capacity-only run (IO off) must
+            # not be short-circuited by IO's own inactivity.
+            io_off = not state.active or (lam_io == 0.0 and state.lambda_margin == 0.0)
+            if io_off and lam_cap == 0.0:
                 return pos.new_zeros(())
-            if ft_term is not None:
-                return ft_term(pos, state.tau, lam_io, kappa,
+            if io_off:
+                base = pos.new_zeros(())
+            elif ft_term is not None:
+                base = ft_term(pos, state.tau, lam_io, kappa,
                                state.lambda_margin, state.margin_m, state.margin_tau)
-            return io_term(pos, state.tau, lam_io, state.lambda_margin,
-                           state.margin_m, state.margin_tau)
+            else:
+                base = io_term(pos, state.tau, lam_io, state.lambda_margin,
+                               state.margin_m, state.margin_tau)
+            if lam_cap != 0.0:
+                base = base + cap_term(pos, state.tau, lam_cap)
+            return base
 
         if not observer_mode:
             attach_terms(params, [term_fn])   # must precede NonLinearPlace(...) construction
@@ -566,7 +666,12 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                    # >=3 callbacks/evaluator calls", the guard against a
                    # lifetime probe that measured memory before the op it's
                    # trying to characterize ever turned on.
-                   "n_callbacks_with_active": 0, "n_evals_while_active": 0}
+                   "n_callbacks_with_active": 0, "n_evals_while_active": 0,
+                   # v2 P-D (design sec 5): carried forward from the callback's
+                   # candidate-refresh block rather than recomputed at the end
+                   # -- recomputing it there would need a 2*num_nodes `pos`
+                   # tensor that no longer exists after `placer` returns.
+                   "cap_frac_singleton_groups": None}
 
         def cb(iteration, pos):
             nonlocal previous_topology, topology_net_conversion, previous_home
@@ -624,8 +729,14 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                 node_x = pos.data[:n_phys]
                 node_y = pos.data[n_all:n_all + n_phys]
                 # sec 7 diagnostics are a final-placement report, not a
-                # per-callback cost.
-                res = ctx.evaluate(node_x, node_y, straddle=False)
+                # per-callback cost. sec 5: candidates are only asked for on
+                # the same home_period cadence the refresh below consumes
+                # them on (or once, before the term has ever seen any).
+                want_candidates = (cap_term is not None
+                                   and (cap_term.cand_net.numel() == 0
+                                        or iteration % home_period == 0))
+                res = ctx.evaluate(node_x, node_y, straddle=False,
+                                   capacity_candidates=want_candidates)
                 if do_scan:
                     rec.mark(f"after_ctx_evaluate_{iteration}")
                 if not observer_mode and state.active:
@@ -658,6 +769,29 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                                                 if previous_home is not None and len(homes) else None)
                         ft_term.set_home(homes)
                         previous_home = homes.copy()
+                    if cap_term is not None and (
+                            cap_term.cand_net.numel() == 0
+                            or iteration % home_period == 0):
+                        # sec 5: "Every home_period iterations the evaluator
+                        # emits, per net, the (pair, segment) items it actually
+                        # crossed, capped at m_pairs=4, m_seg=2" -- the same
+                        # frozen-discrete/continuous split `home` already uses.
+                        from ioplace.region_segments import select_candidates
+                        raw = select_candidates(res.cand_net, res.cand_u,
+                                                res.cand_v, res.cand_seg,
+                                                res.cand_count, segment_table,
+                                                m_pairs=cap_m_pairs,
+                                                m_seg=cap_m_seg)
+                        cap_term.set_candidates(raw.remap_nets(net_to_active))
+                        cap_diag = cap_term.diagnostics(pos.detach(), state.tau)
+                        entry.update(
+                            cap_num_candidates=cap_diag["num_candidates"],
+                            cap_num_groups=cap_diag["num_groups"],
+                            cap_frac_singleton_groups=cap_diag["frac_singleton_groups"],
+                            cap_max_d=cap_diag["max_d"],
+                            cap_dropped=int(res.cand_dropped))
+                        cb_state["cap_frac_singleton_groups"] = \
+                            cap_diag["frac_singleton_groups"]
                     wirelength_op = placer.model.op_collections.wirelength_op
                     if norm_policy == "legacy":
                         from ioplace.ops.ft_callback import publish_atomic
@@ -701,6 +835,7 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                                                         if ft_state else 0.),
                                      obj_version=txn.obj_version)
                     entry.update(lambda_ft=txn.lambdas.get("ft", 0.),
+                                 lambda_cap=txn.lambdas.get("cap", 0.),
                                  norm_cmax=txn.cmax,
                                  norm_cap=_json_cap(txn.cap),
                                  cap_binding=txn.cap_binding,
@@ -930,7 +1065,13 @@ def run_io(config_json, k, rtype, seed, out_json, *,
                                 res, node_x, node_y, placedb.net_names,
                                 provenance={"config": os.path.abspath(config_json),
                                             "placement_stage": "gp_lg",
-                                            "def_directory": os.path.abspath(emit_def) if emit_def else None})
+                                            "def_directory": os.path.abspath(emit_def) if emit_def else None},
+                                segments=segment_table,
+                                capacity_metadata=(
+                                    None if cap_meta is None else
+                                    {"capacity_source": cap_meta["capacity_source"],
+                                     "capacity_semantics": cap_meta["capacity_semantics"],
+                                     "segments_sha256": cap_meta["segments_sha256"]}))
 
             detach_terms(params)
             if rec is not None:
@@ -973,6 +1114,19 @@ def run_io(config_json, k, rtype, seed, out_json, *,
             "node_anchor": node_anchor,
             "margin_m": margin_m, "lambda_io_final": lambda_io_final,
             "lambda_ft_final": lambda_ft_final,
+            # v2 P-D (design sec 5): per-segment boundary IO capacity.
+            # lambda_cap_final -- like lambda_io_final/lambda_ft_final above
+            # -- is the committed, un-ramped coefficient, not the per-iteration
+            # applied value; term_fn applies the ramp itself via
+            # applied_lambda_or_zero (ruling D-6).
+            "capacity": os.path.abspath(capacity) if capacity else None,
+            "capacity_source": (cap_meta or {}).get("capacity_source"),
+            "lambda_cap_final": (None if cap_term is None
+                                 else float(normalizer.lambdas.get("cap", 0.))),
+            "cap_frac_singleton_groups": cb_state["cap_frac_singleton_groups"],
+            "cap_tau_b_cells": cap_tau_b_cells, "cap_m_pairs": cap_m_pairs,
+            "cap_m_seg": cap_m_seg, "cap_curvature_dref": cap_curvature_dref,
+            **_pack_capacity_metrics(res),
             "norm_policy": norm_policy, "norm_p": norm_p,
             "norm_ramp_period": norm_ramp_period, "norm_wt_max": norm_wt_max,
             "norm_probe_every": norm_probe_every,
