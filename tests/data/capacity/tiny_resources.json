@@ -1,0 +1,13 @@
+{
+  "x_edges_dbu": [0, 1000, 2000, 3000],
+  "y_edges_dbu": [0, 1000, 2000, 3000],
+  "horizontal_capacity": [[10, 20], [30, 40], [50, 60]],
+  "vertical_capacity": [[7, 8, 9], [11, 12, 13]],
+  "horizontal_usage": [[1, 1], [1, 1], [1, 1]],
+  "vertical_usage": [[1, 1, 1], [1, 1, 1]],
+  "layers": [{"name": "metal2", "direction": "VERTICAL"},
+             {"name": "metal3", "direction": "HORIZONTAL"}],
+  "capacity_semantics": "OpenDB total track capacity; usage includes blockages and wires; preferred-direction layers summed",
+  "uint8_backend": true,
+  "preferred_layer_overflow": 0
+}
