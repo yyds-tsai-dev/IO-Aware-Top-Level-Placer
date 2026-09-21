@@ -1,3 +1,5 @@
+import dataclasses
+
 import numpy as np
 import pytest
 
@@ -38,6 +40,25 @@ def notch():
     """A single-bin notch: region 0 pokes one lattice cell into region 1."""
     return _rs(("A", [[0., 0., 2., 4.], [2., 1., 3., 2.]]),
                ("B", [[2., 0., 4., 1.], [3., 1., 4., 2.], [2., 2., 4., 4.]]))
+
+
+def single_region():
+    """k=1: the whole die is one region. No boundary can exist at all --
+    the degenerate case where the empty-table invariants matter (dtypes,
+    an all-zero CSR, a digest that stays well-defined on empty arrays)."""
+    return _rs(("ONLY", [[0., 0., 4., 4.]]))
+
+
+def enclosed():
+    """Region 1 is a 2x2 block strictly inside region 0's 4x4 lattice,
+    touching no die edge on any side -- unlike l_shape/plug/notch/
+    make_grid_regions, which all touch a die edge somewhere. This is the
+    fixture that would expose a bug in die-edge exclusion, since every one
+    of region 1's four boundaries here is a real region/region boundary,
+    not a region/outside-the-die edge."""
+    return _rs(("A", [[0., 0., 4., 1.], [0., 3., 4., 4.],
+                       [0., 1., 1., 3.], [3., 1., 4., 3.]]),
+               ("B", [[1., 1., 3., 3.]]))
 
 
 def _as_tuples(table):
@@ -105,6 +126,56 @@ def test_a_one_bin_notch_produces_unit_length_segments():
     # against region_graph's ell aggregate, the raster round-trip and the CSR
     # elsewhere in this file).
     assert int((table.length_units == 1).sum()) == 4
+
+
+def test_a_single_region_grid_has_zero_segments():
+    """k=1: no boundary edge exists anywhere, so every derived structure must
+    degenerate cleanly rather than raising or producing garbage shapes."""
+    rg = RegionGrid(single_region())
+    table = enumerate_segments(rg)
+    ny, nx = rg.grid.shape
+
+    assert table.num_segments == 0
+    assert table.orient.shape == (0,) and table.orient.dtype == np.int8
+    assert table.line.shape == (0,) and table.line.dtype == np.int32
+    assert table.lo.shape == (0,) and table.lo.dtype == np.int32
+    assert table.hi.shape == (0,) and table.hi.dtype == np.int32
+    assert table.pair_a.shape == (0,) and table.pair_a.dtype == np.int16
+    assert table.pair_b.shape == (0,) and table.pair_b.dtype == np.int16
+    assert table.length_units.shape == (0,) and table.length_units.dtype == np.int32
+    assert table.length.shape == (0,) and table.length.dtype == np.float64
+    assert table.box.shape == (0, 4) and table.box.dtype == np.float64
+
+    assert table.edge_seg_v.shape == (ny, nx - 1)
+    assert table.edge_seg_h.shape == (ny - 1, nx)
+    assert (table.edge_seg_v == -1).all()
+    assert (table.edge_seg_h == -1).all()
+
+    assert table.row_ptr.shape == (ny + 1,)
+    assert table.col_ptr.shape == (nx + 1,)
+    np.testing.assert_array_equal(table.row_ptr, np.zeros(ny + 1, dtype=np.int64))
+    np.testing.assert_array_equal(table.col_ptr, np.zeros(nx + 1, dtype=np.int64))
+    assert table.row_col.shape == (0,) and table.row_seg.shape == (0,)
+    assert table.col_row.shape == (0,) and table.col_seg.shape == (0,)
+
+    digest = segments_digest(table)
+    assert isinstance(digest, str) and len(digest) == 64
+
+
+def test_a_fully_enclosed_region_pins_all_four_boundaries():
+    """Every other fixture touches a die edge somewhere; this one does not,
+    so it's the only fixture where a die-edge-exclusion bug (e.g. treating
+    the die boundary itself as a region boundary, or off-by-one at the last
+    row/column) would actually show up as a wrong tuple here."""
+    table = enumerate_segments(RegionGrid(enclosed()))
+    assert _as_tuples(table) == [
+        (ORIENT_V, 0, 1, 3, 0, 1),
+        (ORIENT_V, 2, 1, 3, 0, 1),
+        (ORIENT_H, 0, 1, 3, 0, 1),
+        (ORIENT_H, 2, 1, 3, 0, 1),
+    ]
+    assert table.num_segments == 4
+    np.testing.assert_array_equal(table.length_units, [2, 2, 2, 2])
 
 
 @pytest.mark.parametrize("factory", [
@@ -184,6 +255,31 @@ def test_enumeration_is_deterministic_and_digested():
     assert segments_digest(a) == segments_digest(b)
     other = enumerate_segments(RegionGrid(plug()))
     assert segments_digest(other) != segments_digest(a)
+
+
+def test_digest_is_sensitive_to_every_hashed_field():
+    """segments_digest is written into capacity.npz/evaluation.npz as a
+    provenance key so a capacity file can never be silently paired with a
+    different geometry; that guarantee only holds if it actually moves when
+    *any* field it reads changes, not just for the one plug-vs-grid instance
+    above. Mutate each field segments_digest hashes, one at a time, and
+    check the digest moves."""
+    rg = RegionGrid(make_grid_regions((0., 0., 100., 100.), 4, 4, lattice=20))
+    base = enumerate_segments(rg)
+    assert base.num_segments > 0  # so every array field below is non-empty
+    baseline = segments_digest(base)
+
+    for field in ("orient", "line", "lo", "hi", "pair_a", "pair_b"):
+        arr = getattr(base, field).copy()
+        arr[0] = arr[0] + 1
+        mutated = dataclasses.replace(base, **{field: arr})
+        assert segments_digest(mutated) != baseline, \
+            f"digest did not move when '{field}' changed"
+
+    assert segments_digest(dataclasses.replace(base, k=base.k + 1)) != baseline
+    assert segments_digest(dataclasses.replace(base, lattice=base.lattice + 1)) != baseline
+    assert segments_digest(dataclasses.replace(
+        base, die=(base.die[0] + 1.0,) + base.die[1:])) != baseline
 
 
 def test_a_512_lattice_stays_cheap():

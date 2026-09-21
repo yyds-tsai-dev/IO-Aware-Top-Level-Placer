@@ -40,7 +40,7 @@ CAPACITY_SCALARS = (
 )
 
 
-@dataclass
+@dataclass(frozen=True)
 class SegmentTable:
     """Frozen per-segment geometry plus the two lookup structures sec 5 asks
     for: a unit-edge -> segment-id raster (2 x L x (L-1) int32, ~2 MB at
@@ -80,7 +80,7 @@ class SegmentTable:
         return self.pair_a.astype(np.int64) * self.k + self.pair_b.astype(np.int64)
 
 
-def _runs(key, run_len, other_len, transposed):
+def _runs(key, run_len):
     """Run-length-encode a 2-D `key` array (0 == no boundary) along its run
     axis. `key` is already laid out so that a C-order ravel walks the run
     axis fastest. Returns (starts, ends, flat_ids) where flat_ids is -1 off
@@ -119,7 +119,7 @@ def enumerate_segments(rg):
     # ---- vertical segments: runs down the rows of each column boundary ----
     key_v = _boundary_key(grid[:, :-1], grid[:, 1:], k)          # (ny, nx-1)
     # transpose so a C-order ravel walks rows fastest within one column
-    starts_v, ends_v, ids_v = _runs(key_v.T.copy(), ny, nx - 1, True)
+    starts_v, ends_v, ids_v = _runs(key_v.T.copy(), ny)
     line_v = (starts_v // ny).astype(np.int32)
     lo_v = (starts_v % ny).astype(np.int32)
     hi_v = (ends_v % ny + 1).astype(np.int32)
@@ -129,7 +129,7 @@ def enumerate_segments(rg):
 
     # ---- horizontal segments: runs along the columns of each row boundary ----
     key_h = _boundary_key(grid[:-1, :], grid[1:, :], k)          # (ny-1, nx)
-    starts_h, ends_h, ids_h = _runs(key_h, nx, ny - 1, False)
+    starts_h, ends_h, ids_h = _runs(key_h, nx)
     line_h = (starts_h // nx).astype(np.int32)
     lo_h = (starts_h % nx).astype(np.int32)
     hi_h = (ends_h % nx + 1).astype(np.int32)
