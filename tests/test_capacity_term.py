@@ -9,7 +9,7 @@ from ioplace.ops.cap_term import (CAP_CURVATURE_DREF, CapTermRef, cap_curvature,
 from ioplace.ops.io_term import IoTerm, build_net_node_csr
 from ioplace.ops.soft_assign import rect_table
 from ioplace.region_grid import RegionGrid
-from ioplace.region_segments import enumerate_segments, select_candidates
+from ioplace.region_segments import Candidates, enumerate_segments, select_candidates
 from ioplace.regions import make_grid_regions
 from tests.test_io_term import _nl
 
@@ -207,6 +207,44 @@ def test_l1_point_box_grad_matches_autograd_at_an_endpoint_aligned_centroid():
     assert ddy2.item() == pytest.approx(cy2.grad.item())
     assert ddx2.item() == pytest.approx(0.0)
     assert ddy2.item() == pytest.approx(1.0)  # not 0 -- exactly the fix
+
+
+def test_alpha_softmax_direction_favours_the_nearer_alternative_segment():
+    """Fix round 2: `_CapBase._alpha` softmaxes on `-d1/tau_b` (nearer
+    alternative -> larger alpha), never `+d1/tau_b`. Every geometry
+    `select_candidates` can build on this grid collapses to singleton
+    alpha-groups (ruling D-4: `select_candidates`'s m_seg=2 budget never
+    fires because no two segments this table produces share one (net,u,v,
+    boundary) group), and a softmax over a one-element group is 1.0
+    regardless of sign -- confirmed by mutation testing: flipping the sign at
+    `cap_term.py`'s `_alpha` passed all 23 tests in this file before this one
+    was added. `test_segment_softmax_gradient_matches_the_softmax_jacobian`
+    calls `segment_softmax` directly with hand-built inputs, so it bypasses
+    `_alpha`'s real call site (and its sign) entirely.
+
+    Build a `Candidates` fixture directly -- not through `select_candidates`,
+    which would collapse to singletons on this table -- with two *real*
+    segments (the (0|1) and (1|2) boundaries of the strip fixture, at x=30
+    and x=60) forced into one group, and a net centroid close to one and far
+    from the other."""
+    nl, rg, table, io, _csr = _setup([(15., 15.), (75., 15.)], [[0, 1]], k=3)
+    assert table.num_segments == 2
+    cand = Candidates(net=np.array([0, 0], dtype=np.int64),
+                      u=np.array([0, 0], dtype=np.int64),
+                      v=np.array([2, 2], dtype=np.int64),
+                      seg=np.array([0, 1], dtype=np.int64),
+                      group=np.array([0, 0], dtype=np.int64),
+                      count=np.array([1, 1], dtype=np.int64),
+                      n_groups=1)
+    ref = CapTermRef(io, table.box, np.full(2, 100.), tau_b=2. * rg.cell_w)
+    ref.set_candidates(cand)
+    # x=33 is 3 units from segment 0's boundary line (x=30) and 27 units from
+    # segment 1's (x=60) -- unambiguously nearer to segment 0.
+    cx = torch.tensor([33.], dtype=torch.float64)
+    cy = torch.tensor([15.], dtype=torch.float64)
+    alpha = ref._alpha(cx, cy)
+    assert alpha.sum().item() == pytest.approx(1.0)
+    assert alpha[0].item() > alpha[1].item()
 
 
 # ------------------------------------------------- reference term ---------

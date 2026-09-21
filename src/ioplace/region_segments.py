@@ -298,7 +298,8 @@ class Candidates:
     v: np.ndarray         # (M,) int64, demand-pair high region
     seg: np.ndarray       # (M,) int64
     group: np.ndarray     # (M,) int64, dense and non-decreasing
-    count: np.ndarray     # (M,) int64, observed crossings (diagnostics only)
+    count: np.ndarray     # (M,) int64, observed crossings -- scales this
+                          # candidate's demand contribution (ops/cap_term.py)
     n_groups: int
 
     def is_empty(self):
