@@ -4,8 +4,17 @@ Demand, as this plan reads sec 5 (interpretations D-1/D-2 in
 docs/superpowers/plans/2026-09-19-v2-p-d-capacity.md):
 
     D_s = sum over candidates c on segment s of
-              w_{e(c)} * q_{e(c),u(c)} * q_{e(c),v(c)} * alpha_c
+              w_{e(c)} * count(c) * q_{e(c),u(c)} * q_{e(c),v(c)} * alpha_c
 
+  * count(c) is the observed crossing count `Candidates.count` carries for
+    that (net, demand pair, segment) item. The capacity semantics string
+    (`capacity.npz`: "usable tracks crossing the segment; one net crossing
+    consumes one track") and evaluator_ref's own accumulation
+    (`candidate_counts[key] += 1` per crossing, `evaluator_ref.py`) both charge
+    per crossing, not per candidate item; dropping this factor (Task 4 fix
+    round 1 item 3) undercounted D_s for any (net, pair, boundary) that
+    crosses more than once and broke the "the term optimises what the
+    evaluator measures" property the whole subproject leans on.
   * (u, v) is the candidate's *demand pair* -- the regions of the two MST-edge
     endpoints whose leg produced the crossing, not the segment's own boundary
     pair. For an adjacent-pair leg they coincide and this is sec 5's formula
@@ -30,8 +39,7 @@ zero at zero demand, and the penalty expression itself is unchanged.
 import numpy as np
 import torch
 
-from ioplace.ops.soft_assign import (_chunks, chunk_p_ell, region_sdf_l1,
-                                     softmax_stats)
+from ioplace.ops.soft_assign import chunk_p_ell, region_sdf_l1, softmax_stats
 
 # pen''(d) = 12d + 2 is unbounded, so sec 4's "max_s pen''" has no supremum.
 # The declared curvature is pen'' at the overflow level the design tolerates.
@@ -100,11 +108,22 @@ def l1_point_box_dist(cx, cy, box):
 
 
 def l1_point_box_grad(cx, cy, box):
-    """(d d1/d cx, d d1/d cy). The subgradient at the kink (on the box, or
-    exactly on a degenerate axis) is 0, matching torch.sign's convention and
-    `region_sdf_l1`'s own clamped form."""
-    ddx = (cx > box[:, 2]).to(cx.dtype) - (cx < box[:, 0]).to(cx.dtype)
-    ddy = (cy > box[:, 3]).to(cy.dtype) - (cy < box[:, 1]).to(cy.dtype)
+    """(d d1/d cx, d d1/d cy).
+
+    Task 4 fix round 1 item 2: `torch.clamp(min=...)`'s backward passes
+    gradient through *at* the boundary itself (`x >= min`, not `x > min` --
+    verified against autograd: `x.clamp(min=0)` at `x == 0` has grad 1, not
+    0). `l1_point_box_dist` is built from two such clamps per axis, so the
+    subgradient at a face (cx exactly on `box[:,0]`/`box[:,2]`, or cy on
+    `box[:,1]`/`box[:,3]`) is +-1, matching `CapTermRef`'s own autograd there
+    -- a strict `>`/`<` disagreed by exactly 1 at an endpoint-aligned
+    centroid, which is silent everywhere `CapTermRef` is the only consumer
+    but a hard failure of `CapTerm`'s (Task 5) `rel <= 1e-10` parity contract.
+    It is only on a *degenerate* axis (`box[:,0] == box[:,2]`, a vertical
+    segment's x-extent, or the H analogue in y) that the two boundary terms
+    are simultaneously satisfied and cancel to a true 0."""
+    ddx = (cx >= box[:, 2]).to(cx.dtype) - (cx <= box[:, 0]).to(cx.dtype)
+    ddy = (cy >= box[:, 3]).to(cy.dtype) - (cy <= box[:, 1]).to(cy.dtype)
     return ddx, ddy
 
 
@@ -135,7 +154,8 @@ class _CapBase(torch.nn.Module):
         self.n_groups = 0
         self.last_demand = None
         self.last_d = None
-        for name in ("cand_net", "cand_u", "cand_v", "cand_seg", "cand_group"):
+        for name in ("cand_net", "cand_u", "cand_v", "cand_seg", "cand_group",
+                     "cand_count"):
             self.register_buffer(name,
                                  torch.zeros(0, dtype=torch.int64, device=device))
 
@@ -152,7 +172,7 @@ class _CapBase(torch.nn.Module):
         arrays = {}
         for name, values in (("cand_net", cand.net), ("cand_u", cand.u),
                              ("cand_v", cand.v), ("cand_seg", cand.seg),
-                             ("cand_group", cand.group)):
+                             ("cand_group", cand.group), ("cand_count", cand.count)):
             arrays[name] = torch.as_tensor(np.asarray(values, dtype=np.int64),
                                            dtype=torch.int64, device=device)
         size = arrays["cand_net"].numel()
@@ -170,6 +190,8 @@ class _CapBase(torch.nn.Module):
             if bool(((arrays["cand_seg"] < 0)
                      | (arrays["cand_seg"] >= self.num_segments)).any()):
                 raise ValueError("candidate segment id outside the table")
+            if bool((arrays["cand_count"] < 0).any()):
+                raise ValueError("candidate crossing counts must be non-negative")
             groups = arrays["cand_group"]
             if int(groups.min()) < 0 or int(groups.max()) >= int(cand.n_groups):
                 raise ValueError("candidate group ids are not dense")
@@ -211,6 +233,14 @@ class CapTermRef(_CapBase):
         y = pos[meta.num_nodes:meta.num_nodes + meta.num_physical]
         x = torch.cat((x[:meta.num_movable], x[meta.num_movable:].detach()))
         y = torch.cat((y[:meta.num_movable], y[meta.num_movable:].detach()))
+        # Task 4 fix round 1 item 1: the sec 7 anchor must be applied before
+        # anything (q's region SDF *and* the net centroid) reads x/y, exactly
+        # like IoTermRef/IoTerm._split_xy -- otherwise membership and the
+        # centroid silently fall back to the cell lower-left even when the
+        # flow's default (and the freeze's own membership read, freeze.py)
+        # is node_anchor="center". A constant per-node offset, so it changes
+        # no gradient -- only where the region SDF/centroid are evaluated.
+        x, y = meta._anchor_xy(x, y)
         rects = meta.rects.to(dtype=x.dtype)
         m, t, am = softmax_stats(x, y, rects, meta.rect2region, meta.K, tau)
         sdf = region_sdf_l1(x, y, rects, meta.rect2region, 0, meta.K)
@@ -221,7 +251,11 @@ class CapTermRef(_CapBase):
         q = -torch.expm1(S)
         cx, cy = self._centroids(x, y)
         alpha = self._alpha(cx, cy)
-        product = (self.w_cand() * q[self.cand_net, self.cand_u]
+        # Task 4 fix round 1 item 3: charge per observed crossing
+        # (`cand.count`), not once per (net, pair, boundary) candidate item --
+        # see the module docstring's D_s formula.
+        product = (self.w_cand() * self.cand_count.to(torch.float64)
+                   * q[self.cand_net, self.cand_u]
                    * q[self.cand_net, self.cand_v] * alpha)
         demand = torch.zeros(self.num_segments, dtype=torch.float64,
                              device=x.device)
@@ -232,7 +266,11 @@ class CapTermRef(_CapBase):
 
     def forward(self, pos, tau, lambda_cap):
         if lambda_cap == 0.0 or self.cand_net.numel() == 0:
-            return pos.new_zeros(())
+            # fp64, not pos.new_zeros(()): the non-short-circuit branch below
+            # always returns a float64 scalar (C/demand/cap_penalty are all
+            # float64), so an fp32 pos must not silently change this
+            # branch's return dtype (minor, fix round 1 free item).
+            return torch.zeros((), dtype=torch.float64, device=pos.device)
         demand = self._demand(pos, tau)
         d, _inv = normalised_overflow(demand, self.C)
         self.last_demand, self.last_d = demand.detach(), d.detach()
