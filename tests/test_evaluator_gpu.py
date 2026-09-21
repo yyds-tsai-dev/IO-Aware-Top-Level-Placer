@@ -472,6 +472,11 @@ def _assert_batch_invariant_fields(a, b, float_rel=1e-12, straddle=True):
     assert a.boundary_pair_demand == b.boundary_pair_demand
     assert a.tree_wl == pytest.approx(b.tree_wl, rel=float_rel)
     assert a.hpwl == pytest.approx(b.hpwl, rel=float_rel)
+    # v2 P-D: integer capacity fields are bit-exact; segment_util/max_util/
+    # p99_util are too, because both come from region_segments.
+    # segment_utilisation applied to the same bit-exact segment_demand.
+    if a.segment_demand is not None or b.segment_demand is not None:
+        np.testing.assert_array_equal(a.segment_demand, b.segment_demand)
     if straddle:
         # v2 P-F: same split as everything above -- integers bit-exact, the
         # three float64 reductions at float_rel. `straddle=False` is only for
@@ -936,3 +941,202 @@ def test_gpu_per_call_straddle_switch_matches_the_context_default():
     lean = GpuEvalContext(nl, rg, device="cuda", straddle=False)
     with pytest.raises(ValueError, match="straddle=False"):
         lean.evaluate(nl.node_x, nl.node_y, straddle=True)
+
+
+# ---------------------------------------------------------------------------
+# v2 P-D (design sec 5 / sec 9): per-segment demand and utilisation, bit-exact
+# ref vs GPU across batch sizes and chunk budgets.
+# ---------------------------------------------------------------------------
+from ioplace.region_segments import enumerate_segments, segment_utilisation
+
+
+def _multi_rect_regions(die):
+    """One non-rectangular ("producer-like") geometry, so parity is not only
+    tested on axis-aligned grid partitions: region 0 is an L, region 1 the
+    block it wraps, region 2 and 3 split the right half."""
+    from ioplace.regions import RegionSet, RegionSpec
+    xl, yl, xh, yh = die
+    mx, my = (xl + xh) / 2., (yl + yh) / 2.
+    qx = xl + (xh - xl) / 4.
+    rs = RegionSet(die=die, lattice=20, regions=[
+        RegionSpec("L", np.array([[xl, yl, qx, yh], [qx, yl, mx, my]])),
+        RegionSpec("B", np.array([[qx, my, mx, yh]])),
+        RegionSpec("R0", np.array([[mx, yl, xh, my]])),
+        RegionSpec("R1", np.array([[mx, my, xh, yh]])),
+    ])
+    rs.validate()
+    return rs
+
+
+def _capacity_for(table, rng):
+    """A capacity vector with slack, tight and blocked segments, so all three
+    branches of segment_utilisation are exercised."""
+    capacity = rng.uniform(0.5, 6.0, table.num_segments)
+    capacity[::7] = 0.0
+    return capacity
+
+
+def _assert_capacity_fields_bit_exact(a, b):
+    np.testing.assert_array_equal(a.segment_demand, b.segment_demand)
+    np.testing.assert_array_equal(a.segment_util, b.segment_util)
+    np.testing.assert_array_equal(a.segment_capacity, b.segment_capacity)
+    assert a.num_over_capacity == b.num_over_capacity
+    assert a.num_zero_capacity_segments == b.num_zero_capacity_segments
+    assert a.zero_capacity_demand == b.zero_capacity_demand
+    # max_util / p99_util come from the same numpy helper on the same integers,
+    # so they are bit-exact, not merely close (parity contract).
+    assert a.max_util == b.max_util
+    assert a.p99_util == b.p99_util
+
+
+def _assert_candidates_bit_exact(a, b):
+    for name in ("cand_net", "cand_u", "cand_v", "cand_seg", "cand_count"):
+        np.testing.assert_array_equal(getattr(a, name), getattr(b, name))
+    assert a.cand_dropped == b.cand_dropped
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+@pytest.mark.parametrize("multi_rect", [False, True])
+def test_gpu_segment_demand_matches_the_reference(seed, multi_rect):
+    rng = np.random.default_rng(seed)
+    rs = (_multi_rect_regions(DIE) if multi_rect
+          else make_grid_regions(DIE, 4, 4, lattice=20))
+    rg = RegionGrid(rs)
+    table = enumerate_segments(rg)
+    capacity = _capacity_for(table, rng)
+    nl = _random_case(rng)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg, segments=table,
+                   segment_capacity=capacity, capacity_candidates=True)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg, segments=table,
+                       segment_capacity=capacity, capacity_candidates=True)
+    _assert_capacity_fields_bit_exact(gpu, ref)
+    _assert_candidates_bit_exact(gpu, ref)
+    assert int(ref.segment_demand.sum()) == ref.io_count - ref.large_net_lb
+
+
+def test_gpu_segment_demand_is_batch_invariant():
+    """T2's field-specific acceptance, extended: construction parameters that
+    force many tiny chunks must give bit-exact capacity fields against a
+    single-huge-batch reference run."""
+    rs = _multi_rect_regions(DIE)
+    rg = RegionGrid(rs)
+    table = enumerate_segments(rg)
+    rng = np.random.default_rng(123)
+    capacity = _capacity_for(table, rng)
+    nl = _lambda_ge4_netlist(rng, rg.k)
+
+    from ioplace.evaluator_gpu import GpuEvalContext
+    baseline = GpuEvalContext(nl, rg, device="cuda", mst_chunk_budget=10 ** 9,
+                              seg_chunk_budget=10 ** 9, edge_batch_size=10 ** 9,
+                              segments=table, segment_capacity=capacity)
+    reference = baseline.evaluate(nl.node_x, nl.node_y, capacity_candidates=True)
+    for mst_b, seg_b, edge_b in [(3, 3, 3), (7, 11, 5), (1, 4, 2)]:
+        ctx = GpuEvalContext(nl, rg, device="cuda", mst_chunk_budget=mst_b,
+                             seg_chunk_budget=seg_b, edge_batch_size=edge_b,
+                             segments=table, segment_capacity=capacity)
+        got = ctx.evaluate(nl.node_x, nl.node_y, capacity_candidates=True)
+        _assert_batch_invariant_fields(reference, got)
+        _assert_capacity_fields_bit_exact(reference, got)
+        _assert_candidates_bit_exact(reference, got)
+
+
+def test_gpu_capacity_fields_are_absent_without_segments():
+    rg = RegionGrid(make_grid_regions(DIE, 4, 4, lattice=20))
+    nl = _random_case(np.random.default_rng(0))
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg)
+    for name in ("segment_demand", "segment_util", "num_over_capacity",
+                "cand_net"):
+        assert getattr(gpu, name) is None
+
+
+def test_gpu_large_nets_never_contribute_segment_demand():
+    """Nets above max_degree take the presence lower bound and skip the MST /
+    segment pipeline entirely, on both sides."""
+    rg = RegionGrid(make_grid_regions(DIE, 4, 4, lattice=20))
+    table = enumerate_segments(rg)
+    rng = np.random.default_rng(11)
+    nl = _random_case(rng, n_cells=60, n_nets=8, max_d=30)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg, max_degree=8, segments=table)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg, max_degree=8,
+                       segments=table)
+    assert ref.large_net_lb > 0
+    np.testing.assert_array_equal(gpu.segment_demand, ref.segment_demand)
+    assert int(ref.segment_demand.sum()) == ref.io_count - ref.large_net_lb
+
+
+def test_gpu_segment_demand_matches_reference_on_boundary_exact_nonzero_origin_die():
+    """P-F's lesson (task-7 brief cross-reference), applied to the P-D capacity
+    fields rather than the straddle diagnostics: a parity suite that only
+    exercises xl=yl=0 and never lands a coordinate exactly on a segment
+    boundary is vacuous for exactly the `self.xl + (ix0+1)*cell_w` term C1's
+    fix cares about, and _process_segments' segment-id gather is new code
+    that reads the same lattice indices. Mirrors
+    test_gpu_straddle_matches_reference_on_a_nonzero_noninteger_die_origin's
+    die (non-zero, non-integer origin, an inexact cell size) and puts two
+    node coordinates exactly on the region-column/row boundary line."""
+    from ioplace.netlist import Netlist
+    DIE_ND = (17.3, 4.7, 217.3, 204.7)
+    rg = RegionGrid(make_grid_regions(DIE_ND, 3, 3, lattice=30))
+    table = enumerate_segments(rg)
+    xl, yl = DIE_ND[0], DIE_ND[1]
+    cw, ch = rg.cell_w, rg.cell_h
+    bx, by = xl + 10 * cw, yl + 10 * ch          # exact region-column/row line
+
+    # 8 cells: nets 0/1 each straddle the boundary line exactly (one endpoint
+    # sits ON bx/by); nets 2/3 are a scatter of interior pins so the MST sees
+    # more than a single 2-pin edge.
+    node_x = np.array([bx, bx - 15.0, bx, bx + 12.0,
+                       xl + 3.0, xl + 190.0, xl + 90.0, xl + 95.0])
+    node_y = np.array([yl + 20.0, yl + 20.0, by, by - 8.0,
+                       yl + 5.0, yl + 195.0, by + 4.0, by - 4.0])
+    n_cells = len(node_x)
+    nl = Netlist(node_x=node_x, node_y=node_y,
+                node_size_x=np.ones(n_cells), node_size_y=np.ones(n_cells),
+                num_movable=n_cells, num_terminals=0, num_terminal_NIs=0,
+                pin_offset_x=np.zeros(n_cells), pin_offset_y=np.zeros(n_cells),
+                pin2node=np.array([0, 1, 2, 3, 4, 5, 6, 7], np.int32),
+                pin2net=np.array([0, 0, 1, 1, 2, 2, 3, 3], np.int32),
+                flat_net2pin=np.arange(n_cells, dtype=np.int32),
+                flat_net2pin_start=np.array([0, 2, 4, 6, 8], np.int32),
+                xl=DIE_ND[0], yl=DIE_ND[1], xh=DIE_ND[2], yh=DIE_ND[3])
+    rng = np.random.default_rng(7)
+    capacity = _capacity_for(table, rng)
+    ref = evaluate(nl, nl.node_x, nl.node_y, rg, segments=table,
+                   segment_capacity=capacity, capacity_candidates=True)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg, segments=table,
+                       segment_capacity=capacity, capacity_candidates=True)
+    assert int(ref.segment_demand.sum()) > 0   # the case actually crosses a boundary
+    _assert_capacity_fields_bit_exact(gpu, ref)
+    _assert_candidates_bit_exact(gpu, ref)
+
+
+@pytest.mark.slow
+def test_segment_demand_regression_on_a_frozen_placement(tmp_path):
+    """sec 9: 'Add a slow regression pinning per-segment demand for one frozen
+    placement.' The first run writes the baseline next to the existing
+    evaluator regression fixtures; later runs compare against it."""
+    import json
+    import os
+    rs = _multi_rect_regions(DIE)
+    rg = RegionGrid(rs)
+    table = enumerate_segments(rg)
+    rng = np.random.default_rng(2026)
+    nl = _random_case(rng, n_cells=400, n_nets=300, max_d=10)
+    gpu = evaluate_gpu(nl, nl.node_x, nl.node_y, rg, segments=table)
+    baseline = os.path.join(os.path.dirname(__file__), "data",
+                            "segment_demand_multirect.json")
+    payload = {"segments_sha256": __import__(
+        "ioplace.region_segments", fromlist=["segments_digest"]
+    ).segments_digest(table),
+        "segment_demand": gpu.segment_demand.tolist(),
+        "io_count": int(gpu.io_count), "large_net_lb": int(gpu.large_net_lb)}
+    if not os.path.exists(baseline):
+        os.makedirs(os.path.dirname(baseline), exist_ok=True)
+        with open(baseline, "w") as stream:
+            json.dump(payload, stream, indent=1)
+        pytest.skip("wrote the segment-demand baseline; rerun to compare")
+    with open(baseline) as stream:
+        saved = json.load(stream)
+    assert saved["segments_sha256"] == payload["segments_sha256"]
+    assert saved["segment_demand"] == payload["segment_demand"]
+    assert saved["io_count"] == payload["io_count"]

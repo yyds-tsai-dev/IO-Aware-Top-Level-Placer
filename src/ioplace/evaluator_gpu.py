@@ -80,6 +80,7 @@ import torch
 
 from ioplace.evaluator_ref import EvalResult
 from ioplace.region_graph import region_graph as build_region_graph, next_hop_table, steiner_tree_stats
+from ioplace.region_segments import segment_utilisation
 from ioplace.straddle import _REGION_STRIDE
 
 
@@ -94,7 +95,8 @@ def _pow2_bounds(n):
 class GpuEvalContext:
     def __init__(self, nl, rg, device="cuda", max_degree=256,
                  mst_chunk_budget=8_000_000, seg_chunk_budget=8_000_000,
-                 edge_batch_size=1_000_000, straddle=True):
+                 edge_batch_size=1_000_000, straddle=True,
+                 segments=None, segment_capacity=None):
         """
         mst_chunk_budget / seg_chunk_budget / edge_batch_size (M4 T2 §4.2 item 7:
         "batch size as a construction parameter"): all three bound the peak size
@@ -319,6 +321,43 @@ class GpuEvalContext:
         # other two budgets) so it can be dialled independently for the T2
         # batch-invariance tests.
         self._edge_batch_size = edge_batch_size
+
+        # ---- v2 P-D (design sec 5): the unit-edge -> segment-id raster ----
+        # The GPU path reads the raster directly rather than the per-row CSR:
+        # _process_segments already gathers every lattice cell along a leg for
+        # the bitmask and pair-demand passes, so the segment id of a transition
+        # is one more indexed read at coordinates it already holds. The CSR is
+        # the reference's structure, where the cost model is the opposite.
+        #
+        # Task-7 brief drift: the brief places this block right after
+        # `self._seg_bounds_t = ...` (pre-P-D __init__), but self.n_nets
+        # (needed by the composite-key headroom assert below) is not assigned
+        # until further up this same __init__ -- moved here, after every
+        # field it reads is already set, rather than reproduced at a location
+        # that would AttributeError.
+        self.segments = segments
+        self.segment_capacity = None
+        self.edge_seg_v_t = None
+        self.edge_seg_h_t = None
+        if segments is not None:
+            if (segments.k != rg.k or segments.grid_shape() != rg.grid.shape
+                    or segments.die != tuple(float(v) for v in rg.die)):
+                raise ValueError("segment table was built for a different region grid")
+            self.num_segments = int(segments.num_segments)
+            assert self.n_nets * self.k * self.k * max(self.num_segments, 1) < 2 ** 63, (
+                "no int64 headroom for the (net,u,v,seg) composite candidate key")
+            self.edge_seg_v_t = torch.from_numpy(
+                np.ascontiguousarray(segments.edge_seg_v)).to(self.device)
+            self.edge_seg_h_t = torch.from_numpy(
+                np.ascontiguousarray(segments.edge_seg_h)).to(self.device)
+            if segment_capacity is not None:
+                self.segment_capacity = np.asarray(segment_capacity,
+                                                   dtype=np.float64)
+                if self.segment_capacity.shape != (self.num_segments,):
+                    raise ValueError("segment_capacity must carry one value "
+                                     "per segment")
+        elif segment_capacity is not None:
+            raise ValueError("segment_capacity needs segments=")
 
     # ------------------------------------------------------------------
     # geometry helpers
@@ -564,7 +603,10 @@ class GpuEvalContext:
     # ------------------------------------------------------------------
     # FT (passed-region bitmask) + boundary pair demand, via bucketed padded gather
     # ------------------------------------------------------------------
-    def _process_segments(self, fixed_idx, lo, hi, net_id, is_vert, passed_bit_acc, pair_count_acc):
+    def _process_segments(self, fixed_idx, lo, hi, net_id, is_vert,
+                          passed_bit_acc, pair_count_acc,
+                          segment_demand_acc=None, edge_u=None, edge_v=None,
+                          candidate_keys=None):
         dev = self.device
         cell_count = hi - lo + 1
         bucket_idx = torch.bucketize(cell_count, self._seg_bounds_t, right=False)
@@ -648,16 +690,93 @@ class GpuEvalContext:
                         keys = lo_ab * 64 + hi_ab
                         pair_count_acc += torch.bincount(keys, minlength=pair_count_acc.numel())
 
+                        # v2 P-D: the same transitions, keyed by segment id.
+                        # Within the unpadded span cand[:,t+1] == cand[:,t]+1,
+                        # so the transition at position t is the unit edge whose
+                        # boundary index is cand[:,t]. Padded positions repeat
+                        # the last cell, so `diff` is False there -- the same
+                        # property the pair-demand pass above relies on.
+                        if segment_demand_acc is not None:
+                            # Task-7 fix: `cand[:, :-1]` at a *padded* position
+                            # (beyond the unpadded cell_count span) repeats the
+                            # segment's last valid cell index, h0 -- which can
+                            # be nx-1/ny-1, one past edge_seg_v_t/edge_seg_h_t's
+                            # boundary-index range (nx-1/ny-1 wide). diff is
+                            # False there (the whole point of the padding
+                            # scheme), but advanced indexing evaluates the
+                            # gather for *every* position before `[diff]`
+                            # filters it, so an unclamped out-of-range boundary
+                            # index CUDA-asserts even though its result is
+                            # discarded. Clamping to each raster's own last
+                            # valid boundary index is safe: a genuine transition
+                            # (diff True) can only occur at an *internal*
+                            # boundary, whose index is always < that bound.
+                            base = cand[:, :-1]
+                            fixed_exp = f.unsqueeze(1).expand(-1, L - 1)
+                            if is_vert:
+                                base_h = torch.clamp(base, max=self.edge_seg_h_t.shape[0] - 1)
+                                seg_ids = self.edge_seg_h_t[base_h, fixed_exp][diff]
+                            else:
+                                base_v = torch.clamp(base, max=self.edge_seg_v_t.shape[1] - 1)
+                                seg_ids = self.edge_seg_v_t[fixed_exp, base_v][diff]
+                            seg_ids = seg_ids.to(torch.int64)
+                            assert bool((seg_ids >= 0).all()), \
+                                "a lattice transition mapped to no segment"
+                            segment_demand_acc += torch.bincount(
+                                seg_ids, minlength=segment_demand_acc.numel())
+                            if candidate_keys is not None:
+                                nid_exp = nid.unsqueeze(1).expand(-1, L - 1)[diff]
+                                u_exp = edge_u[sel][start:end].unsqueeze(1).expand(-1, L - 1)[diff]
+                                v_exp = edge_v[sel][start:end].unsqueeze(1).expand(-1, L - 1)[diff]
+                                keep = u_exp != v_exp
+                                candidate_keys["dropped"] += int((~keep).sum())
+                                if bool(keep.any()):
+                                    net_k = nid_exp[keep].to(torch.int64)
+                                    lo_uv = torch.minimum(u_exp[keep], v_exp[keep]).to(torch.int64)
+                                    hi_uv = torch.maximum(u_exp[keep], v_exp[keep]).to(torch.int64)
+                                    key = (((net_k * self.k + lo_uv) * self.k + hi_uv)
+                                           * self.num_segments + seg_ids[keep])
+                                    uniq, counts = torch.unique(key, return_counts=True)
+                                    candidate_keys["keys"].append(uniq)
+                                    candidate_keys["counts"].append(counts)
+
     @staticmethod
     def _reduce_pair_demand(pair_count_acc):
         counts = pair_count_acc.cpu().numpy()
         nz = np.nonzero(counts)[0]
         return {(int(u) // 64, int(u) % 64): int(counts[u]) for u in nz}
 
+    def _reduce_candidates(self, candidate_keys):
+        """Collapse the per-batch unique (net,u,v,seg) keys into one ascending
+        list. torch.unique sorts, and the reference builds the same composite
+        key with np.unique -- which is what makes the two candidate lists
+        bit-identical rather than merely equivalent as sets."""
+        empty = np.zeros(0, dtype=np.int64)
+        if not candidate_keys["keys"]:
+            return dict(cand_net=empty, cand_u=empty, cand_v=empty,
+                        cand_seg=empty, cand_count=empty,
+                        cand_dropped=int(candidate_keys["dropped"]))
+        keys = torch.cat(candidate_keys["keys"])
+        counts = torch.cat(candidate_keys["counts"])
+        uniq, inverse = torch.unique(keys, return_inverse=True)
+        totals = torch.zeros(uniq.numel(), dtype=torch.int64, device=uniq.device)
+        totals.index_add_(0, inverse, counts.to(torch.int64))
+        uniq = uniq.cpu().numpy().astype(np.int64)
+        size = self.num_segments
+        seg = uniq % size
+        rest = uniq // size
+        v = rest % self.k
+        rest = rest // self.k
+        u = rest % self.k
+        net = rest // self.k
+        return dict(cand_net=net, cand_u=u, cand_v=v, cand_seg=seg,
+                    cand_count=totals.cpu().numpy().astype(np.int64),
+                    cand_dropped=int(candidate_keys["dropped"]))
+
     # ------------------------------------------------------------------
     # main entry point
     # ------------------------------------------------------------------
-    def evaluate(self, node_x, node_y, *, straddle=None):
+    def evaluate(self, node_x, node_y, *, straddle=None, capacity_candidates=False):
         want_straddle = self.straddle if straddle is None else bool(straddle)
         if want_straddle and not self.straddle:
             raise ValueError("this GpuEvalContext was built with straddle=False, "
@@ -708,7 +827,16 @@ class GpuEvalContext:
         # below (not a scatter) is race-free.
         net_region_key = self.pin2net_t.to(torch.int64) * 64 + pin_rid.to(torch.int64)
         del pin_ix, pin_iy
-        if not want_straddle:
+        # v2 P-D: the capacity candidate keys (net,u,v,seg) need each MST
+        # edge endpoint's region id -- gathered from pin_rid in the edge-batch
+        # loop far below (D-1/D-2: keyed on the MST-edge terminal pair). That
+        # is the only other place in evaluate() pin_rid is read, so it must
+        # survive at least that long whenever capacity_candidates is asked
+        # for; task-7 brief drift: the brief's unconditional
+        # `del pin_ix, pin_iy, pin_rid` predates P-F's want_straddle-gated
+        # deletion here -- merged rather than replacing it.
+        need_pin_rid_for_capacity = self.segments is not None and capacity_candidates
+        if not want_straddle and not need_pin_rid_for_capacity:
             del pin_rid          # only net_region_key above needed it
         uniq_keys, uniq_counts = torch.unique(net_region_key, return_counts=True)
         del net_region_key
@@ -748,9 +876,13 @@ class GpuEvalContext:
         if want_straddle:
             straddle_stats = self._straddle_stats(node_x, node_y, pin_rid,
                                                   per_net_lambda)
-            del pin_rid
+            if not need_pin_rid_for_capacity:
+                del pin_rid
         else:
             straddle_stats = {}
+            # pin_rid, if still alive here, is kept alive for the capacity
+            # candidate-key gather in the edge-batch loop below and is
+            # explicitly deleted there once it is no longer needed.
 
         # per_net_steiner (ST_e): Λ<=3 closed form (bulk, vectorized over only
         # the Λ==2 / Λ==3 subsets -- never a full (n_nets,K) bit-plane tensor);
@@ -834,6 +966,12 @@ class GpuEvalContext:
         # batch size *can* land on a different but equally valid rounding).
         tree_wl_t = torch.zeros((), dtype=torch.float64, device=dev)
 
+        # v2 P-D (design sec 5): capacity_fields collects everything that goes
+        # into EvalResult only when segments= was supplied, so a caller that
+        # never asks for capacity sees the same None-filled EvalResult it
+        # always has (Task 6's "not measured" vs "measured as zero" contract).
+        capacity_fields = {}
+
         M = edge_net_id.numel()
         if M > 0:
             # M4 T2 items 4/7: the MST edge arrays (edge_net_id/edge_pin_a/
@@ -854,6 +992,17 @@ class GpuEvalContext:
             # float64-reduction-order slack documented above for tree_wl.
             passed_bit_acc = torch.zeros((n_nets, self.k), dtype=torch.int8, device=dev)
             pair_count_acc = torch.zeros(64 * 64, dtype=torch.int64, device=dev)
+            # v2 P-D: segment_demand_acc/candidate_keys mirror pair_count_acc's
+            # incremental-accumulation pattern above -- only allocated when
+            # segments= is in play, so a straddle-only or legacy-only caller
+            # pays nothing extra.
+            segment_demand_acc = None
+            candidate_keys = None
+            if self.segments is not None:
+                segment_demand_acc = torch.zeros(self.num_segments,
+                                                 dtype=torch.int64, device=dev)
+                if capacity_candidates:
+                    candidate_keys = {"keys": [], "counts": [], "dropped": 0}
             batch = self._edge_batch_size
             for start in range(0, M, batch):
                 end = min(M, start + batch)
@@ -867,6 +1016,15 @@ class GpuEvalContext:
 
                 ax, ay = self._to_idx(xa, ya)
                 bx, by = self._to_idx(xb, yb)
+
+                # v2 P-D (D-1/D-2): the candidate key is grouped on the MST
+                # edge's terminal-pin region ids, gathered from pin_rid here
+                # (the same global pin indices _batch_mst drew b_pin_a/b_pin_b
+                # from) -- see the pin_rid lifetime comments above.
+                edge_u = edge_v = None
+                if candidate_keys is not None:
+                    edge_u = pin_rid[b_pin_a]
+                    edge_v = pin_rid[b_pin_b]
 
                 # horizontal segment (at ay, matching edge_regions_and_crossings' (x0,y0)->(x1,y0) leg)
                 h_row = ay
@@ -889,14 +1047,56 @@ class GpuEvalContext:
                 # R2 remedy (unchanged from M3 T1): passed_bit_acc is the other
                 # (E,K) int64 -> int8 accumulator (paired with
                 # _process_segments' int8 seg_bits source).
-                self._process_segments(h_row, h_lo, h_hi, b_net_id, False, passed_bit_acc, pair_count_acc)
-                self._process_segments(v_col, v_lo, v_hi, b_net_id, True, passed_bit_acc, pair_count_acc)
+                self._process_segments(h_row, h_lo, h_hi, b_net_id, False,
+                                       passed_bit_acc, pair_count_acc,
+                                       segment_demand_acc, edge_u, edge_v,
+                                       candidate_keys)
+                self._process_segments(v_col, v_lo, v_hi, b_net_id, True,
+                                       passed_bit_acc, pair_count_acc,
+                                       segment_demand_acc, edge_u, edge_v,
+                                       candidate_keys)
 
             passed_bm = self._pack_bits(passed_bit_acc)
             ft_bm = passed_bm & (~pin_bm)
             per_net_ft = self._popcount_k(ft_bm)
 
             pair_demand = self._reduce_pair_demand(pair_count_acc)
+
+            if segment_demand_acc is not None:
+                capacity_fields["segment_demand"] = \
+                    segment_demand_acc.cpu().numpy().astype(np.int64)
+            if candidate_keys is not None:
+                capacity_fields.update(self._reduce_candidates(candidate_keys))
+
+        # v2 P-D: pin_rid's last possible use is the edge_u/edge_v gather
+        # inside the loop above (only when need_pin_rid_for_capacity); explicit
+        # del once past that point, matching this file's del discipline. Safe
+        # even when M == 0 (loop body, and hence the gather, never ran) since
+        # pin_rid was only left alive in the first place when
+        # need_pin_rid_for_capacity was True.
+        if need_pin_rid_for_capacity:
+            del pin_rid
+
+        if self.segments is not None:
+            demand = capacity_fields.setdefault(
+                "segment_demand", np.zeros(self.num_segments, dtype=np.int64))
+            # sec 5: the Ph/Pv prefix-sum counts become a free assertion. One
+            # device sync on two scalars, not per edge.
+            assert int(demand.sum()) == int(per_net_crossings.sum().item()) - large_lb, \
+                "per-segment demand does not reconcile with the Ph/Pv crossing count"
+            if self.segment_capacity is not None:
+                util, scalars = segment_utilisation(demand, self.segment_capacity)
+                capacity_fields["segment_capacity"] = self.segment_capacity
+                capacity_fields["segment_util"] = util
+                capacity_fields.update(
+                    (name, scalars[name]) for name in
+                    ("num_over_capacity", "num_zero_capacity_segments",
+                     "zero_capacity_demand", "max_util", "p99_util"))
+            if capacity_candidates and "cand_net" not in capacity_fields:
+                empty = np.zeros(0, dtype=np.int64)
+                capacity_fields.update(cand_net=empty, cand_u=empty, cand_v=empty,
+                                       cand_seg=empty, cand_count=empty,
+                                       cand_dropped=0)
 
         tree_wl = float(tree_wl_t.item())
 
@@ -916,9 +1116,13 @@ class GpuEvalContext:
             per_net_steiner=per_net_steiner.cpu().numpy(),
             per_net_home=per_net_home.to(torch.uint8).cpu().numpy(),
             **straddle_stats,
+            **capacity_fields,
         )
 
 
-def evaluate_gpu(nl, node_x, node_y, rg, max_degree=256, device="cuda", straddle=True):
-    return GpuEvalContext(nl, rg, device=device, max_degree=max_degree,
-                          straddle=straddle).evaluate(node_x, node_y)
+def evaluate_gpu(nl, node_x, node_y, rg, max_degree=256, device="cuda", straddle=True,
+                 segments=None, segment_capacity=None, capacity_candidates=False):
+    ctx = GpuEvalContext(nl, rg, device=device, max_degree=max_degree,
+                         straddle=straddle, segments=segments,
+                         segment_capacity=segment_capacity)
+    return ctx.evaluate(node_x, node_y, capacity_candidates=capacity_candidates)
