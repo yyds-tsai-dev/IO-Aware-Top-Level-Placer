@@ -238,12 +238,23 @@ def test_the_center_offset_is_half_the_cell_not_the_whole_cell():
 def test_run_main_flow_wires_node_anchor_like_the_other_drivers():
     """P-F fix round 1, item 4 (promoted from the reviewer's m-7):
     run_main_flow.py is a driver too, and freeze.py already freezes on cell
-    centres, so it must default to 'center' and reject 'pin' before CUDA
-    exactly like run_placement.py/run_placement_io.py do."""
+    centres, so it must default to 'center' (when a value is actually needed,
+    i.e. --phase soft/all) and reject 'pin' before CUDA exactly like
+    run_placement.py/run_placement_io.py do.
+
+    The parser default itself is None, not 'center' -- fence-diagnostics fix
+    (P-F Task 7 finding): run_main_flow must tell an omitted --node-anchor
+    apart from an explicit 'center' so a --phase fence call that omits the
+    flag can inherit the anchor freeze.json recorded from the soft phase
+    instead of relabelling it 'center' (see test_main_flow_driver.py's
+    test_phase_fence_inherits_the_recorded_node_anchor_when_omitted /
+    test_phase_fence_raises_when_node_anchor_disagrees_with_freeze).
+    run_placement.py/run_placement_io.py have no two-invocation split and
+    keep their own 'center' default unchanged."""
     from ioplace.drivers.run_main_flow import build_parser, run_main_flow, run_soft_phase
     parser = build_parser()
     args = parser.parse_args(["--config", "c.json", "--out-dir", "o"])
-    assert args.node_anchor == "center"
+    assert args.node_anchor is None
     action, = [a for a in parser._actions if a.dest == "node_anchor"]
     assert tuple(action.choices) == ("lower_left", "center", "pin")
     with pytest.raises(ValueError, match="IoTermRef-only"):

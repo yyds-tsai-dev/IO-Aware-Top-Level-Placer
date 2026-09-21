@@ -41,6 +41,10 @@ FREEZE_FIELDS = (
     "churn", "k", "region_cell_count", "region_cell_area", "region_area",
     "region_utilization", "io_soft", "membership_npz", "soft_npz",
     "repaired_empty_regions", "gp_iterations_soft", "density_weight_soft",
+    # fence-diagnostics fix (P-F Task 7 finding): the anchor the soft phase
+    # ran with, so a later --phase fence invocation can report it instead of
+    # its own (possibly stale/default) --node-anchor argument.
+    "node_anchor",
 )
 
 MAIN_FLOW_RESULT_FIELDS = (
@@ -69,7 +73,16 @@ MAIN_FLOW_RESULT_FIELDS = (
     "t_gp_fence", "t_lg", "t_eval", "peak_mem_mb", "peak_mem_mb_by_phase",
     "device_used_gb", "host_peak_rss_gb",
     "gp_iterations_soft", "gp_iterations_fence", "gp_iteration_budget",
-    "final_overflow", "stop_overflow_reached", "legalization_status",
+    # final_overflow (fence-diagnostics fix, P-F Task 7 finding): the raw
+    # max() across all K+1 fence-mode overflow buckets, kept for continuity
+    # -- in fence mode this is usually dominated by the degenerate
+    # escape-cell bucket (fence_phase.py:134-142), not the design's real
+    # overflow. final_overflow_regions is the full per-bucket vector;
+    # final_overflow_stop_metric is what stop_overflow_reached is actually
+    # computed from (overflow[-1] when fence regions are present, matching
+    # DREAMPlace's own Lgamma_stop_criterion, NonLinearPlace.py:300-311).
+    "final_overflow", "final_overflow_regions", "final_overflow_stop_metric",
+    "stop_overflow_reached", "legalization_status",
     "num_unplaced_cells", "effective_target_density", "num_filler_nodes",
     "num_bins_x", "num_bins_y",
     # soft-phase provenance (the run_soft_phase record minus its arrays; None

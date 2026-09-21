@@ -50,7 +50,8 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from ioplace.drivers.run_placement import (RESULT_SCHEMA_VERSION,
-    _legalization_fields, _stop_overflow_reached, _gp_iteration_budget,
+    _fence_overflow_stop_metric, _legalization_fields, _stop_overflow_reached,
+    _gp_iteration_budget,
     _effective_scale_fields, _last_metric_iteration, _t8a_provenance, run_flat)
 from ioplace.drivers.run_placement_io import RESULT_FIELDS, run_io
 
@@ -98,6 +99,50 @@ def test_stop_overflow_reached_true_when_final_overflow_at_or_below_target():
 
 def test_stop_overflow_reached_false_when_final_overflow_above_target():
     assert _stop_overflow_reached(0.10, 0.07) is False
+
+
+def test_fence_overflow_stop_metric_ignores_a_saturated_final_bucket():
+    """Fence-diagnostics fix (P-F Task 7 finding): the v2 main flow's fence
+    phase forces one movable cell into DREAMPlace's implicit "no fence"
+    bucket, appended last in the K+1-length overflow vector (escape-cell
+    workaround, fence_phase.py:134-142); with effectively zero placeable
+    bins its overflow saturates near 1.0 regardless of the design's real
+    state (measured 0.99996 in the run that found this). Before this fix,
+    run_main_flow fed max(overflow_regions) to _stop_overflow_reached, so
+    that one degenerate bucket could mask every real region having already
+    converged well below stop_overflow -- a false negative. The regression:
+    two well-converged fence regions (0.02, 0.01) plus a saturated escape
+    bucket (0.99996) as overflow[-1] must not suppress the stop flag when
+    fed through _fence_overflow_stop_metric, even though .max() over the
+    same vector would."""
+    overflow_regions = [0.02, 0.01, 0.99996]
+    assert max(overflow_regions) == pytest.approx(0.99996)
+    metric = _fence_overflow_stop_metric(overflow_regions, True)
+    assert metric == pytest.approx(0.99996)
+    # This regression is about *provenance*, not about flipping the boolean
+    # for this exact vector: DREAMPlace's own Lgamma_stop_criterion also
+    # reads only overflow[-1] for fence regions (NonLinearPlace.py:300-311),
+    # so a saturated *last* bucket is still "not stopped" by design -- the
+    # bug was `.max()` picking a *different*, non-saturated bucket's value
+    # only by accident of ordering while still calling it the design's own
+    # overflow. Assert the metric is exactly overflow[-1], not derived from
+    # max(), which is the actual fix under test.
+    assert metric == overflow_regions[-1]
+    assert _stop_overflow_reached(metric, 0.07) is False
+
+    # The case the fix actually changes the answer for: once the escape
+    # bucket is no longer conflated with a genuinely unconverged region,
+    # a low overflow[-1] must not be suppressed by a *different* bucket
+    # that is still high (e.g. a region GP has not yet reached).
+    overflow_regions_converging = [0.99996, 0.30, 0.05]
+    metric_converging = _fence_overflow_stop_metric(overflow_regions_converging, True)
+    assert metric_converging == pytest.approx(0.05)
+    assert _stop_overflow_reached(metric_converging, 0.07) is True
+    assert _stop_overflow_reached(max(overflow_regions_converging), 0.07) is False
+
+
+def test_fence_overflow_stop_metric_falls_back_to_max_without_fence_regions():
+    assert _fence_overflow_stop_metric([0.3, 0.9, 0.05], False) == pytest.approx(0.9)
 
 
 def test_gp_iteration_budget_reads_config_value():

@@ -209,6 +209,29 @@ def _stop_overflow_reached(final_overflow, stop_overflow):
     return bool(final_overflow <= float(stop_overflow))
 
 
+def _fence_overflow_stop_metric(overflow_regions, has_fence_regions):
+    """Fence-diagnostics fix (P-F Task 7 finding): `placer.model.overflow` is
+    a K+1-length vector in fence mode -- one entry per explicit fence region
+    plus DREAMPlace's own implicit "no fence" bucket, appended last
+    (PlaceObj.py's `build_multi_fence_region_density_op`: "region 0, ...,
+    region n, non_fence_region"). The v2 main flow's fence phase forces
+    exactly one movable cell into that bucket as its escape-cell workaround
+    (fence_phase.py:134-142); with effectively zero placeable bins its
+    overflow saturates near 1.0 regardless of the design's real state, so
+    `max(overflow_regions)` is usually dominated by that artefact rather than
+    reflecting placement quality (measured 0.99996 in the P-F Task 7 run that
+    found this). DREAMPlace's own Lgamma_stop_criterion reads only
+    overflow[-1] for fence regions ("for fence region, the outer cell
+    overflow decides the stopping of GP", NonLinearPlace.py:300-311), so this
+    mirrors that instead of maxing over buckets that were never meant to be
+    compared against each other. `has_fence_regions` is `len(placedb.regions)
+    > 0`; with no fence regions the vector is a single scalar-shaped entry
+    and max()/[-1] coincide. Split out for mock-vector testability, same
+    rationale as `_stop_overflow_reached` above."""
+    return (float(overflow_regions[-1]) if has_fence_regions
+           else float(max(overflow_regions)))
+
+
 def _gp_iteration_budget(params):
     """Overflow-diagnosis follow-up: the configured GP iteration budget
     (`global_place_stages[0]["iteration"]`), split out for the same

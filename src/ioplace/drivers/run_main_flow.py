@@ -22,6 +22,7 @@ from ioplace.artifacts import (MAIN_FLOW_RESULT_SCHEMA_VERSION, file_sha256,
 from ioplace.dp_hook import (assert_optimizer_lock, attach_terms, detach_terms,
                              install_version_invariant, refresh_nesterov_secant)
 from ioplace.drivers.run_placement import (_effective_scale_fields,
+                                           _fence_overflow_stop_metric,
                                            _gp_iteration_budget,
                                            _legalization_diagnostics,
                                            _load_dreamplace,
@@ -443,7 +444,8 @@ def run_soft_phase(config_json, out_dir, *, k, rtype, seed, regions_json=None,
                 repaired_empty_regions=repaired,
                 gp_iterations_soft=cb_state["last_iteration"] + 1,
                 density_weight_soft=density_weight_soft,
-                stats=region_cell_stats(part, size_x_native, size_y_native, rs_native))
+                stats=region_cell_stats(part, size_x_native, size_y_native, rs_native),
+                node_anchor=node_anchor)
             save_freeze(os.path.join(out_dir, FREEZE_JSON), record)
         detach_terms(params)
 
@@ -553,7 +555,18 @@ def run_fence_gp(config_json, out_dir, *, region_set, part, positions,
                            die=info["die_native"], shift_factor=info["shift_factor"],
                            scale_factor=info["scale_factor"],
                            placedb_sha256=info["placedb_sha256"], kind="placement")
+            # Fence-diagnostics fix (P-F Task 7 finding): final_overflow (kept
+            # for continuity) is the raw max across all K+1 fence-mode
+            # buckets, which in this driver is usually dominated by the
+            # degenerate escape-cell bucket (fence_phase.py:134-142) rather
+            # than the design's real overflow -- see
+            # _fence_overflow_stop_metric's docstring. final_overflow_regions
+            # is the full per-bucket vector so a reader can tell the two
+            # apart instead of taking final_overflow at face value.
+            overflow_regions = [float(v) for v in placer.model.overflow.reshape(-1)]
             final_overflow = float(placer.model.overflow.max())
+            final_overflow_stop_metric = _fence_overflow_stop_metric(
+                overflow_regions, len(placedb.regions) > 0)
             m = placedb.num_movable_nodes
             compliance = fence_compliance(
                 rg, node_x, node_y, part,
@@ -591,8 +604,10 @@ def run_fence_gp(config_json, out_dir, *, region_set, part, positions,
             "escape_cell": info["escape_cell"],
             "escape_from": info["escape_from"], "legal_fields": legal_fields,
             "scale_fields": scale_fields, "final_overflow": final_overflow,
-            "stop_overflow_reached": _stop_overflow_reached(final_overflow,
-                                                            params.stop_overflow),
+            "final_overflow_regions": overflow_regions,
+            "final_overflow_stop_metric": final_overflow_stop_metric,
+            "stop_overflow_reached": _stop_overflow_reached(
+                final_overflow_stop_metric, params.stop_overflow),
             "gp_iterations_fence": cb_state["last_iteration"] + 1,
             "gp_iteration_budget": _gp_iteration_budget(params),
             "placement_npz": placement_path, "evaluation_npz": evaluation_path,
@@ -612,7 +627,7 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
                   argmax_chunk=4, density_clamp_lo=0.25, density_clamp_hi=4.0,
                   ignore_net_degree=None, w_mode="unit", dp_seed=None,
                   deterministic=None, check_invariant=False,
-                  benchmark_kind="real", extra_terms=(), node_anchor="center"):
+                  benchmark_kind="real", extra_terms=(), node_anchor=None):
     import torch
     if phase not in ("all", "soft", "fence"):
         raise ValueError(f"unknown phase {phase!r}")
@@ -620,14 +635,26 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
         raise ValueError(f"unknown init {init!r}")
     if norm_policy not in NORM_POLICIES:
         raise ValueError(f"unknown norm policy {norm_policy!r}")
+    # Fence-diagnostics fix (P-F Task 7 finding): `node_anchor=None` means "not
+    # given" -- distinct from an explicit "center" -- so a --phase fence call
+    # that omits --node-anchor can silently take the anchor the soft phase
+    # recorded in freeze.json, while one that passes a *conflicting* explicit
+    # value still raises instead of the old behaviour of always trusting this
+    # argument (a fence-only invocation would then just relabel whatever the
+    # soft phase actually used). `node_anchor_given` is threaded through to
+    # the freeze-vs-argument comparison below; `effective_node_anchor` is what
+    # actually runs when a value is needed now (the soft phase, or the
+    # up-front validation).
+    node_anchor_given = node_anchor is not None
+    effective_node_anchor = node_anchor if node_anchor_given else "center"
     # P-F fix round 1 item 4: reject here too (not just inside run_soft_phase)
     # so --phase fence -- which never calls run_soft_phase, since IO/FT are
     # off after the freeze -- still rejects a bad --node-anchor up front,
     # before os.makedirs/torch.cuda.mem_get_info below.
-    if node_anchor not in ("lower_left", "center", "pin"):
+    if effective_node_anchor not in ("lower_left", "center", "pin"):
         raise ValueError("node_anchor must be lower_left, center or pin, got %r"
-                         % (node_anchor,))
-    if node_anchor == "pin":
+                         % (effective_node_anchor,))
+    if effective_node_anchor == "pin":
         raise ValueError(
             "node_anchor='pin' is an IoTermRef-only bias probe (design v2 sec 7); "
             "no driver may run it -- use src/scripts/run_anchor_comparison.py")
@@ -658,7 +685,7 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
                 ignore_net_degree=ignore_net_degree, w_mode=w_mode,
                 dp_seed=dp_seed, deterministic=deterministic,
                 check_invariant=check_invariant, timer=timer,
-                node_anchor=node_anchor)
+                node_anchor=effective_node_anchor)
             # Everything the soft phase decided that result.json would otherwise
             # lose: region_source, the resolved init record, the prior
             # (including `remapped`, which is the --remap-blocks auto decision
@@ -684,6 +711,23 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
                     f"--phase fence needs {os.path.basename(required)} in {out_dir}; "
                     "run --phase soft (or --phase all) first")
         record = load_freeze(freeze_path)
+        # Fence-diagnostics fix (P-F Task 7 finding): freeze.json is
+        # authoritative for the anchor the soft phase actually ran with,
+        # whether it ran in this same process (phase="all") or a separate
+        # earlier invocation (phase="fence" reading its artefacts back). A
+        # fence-only call that explicitly passes a *conflicting*
+        # --node-anchor is almost certainly a mistake -- raise instead of
+        # silently preferring either value; one that omits it (the common
+        # case) just inherits the recorded anchor.
+        if (phase == "fence" and node_anchor_given
+                and effective_node_anchor != record["node_anchor"]):
+            raise ValueError(
+                f"--node-anchor {effective_node_anchor!r} disagrees with "
+                f"node_anchor {record['node_anchor']!r} recorded in "
+                f"{freeze_path} by the soft phase; omit --node-anchor on a "
+                "--phase fence run to use the recorded value, or pass the "
+                "same anchor")
+        node_anchor = record["node_anchor"]
         positions = load_positions(soft_path)
         region_set = RegionSet.from_json(regions_path)
         region_set.validate()
@@ -745,6 +789,8 @@ def run_main_flow(config_json, out_dir, *, k=16, rtype="grid", seed=0,
         "io_fence_gp_source": fence["io_fence_gp_source"],
         "soft_summary": soft_summary,
         "final_overflow": fence["final_overflow"],
+        "final_overflow_regions": fence["final_overflow_regions"],
+        "final_overflow_stop_metric": fence["final_overflow_stop_metric"],
         "stop_overflow_reached": fence["stop_overflow_reached"],
         "artifacts": artefacts,
         **fence["legal_fields"],
@@ -814,18 +860,25 @@ def build_parser():
     parser.add_argument("--check-invariant", action="store_true")
     parser.add_argument("--benchmark-kind", default="real", choices=["real", "synthetic"])
     # v2 P-F (design sec 7): the anchor at which the soft region assignment is
-    # evaluated. --phase fence is a no-op (IO/FT are off after the freeze).
+    # evaluated. --phase fence is a no-op for placement (IO/FT are off after
+    # the freeze) -- fence-diagnostics fix (P-F Task 7 finding): default is
+    # None ("not given"), not "center", so run_main_flow can tell a fence-only
+    # call that omits this flag (inherit the anchor freeze.json recorded)
+    # apart from one that explicitly passes a conflicting value (raise).
     parser.add_argument("--node-anchor", choices=["lower_left", "center", "pin"],
-                        default="center",
+                        default=None,
                         help="anchor for the soft region assignment: 'center' "
-                             "(default) evaluates the SDF at x+0.5*w, y+0.5*h, "
-                             "matching the freeze rule (freeze.py's membership "
-                             "is already the cell centre) and whole-cell fence "
+                             "(the default when --phase is soft/all) "
+                             "evaluates the SDF at x+0.5*w, y+0.5*h, matching "
+                             "the freeze rule (freeze.py's membership is "
+                             "already the cell centre) and whole-cell fence "
                              "ownership; 'lower_left' is the legacy anchor; "
                              "'pin' is rejected by every driver -- it exists "
                              "only in IoTermRef as a small-scale bias probe; "
-                             "no-op for --phase fence (IO/FT are off after "
-                             "the freeze)")
+                             "no-op for placement under --phase fence (IO/FT "
+                             "are off after the freeze) -- omit it there to "
+                             "report the anchor freeze.json recorded from the "
+                             "soft phase, or pass the same one it used")
     return parser
 
 

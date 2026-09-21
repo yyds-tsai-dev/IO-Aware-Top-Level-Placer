@@ -103,6 +103,11 @@ def test_freeze_record_is_schema_complete(tmp_path):
         soft_npz="soft.npz", repaired_empty_regions=[], gp_iterations_soft=301,
         density_weight_soft=1.5e-5,
         stats={"region_cell_count": [1, 1, 1, 1], "region_cell_area": [1.] * 4,
-               "region_area": [4.] * 4, "region_utilization": [.25] * 4})
+               "region_area": [4.] * 4, "region_utilization": [.25] * 4},
+        node_anchor="lower_left")
     save_freeze(str(tmp_path / "freeze.json"), record)      # must not raise
     assert record["schema_version"] == 1 and record["reason"] == "criterion"
+    # Fence-diagnostics fix (P-F Task 7 finding): a separate --phase fence
+    # invocation reads this back to report the anchor the soft phase actually
+    # used, instead of trusting its own --node-anchor argument.
+    assert record["node_anchor"] == "lower_left"

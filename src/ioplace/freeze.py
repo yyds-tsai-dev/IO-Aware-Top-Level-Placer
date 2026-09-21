@@ -160,7 +160,14 @@ def region_cell_stats(part, size_x, size_y, rs):
 
 def freeze_record(*, iteration, reason, overflow, tau, tau_rel, churn, k,
                   io_soft, membership_npz, soft_npz, repaired_empty_regions,
-                  gp_iterations_soft, density_weight_soft, stats):
+                  gp_iterations_soft, density_weight_soft, stats, node_anchor):
+    """`node_anchor` (fence-diagnostics fix, P-F Task 7 finding): the soft
+    phase is the only phase that ever reads `--node-anchor` (fence mode has
+    IO/FT off, "terms after the freeze"), so freeze.json is the only place
+    the value survives into a later, separate `--phase fence` invocation.
+    Without it, `run_main_flow` had no way to tell "the fence call omitted
+    --node-anchor" from "the fence call's default agrees with the soft
+    phase's anchor" and always trusted its own argument instead."""
     record = {"schema_version": FREEZE_SCHEMA_VERSION,
               "iteration": int(iteration), "reason": str(reason),
               "overflow": float(overflow), "tau": float(tau),
@@ -170,6 +177,7 @@ def freeze_record(*, iteration, reason, overflow, tau, tau_rel, churn, k,
               "membership_npz": str(membership_npz), "soft_npz": str(soft_npz),
               "repaired_empty_regions": list(repaired_empty_regions),
               "gp_iterations_soft": int(gp_iterations_soft),
-              "density_weight_soft": float(density_weight_soft)}
+              "density_weight_soft": float(density_weight_soft),
+              "node_anchor": str(node_anchor)}
     record.update(stats)
     return record

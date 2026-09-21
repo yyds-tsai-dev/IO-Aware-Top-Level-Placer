@@ -252,7 +252,8 @@ def test_run_main_flow_maps_fence_compliance_and_matches_the_result_schema(
         churn=0.0, k=k, io_soft=5, membership_npz=membership_path,
         soft_npz=soft_path, repaired_empty_regions=[], gp_iterations_soft=11,
         density_weight_soft=1.5,
-        stats=region_cell_stats(part, size_x, size_y, rs))
+        stats=region_cell_stats(part, size_x, size_y, rs),
+        node_anchor="center")
     save_freeze(freeze_path, record)
 
     def fake_run_soft_phase(config_json, out_dir, *, k, timer=None, **kwargs):
@@ -304,7 +305,8 @@ def test_run_main_flow_maps_fence_compliance_and_matches_the_result_schema(
             "scale_fields": {"effective_target_density": 0.7,
                             "num_filler_nodes": 0, "num_bins_x": 8,
                             "num_bins_y": 8},
-            "final_overflow": 0.05, "stop_overflow_reached": True,
+            "final_overflow": 0.05, "final_overflow_regions": [0.05, 0.03],
+            "final_overflow_stop_metric": 0.03, "stop_overflow_reached": True,
             "gp_iterations_fence": 5, "gp_iteration_budget": 100,
             "placement_npz": placement_path, "evaluation_npz": evaluation_path,
             "params_seed": 7, "deterministic": 1,
@@ -454,10 +456,15 @@ def test_main_flow_end_to_end_on_gcd_closes_the_io_identity(tmp_path, norm_polic
     assert rerun["lg_loss"] == result["lg_loss"]
 
 
-def test_parser_defaults_the_node_anchor_to_center():
+def test_parser_defaults_the_node_anchor_to_none():
+    """Fence-diagnostics fix (P-F Task 7 finding): the parser default must be
+    None ("not given"), not "center" -- run_main_flow needs to tell an
+    omitted --node-anchor apart from an explicit one that happens to be
+    "center" so a --phase fence call can silently inherit freeze.json's
+    recorded anchor instead of relabelling it."""
     parser = build_parser()
     args = parser.parse_args(["--config", "c.json", "--out-dir", "o"])
-    assert args.node_anchor == "center"
+    assert args.node_anchor is None
 
 
 def test_main_flow_result_fields_carry_the_p_f_diagnostics():
@@ -465,3 +472,145 @@ def test_main_flow_result_fields_carry_the_p_f_diagnostics():
     from ioplace.straddle import STRADDLE_SCALARS
     for name in ("node_anchor",) + STRADDLE_SCALARS:
         assert name in MAIN_FLOW_RESULT_FIELDS, name
+
+
+def test_phase_fence_raises_when_node_anchor_disagrees_with_freeze(tmp_path):
+    """Fence-diagnostics fix (P-F Task 7 finding): a --phase fence call that
+    stamped node_anchor from its own argument used to silently relabel a
+    soft phase that ran at a different anchor. An explicit --node-anchor on
+    the fence-only call that disagrees with what freeze.json recorded is
+    almost certainly a mistake -- raise rather than silently preferring
+    either value. This never reaches run_fence_gp (no mock needed): the
+    check sits right after load_freeze, before positions/regions/membership
+    are even read back."""
+    from ioplace.artifacts import save_freeze, save_membership, save_positions
+    from ioplace.freeze import freeze_record, region_cell_stats
+
+    out = tmp_path / "run"
+    out.mkdir()
+    config = tmp_path / "config.json"
+    config.write_text("{}")
+
+    k = 2
+    die = (0.0, 0.0, 100.0, 100.0)
+    rs = make_grid_regions(die, 2, 1, lattice=8)
+    part = np.array([0, 1], dtype=np.int32)
+    size_x = np.array([10.0, 10.0])
+    size_y = np.array([10.0, 10.0])
+    node_x = np.array([10.0, 60.0])
+    node_y = np.array([10.0, 10.0])
+
+    rs.to_json(str(out / REGIONS_JSON))
+    soft_path = str(out / SOFT_NPZ)
+    save_positions(soft_path, node_x, node_y, die=die, shift_factor=(0.0, 0.0),
+                   scale_factor=1.0, placedb_sha256="fake", kind="soft")
+    membership_path = str(out / FROZEN_MEMBERSHIP_NPZ)
+    save_membership(membership_path, part, source="freeze", k=k, seed=0,
+                    epsilon=0.0)
+    record = freeze_record(
+        iteration=10, reason="gp_end", overflow=0.05, tau=0.1, tau_rel=0.02,
+        churn=0.0, k=k, io_soft=5, membership_npz=membership_path,
+        soft_npz=soft_path, repaired_empty_regions=[], gp_iterations_soft=11,
+        density_weight_soft=1.5,
+        stats=region_cell_stats(part, size_x, size_y, rs),
+        node_anchor="lower_left")
+    save_freeze(str(out / FREEZE_JSON), record)
+
+    with pytest.raises(ValueError, match="disagrees with"):
+        run_main_flow(str(config), str(out), k=k, phase="fence",
+                      node_anchor="center")
+
+
+def test_phase_fence_inherits_the_recorded_node_anchor_when_omitted(
+        tmp_path, monkeypatch):
+    """Fence-diagnostics fix (P-F Task 7 finding): the common case -- a
+    --phase fence call that omits --node-anchor entirely -- must report the
+    anchor freeze.json recorded from the soft phase, not the driver's
+    "center" default (which used to relabel a lower_left soft phase as
+    "center" whenever the fence call omitted the flag)."""
+    from ioplace.artifacts import (MAIN_FLOW_RESULT_FIELDS, save_freeze,
+                                   save_membership, save_positions)
+    from ioplace.drivers.run_placement import (_legalization_fields,
+                                               _pack_eval_metrics)
+    from ioplace.freeze import freeze_record, region_cell_stats
+    from ioplace.main_flow_metrics import fence_compliance, region_area_balance
+    from ioplace.region_grid import RegionGrid
+
+    out = tmp_path / "run"
+    out.mkdir()
+    config = tmp_path / "config.json"
+    config.write_text("{}")
+
+    k = 2
+    die = (0.0, 0.0, 100.0, 100.0)
+    rs = make_grid_regions(die, 2, 1, lattice=8)
+    part = np.array([0, 1], dtype=np.int32)
+    size_x = np.array([10.0, 10.0])
+    size_y = np.array([10.0, 10.0])
+    node_x = np.array([10.0, 60.0])
+    node_y = np.array([10.0, 10.0])
+
+    regions_path = str(out / REGIONS_JSON)
+    rs.to_json(regions_path)
+    soft_path = str(out / SOFT_NPZ)
+    save_positions(soft_path, node_x, node_y, die=die, shift_factor=(0.0, 0.0),
+                   scale_factor=1.0, placedb_sha256="fake", kind="soft")
+    membership_path = str(out / FROZEN_MEMBERSHIP_NPZ)
+    save_membership(membership_path, part, source="freeze", k=k, seed=0,
+                    epsilon=0.0)
+    freeze_path = str(out / FREEZE_JSON)
+    record = freeze_record(
+        iteration=10, reason="gp_end", overflow=0.05, tau=0.1, tau_rel=0.02,
+        churn=0.0, k=k, io_soft=5, membership_npz=membership_path,
+        soft_npz=soft_path, repaired_empty_regions=[], gp_iterations_soft=11,
+        density_weight_soft=1.5,
+        stats=region_cell_stats(part, size_x, size_y, rs),
+        node_anchor="lower_left")
+    save_freeze(freeze_path, record)
+
+    rg = RegionGrid(rs)
+    compliance = fence_compliance(rg, node_x, node_y, part, size_x, size_y)
+    balance = region_area_balance(part, size_x, size_y, rs)
+    real_eval_result = SimpleNamespace(
+        io_count=3, ft_count=0, tree_wl=1.0, hpwl=2.0, large_net_lb=0,
+        hard_lambda_sum=0.0, io_rg=0.0, ft_rg=0.0,
+        straddle_cells=1, straddle_area_fraction=0.25,
+        straddle_pin_split_nets=0, straddle_out_area=0.5,
+        straddle_movable_area=2.0, straddle_wide_cells=0)
+    metrics = _pack_eval_metrics(real_eval_result)
+    legal_fields = _legalization_fields(True, 0, 1)
+
+    def fake_run_fence_gp(config_json, out_dir, *, region_set, part,
+                          positions, reference_density_weight,
+                          density_clamp_lo=0.25, density_clamp_hi=4.0,
+                          dp_seed=None, deterministic=None, extra_terms=(),
+                          timer=None):
+        placement_path = str(out / PLACEMENT_NPZ)
+        evaluation_path = str(out / EVALUATION_NPZ)
+        save_positions(placement_path, node_x, node_y, die=die,
+                       shift_factor=(0.0, 0.0), scale_factor=1.0,
+                       placedb_sha256="fake", kind="placement")
+        np.savez_compressed(evaluation_path, node_x=node_x, node_y=node_y)
+        return {
+            "metrics": metrics, "eval_result": real_eval_result,
+            "io_fence_gp": 4, "io_fence_gp_source": "legalize_op",
+            "hpwl_gp": 2.5, "hpwl_lg": 2.0,
+            "fence_compliance": compliance, "region_area_balance": balance,
+            "density_weight_clamp": [], "escape_cell": 0, "escape_from": 1,
+            "legal_fields": legal_fields,
+            "scale_fields": {"effective_target_density": 0.7,
+                            "num_filler_nodes": 0, "num_bins_x": 8,
+                            "num_bins_y": 8},
+            "final_overflow": 0.05, "final_overflow_regions": [0.05, 0.03],
+            "final_overflow_stop_metric": 0.03, "stop_overflow_reached": True,
+            "gp_iterations_fence": 5, "gp_iteration_budget": 100,
+            "placement_npz": placement_path, "evaluation_npz": evaluation_path,
+            "params_seed": 7, "deterministic": 1,
+        }
+
+    monkeypatch.setattr("ioplace.drivers.run_main_flow.run_fence_gp",
+                        fake_run_fence_gp)
+
+    result = run_main_flow(str(config), str(out), k=k, phase="fence")
+    assert result["node_anchor"] == "lower_left"
+    assert set(result) == set(MAIN_FLOW_RESULT_FIELDS)
