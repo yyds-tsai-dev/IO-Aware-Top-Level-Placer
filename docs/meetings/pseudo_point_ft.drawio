@@ -1,0 +1,106 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="pseudo-point FT" name="pseudo-point FT">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="1" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="c1" value="&lt;b&gt;Pseudo-point FT (P-E)&lt;/b&gt; &amp;#8212; one movable point per crossing net decides which region the net passes through" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;fontSize=20;" vertex="1" parent="1">
+          <mxGeometry x="60" y="40" width="1100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="c2" value="&lt;b&gt;A&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=1;verticalAlign=top;align=left;spacingLeft=6;fillColor=#dae8fc;strokeColor=#6c8ebf;fontFamily=Times New Roman;fontSize=16;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="60" y="110" width="160" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="c3" value="&lt;b&gt;B&lt;/b&gt; (congested)&lt;br&gt;util 1.08 &amp;#8594; &amp;#969; = 1.44" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=1;verticalAlign=top;align=left;spacingLeft=6;fillColor=#f8cecc;strokeColor=#b85450;fontFamily=Times New Roman;fontSize=16;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="220" y="110" width="160" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="c4" value="&lt;b&gt;C&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=1;verticalAlign=top;align=left;spacingLeft=6;fillColor=#dae8fc;strokeColor=#6c8ebf;fontFamily=Times New Roman;fontSize=16;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="380" y="110" width="160" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="c5" value="&lt;b&gt;D&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=1;verticalAlign=top;align=left;spacingLeft=6;fillColor=#f5f5f5;strokeColor=#999999;fontFamily=Times New Roman;fontSize=16;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="60" y="270" width="160" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="c6" value="&lt;b&gt;E&lt;/b&gt; (sparse)&lt;br&gt;util 0.54 &amp;#8594; &amp;#969; = 0.36" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=1;verticalAlign=top;align=left;spacingLeft=6;fillColor=#d5e8d4;strokeColor=#82b366;fontFamily=Times New Roman;fontSize=16;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="220" y="270" width="160" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="c7" value="&lt;b&gt;F&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=1;verticalAlign=top;align=left;spacingLeft=6;fillColor=#f5f5f5;strokeColor=#999999;fontFamily=Times New Roman;fontSize=16;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="380" y="270" width="160" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="c8" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=3;strokeColor=#b85450;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="140" y="190" as="sourcePoint" />
+            <mxPoint x="300" y="190" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c9" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=3;strokeColor=#b85450;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="190" as="sourcePoint" />
+            <mxPoint x="460" y="190" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c10" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=3;strokeColor=#4d7a38;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="140" y="190" as="sourcePoint" />
+            <mxPoint x="300" y="350" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="140" y="350" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c11" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=3;strokeColor=#4d7a38;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="350" as="sourcePoint" />
+            <mxPoint x="460" y="190" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="460" y="350" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c12" value="" style="ellipse;fillColor=none;strokeColor=#666666;dashed=1;dashPattern=2 2;" vertex="1" parent="1">
+          <mxGeometry x="108" y="158" width="64" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="c13" value="" style="ellipse;fillColor=none;strokeColor=#666666;dashed=1;dashPattern=2 2;" vertex="1" parent="1">
+          <mxGeometry x="428" y="158" width="64" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="c14" value="" style="ellipse;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="135" y="185" width="10" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="c15" value="u" style="text;html=1;align=left;verticalAlign=middle;fontStyle=1;fontFamily=Times New Roman;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="148" y="166" width="40" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="c16" value="" style="ellipse;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="455" y="185" width="10" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="c17" value="v" style="text;html=1;align=left;verticalAlign=middle;fontStyle=1;fontFamily=Times New Roman;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="468" y="166" width="40" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="c18" value="" style="rhombus;fillColor=#ffe6cc;strokeColor=#000000;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="291" y="181" width="18" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="c19" value="p (case 1)" style="text;html=1;align=left;verticalAlign=middle;fontStyle=1;fontColor=#000000;fontFamily=Times New Roman;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="310" y="164" width="60" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="c20" value="" style="rhombus;fillColor=#ffe6cc;strokeColor=#000000;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="291" y="341" width="18" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="c21" value="p (case 2)" style="text;html=1;align=left;verticalAlign=middle;fontStyle=1;fontColor=#000000;fontFamily=Times New Roman;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="310" y="324" width="60" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="c22" value="u, v: the two pins of one 2-pin net (u in A, v in C). &amp;#9670; = pseudo point p; the net is modelled as u &amp;#8594; p &amp;#8594; v.&lt;br&gt;&lt;font color='#b85450'&gt;&amp;#9472;&amp;#9472;&lt;/font&gt; case 1: p in B, straight path, feed-through in the congested region&lt;br&gt;&lt;font color='#4d7a38'&gt;- - -&lt;/font&gt; case 2: p in E, detour of 10 through the sparse region&lt;br&gt;dashed circles: anti-collapse radius &amp;#961;&lt;sub&gt;min&lt;/sub&gt; = 0.1&amp;#183;&amp;#8214;u&amp;#8722;v&amp;#8214;&lt;sub&gt;1&lt;/sub&gt; = 2 (p is pushed out of them)" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="60" y="442" width="500" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="c23" value="&lt;b&gt;1. Pseudo point.&lt;/b&gt; Every 2-pin net whose pins sit in different regions gets one extra movable node p. Where p sits = which region the net passes through (its feed-through region).&lt;br&gt;&lt;br&gt;&lt;b&gt;2. What p is.&lt;/b&gt; A filler-class node: tiny area (1 site &amp;#215; 1 row), no pins, so it adds nothing to HPWL; not confined by any fence. It exists only inside GP: dropped before LG, never seen by the evaluator.&lt;br&gt;&lt;br&gt;&lt;b&gt;3. Cost&lt;/b&gt; = detour through p &amp;#215; congestion weight of the region p sits in&lt;br&gt;$$L_{ft}=\sum_e w_e \cdot \omega(r(p_e)) \cdot \left[WA(u,v,p_e)-WA(u,v)\right]$$$$\omega_k=\left(\frac{util_k}{\text{target density}}\right)^2$$&amp;#969; is refreshed every home_period and frozen inside the gradient; r(p) is a soft region mixture, so &amp;#969; has no jump at a boundary.&lt;br&gt;&lt;br&gt;&lt;b&gt;4. Anti-collapse.&lt;/b&gt; Pure detour cost is smallest at p = u or p = v, so a hinge $$\mu\sum_e \left[(\rho_{min}-|p-u|_1)_+^2+(\rho_{min}-|p-v|_1)_+^2\right]$$ keeps p off the pins." style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="620" y="90" width="540" height="470" as="geometry" />
+        </mxCell>
+        <mxCell id="c24" value="&lt;b&gt;Worked example&lt;/b&gt; (HPWL of u&amp;#8211;v = 20; utilisations made up, target density 0.9)&lt;br&gt;&lt;table border='1' cellpadding='4' style='border-collapse:collapse;font-size:15px;font-family:Times New Roman'&gt;&lt;tr&gt;&lt;th&gt;&lt;/th&gt;&lt;th&gt;p in&lt;/th&gt;&lt;th&gt;detour&lt;/th&gt;&lt;th&gt;&amp;#969;&lt;/th&gt;&lt;th&gt;cost &amp;#969;&amp;#183;detour&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;font color='#b85450'&gt;case 1&lt;/font&gt;&lt;/td&gt;&lt;td&gt;B&lt;/td&gt;&lt;td&gt;0&lt;/td&gt;&lt;td&gt;1.44&lt;/td&gt;&lt;td&gt;&lt;b&gt;0&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;font color='#4d7a38'&gt;case 2&lt;/font&gt;&lt;/td&gt;&lt;td&gt;E&lt;/td&gt;&lt;td&gt;10&lt;/td&gt;&lt;td&gt;0.36&lt;/td&gt;&lt;td&gt;3.6&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;fontSize=15;" vertex="1" parent="1">
+          <mxGeometry x="620" y="580" width="540" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="c25" value="&lt;b&gt;Observation.&lt;/b&gt; Because the cost is &amp;#969; &amp;#215; detour, a p anywhere inside the u&amp;#8211;v bounding box has detour &amp;#8776; 0 (with WA only down to &amp;#8722;8&amp;#947;/e) and costs &amp;#8776; 0, whatever &amp;#969; is. So case 1 wins and the term does &lt;b&gt;not&lt;/b&gt; push this net out of congested B. The term only chooses among routes that already detour. The P-E plan notes the same thing (inside the box only the &amp;#969;-mixture gradient steers p) and logs pseudo_detour_min to watch it." style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#fff2cc;strokeColor=#d6b656;fontFamily=Times New Roman;fontSize=16;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="620" y="725" width="540" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="c26" value="&lt;i&gt;Status: planned (P-E plan committed), not implemented.&lt;/i&gt;" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;fontSize=14;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="620" y="865" width="540" height="24" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

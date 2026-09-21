@@ -1,0 +1,240 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="boundary IO capacity" name="boundary IO capacity">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="1" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="c1" value="&lt;b&gt;Boundary IO capacity (P-D)&lt;/b&gt; &amp;#8212; capacity is counted per boundary &lt;i&gt;segment&lt;/i&gt;, and feed-through nets use capacity too" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;fontSize=20;" vertex="1" parent="1">
+          <mxGeometry x="60" y="40" width="1100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="c2" value="Region A" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=1;verticalAlign=top;align=left;spacingLeft=6;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontFamily=Times New Roman;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="60" y="110" width="240" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c3" value="Region B" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=1;verticalAlign=top;align=left;spacingLeft=6;fontStyle=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontFamily=Times New Roman;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="300" y="110" width="240" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="c4" value="Region C" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=1;verticalAlign=top;align=left;spacingLeft=6;fontStyle=1;fillColor=#d5e8d4;strokeColor=#82b366;fontFamily=Times New Roman;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="300" y="230" width="240" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="c5" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=7;strokeColor=#b85450;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="230" as="sourcePoint" />
+            <mxPoint x="300" y="110" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c6" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=7;strokeColor=#82b366;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="350" as="sourcePoint" />
+            <mxPoint x="300" y="230" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c7" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=7;strokeColor=#d79b00;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="230" as="sourcePoint" />
+            <mxPoint x="540" y="230" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c8" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="228" y="212.0" as="sourcePoint" />
+            <mxPoint x="384" y="212.0" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c9" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="224" y="208.0" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c10" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="380" y="208.0" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c11" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="228" y="188.0" as="sourcePoint" />
+            <mxPoint x="384" y="188.0" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c12" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="224" y="184.0" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c13" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="380" y="184.0" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c14" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="228" y="164.0" as="sourcePoint" />
+            <mxPoint x="384" y="164.0" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c15" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="224" y="160.0" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c16" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="380" y="160.0" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c17" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="228" y="140.0" as="sourcePoint" />
+            <mxPoint x="384" y="140.0" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c18" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="224" y="136.0" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c19" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="380" y="136.0" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c20" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="228" y="314" as="sourcePoint" />
+            <mxPoint x="384" y="314" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c21" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="224" y="310" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c22" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="380" y="310" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c23" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="228" y="272.0" as="sourcePoint" />
+            <mxPoint x="384" y="272.0" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c24" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="224" y="268.0" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c25" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="380" y="268.0" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c26" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=3;strokeColor=#0050ef;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="180" y="122" as="sourcePoint" />
+            <mxPoint x="456" y="314" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="456" y="122" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c27" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="176" y="118" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c28" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="452" y="310" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="c29" value="s1 (A&amp;#8211;B)" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontStyle=1;fontFamily=Times New Roman;fontSize=16;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="250" y="84" width="100" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="c30" value="s2 (A&amp;#8211;C)" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontStyle=1;fontFamily=Times New Roman;fontSize=16;fontColor=#4d7a38;" vertex="1" parent="1">
+          <mxGeometry x="250" y="354" width="100" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="c31" value="s3 (B&amp;#8211;C)" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontStyle=1;fontFamily=Times New Roman;fontSize=16;fontColor=#b07a00;fontSize=15;" vertex="1" parent="1">
+          <mxGeometry x="435" y="232" width="90" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="c32" value="feed-through net&lt;br&gt;A &amp;#8594; B &amp;#8594; C" style="text;html=1;align=left;verticalAlign=middle;fontColor=#0050ef;fontFamily=Times New Roman;fontSize=16;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="462" y="120" width="130" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c33" value="&amp;#9472;&amp;#9472; 2-pin net crossing a boundary &amp;#160;&amp;#160;&amp;#160; &lt;font color='#0050ef'&gt;- - -&lt;/font&gt; feed-through net: enters B through s1 and leaves through s3, so it takes demand on &lt;b&gt;both&lt;/b&gt; segments&lt;br&gt;Thick coloured lines = boundary segments (red = over capacity)" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="60" y="364" width="480" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c34" value="&lt;b&gt;1. Segment.&lt;/b&gt; A maximal stretch of boundary between one pair of adjacent regions. A pair can own several segments (rectilinear regions), so capacity is kept per segment, not per pair.&lt;br&gt;&lt;br&gt;&lt;b&gt;2. Capacity&lt;/b&gt; $$C_s$$ = routing tracks that cross the segment. Extracted once before GP from OpenROAD's GCell capacities (fallback: $$\rho\cdot\ell$$ from LEF track pitch). One crossing net uses one track.&lt;br&gt;&lt;br&gt;&lt;b&gt;3. Demand&lt;/b&gt; $$D_s$$ = nets crossing the segment (a soft, differentiable count in GP). A feed-through net counts on its entry &lt;i&gt;and&lt;/i&gt; exit segments.&lt;br&gt;&lt;br&gt;&lt;b&gt;4. Penalty&lt;/b&gt; (GrandPlan Eq.5 shape): zero while under capacity, steep once over&lt;br&gt;$$d_s=\frac{D_s-C_s}{C_s},\quad L_{cap}=\sum_s \left(2[d_s]_+^3+[d_s]_+^2\right)$$Turned on at overflow &amp;#8804; 0.30 and kept on after the freeze. The evaluator reports per-segment utilisation $$D_s/C_s$$ as a hard check." style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="620" y="90" width="520" height="420" as="geometry" />
+        </mxCell>
+        <mxCell id="c35" value="&lt;b&gt;Worked example&lt;/b&gt; (capacities made up for illustration)&lt;br&gt;&lt;table border='1' cellpadding='4' style='border-collapse:collapse;font-size:15px;font-family:Times New Roman'&gt;&lt;tr&gt;&lt;th&gt;segment&lt;/th&gt;&lt;th&gt;C&lt;sub&gt;s&lt;/sub&gt;&lt;/th&gt;&lt;th&gt;D&lt;sub&gt;s&lt;/sub&gt;&lt;/th&gt;&lt;th&gt;d&lt;sub&gt;s&lt;/sub&gt;&lt;/th&gt;&lt;th&gt;penalty&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;font color='#b85450'&gt;&lt;b&gt;s1&lt;/b&gt; A&amp;#8211;B&lt;/font&gt;&lt;/td&gt;&lt;td&gt;4&lt;/td&gt;&lt;td&gt;4 + 1 FT = &lt;b&gt;5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;+0.25&lt;/td&gt;&lt;td&gt;&lt;b&gt;0.094&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;font color='#4d7a38'&gt;&lt;b&gt;s2&lt;/b&gt; A&amp;#8211;C&lt;/font&gt;&lt;/td&gt;&lt;td&gt;4&lt;/td&gt;&lt;td&gt;2&lt;/td&gt;&lt;td&gt;&amp;#8722;0.50&lt;/td&gt;&lt;td&gt;0&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;font color='#b07a00'&gt;&lt;b&gt;s3&lt;/b&gt; B&amp;#8211;C&lt;/font&gt;&lt;/td&gt;&lt;td&gt;3&lt;/td&gt;&lt;td&gt;1 FT&lt;/td&gt;&lt;td&gt;&amp;#8722;0.67&lt;/td&gt;&lt;td&gt;0&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;br&gt;Only s1 is penalised. Its gradient pulls the pins of s1's nets into a single region (fewer A&amp;#8211;B crossings), or slides a crossing along the boundary to another A&amp;#8211;B segment when the pair has one. s2 and s3 feel no force." style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;fontSize=15;" vertex="1" parent="1">
+          <mxGeometry x="620" y="520" width="520" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="c36" value="&lt;b&gt;Penalty vs utilisation&lt;/b&gt; $$D_s/C_s$$" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;fontSize=15;" vertex="1" parent="1">
+          <mxGeometry x="60" y="414" width="420" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="c37" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=1;strokeColor=#333333;endArrow=classic;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="100" y="650" as="sourcePoint" />
+            <mxPoint x="480" y="650" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c38" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=1;strokeColor=#333333;endArrow=classic;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="100" y="650" as="sourcePoint" />
+            <mxPoint x="100" y="445" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c39" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=3;strokeColor=#b85450;curved=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="100.0" y="650.0" as="sourcePoint" />
+            <mxPoint x="461.0" y="460.0" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="109.0" y="650.0" />
+              <mxPoint x="118.0" y="650.0" />
+              <mxPoint x="127.1" y="650.0" />
+              <mxPoint x="136.1" y="650.0" />
+              <mxPoint x="145.1" y="650.0" />
+              <mxPoint x="154.2" y="650.0" />
+              <mxPoint x="163.2" y="650.0" />
+              <mxPoint x="172.2" y="650.0" />
+              <mxPoint x="181.2" y="650.0" />
+              <mxPoint x="190.2" y="650.0" />
+              <mxPoint x="199.3" y="650.0" />
+              <mxPoint x="208.3" y="650.0" />
+              <mxPoint x="217.3" y="650.0" />
+              <mxPoint x="226.3" y="650.0" />
+              <mxPoint x="235.4" y="650.0" />
+              <mxPoint x="244.4" y="650.0" />
+              <mxPoint x="253.4" y="650.0" />
+              <mxPoint x="262.4" y="650.0" />
+              <mxPoint x="271.5" y="650.0" />
+              <mxPoint x="280.5" y="650.0" />
+              <mxPoint x="289.5" y="649.8" />
+              <mxPoint x="298.6" y="649.2" />
+              <mxPoint x="307.6" y="648.1" />
+              <mxPoint x="316.6" y="646.5" />
+              <mxPoint x="325.6" y="644.1" />
+              <mxPoint x="334.6" y="640.9" />
+              <mxPoint x="343.7" y="636.8" />
+              <mxPoint x="352.7" y="631.8" />
+              <mxPoint x="361.7" y="625.6" />
+              <mxPoint x="370.8" y="618.3" />
+              <mxPoint x="379.8" y="609.8" />
+              <mxPoint x="388.8" y="599.8" />
+              <mxPoint x="397.8" y="588.5" />
+              <mxPoint x="406.8" y="575.5" />
+              <mxPoint x="415.9" y="560.9" />
+              <mxPoint x="424.9" y="544.6" />
+              <mxPoint x="433.9" y="526.5" />
+              <mxPoint x="442.9" y="506.4" />
+              <mxPoint x="452.0" y="484.2" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c40" value="0" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=center;fontFamily=Times New Roman;fontSize=16;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="85.0" y="654" width="30" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="c41" value="1.0" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=center;fontFamily=Times New Roman;fontSize=16;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="265.5" y="654" width="30" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="c42" value="2.0" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=center;fontFamily=Times New Roman;fontSize=16;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="446.0" y="654" width="30" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="c43" value="" style="html=1;endArrow=none;rounded=0;strokeWidth=1;strokeColor=#999999;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="280.5" y="450" as="sourcePoint" />
+            <mxPoint x="280.5" y="650" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c44" value="capacity" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=right;fontFamily=Times New Roman;fontSize=16;fontSize=13;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="210.5" y="452" width="64" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="c45" value="no force below capacity" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;fontSize=13;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="110" y="622" width="170" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="c46" value="" style="ellipse;fillColor=#b85450;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="320.62" y="639.05" width="10" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="c47" value="s1: 1.25 &amp;#8594; 0.094" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;fontSize=13;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="331.62" y="618.05" width="150" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="c48" value="&lt;i&gt;Status: segment enumeration, capacity extraction and the penalty are implemented on v2/redesign (P-D tasks 1&amp;#8211;4); not yet wired into run_main_flow.&lt;/i&gt;" style="text;html=1;whiteSpace=wrap;verticalAlign=top;align=left;fontFamily=Times New Roman;fontSize=16;fontSize=14;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="620" y="760" width="520" height="50" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
