@@ -687,6 +687,10 @@ def test_edge_segment_ids_agrees_with_evaluator_ref_at_region_junctions():
 
     rg2 = RegionGrid(make_grid_regions((0., 0., 100., 100.), 2, 2, lattice=4))
     table2 = enumerate_segments(rg2)
+    grid2 = rg2.grid
+    assert len({int(grid2[1, 1]), int(grid2[1, 2]),
+                int(grid2[2, 1]), int(grid2[2, 2])}) == 4, \
+        "fixture's (50, 50) 4-way junction assumption drifted"
     cases2 = [
         (10., 50., 50., 10.),   # elbow exactly on the 4-way junction (50, 50)
         (10., 10., 50., 50.),   # end point exactly on the 4-way junction
