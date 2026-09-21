@@ -2,6 +2,7 @@ import numpy as np
 from dataclasses import dataclass, field
 from ioplace.netlist import pin_positions
 from ioplace.region_graph import region_graph as build_region_graph, next_hop_table, steiner_tree_stats
+from ioplace.region_segments import edge_segment_ids, segment_utilisation
 from ioplace.straddle import straddle_diagnostics
 
 @dataclass
@@ -34,6 +35,25 @@ class EvalResult:
     straddle_wide_cells: int = 0
     per_node_straddle: np.ndarray = None   # (num_physical,) uint8
     per_net_pin_split: np.ndarray = None   # (num_nets,) int32, signed
+    # v2 P-D (design sec 5): the per-segment hard check. All None unless
+    # `evaluate(..., segments=...)` was asked for, so "not measured" and
+    # "measured as zero" stay distinguishable.
+    segment_demand: np.ndarray = None      # (S,) int64
+    segment_capacity: np.ndarray = None    # (S,) float64
+    segment_util: np.ndarray = None        # (S,) float64, inf where C == 0 < D
+    num_over_capacity: int = None
+    num_zero_capacity_segments: int = None
+    zero_capacity_demand: int = None
+    max_util: float = None
+    p99_util: float = None
+    # capped-candidate source arrays, ascending by ((net*K+u)*K+v)*S+seg --
+    # the ordering that makes ref/GPU parity bit-exact.
+    cand_net: np.ndarray = None
+    cand_u: np.ndarray = None
+    cand_v: np.ndarray = None
+    cand_seg: np.ndarray = None
+    cand_count: np.ndarray = None
+    cand_dropped: int = None               # crossings on legs with u == v
 
 def net_mst_edges(px, py):
     d = len(px)
@@ -91,7 +111,9 @@ def edge_regions_and_crossings(rg, x0, y0, x1, y1):
     n2 = _walk_segment(rg, x1, y0, x1, y1, regions, pairs)   # 垂直段
     return regions, n1 + n2, pairs
 
-def evaluate(nl, node_x, node_y, rg, max_degree=256, *, route_wirelength_budget=None, straddle=True):
+def evaluate(nl, node_x, node_y, rg, max_degree=256, *, route_wirelength_budget=None,
+             straddle=True, segments=None, segment_capacity=None,
+             capacity_candidates=False):
     """Evaluate legacy MST L-routes or opt into budgeted detour geometry.
 
     A budget of .05 allows +5% per MST branch; pin HPWL and connectivity stay
@@ -100,7 +122,21 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256, *, route_wirelength_budget=
     Nets above max_degree retain the legacy lower-bound treatment.
 
     straddle=False skips the sec 7 diagnostics; the legacy fields are bit-identical either way.
+
+    v2 P-D (design sec 5): with `segments` (a region_segments.SegmentTable
+    built from this same `rg`) every unit crossing is additionally mapped to
+    its segment id and accumulated into `segment_demand`; with
+    `segment_capacity` the utilisation fields are filled from the shared
+    `region_segments.segment_utilisation` helper; with `capacity_candidates`
+    the per-(net, demand pair, segment) crossing counts the capacity term's
+    candidate refresh consumes are returned too.
     """
+    if segments is not None:
+        if (segments.k != rg.k or segments.grid_shape() != rg.grid.shape
+                or segments.die != tuple(float(v) for v in rg.die)):
+            raise ValueError("segment table was built for a different region grid")
+    elif segment_capacity is not None or capacity_candidates:
+        raise ValueError("segment_capacity/capacity_candidates need segments=")
     router = None
     if route_wirelength_budget is not None:
         from ioplace.route_eval.budgeted import BudgetedRouter
@@ -120,6 +156,10 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256, *, route_wirelength_budget=
     rg_adj, rg_D, rg_ell = build_region_graph(rg)
     rg_next_hop = next_hop_table(rg_adj, rg_D)
     pair_demand = {}
+    segment_demand = (np.zeros(segments.num_segments, dtype=np.int64)
+                      if segments is not None else None)
+    candidate_counts = {} if capacity_candidates else None
+    candidates_dropped = 0
     tree_wl = 0.0
     hpwl = 0.0
     large_lb = 0
@@ -168,6 +208,30 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256, *, route_wirelength_budget=
             for pr in pairs:
                 pair_demand[pr] = pair_demand.get(pr, 0) + 1
             tree_wl += length
+            if segments is not None:
+                if routes is None:
+                    seg_ids = edge_segment_ids(rg, segments, nx_[a], ny_[a],
+                                               nx_[b], ny_[b])
+                else:
+                    seg_ids = np.concatenate(
+                        [edge_segment_ids(rg, segments, p[0], p[1], q[0], q[1])
+                         for p, q in zip(points[:-1], points[1:])]
+                        or [np.zeros(0, dtype=np.int32)])
+                # the sec 5 "free assertion on slice lengths": the CSR slice
+                # and the independent lattice walk must agree exactly.
+                assert len(seg_ids) == nc, (
+                    "segment lookup disagrees with the lattice walk: "
+                    "%d vs %d" % (len(seg_ids), nc))
+                np.add.at(segment_demand, seg_ids, 1)
+                if candidate_counts is not None:
+                    ua, ub = int(net_pin_rids[a]), int(net_pin_rids[b])
+                    if ua == ub:
+                        candidates_dropped += len(seg_ids)
+                    else:
+                        lo_r, hi_r = min(ua, ub), max(ua, ub)
+                        for sid in seg_ids:
+                            key = (net, lo_r, hi_r, int(sid))
+                            candidate_counts[key] = candidate_counts.get(key, 0) + 1
         per_net_crossings[net] = ncross
         per_net_ft[net] = len(passed - pin_regions)
     hard_lambda_sum = int(np.maximum(per_net_lambda - 1, 0).sum())
@@ -175,6 +239,35 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256, *, route_wirelength_budget=
     ft_rg = io_rg - hard_lambda_sum
     st = straddle_diagnostics(nl, node_x, node_y, rg,
                               pin_rid=pin_rid_all) if straddle else None
+    capacity_fields = {}
+    if segments is not None:
+        capacity_fields["segment_demand"] = segment_demand
+        assert int(segment_demand.sum()) == int(per_net_crossings.sum()) - large_lb, \
+            "per-segment demand does not reconcile with the Ph/Pv crossing count"
+        if segment_capacity is not None:
+            capacity = np.asarray(segment_capacity, dtype=np.float64)
+            util, scalars = segment_utilisation(segment_demand, capacity)
+            capacity_fields["segment_capacity"] = capacity
+            capacity_fields["segment_util"] = util
+            for name in ("num_over_capacity", "num_zero_capacity_segments",
+                         "zero_capacity_demand", "max_util", "p99_util"):
+                capacity_fields[name] = scalars[name]
+    if candidate_counts is not None:
+        size = segments.num_segments
+        keys = np.array(sorted(candidate_counts), dtype=np.int64).reshape(-1, 4)
+        counts = np.array([candidate_counts[tuple(int(v) for v in row)]
+                           for row in keys], dtype=np.int64)
+        # sort by the composite key torch.unique will produce on the GPU side
+        composite = (((keys[:, 0] * rg.k + keys[:, 1]) * rg.k + keys[:, 2]) * size
+                     + keys[:, 3]) if keys.size else np.zeros(0, dtype=np.int64)
+        order = np.argsort(composite, kind="stable")
+        capacity_fields.update(
+            cand_net=keys[order, 0] if keys.size else np.zeros(0, dtype=np.int64),
+            cand_u=keys[order, 1] if keys.size else np.zeros(0, dtype=np.int64),
+            cand_v=keys[order, 2] if keys.size else np.zeros(0, dtype=np.int64),
+            cand_seg=keys[order, 3] if keys.size else np.zeros(0, dtype=np.int64),
+            cand_count=counts[order] if keys.size else np.zeros(0, dtype=np.int64),
+            cand_dropped=int(candidates_dropped))
     return EvalResult(
         io_count=int(per_net_crossings.sum()),
         ft_count=int(per_net_ft.sum()),
@@ -192,4 +285,5 @@ def evaluate(nl, node_x, node_y, rg, max_degree=256, *, route_wirelength_budget=
         straddle_movable_area=st.straddle_movable_area if st else 0.0,
         straddle_wide_cells=st.straddle_wide_cells if st else 0,
         per_node_straddle=st.per_node_straddle if st else None,
-        per_net_pin_split=st.per_net_pin_split if st else None)
+        per_net_pin_split=st.per_net_pin_split if st else None,
+        **capacity_fields)
