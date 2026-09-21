@@ -202,6 +202,9 @@ def segment_ids_on_row(table, row, lo, hi):
     crosses the column boundaries j with min(lo,hi) <= j < max(lo,hi), so this
     is one contiguous CSR slice and costs the number of crossings, not the
     length of the leg (sec 5)."""
+    n_rows = table.row_ptr.shape[0] - 1
+    if not (0 <= row < n_rows):
+        raise IndexError(f"row {row} out of bounds for a table with {n_rows} rows")
     a, b = (lo, hi) if lo <= hi else (hi, lo)
     s0, s1 = int(table.row_ptr[row]), int(table.row_ptr[row + 1])
     cols = table.row_col[s0:s1]
@@ -212,6 +215,9 @@ def segment_ids_on_row(table, row, lo, hi):
 
 def segment_ids_on_col(table, col, lo, hi):
     """Horizontal segments crossed by a vertical leg in grid column `col`."""
+    n_cols = table.col_ptr.shape[0] - 1
+    if not (0 <= col < n_cols):
+        raise IndexError(f"col {col} out of bounds for a table with {n_cols} cols")
     a, b = (lo, hi) if lo <= hi else (hi, lo)
     s0, s1 = int(table.col_ptr[col]), int(table.col_ptr[col + 1])
     rows = table.col_row[s0:s1]
@@ -243,6 +249,13 @@ def segment_utilisation(demand, capacity):
     *counted* in num_over_capacity and reported separately. No epsilon is
     substituted anywhere.
 
+    `util` here is a diagnostic ratio only. Ruling D-3's `C_s = 0 -> d_s :=
+    D_s` governs the differentiable penalty term `d_s` that a later task
+    builds on top of segment_demand/segment_capacity -- it does not apply to
+    this function's `util`, which stays `inf`/`0.0` at zero capacity as
+    described above. Do not conflate the two: applying D-3's substitution to
+    `util` instead of `d_s` would be a different (and wrong) quantity.
+
     Both evaluators call this one function on the same bit-exact
     `segment_demand`, which is what makes segment_util/max_util/p99_util
     bit-exact across CPU and GPU rather than merely close."""
@@ -250,6 +263,8 @@ def segment_utilisation(demand, capacity):
     capacity = np.asarray(capacity, dtype=np.float64)
     if demand.shape != capacity.shape:
         raise ValueError("segment demand and capacity must have the same shape")
+    if (demand < 0).any() or (capacity < 0).any():
+        raise ValueError("segment demand and capacity must be non-negative")
     positive = capacity > 0.0
     util = np.zeros(demand.shape, dtype=np.float64)
     np.divide(demand, capacity, out=util, where=positive)
@@ -350,6 +365,9 @@ def select_candidates(net, u, v, seg, count, table, m_pairs=4, m_seg=2):
     gkey = ((net * k + u) * k + v) * (k * k) + spair
     uniq_g, gid = np.unique(gkey, return_inverse=True)
     gid = gid.astype(np.int64)
+    # bincount only takes float64 weights; count.sum() per group is well
+    # under 2**53 at any realistic net degree / crossing count, so the
+    # float64 accumulation is exact and the cast back to int64 loses nothing.
     gtot = np.bincount(gid, weights=count.astype(np.float64),
                        minlength=uniq_g.size).astype(np.int64)
     gnet = np.zeros(uniq_g.size, dtype=np.int64)

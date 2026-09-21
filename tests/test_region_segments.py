@@ -465,3 +465,151 @@ def test_remap_nets_drops_inactive_nets_and_recompacts_groups():
     assert np.array_equal(remapped.group, np.array([0, 1]))
     assert select_candidates(np.zeros(0, dtype=np.int64), *(
         np.zeros(0, dtype=np.int64) for _ in range(4)), table).is_empty()
+
+
+# ---------------------------------------------------------------------------
+# Fix round 1 (review of commit 4455233): edge_segment_ids edge cases, a
+# select_candidates group-tie-break regression test, and a parity check
+# against evaluator_ref's independently-implemented crossing walk.
+# ---------------------------------------------------------------------------
+
+from ioplace import evaluator_ref
+
+
+def _brute_edge_segments(rg, table, x0, y0, x1, y1):
+    """Brute-force cross-check for edge_segment_ids: the same L-route, but
+    built from the raster-backed _brute_row/_brute_col helpers instead of the
+    CSR, so a transposition bug in edge_segment_ids' axis composition (row vs
+    col, x vs y) would show up here even though both paths ultimately read
+    the same table."""
+    ax, ay = rg.to_idx(np.asarray([x0], dtype=np.float64),
+                       np.asarray([y0], dtype=np.float64))
+    bx, by = rg.to_idx(np.asarray([x1], dtype=np.float64),
+                       np.asarray([y1], dtype=np.float64))
+    horizontal = _brute_row(table, int(ay[0]), int(ax[0]), int(bx[0]))
+    vertical = _brute_col(table, int(bx[0]), int(ay[0]), int(by[0]))
+    return np.concatenate([horizontal, vertical])
+
+
+def test_edge_segment_ids_handles_degenerate_and_axis_only_legs():
+    """The one existing edge_segment_ids test is a two-crossing diagonal
+    happy path; none of same-region, coincident, axis-only, or an elbow
+    landing exactly on a multi-region junction were covered, so an
+    axis-transposition regression here would have gone uncaught."""
+    rg = RegionGrid(make_grid_regions((0., 0., 100., 100.), 2, 2, lattice=4))
+    table = enumerate_segments(rg)
+
+    # Same-region edge: both endpoints deep inside region 0 (SW). No boundary
+    # is crossed at all.
+    ids = edge_segment_ids(rg, table, 10., 10., 20., 20.)
+    assert ids.shape == (0,)
+    np.testing.assert_array_equal(ids, _brute_edge_segments(rg, table, 10., 10., 20., 20.))
+
+    # Coincident endpoints: a zero-length "edge" degenerates to two
+    # zero-length legs.
+    ids = edge_segment_ids(rg, table, 10., 10., 10., 10.)
+    assert ids.shape == (0,)
+    np.testing.assert_array_equal(ids, _brute_edge_segments(rg, table, 10., 10., 10., 10.))
+
+    # Pure horizontal leg (y0 == y1): the vertical leg is zero-length, so only
+    # the row lookup can contribute. Crosses the single 0|1 boundary.
+    ids = edge_segment_ids(rg, table, 10., 10., 90., 10.)
+    np.testing.assert_array_equal(ids, _brute_edge_segments(rg, table, 10., 10., 90., 10.))
+    pairs = [(int(table.pair_a[s]), int(table.pair_b[s])) for s in ids]
+    assert pairs == [(0, 1)]
+
+    # Pure vertical leg (x0 == x1): the horizontal leg is zero-length, so only
+    # the column lookup can contribute. Crosses the single 0|2 boundary.
+    ids = edge_segment_ids(rg, table, 10., 10., 10., 90.)
+    np.testing.assert_array_equal(ids, _brute_edge_segments(rg, table, 10., 10., 10., 90.))
+    pairs = [(int(table.pair_a[s]), int(table.pair_b[s])) for s in ids]
+    assert pairs == [(0, 2)]
+
+    # Elbow landing exactly on the 4-way junction at (50, 50): (10,50) is in
+    # region 2 (NW), the elbow (50,50) itself resolves unambiguously to
+    # region 3 (NE) (RegionGrid.to_idx floors, so the junction coordinate
+    # belongs to the cell it is the *lower* corner of), and (50,10) is in
+    # region 1 (SE). This is exactly the coordinate where a row/col mixup in
+    # edge_segment_ids' axis composition would surface.
+    ids = edge_segment_ids(rg, table, 10., 50., 50., 10.)
+    np.testing.assert_array_equal(ids, _brute_edge_segments(rg, table, 10., 50., 50., 10.))
+    pairs = [(int(table.pair_a[s]), int(table.pair_b[s])) for s in ids]
+    assert pairs == [(2, 3), (1, 3)]
+
+
+def test_select_candidates_breaks_group_ties_by_group_key():
+    """Plan wording: 'ties by group key'. Three groups tied on total count
+    (pairs (4,5), (8,9), (1,2), each count 40) compete for the last two of
+    four m_pairs slots once (0,1)=60 and (5,6)=50 are seated; the tie-break
+    must keep the two with the smaller ascending (net, u, v, boundary-pair)
+    key -- here (1,2) and (4,5) -- and drop (8,9), never a choice driven by
+    input array position or segment id."""
+    rg = RegionGrid(make_grid_regions((0., 0., 100., 100.), 4, 4, lattice=20))
+    table = enumerate_segments(rg)
+    segs, seen = [], set()
+    for s in range(table.num_segments):
+        key = (int(table.pair_a[s]), int(table.pair_b[s]))
+        if key not in seen:
+            seen.add(key)
+            segs.append(s)
+        if len(segs) == 6:
+            break
+    assert [(int(table.pair_a[s]), int(table.pair_b[s])) for s in segs] == \
+        [(0, 1), (4, 5), (8, 9), (12, 13), (1, 2), (5, 6)]
+    net = np.zeros(6, dtype=np.int64)
+    u = np.array([int(table.pair_a[s]) for s in segs], dtype=np.int64)
+    v = np.array([int(table.pair_b[s]) for s in segs], dtype=np.int64)
+    seg = np.asarray(segs, dtype=np.int64)
+    count = np.array([60, 40, 40, 10, 40, 50], dtype=np.int64)
+    cand = select_candidates(net, u, v, seg, count, table, m_pairs=4, m_seg=2)
+    assert cand.n_groups == 4
+    kept_pairs = sorted({(int(a), int(b))
+                         for a, b in zip(cand.u.tolist(), cand.v.tolist())})
+    assert kept_pairs == [(0, 1), (1, 2), (4, 5), (5, 6)]
+    assert sorted(cand.count.tolist()) == [40, 40, 50, 60]
+
+
+@pytest.mark.parametrize("factory", [l_shape, plug, notch])
+def test_edge_segment_ids_agrees_with_evaluator_ref_crossings(factory):
+    """edge_segment_ids' docstring claims it walks the identical L-route
+    geometry evaluator_ref.edge_regions_and_crossings does. That claim is
+    load-bearing: if the capacity term's notion of 'which segments an edge
+    crosses' ever disagreed with the evaluator's notion of 'crossings', the
+    capacity term would optimise against a quantity the evaluator does not
+    measure, and every capacity number in this subproject would be quietly
+    meaningless while every other test here kept passing. Exhaustively drive
+    both independently-implemented functions over every cell-center-to-
+    cell-center edge on a small lattice and require exact agreement on both
+    the crossing count and the ordered sequence of boundary pairs crossed."""
+    rg = RegionGrid(factory())
+    table = enumerate_segments(rg)
+    ny, nx = rg.grid.shape
+    xl, yl, _xh, _yh = rg.die
+    centers = [(xl + (i + 0.5) * rg.cell_w, yl + (j + 0.5) * rg.cell_h)
+               for i in range(nx) for j in range(ny)]
+    for x0, y0 in centers:
+        for x1, y1 in centers:
+            ids = edge_segment_ids(rg, table, x0, y0, x1, y1)
+            ours = [(int(table.pair_a[s]), int(table.pair_b[s])) for s in ids]
+            _regs, ncross, pairs_ref = evaluator_ref.edge_regions_and_crossings(
+                rg, x0, y0, x1, y1)
+            assert len(ids) == ncross
+            assert ours == pairs_ref
+
+
+def test_edge_segment_ids_agrees_with_evaluator_ref_on_a_larger_lattice():
+    """Same cross-check, sampled (deterministic seed) on a bigger lattice so
+    at least one case exercises multiple crossings per leg on genuinely
+    diagonal, non-cell-center routes."""
+    rg = RegionGrid(make_grid_regions((0., 0., 100., 100.), 4, 4, lattice=20))
+    table = enumerate_segments(rg)
+    rng = np.random.default_rng(0)
+    xl, yl, xh, yh = rg.die
+    pts = rng.uniform([xl, yl], [xh, yh], size=(200, 2))
+    for (x0, y0), (x1, y1) in zip(pts[::2], pts[1::2]):
+        ids = edge_segment_ids(rg, table, x0, y0, x1, y1)
+        ours = [(int(table.pair_a[s]), int(table.pair_b[s])) for s in ids]
+        _regs, ncross, pairs_ref = evaluator_ref.edge_regions_and_crossings(
+            rg, x0, y0, x1, y1)
+        assert len(ids) == ncross
+        assert ours == pairs_ref
