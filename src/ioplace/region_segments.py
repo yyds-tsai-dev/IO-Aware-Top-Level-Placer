@@ -194,3 +194,181 @@ def segments_digest(table):
         digest.update(str(contiguous.shape).encode())
         digest.update(memoryview(contiguous).cast("B"))
     return digest.hexdigest()
+
+
+def segment_ids_on_row(table, row, lo, hi):
+    """Vertical segments crossed by a horizontal leg in grid row `row` running
+    between grid columns `lo` and `hi` (inclusive, either order). The leg
+    crosses the column boundaries j with min(lo,hi) <= j < max(lo,hi), so this
+    is one contiguous CSR slice and costs the number of crossings, not the
+    length of the leg (sec 5)."""
+    a, b = (lo, hi) if lo <= hi else (hi, lo)
+    s0, s1 = int(table.row_ptr[row]), int(table.row_ptr[row + 1])
+    cols = table.row_col[s0:s1]
+    i0 = int(np.searchsorted(cols, a, side="left"))
+    i1 = int(np.searchsorted(cols, b, side="left"))
+    return table.row_seg[s0 + i0:s0 + i1]
+
+
+def segment_ids_on_col(table, col, lo, hi):
+    """Horizontal segments crossed by a vertical leg in grid column `col`."""
+    a, b = (lo, hi) if lo <= hi else (hi, lo)
+    s0, s1 = int(table.col_ptr[col]), int(table.col_ptr[col + 1])
+    rows = table.col_row[s0:s1]
+    i0 = int(np.searchsorted(rows, a, side="left"))
+    i1 = int(np.searchsorted(rows, b, side="left"))
+    return table.col_seg[s0 + i0:s0 + i1]
+
+
+def edge_segment_ids(rg, table, x0, y0, x1, y1):
+    """Segments crossed by the L-route (x0,y0) -> (x1,y0) -> (x1,y1), in that
+    order -- the same geometry `evaluator_ref.edge_regions_and_crossings`
+    walks, so `len(...)` equals that function's crossing count."""
+    ax, ay = rg.to_idx(np.asarray([x0], dtype=np.float64),
+                       np.asarray([y0], dtype=np.float64))
+    bx, by = rg.to_idx(np.asarray([x1], dtype=np.float64),
+                       np.asarray([y1], dtype=np.float64))
+    horizontal = segment_ids_on_row(table, int(ay[0]), int(ax[0]), int(bx[0]))
+    vertical = segment_ids_on_col(table, int(bx[0]), int(ay[0]), int(by[0]))
+    return np.concatenate([horizontal, vertical])
+
+
+def segment_utilisation(demand, capacity):
+    """(util, scalars) from per-segment demand and capacity.
+
+    Unit rule (round-feedback spec:169-196): a zero-capacity segment is
+    blocked, not scaled -- its utilisation is reported as `inf` when it
+    carries demand and 0.0 when it does not, and it is *excluded* from
+    max_util/p99_util (which are the statistics of the routable segments) but
+    *counted* in num_over_capacity and reported separately. No epsilon is
+    substituted anywhere.
+
+    Both evaluators call this one function on the same bit-exact
+    `segment_demand`, which is what makes segment_util/max_util/p99_util
+    bit-exact across CPU and GPU rather than merely close."""
+    demand = np.asarray(demand, dtype=np.int64)
+    capacity = np.asarray(capacity, dtype=np.float64)
+    if demand.shape != capacity.shape:
+        raise ValueError("segment demand and capacity must have the same shape")
+    positive = capacity > 0.0
+    util = np.zeros(demand.shape, dtype=np.float64)
+    np.divide(demand, capacity, out=util, where=positive)
+    util[(~positive) & (demand > 0)] = np.inf
+    routable = util[positive]
+    scalars = {
+        "num_segments": int(demand.size),
+        "segment_demand_total": int(demand.sum()),
+        "num_over_capacity": int((demand > capacity).sum()),
+        "num_zero_capacity_segments": int((~positive).sum()),
+        "zero_capacity_demand": int(demand[~positive].sum()),
+        "max_util": float(routable.max()) if routable.size else 0.0,
+        "p99_util": float(np.percentile(routable, 99)) if routable.size else 0.0,
+    }
+    assert tuple(scalars) == CAPACITY_SCALARS, "CAPACITY_SCALARS drifted"
+    return util, scalars
+
+
+@dataclass
+class Candidates:
+    """The capped per-net candidate list the capacity term differentiates.
+
+    One row per (net, demand pair (u,v), segment). `group` is the dense id of
+    the alpha-softmax group (net, u, v, boundary pair of seg) -- see
+    interpretation D-2 in the plan: alternatives on one boundary pair share a
+    group and a single w*q_u*q_v; a feed-through's entry and exit segments sit
+    in different groups and each take the full product."""
+
+    net: np.ndarray       # (M,) int64
+    u: np.ndarray         # (M,) int64, demand-pair low region
+    v: np.ndarray         # (M,) int64, demand-pair high region
+    seg: np.ndarray       # (M,) int64
+    group: np.ndarray     # (M,) int64, dense and non-decreasing
+    count: np.ndarray     # (M,) int64, observed crossings (diagnostics only)
+    n_groups: int
+
+    def is_empty(self):
+        return int(self.net.shape[0]) == 0
+
+    def remap_nets(self, mapping):
+        """Translate global net ids through `mapping` (an (n_nets,) int64 array
+        with -1 for nets the differentiable term does not carry -- the IO CSR
+        drops nets above `ignore_net_degree` and nets collapsing to one node,
+        `ops/io_term.build_net_node_csr`), dropping the rest and recompacting
+        the group ids."""
+        mapping = np.asarray(mapping, dtype=np.int64)
+        new_net = mapping[self.net]
+        keep = new_net >= 0
+        group = self.group[keep]
+        _uniq, dense = np.unique(group, return_inverse=True)
+        return Candidates(net=new_net[keep], u=self.u[keep], v=self.v[keep],
+                          seg=self.seg[keep], group=dense.astype(np.int64),
+                          count=self.count[keep], n_groups=int(_uniq.size))
+
+
+def _rank_within(owner, order):
+    """Position of each element within its `owner` run, for an array already
+    sorted so that equal owners are contiguous and the desired ranking order
+    holds inside each run. `order` is that sort permutation."""
+    owner_sorted = owner[order]
+    n = owner_sorted.size
+    if n == 0:
+        return np.zeros(0, dtype=np.int64)
+    new_run = np.empty(n, dtype=bool)
+    new_run[0] = True
+    new_run[1:] = owner_sorted[1:] != owner_sorted[:-1]
+    positions = np.arange(n, dtype=np.int64)
+    run_start = np.maximum.accumulate(np.where(new_run, positions, 0))
+    rank = np.empty(n, dtype=np.int64)
+    rank[order] = positions - run_start
+    return rank
+
+
+def select_candidates(net, u, v, seg, count, table, m_pairs=4, m_seg=2):
+    """Cap a net's crossed (demand pair, segment) items at `m_pairs` groups and
+    `m_seg` segments per group (spec sec 5's m_pairs=4 / m_seg=2 budget, read
+    through interpretation D-2).
+
+    Inputs are the evaluator's per-(net, u, v, seg) crossing counts with u < v
+    and u != v; both evaluators produce them in the same ascending composite-key
+    order, so this function's output is bit-identical between them. Every
+    tie-break is total: groups by (-total count, group key), segments within a
+    group by (-count, segment id)."""
+    net = np.asarray(net, dtype=np.int64)
+    u = np.asarray(u, dtype=np.int64)
+    v = np.asarray(v, dtype=np.int64)
+    seg = np.asarray(seg, dtype=np.int64)
+    count = np.asarray(count, dtype=np.int64)
+    if net.size == 0:
+        z = np.zeros(0, dtype=np.int64)
+        return Candidates(net=z, u=z, v=z, seg=z, group=z, count=z, n_groups=0)
+    if (u >= v).any():
+        raise ValueError("candidate demand pairs must satisfy u < v "
+                         "(same-region legs are dropped by the caller)")
+    k = np.int64(table.k)
+    spair = table.pair_key()[seg]
+    # (net, u, v, boundary pair) -> dense group id, ascending by that tuple
+    gkey = ((net * k + u) * k + v) * (k * k) + spair
+    uniq_g, gid = np.unique(gkey, return_inverse=True)
+    gid = gid.astype(np.int64)
+    gtot = np.bincount(gid, weights=count.astype(np.float64),
+                       minlength=uniq_g.size).astype(np.int64)
+    gnet = np.zeros(uniq_g.size, dtype=np.int64)
+    gnet[gid] = net
+
+    # ---- cap the number of groups per net ----
+    g_order = np.lexsort((uniq_g, -gtot, gnet))
+    g_rank = _rank_within(gnet, g_order)
+    group_keep = g_rank < m_pairs
+
+    # ---- cap the number of segments per kept group ----
+    keep = group_keep[gid]
+    i_order = np.lexsort((seg[keep], -count[keep], gid[keep]))
+    i_rank = _rank_within(gid[keep], i_order)
+    item_keep = i_rank < m_seg
+
+    idx = np.nonzero(keep)[0][item_keep]
+    idx = idx[np.lexsort((seg[idx], gid[idx]))]          # (group, seg) ascending
+    _uniq, dense = np.unique(gid[idx], return_inverse=True)
+    return Candidates(net=net[idx], u=u[idx], v=v[idx], seg=seg[idx],
+                      group=dense.astype(np.int64), count=count[idx],
+                      n_groups=int(_uniq.size))

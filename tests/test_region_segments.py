@@ -295,3 +295,173 @@ def test_a_512_lattice_stays_cheap():
     assert table.num_segments == 24
     assert table.edge_seg_v.shape == (512, 511)
     assert table.edge_seg_h.shape == (511, 512)
+
+
+from ioplace.region_segments import (Candidates, edge_segment_ids,
+                                     segment_ids_on_col, segment_ids_on_row,
+                                     segment_utilisation, select_candidates,
+                                     CAPACITY_SCALARS)
+
+
+def _brute_row(table, row, lo, hi):
+    """Every vertical unit edge a horizontal leg in `row` from column `lo` to
+    column `hi` (inclusive) crosses, straight off the raster."""
+    a, b = min(lo, hi), max(lo, hi)
+    ids = table.edge_seg_v[row, a:b]
+    return ids[ids >= 0]
+
+
+def _brute_col(table, col, lo, hi):
+    a, b = min(lo, hi), max(lo, hi)
+    ids = table.edge_seg_h[a:b, col]
+    return ids[ids >= 0]
+
+
+@pytest.mark.parametrize("factory", [l_shape, plug, notch])
+def test_csr_leg_lookup_matches_the_raster_everywhere(factory):
+    rg = RegionGrid(factory())
+    table = enumerate_segments(rg)
+    ny, nx = rg.grid.shape
+    for row in range(ny):
+        for lo in range(nx):
+            for hi in range(nx):
+                np.testing.assert_array_equal(
+                    segment_ids_on_row(table, row, lo, hi),
+                    _brute_row(table, row, lo, hi))
+    for col in range(nx):
+        for lo in range(ny):
+            for hi in range(ny):
+                np.testing.assert_array_equal(
+                    segment_ids_on_col(table, col, lo, hi),
+                    _brute_col(table, col, lo, hi))
+
+
+def test_leg_lookup_length_equals_the_prefix_sum_crossing_count():
+    """The Ph/Pv identity sec 5 calls a 'free assertion on slice lengths'."""
+    rg = RegionGrid(plug())
+    table = enumerate_segments(rg)
+    grid = rg.grid
+    ny, nx = grid.shape
+    hdiff = (grid[:, :-1] != grid[:, 1:]).astype(np.int64)
+    ph = np.zeros((ny, nx), dtype=np.int64)
+    ph[:, 1:] = np.cumsum(hdiff, axis=1)
+    for row in range(ny):
+        for lo in range(nx):
+            for hi in range(lo, nx):
+                assert len(segment_ids_on_row(table, row, lo, hi)) == \
+                    int(ph[row, hi] - ph[row, lo])
+
+
+def test_edge_segment_ids_walks_an_l_route_in_coordinates():
+    rg = RegionGrid(make_grid_regions((0., 0., 100., 100.), 2, 2, lattice=4))
+    table = enumerate_segments(rg)
+    # (10,10) is in region 0 (SW); (90,90) is in region 3 (NE).
+    ids = edge_segment_ids(rg, table, 10., 10., 90., 90.)
+    # The L-route goes horizontally at y=10 (crossing the 0|1 boundary) then
+    # vertically at x=90 (crossing the 1|3 boundary).
+    assert len(ids) == 2
+    pairs = [(int(table.pair_a[s]), int(table.pair_b[s])) for s in ids]
+    assert pairs == [(0, 1), (1, 3)]
+
+
+def test_segment_utilisation_reports_the_capacity_scalars():
+    demand = np.array([0, 5, 12, 3, 1], dtype=np.int64)
+    capacity = np.array([10., 10., 10., 0., 0.], dtype=np.float64)
+    util, scalars = segment_utilisation(demand, capacity)
+    np.testing.assert_allclose(util[:3], [0., 0.5, 1.2])
+    assert util[3] == np.inf and util[4] == np.inf
+    assert tuple(scalars) == CAPACITY_SCALARS
+    assert scalars["num_segments"] == 5
+    assert scalars["segment_demand_total"] == 21
+    # 12 > 10, and both zero-capacity segments carry demand
+    assert scalars["num_over_capacity"] == 3
+    assert scalars["num_zero_capacity_segments"] == 2
+    assert scalars["zero_capacity_demand"] == 4
+    assert scalars["max_util"] == pytest.approx(1.2)
+    assert scalars["p99_util"] == pytest.approx(np.percentile([0., 0.5, 1.2], 99))
+
+
+def test_segment_utilisation_never_divides_by_a_zero_capacity():
+    """Unit rule: zero-capacity segments stay blocked with a finite penalty and
+    no epsilon is substituted -- so no NaN, no inf/inf, no 1e-9 anywhere."""
+    util, scalars = segment_utilisation(np.zeros(3, dtype=np.int64),
+                                        np.zeros(3, dtype=np.float64))
+    assert np.array_equal(util, np.zeros(3))
+    assert scalars["num_over_capacity"] == 0
+    assert scalars["max_util"] == 0. and scalars["p99_util"] == 0.
+
+
+def test_select_candidates_caps_groups_and_segments():
+    rg = RegionGrid(make_grid_regions((0., 0., 100., 100.), 4, 4, lattice=20))
+    table = enumerate_segments(rg)
+    # Six distinct (u, v, pair(seg)) groups for net 0, one segment each,
+    # with descending counts; m_pairs=4 must keep the four heaviest.
+    segs, seen = [], set()
+    for s in range(table.num_segments):
+        key = (int(table.pair_a[s]), int(table.pair_b[s]))
+        if key not in seen:
+            seen.add(key)
+            segs.append(s)
+        if len(segs) == 6:
+            break
+    net = np.zeros(6, dtype=np.int64)
+    u = np.array([int(table.pair_a[s]) for s in segs], dtype=np.int64)
+    v = np.array([int(table.pair_b[s]) for s in segs], dtype=np.int64)
+    seg = np.asarray(segs, dtype=np.int64)
+    count = np.array([60, 50, 40, 30, 20, 10], dtype=np.int64)
+    cand = select_candidates(net, u, v, seg, count, table, m_pairs=4, m_seg=2)
+    assert cand.n_groups == 4
+    assert sorted(cand.count.tolist()) == [30, 40, 50, 60]
+
+
+def test_select_candidates_keeps_two_alternatives_on_one_boundary_pair():
+    """Three segments on the same boundary pair for the same net: one group,
+    the two heaviest kept (m_seg=2), ties broken by segment id."""
+    table = enumerate_segments(RegionGrid(notch()))
+    same = [s for s in range(table.num_segments)
+            if (int(table.pair_a[s]), int(table.pair_b[s])) == (0, 1)
+            and int(table.orient[s]) == ORIENT_V]
+    assert len(same) == 3
+    net = np.zeros(3, dtype=np.int64)
+    u = np.zeros(3, dtype=np.int64)
+    v = np.ones(3, dtype=np.int64)
+    seg = np.asarray(same, dtype=np.int64)
+    count = np.array([1, 1, 5], dtype=np.int64)
+    cand = select_candidates(net, u, v, seg, count, table)
+    assert cand.n_groups == 1
+    # the 5-count one, plus the lower-id of the two tied 1-counts
+    assert sorted(cand.seg.tolist()) == sorted([same[2], min(same[0], same[1])])
+    assert np.array_equal(cand.group, np.zeros(2, dtype=np.int64))
+
+
+def test_select_candidates_is_order_independent():
+    table = enumerate_segments(RegionGrid(plug()))
+    net = np.array([0, 0, 1, 1], dtype=np.int64)
+    u = np.array([0, 0, 1, 0], dtype=np.int64)
+    v = np.array([1, 2, 2, 2], dtype=np.int64)
+    seg = np.array([0, 1, 3, 1], dtype=np.int64)
+    count = np.array([3, 7, 2, 9], dtype=np.int64)
+    a = select_candidates(net, u, v, seg, count, table)
+    order = np.array([2, 0, 3, 1])
+    b = select_candidates(net[order], u[order], v[order], seg[order],
+                          count[order], table)
+    for name in ("net", "u", "v", "seg", "group", "count"):
+        np.testing.assert_array_equal(getattr(a, name), getattr(b, name))
+    assert a.n_groups == b.n_groups
+
+
+def test_remap_nets_drops_inactive_nets_and_recompacts_groups():
+    table = enumerate_segments(RegionGrid(plug()))
+    cand = select_candidates(np.array([0, 5, 5], dtype=np.int64),
+                             np.array([0, 0, 1], dtype=np.int64),
+                             np.array([1, 2, 2], dtype=np.int64),
+                             np.array([0, 1, 3], dtype=np.int64),
+                             np.array([1, 1, 1], dtype=np.int64), table)
+    mapping = np.full(6, -1, dtype=np.int64)
+    mapping[5] = 0                       # only global net 5 is active
+    remapped = cand.remap_nets(mapping)
+    assert np.array_equal(remapped.net, np.zeros(2, dtype=np.int64))
+    assert remapped.n_groups == 2
+    assert np.array_equal(remapped.group, np.array([0, 1]))
+    assert select_candidates(np.zeros(0, dtype=np.int64), *(
+        np.zeros(0, dtype=np.int64) for _ in range(4)), table).is_empty()
