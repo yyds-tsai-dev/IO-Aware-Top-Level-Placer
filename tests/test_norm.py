@@ -338,6 +338,38 @@ def test_dependent_term_is_zeroed_when_its_base_dies():
     assert recovered.lambdas["io"] > 0.0 and recovered.lambdas["ft"] > 0.0
 
 
+def test_requires_zeroing_happens_before_cmax_so_a_dead_base_does_not_inflate_it():
+    """Ruling D-10 (P-D Task 8): a term registered with `requires=<base>`
+    must be zeroed for the Cmax computation, not only for the final
+    published lambda -- otherwise a dependent whose base just died still
+    counts its (about to be discarded) pre-clip lambda*curvature in Cmax's
+    weighted mean, inflating Cmax and over-clipping every surviving term.
+    Harmless with only `io`/`ft` registered (this scenario always zeroed
+    `ft`'s *published* lambda on the same probe `io`'s own gradient died, and
+    no existing test read `cmax` at that probe), but registering a third,
+    independent term (`cap`) makes the interaction observable and load-
+    bearing, since `cap` has no `requires` relation of its own and would
+    otherwise absorb the inflated Cmax's over-clipping."""
+    n = TermNormalizer(policy="grandplan", wt0=1.0)
+    n.register("io", object(), 1.0, activate_overflow=0.90, n_ramp=0)
+    n.register("ft", object(), 6.0, activate_overflow=0.90, n_ramp=0,
+               requires="io")
+    n.transaction(0, 0.85, tau=1000.0, gamma=0.0,
+                  grad_norms={"wl": 1000.0, "io": 100.0, "ft": 50.0})
+    n.mark_refreshed()
+    # io's gradient vanishes; ft's own gradient stays healthy, so ft's own
+    # pre-clip lambda is still computed as nonzero before the `requires`
+    # chain zeroes it for publication.
+    txn = n.transaction(50, 0.80, tau=1000.0, gamma=0.0,
+                        grad_norms={"wl": 1000.0, "io": 0.0, "ft": 50.0})
+    assert txn.lambdas == {"io": 0.0, "ft": 0.0}
+    # Buggy order: Cmax = curv_ft (6.0), since ft's un-zeroed pre-clip lambda
+    # is the only nonzero weight in the mean. Fixed order: both pre-clip
+    # lambdas are zero by the time Cmax is computed, so cmax_from_curvatures
+    # falls back to its "no force" default of 1.0.
+    assert txn.cmax == pytest.approx(1.0, rel=1e-12)
+
+
 def test_a_tiny_but_nonzero_gradient_is_measured_and_only_bounded_by_the_cap():
     """Controller ruling F1' (round 2), superseding both earlier rules for
     `0 < grad <= eps_rel * ||grad WL||`: neither zero the coefficient (fix

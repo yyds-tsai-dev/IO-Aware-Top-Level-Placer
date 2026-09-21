@@ -156,6 +156,27 @@ def _json_cap(cap):
     return None if cap == float("inf") else cap
 
 
+def applied_lambda_or_zero(normalizer, name, iteration):
+    """The single safe way any driver reads a registered term's *applied*
+    (activation-ramped) coefficient (ruling D-6, P-D Task 8).
+
+    `TermNormalizer.applied_lambda` correctly answers 0.0 before a term
+    activates and scales the committed coefficient by the activation ramp
+    otherwise; `normalizer.lambdas.get(name, 0.0)` skips that ramp entirely
+    for any term whose registration does not override the default
+    `n_ramp=20` -- exactly `cap`'s registration, and exactly the trap
+    subproject P-C's Task 10 hit. Every driver-level coefficient consumer
+    (`run_placement_io.py`'s `term_fn` today, and `norm_adapter.py`'s future
+    `cap` extension for `run_main_flow.py`) must read the coefficient through
+    this one function rather than re-deriving the call, so the read cannot be
+    half-fixed in one driver and not the other. `normalizer=None` (the term
+    was never built this run) reads as inert, not an error, so a driver may
+    call this unconditionally."""
+    if normalizer is None:
+        return 0.0
+    return normalizer.applied_lambda(name, iteration)
+
+
 @dataclass
 class TermConfig:
     """Static registration data for one extra objective term. There is no
@@ -559,13 +580,39 @@ class TermNormalizer:
                     "reaching _compute)" % (self.policy,))
             if state.grad_norm != 0.0:
                 healthy.append(name)
+        # Review C1 / ruling D-10 (P-D Task 8): a term registered with
+        # `requires=<base>` expresses its force as `lambda_base * kappa`, so
+        # it cannot be applied at all once the base coefficient is zero -- and
+        # the retired failure mode was worse than useless, because the FT
+        # coefficient *rose* at exactly the probe where IO's signal vanished.
+        # This must run on the PRE-CLIP lambdas, BEFORE Cmax is computed: with
+        # only `io`/`ft` active this was numerically harmless (the golden
+        # trajectories never hit the case where a dependent's own gradient
+        # stayed healthy on the same probe its base died), but registering a
+        # third, independent term (`cap`) makes it reachable -- a dependent
+        # whose base just died could still carry a nonzero pre-clip lambda at
+        # Cmax time, inflating Cmax and over-clipping every surviving term.
+        # Iterated so a chain of dependencies collapses in one transaction.
+        for _ in range(len(self.configs)):
+            changed = False
+            for name, config in self.configs.items():
+                base = config.requires
+                if base is None or lambdas.get(name, 0.0) == 0.0:
+                    continue
+                if lambdas.get(base, 0.0) <= 0.0:
+                    lambdas[name], weights[name] = 0.0, 0.0
+                    changed = True
+            if not changed:
+                break
         # Cmax is the pre-clip lambda-weighted mean curvature (controller
         # ruling 2026-09-19, fix round 1): Cmax = sum_t lambda_t*curv_t /
         # sum_t lambda_t. This replaces the derived-kappa form
         # `1 + kappa_t(curv_t-1)_+`, which divided by lambda_io and so
         # degenerated whenever lambda_io == 0. The new form is exactly the
         # legacy bound sum_t lambda_t*curv_t <= c_lip*tau^2/gamma when only IO
-        # is active (curv_io == 1), with no such degeneracy.
+        # is active (curv_io == 1), with no such degeneracy. `lambdas` here
+        # already has the requires-zeroing above applied, so a dependent term
+        # whose base died contributes nothing to Cmax (ruling D-10).
         preclip = lambdas
         cmax = cmax_from_curvatures(
             [(preclip[name], self.configs[name].curvature)
@@ -584,27 +631,6 @@ class TermNormalizer:
         else:
             binding = None
         lambdas, _ = clip_sum_to_cap(preclip, cap)
-        for name in healthy:
-            lam_states[name] = lambdas[name]
-        # Review C1: a term registered with `requires=<base>` expresses its
-        # force as `lambda_base * kappa`, so it cannot be applied at all once
-        # the base coefficient is zero -- and the retired failure mode was
-        # worse than useless, because the FT coefficient *rose* at exactly the
-        # probe where IO's signal vanished. Zero the published coefficient (and
-        # its weight) but leave `lam_states` alone, so policy B resumes from
-        # its converged value when the base recovers (review I7). Iterated so a
-        # chain of dependencies collapses in one transaction.
-        for _ in range(len(self.configs)):
-            changed = False
-            for name, config in self.configs.items():
-                base = config.requires
-                if base is None or lambdas.get(name, 0.0) == 0.0:
-                    continue
-                if lambdas.get(base, 0.0) <= 0.0:
-                    lambdas[name], weights[name] = 0.0, 0.0
-                    changed = True
-            if not changed:
-                break
         # Review M2: mirror `ScheduleState.kappa_max`. The applied force is
         # already bounded by the cap; this bounds the *conditioning* of the
         # kappa = lam/lam_base the driver recovers by division.
@@ -617,6 +643,14 @@ class TermNormalizer:
             if lambdas[name] > ceiling:
                 lambdas[name] = ceiling
                 kappa_clamped[name] = True
+        # Ruling D-10: snapshot policy B's momentum state from the FINAL
+        # lambdas -- after both the requires-zeroing and the kappa clamp --
+        # not from a pre-clamp value. The old order snapshotted before the
+        # kappa clamp could run, so a clamped term's next probe would resume
+        # its multiplicative update from a value that was never actually
+        # applied.
+        for name in healthy:
+            lam_states[name] = lambdas[name]
         return lambdas, weights, cmax, cap, binding, lam_states, kappa_clamped
 
     def weights(self, iteration, overflow, tau, gamma):
